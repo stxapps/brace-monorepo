@@ -2,6 +2,9 @@
   "name": "@stxapps/brace-web",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "compile": "tsc --noEmit"
+  },
   "dependencies": {
     "next": "~16.1.6",
     "react": "^19.0.0",

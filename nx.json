@@ -58,6 +58,9 @@
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
+    },
+    "dev": {
+      "continuous": true
     }
   },
   "generators": {

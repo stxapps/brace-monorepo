@@ -2,7 +2,13 @@
   "name": "@stxapps/brace-monorepo",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "lint": "nx run-many -t lint",
+    "typecheck": "nx run-many -t typecheck compile",
+    "test": "nx run-many -t test",
+    "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web",
+    "build": "nx run-many -t build"
+  },
   "private": true,
   "devDependencies": {
     "@eslint/js": "^9.8.0",
@@ -41,18 +47,12 @@
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",
     "tslib": "^2.3.0",
+    "tsx": "^4.22.3",
     "typescript": "~5.9.2",
-    "typescript-eslint": "^8.40.0",
-    "wxt": "^0.20.26",
-    "@wxt-dev/module-react": "^1.1.5"
+    "typescript-eslint": "^8.40.0"
   },
   "workspaces": [
     "packages/*",
     "apps/*"
-  ],
-  "dependencies": {
-    "next": "^16.2.6",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  }
+  ]
 }
