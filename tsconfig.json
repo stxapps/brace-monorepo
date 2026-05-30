@@ -8,6 +8,15 @@
     },
     {
       "path": "./apps/brace-web"
+    },
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/web-ui"
+    },
+    {
+      "path": "./packages/react"
     }
   ]
 }
