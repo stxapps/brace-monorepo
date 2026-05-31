@@ -4,8 +4,11 @@
   "license": "MIT",
   "scripts": {
     "reset": "nx reset",
+    "lint": "nx run-many -t lint",
+    "lint:fix": "nx run-many -t lint -- --fix",
     "format": "prettier --write .",
-    "lint": "nx run-many -t lint -- --fix",
+    "format:check": "prettier --check .",
+    "fix": "npm run lint:fix && npm run format",
     "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web",
