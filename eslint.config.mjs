@@ -1,4 +1,5 @@
 import nx from '@nx/eslint-plugin';
+import jsoncParser from 'jsonc-eslint-parser';
 
 export default [
   ...nx.configs['flat/base'],
@@ -14,7 +15,12 @@ export default [
         'error',
         {
           enforceBuildableLibDependency: true,
-          allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$'],
+          allow: [
+            '^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$',
+            // web-ui is a shadcn component library: components self-import its
+            // own subpaths (e.g. lib/utils) and apps deep-import components.
+            '@stxapps/web-ui/**',
+          ],
           depConstraints: [
             {
               sourceTag: '*',
@@ -38,5 +44,31 @@ export default [
     ],
     // Override or add rules here
     rules: {},
+  },
+  {
+    files: ['**/*.json'],
+    languageOptions: {
+      parser: jsoncParser,
+    },
+    rules: {
+      '@nx/dependency-checks': [
+        'error',
+        {
+          // Build/test/config files aren't shipped — their imports (wxt, vite,
+          // eslint, jest, testing-library, next plugins) are dev tooling.
+          ignoredFiles: [
+            '{projectRoot}/eslint.config.{js,cjs,mjs}',
+            '{projectRoot}/*.config.{js,cjs,mjs,ts,cts,mts}',
+            '{projectRoot}/specs/**/*',
+            '{projectRoot}/**/*.spec.{ts,tsx}',
+          ],
+          // Apps render via the automatic JSX runtime and pull framework
+          // runtime deps (react, react-dom, next) in without a direct import,
+          // so the "obsolete dependency" direction only yields false positives.
+          // Keep the valuable guard: imported packages must be declared.
+          checkObsoleteDependencies: false,
+        },
+      ],
+    },
   },
 ];

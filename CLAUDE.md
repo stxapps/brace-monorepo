@@ -21,3 +21,9 @@
 - The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
 
 <!-- nx configuration end-->
+
+# Package manager
+
+- This monorepo uses **npm** (npm/npx), not pnpm or yarn. The lockfile is `package-lock.json`.
+- Run Nx via `npx nx <target>` or `npm exec nx <target>` (the generic Nx guidance above shows a `pnpm` example — ignore that here).
+- Use the root scripts where they exist: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run dev`, `npm run reset`.

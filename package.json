@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
+    "reset": "nx reset",
     "lint": "nx run-many -t lint",
-    "typecheck": "nx run-many -t typecheck compile",
+    "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test",
     "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web",
     "build": "nx run-many -t build"
@@ -32,7 +33,6 @@
     "@types/node": "20.19.9",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "autoprefixer": "10.4.13",
     "babel-jest": "~30.3.0",
     "eslint": "^9.8.0",
     "eslint-config-next": "^16.1.6",
@@ -48,7 +48,7 @@
     "nx": "22.7.5",
     "postcss": "8.4.38",
     "prettier": "^3.8.1",
-    "tailwindcss": "3.4.3",
+    "tailwindcss": "^4.3.0",
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",
     "tslib": "^2.3.0",

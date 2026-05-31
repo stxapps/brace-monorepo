@@ -1,6 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import '@stxapps/web-ui/styles.css';
+
+@source '../../../../packages/web-ui/src';
 
 html {
   -webkit-text-size-adjust: 100%;

@@ -6,5 +6,10 @@
     "composite": false,
     "declarationMap": false,
     "emitDeclarationOnly": false
-  }
+  },
+  "references": [
+    {
+      "path": "../../packages/web-ui"
+    }
+  ]
 }

@@ -11,14 +11,16 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
-    "compile": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@stxapps/web-ui": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
     "@wxt-dev/module-react": "^1.1.5",
     "wxt": "^0.20.26"
   }
