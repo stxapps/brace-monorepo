@@ -1,5 +1,6 @@
 import nx from '@nx/eslint-plugin';
 import jsoncParser from 'jsonc-eslint-parser';
+import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import prettier from 'eslint-config-prettier/flat';
 
 export default [
@@ -43,8 +44,14 @@ export default [
       '**/*.cjs',
       '**/*.mjs',
     ],
+    plugins: {
+      'simple-import-sort': simpleImportSort,
+    },
     // Override or add rules here
-    rules: {},
+    rules: {
+      'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error',
+    },
   },
   {
     files: ['**/*.json'],
