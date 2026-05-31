@@ -49,7 +49,19 @@ export default [
     },
     // Override or add rules here
     rules: {
-      'simple-import-sort/imports': 'error',
+      'simple-import-sort/imports': [
+        'error',
+        {
+          groups: [
+            ['^\\u0000'], // side-effect imports
+            ['^node:'], // node builtins
+            ['^react', '^@?\\w'], // external packages, react first
+            ['^@stxapps/'], // internal workspace packages
+            ['^\\.\\.(?!/?$)', '^\\.\\./?$', '^\\./(?=.*/)(?!/?$)', '^\\.(?!/?$)', '^\\./?$'], // relative
+            ['^.+\\.s?css$'], // styles last
+          ],
+        },
+      ],
       'simple-import-sort/exports': 'error',
     },
   },

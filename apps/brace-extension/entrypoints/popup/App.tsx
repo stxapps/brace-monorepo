@@ -1,6 +1,6 @@
-import './App.css';
-
 import { useState } from 'react';
+
+import './App.css';
 
 import wxtLogo from '/wxt.svg';
 import reactLogo from '@/assets/react.svg';
