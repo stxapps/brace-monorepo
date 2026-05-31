@@ -4,6 +4,9 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "nx": {
+    "tags": ["type:app", "platform:web"]
+  },
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",

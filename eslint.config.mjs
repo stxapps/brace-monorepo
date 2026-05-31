@@ -24,9 +24,48 @@ export default [
             '@stxapps/web-ui/**',
           ],
           depConstraints: [
+            // Layering (type): shared <- react/crypto <- ui <- app.
+            // A project may only depend on its own layer and lower ones.
             {
-              sourceTag: '*',
-              onlyDependOnLibsWithTags: ['*'],
+              sourceTag: 'type:app',
+              onlyDependOnLibsWithTags: [
+                'type:app',
+                'type:ui',
+                'type:react',
+                'type:crypto',
+                'type:shared',
+              ],
+            },
+            {
+              sourceTag: 'type:ui',
+              onlyDependOnLibsWithTags: ['type:ui', 'type:react', 'type:shared'],
+            },
+            {
+              sourceTag: 'type:react',
+              onlyDependOnLibsWithTags: ['type:react', 'type:shared'],
+            },
+            {
+              sourceTag: 'type:crypto',
+              onlyDependOnLibsWithTags: ['type:crypto', 'type:shared'],
+            },
+            {
+              sourceTag: 'type:shared',
+              onlyDependOnLibsWithTags: ['type:shared'],
+            },
+            // Platform: agnostic code must stay portable; web/node may also use
+            // agnostic libs. This keeps web-only libs (ui, crypto) out of the
+            // node api and out of platform-agnostic packages.
+            {
+              sourceTag: 'platform:agnostic',
+              onlyDependOnLibsWithTags: ['platform:agnostic'],
+            },
+            {
+              sourceTag: 'platform:web',
+              onlyDependOnLibsWithTags: ['platform:web', 'platform:agnostic'],
+            },
+            {
+              sourceTag: 'platform:node',
+              onlyDependOnLibsWithTags: ['platform:node', 'platform:agnostic'],
             },
           ],
         },

@@ -22,6 +22,11 @@
 
 <!-- nx configuration end-->
 
+# Architecture
+
+- Packages: `@stxapps/{shared,react,web-ui}` (more planned). Apps: `brace-web`, `brace-extension`, `brace-api`.
+- See @docs/architecture.md for lib responsibilities and dependency rules (respect the layering — packages must never import an app). See @docs/setup.md for scaffold commands.
+
 # Package manager
 
 - This monorepo uses **npm** (npm/npx), not pnpm or yarn. The lockfile is `package-lock.json`.

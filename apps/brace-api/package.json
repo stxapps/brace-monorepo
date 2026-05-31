@@ -2,6 +2,9 @@
   "name": "@stxapps/brace-api",
   "version": "0.0.1",
   "private": true,
+  "nx": {
+    "tags": ["type:app", "platform:node"]
+  },
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
