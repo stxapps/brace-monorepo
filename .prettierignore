@@ -4,3 +4,14 @@
 /.nx/cache
 /.nx/workspace-data
 .nx/self-healing
+
+# Build outputs & generated files
+**/dist
+**/out-tsc
+**/.next
+**/.output
+**/.wxt
+**/next-env.d.ts
+
+# Lockfiles
+package-lock.json

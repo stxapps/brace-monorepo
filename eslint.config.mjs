@@ -1,5 +1,6 @@
 import nx from '@nx/eslint-plugin';
 import jsoncParser from 'jsonc-eslint-parser';
+import prettier from 'eslint-config-prettier/flat';
 
 export default [
   ...nx.configs['flat/base'],
@@ -71,4 +72,6 @@ export default [
       ],
     },
   },
+  // Must be last: disables ESLint rules that conflict with Prettier formatting.
+  prettier,
 ];
