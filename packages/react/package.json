@@ -3,7 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "nx": {
-    "tags": ["type:react", "platform:agnostic"]
+    "tags": [
+      "type:react",
+      "platform:agnostic"
+    ]
   },
   "type": "module",
   "main": "./src/index.ts",

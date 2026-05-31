@@ -3,7 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "nx": {
-    "tags": ["type:shared", "platform:agnostic"]
+    "tags": [
+      "type:shared",
+      "platform:agnostic"
+    ]
   },
   "type": "module",
   "main": "./src/index.ts",

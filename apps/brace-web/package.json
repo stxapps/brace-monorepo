@@ -3,7 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "nx": {
-    "tags": ["type:app", "platform:web"]
+    "tags": [
+      "type:app",
+      "platform:web"
+    ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

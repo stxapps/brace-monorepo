@@ -3,7 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "nx": {
-    "tags": ["type:ui", "platform:web"]
+    "tags": [
+      "type:ui",
+      "platform:web"
+    ]
   },
   "type": "module",
   "main": "./src/index.ts",

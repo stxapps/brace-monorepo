@@ -3,7 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "nx": {
-    "tags": ["type:app", "platform:node"]
+    "tags": [
+      "type:app",
+      "platform:node"
+    ]
   },
   "type": "module",
   "scripts": {
