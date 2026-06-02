@@ -8,6 +8,16 @@
       "platform:web"
     ],
     "targets": {
+      "build": {
+        "options": {
+          "command": "next build && serwist build serwist.config.mjs"
+        },
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/out"
+        ]
+      },
       "dev": {
         "options": {
           "command": "next dev --port 4000"
@@ -24,12 +34,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@serwist/next": "^9.5.11",
     "@stxapps/web-ui": "*",
     "next": "~16.1.6",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "serwist": "9.5.11"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.0"
+    "@serwist/cli": "^9.5.11",
+    "@tailwindcss/postcss": "^4.3.0",
+    "esbuild": "^0.27.7"
   }
 }

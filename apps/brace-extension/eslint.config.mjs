@@ -7,7 +7,7 @@ export default [
   ...baseConfig,
   {
     // WXT-generated output — not authored source, don't lint it.
-    ignores: ['.wxt/**', '.output/**', '**/dist', '**/out-tsc'],
+    ignores: ['.wxt/**', '.output/**'],
   },
   {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
