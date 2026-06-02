@@ -6,7 +6,19 @@
     "tags": [
       "type:app",
       "platform:web"
-    ]
+    ],
+    "targets": {
+      "dev": {
+        "options": {
+          "command": "next dev --port 4000"
+        }
+      },
+      "start": {
+        "options": {
+          "command": "next start --port 4000"
+        }
+      }
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
