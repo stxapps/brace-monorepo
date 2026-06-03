@@ -50,7 +50,10 @@ const themeStorage: ThemeStorage = {
   },
 };
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const rootEl = document.getElementById('root');
+if (!rootEl) throw new Error('Popup root element #root not found');
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <ThemeProvider storage={themeStorage}>
       <App />
