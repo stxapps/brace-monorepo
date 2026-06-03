@@ -64,6 +64,7 @@
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@stxapps/shared": "*",
     "@stxapps/web-ui": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

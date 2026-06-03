@@ -59,6 +59,9 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
     "dev": {
       "continuous": true
     }

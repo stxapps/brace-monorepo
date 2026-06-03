@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@serwist/next": "^9.5.11",
+    "@stxapps/shared": "*",
     "@stxapps/web-ui": "*",
     "next": "~16.1.6",
     "react": "^19.0.0",

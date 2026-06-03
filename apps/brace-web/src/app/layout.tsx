@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
+import { themeInitScript } from '@stxapps/shared';
+
 import { InnerLayout } from './inner-layout';
 
 import './global.css';
@@ -48,6 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={inter.variable}>
       <body>
+        {/* Set the `.dark` class before paint so there's no flash of the wrong
+            theme. Runs synchronously ahead of hydration. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript() }} />
         <InnerLayout>{children}</InnerLayout>
       </body>
     </html>

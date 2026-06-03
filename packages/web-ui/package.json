@@ -18,6 +18,11 @@
       "default": "./src/index.ts"
     },
     "./styles.css": "./src/styles.css",
+    "./theme": {
+      "types": "./src/theme/index.ts",
+      "import": "./src/theme/index.ts",
+      "default": "./src/theme/index.ts"
+    },
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
@@ -32,6 +37,7 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
+    "@stxapps/shared": "*",
     "@radix-ui/react-slot": "^1.2.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

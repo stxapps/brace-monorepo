@@ -2,6 +2,11 @@
 import { Suspense, useEffect } from 'react';
 import { SerwistProvider } from '@serwist/next/react';
 
+import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/theme';
+
+// Stable identity across renders (the provider keys effects off it).
+const themeStorage = localStorageThemeStorage();
+
 function Initializer() {
   useEffect(() => {
     if (!('serviceWorker' in navigator && window.serwist !== undefined)) return;
@@ -69,7 +74,9 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <Initializer />
       </Suspense>
-      <SafeArea>{children}</SafeArea>
+      <ThemeProvider storage={themeStorage}>
+        <SafeArea>{children}</SafeArea>
+      </ThemeProvider>
     </SerwistProvider>
   );
 }

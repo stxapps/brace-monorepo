@@ -50,6 +50,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/shared"
+    },
+    {
       "path": "../../packages/web-ui"
     }
   ]
