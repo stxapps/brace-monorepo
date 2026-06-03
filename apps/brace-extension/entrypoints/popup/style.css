@@ -1,3 +1,24 @@
 @import '@stxapps/web-ui/styles.css';
 
 @source '../../../../packages/web-ui/src';
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  font-named-instance: 'Regular';
+  src: url('../../assets/fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  font-named-instance: 'Italic';
+  src: url('../../assets/fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+:root {
+  --font-inter: 'Inter';
+}
