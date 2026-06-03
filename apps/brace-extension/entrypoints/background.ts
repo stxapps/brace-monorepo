@@ -24,25 +24,21 @@ export interface SavedPage {
   savedAt: number;
 }
 
-export type SavePageResponse =
-  | { ok: true; page: SavedPage }
-  | { ok: false; error: string };
+export type SavePageResponse = { ok: true; page: SavedPage } | { ok: false; error: string };
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener(
-    (message: SavePageMessage, _sender, sendResponse) => {
-      if (message?.type !== 'SAVE_PAGE') return;
+  browser.runtime.onMessage.addListener((message: SavePageMessage, _sender, sendResponse) => {
+    if (message?.type !== 'SAVE_PAGE') return;
 
-      savePage()
-        .then((page) => sendResponse({ ok: true, page } satisfies SavePageResponse))
-        .catch((err) =>
-          sendResponse({ ok: false, error: errorMessage(err) } satisfies SavePageResponse),
-        );
+    savePage()
+      .then((page) => sendResponse({ ok: true, page } satisfies SavePageResponse))
+      .catch((err) =>
+        sendResponse({ ok: false, error: errorMessage(err) } satisfies SavePageResponse),
+      );
 
-      // Returning true keeps the message channel open for the async response.
-      return true;
-    },
-  );
+    // Returning true keeps the message channel open for the async response.
+    return true;
+  });
 });
 
 async function savePage(): Promise<SavedPage> {

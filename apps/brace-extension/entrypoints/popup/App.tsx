@@ -23,9 +23,7 @@ function App() {
   useEffect(() => {
     browser.tabs
       .query({ active: true, currentWindow: true })
-      .then(([active]) =>
-        setTab({ url: active?.url ?? '', title: active?.title ?? '' }),
-      );
+      .then(([active]) => setTab({ url: active?.url ?? '', title: active?.title ?? '' }));
   }, []);
 
   async function handleSave() {

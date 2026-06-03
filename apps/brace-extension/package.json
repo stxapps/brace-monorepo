@@ -12,22 +12,40 @@
     "targets": {
       "build": {
         "cache": true,
-        "inputs": ["production", "^production"],
-        "outputs": ["{projectRoot}/.output/chrome-mv3"]
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/chrome-mv3"
+        ]
       },
       "build:firefox": {
         "cache": true,
-        "inputs": ["production", "^production"],
-        "outputs": ["{projectRoot}/.output/firefox-mv3"]
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/firefox-mv3"
+        ]
       },
       "zip": {
         "cache": true,
-        "inputs": ["production", "^production"],
-        "outputs": ["{projectRoot}/.output/*-chrome.zip"]
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/*-chrome.zip"
+        ]
       },
       "zip:firefox": {
         "cache": true,
-        "inputs": ["production", "^production"],
+        "inputs": [
+          "production",
+          "^production"
+        ],
         "outputs": [
           "{projectRoot}/.output/*-firefox.zip",
           "{projectRoot}/.output/*-sources.zip"
