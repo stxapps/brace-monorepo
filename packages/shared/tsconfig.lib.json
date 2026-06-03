@@ -7,8 +7,7 @@
     "emitDeclarationOnly": true,
     "forceConsistentCasingInFileNames": true,
     "types": ["node"],
-    "module": "preserve",
-    "moduleResolution": "bundler"
+    "module": "preserve"
   },
   "include": ["src/**/*.ts"],
   "references": [],

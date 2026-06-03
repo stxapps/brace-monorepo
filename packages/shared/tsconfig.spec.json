@@ -4,8 +4,7 @@
     "outDir": "./out-tsc/jest",
     "types": ["jest", "node"],
     "forceConsistentCasingInFileNames": true,
-    "module": "preserve",
-    "moduleResolution": "bundler"
+    "module": "preserve"
   },
   "include": [
     "jest.config.ts",

@@ -88,16 +88,18 @@ export * from './lib/theme.js';
 ```
 
 This requires `moduleResolution: bundler` (with `module: esnext` or
-`preserve`) in the package's `tsconfig.lib.json` **and** `tsconfig.spec.json`.
-The `@nx/react` generator sets this up already; `@nx/js` libs inherit
-`nodenext` from `tsconfig.base.json`, so override it per-package (see
-`packages/shared`).
+`preserve`) — which is now the **`tsconfig.base.json` default** (`module:
+esnext`, `moduleResolution: bundler`), so packages and apps inherit it without
+per-project overrides. Only two projects override `module`: `packages/shared`
+uses `module: preserve`, and `brace-api`'s `tsconfig.spec.json` drops to
+`commonjs`/`node10` for ts-jest.
 
 The same applies to **apps**: extensionless source only works if a bundler is
 in the path. `brace-web` (Turbopack) and `brace-extension` (Vite/wxt) bundle by
 nature. `brace-api` is bundled at build time too — see below — so it uses
-`moduleResolution: bundler` and extensionless imports as well. The base default
-stays `nodenext`, but every current project overrides it to `bundler`.
+`moduleResolution: bundler` and extensionless imports as well. Since every
+current project is bundled, `bundler` is the base default rather than a
+per-project override.
 
 ### bundling brace-api
 
