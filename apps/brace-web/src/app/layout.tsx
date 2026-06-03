@@ -5,7 +5,7 @@ import { themeInitScript } from '@stxapps/shared';
 
 import { InnerLayout } from './inner-layout';
 
-import './global.css';
+import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--font-inter' });
 
@@ -22,11 +22,11 @@ export const viewport = {
 export const metadata: Metadata = {
   title: 'Brace.to - Save links to visit later',
   description:
-    'Save links to everything and visit them later easily, anytime, on any device, with Web3 technology that empowers you to truly own your account and data.',
+    'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
   openGraph: {
     title: 'Brace.to - Save links to visit later',
     description:
-      'Save links to everything and visit them later easily, anytime, on any device, with Web3 technology that empowers you to truly own your account and data.',
+      'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
     images: [
       {
         url: 'https://brace.to/twitter-card-image-pattern5.png',
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   twitter: {
     title: 'Brace.to - Save links to visit later',
     description:
-      'Save links to everything and visit them later easily, anytime, on any device, with Web3 technology that empowers you to truly own your account and data.',
+      'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
     images: ['https://brace.to/twitter-card-image-pattern5.png'],
     card: 'summary_large_image',
     site: '@bracedotto',
