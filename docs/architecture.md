@@ -91,5 +91,32 @@ This requires `moduleResolution: bundler` (with `module: esnext` or
 `preserve`) in the package's `tsconfig.lib.json` **and** `tsconfig.spec.json`.
 The `@nx/react` generator sets this up already; `@nx/js` libs inherit
 `nodenext` from `tsconfig.base.json`, so override it per-package (see
-`packages/shared`). Don't change `tsconfig.base.json` — `brace-api` (node/hono)
-relies on its `nodenext` resolution.
+`packages/shared`).
+
+The same applies to **apps**: extensionless source only works if a bundler is
+in the path. `brace-web` (Turbopack) and `brace-extension` (Vite/wxt) bundle by
+nature. `brace-api` is bundled at build time too — see below — so it uses
+`moduleResolution: bundler` and extensionless imports as well. The base default
+stays `nodenext`, but every current project overrides it to `bundler`.
+
+### bundling brace-api
+
+`brace-api` (Hono on Node) has no inherent bundler, so plain `tsc` output left
+`import '@stxapps/shared'` as a bare specifier that Node resolved at runtime to
+the package's raw `.ts` source — and crashed on the extensionless internal
+imports (`ERR_MODULE_NOT_FOUND`). The fix is to **bundle the app** so workspace
+packages are inlined, matching how the web apps consume them.
+
+- **build** — `@nx/esbuild:esbuild` executor (config in
+  `apps/brace-api/package.json` under `nx.targets`): `platform: node`,
+  `format: ['esm']`, `bundle: true`, `thirdParty: false`. Workspace `@stxapps/*`
+  packages get **inlined**; third-party deps (`hono`, `@hono/node-server`) stay
+  **external** and resolve from `node_modules` at runtime.
+- **dev** — `tsx watch src/main.ts` (esbuild under the hood; resolves source +
+  extensionless directly, no build step).
+- **typecheck** — still `tsc` (esbuild doesn't type-check); this is the type
+  gate.
+
+esbuild is a single workspace-root devDependency, shared by `@nx/esbuild`,
+`brace-api`'s build, and `@serwist/cli`'s optional-peer service-worker build in
+`brace-web` (don't redeclare it per-app).

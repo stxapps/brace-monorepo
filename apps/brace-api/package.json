@@ -6,13 +6,35 @@
     "tags": [
       "type:app",
       "platform:node"
-    ]
+    ],
+    "targets": {
+      "build": {
+        "executor": "@nx/esbuild:esbuild",
+        "outputs": [
+          "{options.outputPath}"
+        ],
+        "options": {
+          "main": "apps/brace-api/src/main.ts",
+          "outputPath": "apps/brace-api/dist",
+          "outputFileName": "main.js",
+          "tsConfig": "apps/brace-api/tsconfig.json",
+          "platform": "node",
+          "format": [
+            "esm"
+          ],
+          "bundle": true,
+          "thirdParty": false,
+          "esbuildOptions": {
+            "sourcemap": true
+          }
+        }
+      }
+    }
   },
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js",
-    "build": "tsc -b"
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.4",

@@ -3,8 +3,8 @@
   "compilerOptions": {
     "emitDeclarationOnly": false,
     "noEmit": false,
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "lib": ["es2022"],
     "types": ["jest", "node"],

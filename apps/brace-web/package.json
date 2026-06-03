@@ -44,7 +44,6 @@
   },
   "devDependencies": {
     "@serwist/cli": "^9.5.11",
-    "@tailwindcss/postcss": "^4.3.0",
-    "esbuild": "^0.27.7"
+    "@tailwindcss/postcss": "^4.3.0"
   }
 }
