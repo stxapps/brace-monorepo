@@ -59,7 +59,13 @@ const readVisual = (): VisualViewport => {
   const vv = window.visualViewport;
   if (!vv) {
     // No visualViewport API → fall back to the layout viewport, unzoomed.
-    return { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0, scale: 1 };
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      offsetLeft: 0,
+      offsetTop: 0,
+      scale: 1,
+    };
   }
   return {
     width: vv.width,

@@ -17,10 +17,7 @@ export default function CreateAccountPage() {
 
       <p className="text-center text-sm text-gray-500 dark:text-gray-400">
         Already have an account?{' '}
-        <Link
-          href="/sign-in"
-          className="font-medium text-gray-900 underline dark:text-gray-50"
-        >
+        <Link href="/sign-in" className="font-medium text-gray-900 underline dark:text-gray-50">
           Sign in
         </Link>
       </p>

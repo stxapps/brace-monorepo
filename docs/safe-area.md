@@ -8,12 +8,12 @@ width, and viewport sizing — and the gotchas that make these disagree. Lives i
 
 Three viewport widths exist and they disagree, by design:
 
-| value | scrollbar? | safe area? | notes |
-| ----- | ---------- | ---------- | ----- |
-| CSS `@media` / Tailwind `md:` | included | full viewport | what a breakpoint matches |
-| `window.innerWidth` | included | full viewport | — |
-| `documentElement.clientWidth` | excluded | full viewport | layout width |
-| `visualViewport.width` | excluded | reflects pinch-zoom / keyboard | best for popups |
+| value                         | scrollbar? | safe area?                     | notes                     |
+| ----------------------------- | ---------- | ------------------------------ | ------------------------- |
+| CSS `@media` / Tailwind `md:` | included   | full viewport                  | what a breakpoint matches |
+| `window.innerWidth`           | included   | full viewport                  | —                         |
+| `documentElement.clientWidth` | excluded   | full viewport                  | layout width              |
+| `visualViewport.width`        | excluded   | reflects pinch-zoom / keyboard | best for popups           |
 
 Consequence: if you measure a width in JS and re-derive "am I at `md`?", you can
 disagree with what Tailwind actually matched — by the scrollbar width. **Never
@@ -25,11 +25,11 @@ uses (see `useMediaQuery` below).
 Three different "zooms" reach the UI through different channels. They are not
 interchangeable, and only two of them are ours to handle.
 
-| zoom | how it's triggered | what we do |
-| ---- | ------------------ | ---------- |
-| **browser zoom** (Cmd/Ctrl +/−) | full-page scale | nothing — browser scales `px`/`rem`/images/borders proportionally; layout never sees it |
-| **default font size** (browser/OS preference) | changes what `1rem` resolves to | author in `rem` so the UI scales as one block |
-| **pinch-zoom** (touch) | gesture | enable/disable via meta viewport only; size popups against `visualViewport` so they follow the user |
+| zoom                                          | how it's triggered              | what we do                                                                                          |
+| --------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **browser zoom** (Cmd/Ctrl +/−)               | full-page scale                 | nothing — browser scales `px`/`rem`/images/borders proportionally; layout never sees it             |
+| **default font size** (browser/OS preference) | changes what `1rem` resolves to | author in `rem` so the UI scales as one block                                                       |
+| **pinch-zoom** (touch)                        | gesture                         | enable/disable via meta viewport only; size popups against `visualViewport` so they follow the user |
 
 **Browser zoom** needs no code. It scales rendered output uniformly and does not
 change the root font size.
@@ -41,11 +41,11 @@ keeps its proportions. In custom components, use `rem`; avoid hand-computed px
 widths/heights/spacing.
 
 rem-everywhere is a deliberate accessibility trade-off, **not** an absolute rule.
-Some things should *not* track the user's font preference and stay in **px** — and
+Some things should _not_ track the user's font preference and stay in **px** — and
 Tailwind's own defaults already draw this line for you:
 
-| scale with font size → `rem` | keep device-fixed → `px` |
-| ---------------------------- | ------------------------ |
+| scale with font size → `rem`                      | keep device-fixed → `px`                                                                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | text, padding/margin/gap, component & icon sizing | borders, `divide`, `ring`, `outline` (Tailwind defaults these to px), hairlines, 1px shadows, image intrinsic sizes, safe-area insets (`env()` returns px) |
 
 The bug to avoid is the **half-scaled** UI: rem text inside a px-fixed container (or
@@ -55,7 +55,7 @@ keep it fixed as a whole.
 **Pinch-zoom** can only be enabled/disabled through `<meta name="viewport">`
 (`user-scalable=no`, `maximum-scale=1`) — and WebKit ignores that for accessibility,
 so you can't fully suppress it on iOS. You can't react to the gesture itself, but it
-*does* move the **visual** viewport: `visualViewport.width/height` shrink and
+_does_ move the **visual** viewport: `visualViewport.width/height` shrink and
 `offsetLeft/offsetTop/scale` change. So anything sized against `useVisualViewport`
 (hand-rolled popups, see below) follows the user into the zoomed region — which is
 the desired behavior. `useWindowSize` (layout viewport) is unaffected by pinch-zoom,
@@ -98,7 +98,7 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
 
 **Hooks** (`@stxapps/web-ui/hooks/use-media-query`, `…/use-window-metrics`)
 
-- `useMediaQuery(query)` — SSR-safe `matchMedia` subscription. Pass the *same*
+- `useMediaQuery(query)` — SSR-safe `matchMedia` subscription. Pass the _same_
   string Tailwind uses, e.g. `'(min-width: 48rem)'` for `md:`.
 - `useWindowInsets()`, `useWindowSize()`, `useVisualViewport()`,
   `useScrollbarWidth()` — reactive, backed by **one shared store**: a single
@@ -107,8 +107,8 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   when the value it reads changes.
 
 `useWindowSize` vs `useVisualViewport`: the former is the **layout** viewport
-(`innerWidth/innerHeight`, scrollbar included, matches CSS breakpoints, *unaffected
-by zoom or the on-screen keyboard*) — use it for breakpoint-aligned logic. The
+(`innerWidth/innerHeight`, scrollbar included, matches CSS breakpoints, _unaffected
+by zoom or the on-screen keyboard_) — use it for breakpoint-aligned logic. The
 latter is the **visual** viewport (the visible region after pinch-zoom and the soft
 keyboard, with `offsetLeft/offsetTop/scale`) — use it to size/position popups so
 they clear the keyboard. On most mobile browsers the keyboard fires only
@@ -117,10 +117,10 @@ they clear the keyboard. On most mobile browsers the keyboard fires only
 ### applying safe area
 
 A blanket `<div className="safe-area">` (as in `brace-web` `inner-layout.tsx`) is
-the right default: padding paints *inside* the box, so a background fills
+the right default: padding paints _inside_ the box, so a background fills
 edge-to-edge under the notch while content is inset. It does inset **all** children
 uniformly, though — once you add a sticky header or bottom bar that should bleed to
-the edge with only its *contents* inset, drop the blanket utility and apply per-side
+the edge with only its _contents_ inset, drop the blanket utility and apply per-side
 utilities where they belong (`pt-safe` header, `pb-safe` bottom bar, `px-safe` side
 content).
 
@@ -142,7 +142,7 @@ breakpoint math.
 
    ```tsx
    const insets = useWindowInsets();
-   <PopoverContent collisionPadding={insets} />
+   <PopoverContent collisionPadding={insets} />;
    ```
 
 2. **Hand-roll only when Radix can't express the UI** (custom anchored panel,
