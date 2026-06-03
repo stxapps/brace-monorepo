@@ -20,6 +20,49 @@ disagree with what Tailwind actually matched — by the scrollbar width. **Never
 re-derive breakpoints from a measured width.** Use the same media query the CSS
 uses (see `useMediaQuery` below).
 
+### the three kinds of zoom
+
+Three different "zooms" reach the UI through different channels. They are not
+interchangeable, and only two of them are ours to handle.
+
+| zoom | how it's triggered | what we do |
+| ---- | ------------------ | ---------- |
+| **browser zoom** (Cmd/Ctrl +/−) | full-page scale | nothing — browser scales `px`/`rem`/images/borders proportionally; layout never sees it |
+| **default font size** (browser/OS preference) | changes what `1rem` resolves to | author in `rem` so the UI scales as one block |
+| **pinch-zoom** (touch) | gesture | enable/disable via meta viewport only; size popups against `visualViewport` so they follow the user |
+
+**Browser zoom** needs no code. It scales rendered output uniformly and does not
+change the root font size.
+
+**Default font size** is why we author in `rem`. When the user's preferred size
+grows (16px → e.g. 20px), `1rem` grows, and because Tailwind expresses spacing,
+sizing, and radius in rem (not just `text-*`), the whole UI scales together and
+keeps its proportions. In custom components, use `rem`; avoid hand-computed px
+widths/heights/spacing.
+
+rem-everywhere is a deliberate accessibility trade-off, **not** an absolute rule.
+Some things should *not* track the user's font preference and stay in **px** — and
+Tailwind's own defaults already draw this line for you:
+
+| scale with font size → `rem` | keep device-fixed → `px` |
+| ---------------------------- | ------------------------ |
+| text, padding/margin/gap, component & icon sizing | borders, `divide`, `ring`, `outline` (Tailwind defaults these to px), hairlines, 1px shadows, image intrinsic sizes, safe-area insets (`env()` returns px) |
+
+The bug to avoid is the **half-scaled** UI: rem text inside a px-fixed container (or
+vice versa) clips when the font size grows. Either let a region scale as a whole, or
+keep it fixed as a whole.
+
+**Pinch-zoom** can only be enabled/disabled through `<meta name="viewport">`
+(`user-scalable=no`, `maximum-scale=1`) — and WebKit ignores that for accessibility,
+so you can't fully suppress it on iOS. You can't react to the gesture itself, but it
+*does* move the **visual** viewport: `visualViewport.width/height` shrink and
+`offsetLeft/offsetTop/scale` change. So anything sized against `useVisualViewport`
+(hand-rolled popups, see below) follows the user into the zoomed region — which is
+the desired behavior. `useWindowSize` (layout viewport) is unaffected by pinch-zoom,
+which is exactly why breakpoint logic uses it. See the width table above
+(`visualViewport.width` is the pinch-zoom-aware row) and `useWindowSize` vs
+`useVisualViewport` below.
+
 ### prerequisite: `viewport-fit=cover`
 
 `env(safe-area-inset-*)` are **all 0** unless the page opts into edge-to-edge with
