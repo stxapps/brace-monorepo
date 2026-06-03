@@ -41,3 +41,9 @@ Flag notes:
 #### docs (future)
 
 - npx nx g @nx/next:app apps/brace-docs
+
+#### dependencies
+
+- npm install serwist -w @stxapps/brace-web
+- npm install @serwist/next -w @stxapps/brace-web
+- npm install @serwist/cli --save-dev -w @stxapps/brace-web
