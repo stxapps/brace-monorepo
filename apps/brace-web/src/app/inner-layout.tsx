@@ -54,7 +54,7 @@ function Initializer() {
 }
 
 function SafeArea({ children }: { children: React.ReactNode }) {
-  return <div>{children}</div>;
+  return <div className="safe-area">{children}</div>;
 }
 
 export function InnerLayout({ children }: { children: React.ReactNode }) {
