@@ -1,4 +1,4 @@
-import { react } from './react.js';
+import { react } from './react';
 
 describe('react', () => {
   it('should work', () => {

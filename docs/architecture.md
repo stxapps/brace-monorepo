@@ -71,3 +71,25 @@ Enforcement is driven by two tag dimensions set in each project's
 
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.
+
+### module resolution in packages
+
+Packages are `bundler=none` — apps consume their raw `.ts` source, so each
+consuming bundler (Turbopack, Vite/wxt, Metro/Expo) resolves the package's
+internal relative imports itself. Use **extensionless, bundler-style imports**
+in package source:
+
+```ts
+// ✅ portable across every bundler that consumes the source
+export * from './lib/theme';
+// ❌ NodeNext convention — Turbopack/Metro resolve it literally and 404,
+//    since the file on disk is theme.ts, not theme.js
+export * from './lib/theme.js';
+```
+
+This requires `moduleResolution: bundler` (with `module: esnext` or
+`preserve`) in the package's `tsconfig.lib.json` **and** `tsconfig.spec.json`.
+The `@nx/react` generator sets this up already; `@nx/js` libs inherit
+`nodenext` from `tsconfig.base.json`, so override it per-package (see
+`packages/shared`). Don't change `tsconfig.base.json` — `brace-api` (node/hono)
+relies on its `nodenext` resolution.

@@ -1,4 +1,4 @@
-import { shared } from './shared.js';
+import { shared } from './shared';
 
 describe('shared', () => {
   it('should work', () => {

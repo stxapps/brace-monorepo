@@ -1,2 +1,2 @@
-export * from './lib/shared.js';
-export * from './lib/theme.js';
+export * from './lib/shared';
+export * from './lib/theme';

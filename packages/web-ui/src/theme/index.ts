@@ -3,4 +3,4 @@ export {
   ThemeProvider,
   type ThemeStorage,
   useTheme,
-} from './theme-provider.js';
+} from './theme-provider';

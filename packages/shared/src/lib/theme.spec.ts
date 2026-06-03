@@ -4,7 +4,7 @@ import {
   msUntilNextThemeSwitch,
   resolveTheme,
   type ThemeState,
-} from './theme.js';
+} from './theme';
 
 const at = (h: number, m = 0) => new Date(2026, 0, 1, h, m, 0, 0);
 
