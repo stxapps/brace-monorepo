@@ -1,7 +1,7 @@
 'use client';
 import { useSyncExternalStore } from 'react';
 
-import { getScrollbarWidth, getWindowInsets, type Insets } from '../lib/utils';
+import { getScrollbarWidth, getWindowInsets, type Insets } from '../lib/window';
 
 export interface WindowSize {
   width: number;

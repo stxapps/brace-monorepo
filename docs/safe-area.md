@@ -89,7 +89,7 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   `env(...)` string. Use `getWindowInsets()` instead, which measures a probe
   element's resolved padding.
 
-**Utils** (`@stxapps/web-ui/lib/utils`)
+**Utils** (`@stxapps/web-ui/lib/window`)
 
 - `getWindowInsets(): Insets` — safe-area insets in px (probe-element based,
   SSR-safe → zeros). One-shot; not reactive.

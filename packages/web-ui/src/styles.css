@@ -140,7 +140,7 @@
    * Named tokens for the safe-area insets. Handy as CSS variables; do NOT rely
    * on reading these back through getComputedStyle (several browsers, Safari
    * included, return the literal `env(...)` string) — use getWindowInsets()
-   * from `@stxapps/web-ui/lib/utils`, which measures a probe element instead.
+   * from `@stxapps/web-ui/lib/window`, which measures a probe element instead.
    */
   :root {
     --env-safe-area-inset-top: env(safe-area-inset-top);
