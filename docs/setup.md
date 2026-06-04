@@ -32,6 +32,14 @@ Flag notes:
 
 - npx shadcn@latest add <component> -c packages/web-ui
 - npx shadcn@latest add button -c packages/web-ui --overwrite
+- npx shadcn@latest add input -c packages/web-ui
+- npx shadcn@latest add card -c packages/web-ui
+- npx shadcn@latest add accordion -c packages/web-ui
+- npx shadcn@latest add checkbox -c packages/web-ui
+- npx shadcn@latest add label -c packages/web-ui
+- npx shadcn@latest add field -c packages/web-ui
+- npx shadcn@latest add select -c packages/web-ui
+- npx shadcn@latest add textarea -c packages/web-ui
 
 #### expo (future)
 

@@ -1,27 +1,50 @@
 import Link from 'next/link';
 
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import {
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@stxapps/web-ui/components/ui/card';
+import { Field, FieldGroup, FieldLabel } from '@stxapps/web-ui/components/ui/field';
+import { Input } from '@stxapps/web-ui/components/ui/input';
 
 export default function SignInPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Sign in</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Welcome back to Brace.</p>
-      </header>
+    <>
+      <CardHeader>
+        <CardTitle>Sign in</CardTitle>
+        <CardDescription>Welcome back to Brace.</CardDescription>
+      </CardHeader>
 
-      {/* TODO: sign-in form (@stxapps/web-crypto KDF). */}
-      <Button className="w-full">Sign in</Button>
+      <CardContent>
+        <form>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="username">Username</FieldLabel>
+              <Input id="username" type="text" autoComplete="username" required />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <Input id="password" type="password" autoComplete="current-password" required />
+            </Field>
+          </FieldGroup>
+        </form>
+      </CardContent>
 
-      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-        New to Brace?{' '}
-        <Link
-          href="/create-account"
-          className="font-medium text-gray-900 underline dark:text-gray-50"
-        >
-          Create account
-        </Link>
-      </p>
-    </div>
+      <CardFooter className="flex-col gap-4">
+        <Button type="submit" className="w-full">
+          Sign in
+        </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          New to Brace?{' '}
+          <Link href="/create-account" className="font-medium text-foreground underline">
+            Create account
+          </Link>
+        </p>
+      </CardFooter>
+    </>
   );
 }

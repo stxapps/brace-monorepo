@@ -1,26 +1,50 @@
 import Link from 'next/link';
 
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import {
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@stxapps/web-ui/components/ui/card';
+import { Field, FieldGroup, FieldLabel } from '@stxapps/web-ui/components/ui/field';
+import { Input } from '@stxapps/web-ui/components/ui/input';
 
 export default function CreateAccountPage() {
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Create account</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Start saving links to visit later.
+    <>
+      <CardHeader>
+        <CardTitle>Create account</CardTitle>
+        <CardDescription>Start saving links to visit later.</CardDescription>
+      </CardHeader>
+
+      <CardContent>
+        <form>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="username">Username</FieldLabel>
+              <Input id="username" type="text" autoComplete="username" required />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="password">Password</FieldLabel>
+              <Input id="password" type="password" autoComplete="new-password" required />
+            </Field>
+          </FieldGroup>
+        </form>
+      </CardContent>
+
+      <CardFooter className="flex-col gap-4">
+        <Button type="submit" className="w-full">
+          Create account
+        </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          Already have an account?{' '}
+          <Link href="/sign-in" className="font-medium text-foreground underline">
+            Sign in
+          </Link>
         </p>
-      </header>
-
-      {/* TODO: account-creation form (@stxapps/web-crypto KDF). */}
-      <Button className="w-full">Create account</Button>
-
-      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-        Already have an account?{' '}
-        <Link href="/sign-in" className="font-medium text-gray-900 underline dark:text-gray-50">
-          Sign in
-        </Link>
-      </p>
-    </div>
+      </CardFooter>
+    </>
   );
 }
