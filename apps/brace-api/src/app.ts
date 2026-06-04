@@ -1,8 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-import { shared } from '@stxapps/shared';
-
 import { authRoutes } from './routes/auth';
 
 export const app = new Hono();
@@ -18,7 +16,6 @@ app.use(
 );
 
 app.get('/', (c) => {
-  shared();
   return c.json({ message: 'Welcome to brace-api' });
 });
 

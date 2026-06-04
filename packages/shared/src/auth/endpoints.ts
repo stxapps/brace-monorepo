@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-import { usernameSchema } from '../../lib/auth';
-import { defineEndpoint } from './endpoint';
+import { defineEndpoint } from '../api/endpoint';
+import { usernameSchema } from './credentials';
 
 // Auth endpoint contracts. Request schemas reuse the pure validators from
-// lib/auth.ts so the field rules (length, charset) are defined exactly once and
-// enforced identically on the client form and the server.
+// ./credentials so the field rules (length, charset) are defined exactly once
+// and enforced identically on the client form and the server.
 
 export const checkUsernameRequestSchema = z.object({
   username: usernameSchema,

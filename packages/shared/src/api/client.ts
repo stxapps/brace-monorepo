@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import type { ApiEndpoint, HttpMethod } from '../types/api/endpoint';
+import type { ApiEndpoint, HttpMethod } from './endpoint';
 
 // Platform-agnostic typed fetch driven by the shared endpoint contracts. Lives
 // in `shared` (not `react`) because it's framework-free and the future
@@ -88,7 +88,6 @@ export interface ApiClient {
 // Binds a baseUrl once so call sites stay terminal: `client.call(endpoint, input)`.
 export function createApiClient(options: ApiClientOptions): ApiClient {
   return {
-    call: (endpoint, input, callOptions) =>
-      callEndpoint(options, endpoint, input, callOptions),
+    call: (endpoint, input, callOptions) => callEndpoint(options, endpoint, input, callOptions),
   };
 }

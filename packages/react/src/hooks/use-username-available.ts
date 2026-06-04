@@ -2,11 +2,7 @@
 
 import { queryOptions, useQuery } from '@tanstack/react-query';
 
-import {
-  type ApiClient,
-  checkUsernameEndpoint,
-  usernameSchema,
-} from '@stxapps/shared';
+import { type ApiClient, checkUsernameEndpoint, usernameSchema } from '@stxapps/shared';
 
 import { useApiClient } from '../contexts/api-client';
 import { useDebouncedValue } from './use-debounced-value';
@@ -20,8 +16,7 @@ export function usernameAvailableQueryOptions(client: ApiClient, username: strin
     queryKey: ['username-available', username] as const,
     // `signal` flows into fetch, so a superseded request (older keystrokes) is
     // aborted — the race-safety that makes this worth a query lib over useEffect.
-    queryFn: ({ signal }) =>
-      client.call(checkUsernameEndpoint, { username }, { signal }),
+    queryFn: ({ signal }) => client.call(checkUsernameEndpoint, { username }, { signal }),
     // Only hit the server once the value passes the shared format rules; avoids
     // firing for too-short/invalid names. (fetchQuery ignores this on submit.)
     enabled: usernameSchema.safeParse(username).success,

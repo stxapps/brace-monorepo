@@ -88,9 +88,7 @@ export function CreateAccountForm() {
           />
           <FieldError errors={errors.username ? [errors.username] : undefined} />
           {usernameHint ? (
-            <FieldDescription
-              className={usernameHint.taken ? 'text-destructive' : undefined}
-            >
+            <FieldDescription className={usernameHint.taken ? 'text-destructive' : undefined}>
               {usernameHint.text}
             </FieldDescription>
           ) : null}
