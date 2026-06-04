@@ -14,13 +14,18 @@ import saveLinksToVisitLater from '../assets/images/save-links-to-visit-later.sv
 export default function Page() {
   return (
     <div>
-      <div className={cn(`mx-auto max-w-6xl px-4 md:px-6 lg:px-8 bg-white`)}>
+      <div className={cn(`mx-auto max-w-6xl bg-white px-4 md:px-6 lg:px-8`)}>
         <div className={cn('relative')}>
           <div className={cn('flex h-14 items-center justify-between')}>
-            <Link className={cn('relative rounded focus:outline-none focus:ring focus:ring-offset-2 blk:focus:ring-offset-gray-900')} href="/">
+            <Link
+              className={cn(
+                'blk:focus:ring-offset-gray-900 relative rounded focus:ring focus:ring-offset-2 focus:outline-none',
+              )}
+              href="/"
+            >
               <BraceIcon className={cn('h-8 w-auto')} aria-label="Brace logo" />
             </Link>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className={cn('bg-background hover:bg-input/30')}>
               <Link href="/sign-in">Sign in</Link>
             </Button>
           </div>
