@@ -1,6 +1,6 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   CardContent,
   CardDescription,
@@ -8,8 +8,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@stxapps/web-ui/components/ui/card';
-import { Field, FieldGroup, FieldLabel } from '@stxapps/web-ui/components/ui/field';
-import { Input } from '@stxapps/web-ui/components/ui/input';
+
+import { SignInForm } from '@/components/auth/sign-in-form';
+
+export const metadata: Metadata = { title: 'Sign in' };
 
 export default function SignInPage() {
   return (
@@ -20,25 +22,11 @@ export default function SignInPage() {
       </CardHeader>
 
       <CardContent>
-        <form>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="username">Username</FieldLabel>
-              <Input id="username" type="text" autoComplete="username" required />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="password">Password</FieldLabel>
-              <Input id="password" type="password" autoComplete="current-password" required />
-            </Field>
-          </FieldGroup>
-        </form>
+        <SignInForm />
       </CardContent>
 
-      <CardFooter className="flex-col gap-4">
-        <Button type="submit" className="w-full">
-          Sign in
-        </Button>
-        <p className="text-center text-sm text-muted-foreground">
+      <CardFooter className="justify-center">
+        <p className="text-sm text-muted-foreground">
           New to Brace?{' '}
           <Link href="/create-account" className="font-medium text-foreground underline">
             Create account

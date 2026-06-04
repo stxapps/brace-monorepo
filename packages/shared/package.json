@@ -19,5 +19,7 @@
     },
     "./package.json": "./package.json"
   },
-  "dependencies": {}
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
 }

@@ -48,10 +48,13 @@
   ],
   "references": [
     {
-      "path": "../../packages/shared"
+      "path": "../../packages/react"
     },
     {
       "path": "../../packages/web-ui"
+    },
+    {
+      "path": "../../packages/shared"
     }
   ]
 }
