@@ -1,9 +1,10 @@
 ## architecture
 
 Living reference for how the workspace is organized. See
-[setup.md](./setup.md) for the one-time scaffold commands and
+[setup.md](./setup.md) for the one-time scaffold commands,
 [safe-area.md](./safe-area.md) for safe-area insets, viewport sizing, and popup
-positioning.
+positioning, and [local-first-sync.md](./local-first-sync.md) for the
+local-first data path (local store + encrypted file sync).
 
 ### apps
 
