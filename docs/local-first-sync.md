@@ -2,7 +2,9 @@
 
 How brace keeps data on the device as the source of truth and syncs encrypted
 files to the server. See [architecture.md](./architecture.md) for the package
-layering and [setup.md](./setup.md) for scaffold history.
+layering, [setup.md](./setup.md) for scaffold history, and
+[api-contracts.md](./api-contracts.md) for the contract-first endpoint pattern
+this builds on.
 
 ### the shape of the problem
 
@@ -83,9 +85,10 @@ The three flows:
 3. **Push (new/edited bookmark)** — write to the local store first, enqueue the
    change, request signed URLs, encrypt, upload to R2, mark synced.
 
-Talk to the API through the shared **contract client**, not Hono RPC. Each
-endpoint is described once in `@stxapps/shared` (`defineEndpoint` + zod schemas);
-both the server and every client read that descriptor, so no client ever imports
+Talk to the API through the shared **contract client**, not Hono RPC — see
+[api-contracts.md](./api-contracts.md) for the full pattern. Each endpoint is
+described once in `@stxapps/shared` (`defineEndpoint` + zod schemas); both the
+server and every client read that descriptor, so no client ever imports
 `brace-api`. The sync engine runs outside React, so it calls `callEndpoint`
 directly (no hooks):
 

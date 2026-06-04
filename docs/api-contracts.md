@@ -1,0 +1,61 @@
+## api contracts
+
+How brace-api endpoints are typed and shared across the server and every client.
+See [architecture.md](./architecture.md) for the package layering and
+[local-first-sync.md](./local-first-sync.md) for how the background sync engine
+and TanStack Query sit on top of this contract layer.
+
+### the decision: contract-first, not Hono RPC
+
+Every endpoint is described **once** in `@stxapps/shared` as a `defineEndpoint`
+descriptor plus zod request/response schemas. The server reads that descriptor
+to validate requests and type responses; every client reads the same descriptor
+to build a typed call. Nobody imports `brace-api`.
+
+**Why not Hono's `hc<AppType>` RPC client?** It infers types from the brace-api
+app instance, forcing clients to `import type { AppType } from '@stxapps/brace-api'`.
+That's an `app → app` edge **and** a `web → node` edge — both forbidden by the
+Nx `type:` / `platform:` boundaries in `eslint.config.mjs` (see
+[architecture.md](./architecture.md)). The hand-written contract keeps every
+dependency arrow pointing **down** at `shared`.
+
+### where the pieces live
+
+All in `packages/shared/src`, exported through the package barrel
+(`src/index.ts`) — consumers always import from `@stxapps/shared`, never from
+internal paths:
+
+- **`api/endpoint.ts`** — the `defineEndpoint` primitive + `ApiEndpoint` type.
+- **`api/client.ts`** — the platform-agnostic typed client: `callEndpoint`
+  (GET/DELETE → query string, else JSON body; takes an optional `{ signal }` for
+  cancellation), `createApiClient` (binds a `baseUrl` once so call sites stay
+  terminal: `api.call(endpoint, input)`), and `ApiError`.
+- **`auth/credentials.ts`** — pure, reusable field validators (`usernameSchema`,
+  `passwordSchema`, the sign-in / create-account form schemas).
+- **`auth/endpoints.ts`** — the auth endpoint contracts (e.g.
+  `checkUsernameEndpoint`), whose request schemas reuse the validators from
+  `auth/credentials.ts` so a rule like username length is defined exactly once
+  and enforced identically on client and server.
+
+### adding an endpoint
+
+1. **Contract** — in `packages/shared/src/<area>/endpoints.ts`, define the
+   request/response zod schemas and a `defineEndpoint({ method, path, request,
+response })` descriptor. Reuse pure validators from `<area>/credentials.ts`
+   (or a sibling) rather than re-declaring field rules. It's exported
+   automatically via the barrel — add an `export *` line in `src/index.ts` if the
+   file is new.
+
+2. **Server** — in `apps/brace-api/src/routes/<area>.ts`, build a `Hono()`
+   sub-app whose route uses the contract's own `endpoint.path`, validates with
+   `zValidator('query' | 'json', endpoint.request)`, and types the payload as the
+   contract's response type so the handler fails to compile if the shape drifts.
+   Mount it in `app.ts` via `app.route('/', <area>Routes)`. (CORS lives in
+   `app.ts` — `CORS_ORIGINS`, default `http://localhost:4000`, the web dev port.)
+
+3. **Client** — call `api.call(endpoint, input)`. `api` is `createApiClient`
+   bound to brace-api's base URL in `apps/brace-web/src/lib/api.ts`
+   (`NEXT_PUBLIC_API_URL`, default `http://localhost:3000`). Components should go
+   through the TanStack Query hooks in `@stxapps/react` (which wrap
+   `callEndpoint`); the background sync engine calls `callEndpoint` directly. See
+   [local-first-sync.md](./local-first-sync.md) for that dividing line.
