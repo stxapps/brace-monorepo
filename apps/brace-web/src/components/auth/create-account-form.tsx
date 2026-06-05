@@ -1,12 +1,6 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-
-import {
-  useCreateAccountForm,
-  usernameAvailableQueryOptions,
-  useUsernameAvailable,
-} from '@stxapps/react';
+import { useCreateAccountForm, useUsernameAvailable } from '@stxapps/react';
 import { type CreateAccountValues, usernameSchema } from '@stxapps/shared';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -18,7 +12,11 @@ import {
 } from '@stxapps/web-ui/components/ui/field';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 
-import { api } from '../../lib/api';
+import {
+  useCreateAccount,
+  UsernameCheckError,
+  UsernameTakenError,
+} from '../../hooks/auth/use-create-account';
 
 // Client leaf for the create-account route. The page stays a Server Component;
 // only this interactive form (react-hook-form + zodResolver) runs on the client.
@@ -30,7 +28,7 @@ export function CreateAccountForm() {
     watch,
     formState: { errors, isSubmitting },
   } = useCreateAccountForm();
-  const queryClient = useQueryClient();
+  const createAccount = useCreateAccount();
 
   // Live availability as the user types (debounced + race-safe inside the hook).
   // Only meaningful once the value is a valid format, which gates the query too.
@@ -39,29 +37,23 @@ export function CreateAccountForm() {
   const availability = useUsernameAvailable(username);
 
   async function onSubmit(values: CreateAccountValues) {
-    // Inputs are already validated by zodResolver. Step 1: authoritative
-    // availability check on the exact submitted value. fetchQuery reuses the
-    // live query's cache, so a paused-on name resolves instantly; the server
-    // still re-checks at creation to close the type→submit race.
+    // Inputs are already validated by zodResolver. The hook owns the submit
+    // sequence (availability re-check → KDF → sign → session); here we only map
+    // its typed failures onto the right form field. await keeps isSubmitting
+    // true for the duration.
     try {
-      const { available } = await queryClient.fetchQuery(
-        usernameAvailableQueryOptions(api, values.username),
-      );
-      if (!available) {
+      await createAccount.mutateAsync(values);
+    } catch (err) {
+      if (err instanceof UsernameTakenError) {
         setError('username', { message: 'Username is taken' });
-        return;
+      } else if (err instanceof UsernameCheckError) {
+        setError('username', {
+          message: 'Could not check username availability. Please try again.',
+        });
+      } else {
+        setError('root', { message: 'Could not create account. Please try again.' });
       }
-    } catch {
-      setError('username', {
-        message: 'Could not check username availability. Please try again.',
-      });
-      return;
     }
-
-    // Remaining steps, left for later:
-    //   2. derive the account via client KDF (@stxapps/web-crypto) → key pair
-    //   3. sign a challenge and POST it to exchange for a session id
-    console.log('create account', values);
   }
 
   // Inline hint mirrors the query state, but never fights a hard field error.
@@ -112,6 +104,7 @@ export function CreateAccountForm() {
           >
             Create account
           </Button>
+          <FieldError errors={errors.root ? [errors.root] : undefined} />
         </Field>
       </FieldGroup>
     </form>
