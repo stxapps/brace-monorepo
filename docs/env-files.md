@@ -1,0 +1,124 @@
+## env files
+
+How each app gets its configuration per environment. There are **three
+environments everywhere**, with the same names across every app and (eventually)
+every piece of infrastructure:
+
+| name          | what it is                          |
+| ------------- | ----------------------------------- |
+| `development` | local dev on your machine           |
+| `staging`     | the testing deploy (pre-production) |
+| `production`  | the live deploy                     |
+
+`development` is the odd one out conceptually: it's the local mode the bundlers
+already call "development", not a deploy target. The two deploy tiers are
+`staging` and `production` — use exactly those two words everywhere (env files,
+Nx configurations, wrangler envs, bucket / D1 names, domains, CI) so nothing
+drifts.
+
+For the infrastructure `staging` and `production` deploy onto (the two
+Cloudflare accounts, the two AWS CloudFront distributions, custom domains), see
+`deployment.md` — a separate doc, because that's infra/tech-stack, not config.
+
+### the one constraint that explains everything: bake-time vs run-time
+
+- **brace-web** (Next.js static export) and **brace-extension** (packaged
+  extension) **inline their public vars at _build_ time** — the value is frozen
+  into the shipped artifact. So each environment is a _separate build_, and
+  **nothing here can be secret**: every var ends up in code the client
+  downloads. These apps use `.env` files.
+- **brace-api** reads its config **at _run_ time** from the host (Node
+  `process.env` today, Cloudflare Workers bindings later). This is where secrets
+  live, and they are **never committed and never bundled**. This app uses
+  host-provided vars/secrets, not committed `.env` files.
+
+So: frontends → build-time `.env` files; backend → runtime host config. The rest
+of this doc is just the per-app spelling of that.
+
+### brace-web — Next.js, static export (implemented)
+
+Next.js auto-loads `.env.<mode>` from the app dir based on `NODE_ENV`. Public
+vars need the **`NEXT_PUBLIC_`** prefix and are baked into the static bundle.
+
+`staging` is the wrinkle: it is a _production-mode_ build (`NODE_ENV=production`,
+same as `production`), so Next can't pick it by mode. Nx supplies it via the
+**`envFile`** option on the build target's `staging` configuration. `envFile` is
+an **Nx `run-commands` option, not a Next feature** — Nx loads the file into
+`process.env` before `next build` runs, and that overrides Next's
+auto-loaded `.env.production`.
+
+Files in `apps/brace-web/` (committed except `*.local`):
+
+| file               | used by                                | loaded by    |
+| ------------------ | -------------------------------------- | ------------ |
+| `.env.development` | `nx dev brace-web`                     | Next (auto)  |
+| `.env.production`  | `nx build brace-web`                   | Next (auto)  |
+| `.env.staging`     | `nx build brace-web -c staging`        | Nx `envFile` |
+
+Current var: `NEXT_PUBLIC_API_URL` → the matching brace-api URL. Adding a new
+var = add the line to all three files (the symmetry is deliberate: there is no
+config hiding in `package.json`).
+
+### brace-extension — wxt / Vite (planned, not yet wired)
+
+wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need the
+**`WXT_PUBLIC_`** prefix and are read via `import.meta.env.WXT_PUBLIC_*` — baked
+into the bundle just like brace-web. The mode is chosen with `--mode`:
+
+| command                     | mode          | env file           |
+| --------------------------- | ------------- | ------------------ |
+| `wxt` (dev)                 | `development` | `.env.development` |
+| `wxt build`                 | `production`  | `.env.production`  |
+| `wxt build --mode staging`  | `staging`     | `.env.staging`     |
+
+**Current state:** the extension talks to the page via `browser.runtime`
+messaging and has **no API-URL env yet**. When it starts calling brace-api, add
+`WXT_PUBLIC_API_URL`, the three `.env.*` files under `apps/brace-extension/`, and
+a `--mode staging` build target (mirroring brace-web's `staging` Nx config).
+Unlike brace-web, wxt selects the file by `--mode` natively, so no Nx `envFile`
+indirection is needed.
+
+### brace-api — Hono (Node today, Cloudflare Workers planned)
+
+Server-side: config is read at **runtime**, never baked. Two phases:
+
+**Current — Node via `@hono/node-server`.** Reads `process.env` at runtime:
+`PORT` (`src/main.ts`) and `CORS_ORIGINS` (`src/app.ts`, comma-separated, default
+`http://localhost:4000`). No env-file loader is wired, so values come from the
+shell or the in-code defaults. For local dev you can add a `.env` and load it
+with `node --env-file=.env` / a tsx flag, or just rely on the defaults.
+
+**Planned — Cloudflare Workers, two accounts.** Workers do **not** expose
+`process.env` at runtime; config arrives as **bindings** on the request context
+(`c.env` in Hono). Moving to Workers therefore means reading from `c.env` instead
+of `process.env`. Per-environment config lives in wrangler config
+(`wrangler.jsonc`):
+
+- non-secret vars (e.g. `CORS_ORIGINS`) → `[vars]` under `env.staging` /
+  `env.production`, each pinned to its Cloudflare account (`account_id`).
+- secrets → `wrangler secret put <NAME> --env <env>` (never committed).
+- D1 / R2 → per-env `d1_databases` / `r2_buckets` bindings.
+- local dev → `wrangler dev` reads **`.dev.vars`** (gitignore it), the Workers
+  equivalent of a local `.env`.
+
+There are no `NEXT_PUBLIC_`-style committed files here because nothing is public.
+
+### wiring the frontends to the backend
+
+Each frontend environment points at the matching brace-api environment, and
+brace-api allows the matching frontend origin back:
+
+| environment   | frontend `*_API_URL` →          | brace-api `CORS_ORIGINS` allows |
+| ------------- | ------------------------------- | ------------------------------- |
+| `development` | `http://localhost:3000`         | `http://localhost:4000`         |
+| `staging`     | staging brace-api domain        | staging frontend origin(s)      |
+| `production`  | production brace-api domain     | production frontend origin(s)   |
+
+CORS is never `*` — each API environment allows only its own frontend origin(s).
+
+### what's committed vs ignored
+
+- **committed:** `.env.development`, `.env.staging`, `.env.production` for the
+  frontends — every value in them is public.
+- **gitignored:** `.env*.local` (frontend personal overrides), `.dev.vars`
+  (brace-api Workers local), and all real secrets. These never enter git.

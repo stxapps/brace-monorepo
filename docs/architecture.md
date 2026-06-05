@@ -4,9 +4,12 @@ Living reference for how the workspace is organized. See
 [setup.md](./setup.md) for the one-time scaffold commands,
 [safe-area.md](./safe-area.md) for safe-area insets, viewport sizing, and popup
 positioning, [local-first-sync.md](./local-first-sync.md) for the
-local-first data path (local store + encrypted file sync), and
+local-first data path (local store + encrypted file sync),
 [api-contracts.md](./api-contracts.md) for the contract-first endpoint pattern
-(typed once in `@stxapps/shared`, shared by server and clients).
+(typed once in `@stxapps/shared`, shared by server and clients),
+[env-files.md](./env-files.md) for per-app environment configuration across
+`development` / `staging` / `production`, and [deployment.md](./deployment.md)
+for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 
 ### apps
 

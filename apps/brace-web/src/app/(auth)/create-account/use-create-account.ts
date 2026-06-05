@@ -40,13 +40,21 @@ export function useCreateAccount() {
 
       // Step 2: derive the account via client KDF (@stxapps/web-crypto, future)
       //   → key pair.
-      // Step 3: sign a challenge and POST it to exchange for a session id.
+      // Step 3: sign a challenge and POST it to exchange for a session id. The
+      // server re-checks username uniqueness here to close the step-1→step-3
+      // race; a "taken" rejection throws UsernameTakenError and routes to the
+      // form's setError. This is a write, so don't cancel it on unmount —
+      // TODO: send a client-generated idempotency key with the POST so a retry
+      // after a dropped client (e.g. browser back mid-flight) is safe and won't
+      // create a duplicate account, rather than aborting the in-flight request.
       // Left stubbed until the crypto package and session endpoint land.
       console.log('create account', values);
-
-      // onSuccess will land the returned session in the cache / auth context so
-      // the rest of the app rerenders — the equivalent of dispatching to update
-      // the store.
     },
+    // TODO: persist the returned session in onSuccess (auth context /
+    // queryClient) rather than in the component's mutateAsync continuation —
+    // onSuccess is hook-level and survives the form unmounting (browser back),
+    // so a success that lands after navigation isn't lost. The component keeps
+    // only the failure→setError mapping, which is UI feedback and fine to drop
+    // when the form is gone.
   });
 }

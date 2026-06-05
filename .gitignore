@@ -53,3 +53,6 @@ Thumbs.db
 out
 test-output
 next-env.d.ts
+
+# Local env overrides (committed env files: .env.development, .env.production)
+.env*.local

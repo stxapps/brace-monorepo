@@ -12,6 +12,11 @@
         "options": {
           "command": "next build && serwist build serwist.config.mjs"
         },
+        "configurations": {
+          "staging": {
+            "envFile": "apps/brace-web/.env.staging"
+          }
+        },
         "outputs": [
           "{projectRoot}/.next/!(cache)/**/*",
           "{projectRoot}/.next/!(cache)",
