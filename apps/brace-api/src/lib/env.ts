@@ -20,16 +20,15 @@ export type Bindings = {
   // Comma-separated CORS allow-list (see app.ts). Set in every wrangler env.
   CORS_ORIGINS: string;
 
-  // --- D1 (sqlite) — sharded; see db/shard-router.ts ----------------------
+  // --- D1 (sqlite)  ----------------------
   // D1 bindings are STATIC: a Worker can't bind a database by id at runtime.
-  // So we pre-declare the master plus one binding per shard, and the `shards`
-  // registry table (in master) maps a logical shard_id -> a binding name here.
-  // Master holds ONLY lookup/master data (users, sessions, shard registry) so
-  // it never approaches D1's size cap; user data lives in the shard DBs.
+  // So we pre-declare the master.
+  // Master holds ONLY lookup/master data (users, sessions) so
+  // it never approaches D1's size cap; user data lives in the durable objects.
   DB_MASTER: D1Database;
-  DB_SHARD_1: D1Database;
-  // Add DB_SHARD_2, … here (and a matching d1 binding in wrangler.jsonc plus a
-  // `shards` row) as capacity grows. Nothing else needs to change.
+
+  // --- Durable Objects ----------------------
+
 
   // --- R2 — encrypted bookmark blobs (see docs/local-first-sync.md) -------
   FILES: R2Bucket;
@@ -42,12 +41,10 @@ export type Bindings = {
 };
 
 // The session resolved by the auth guard (middleware/auth.ts) and read by
-// protected handlers via `c.get('session')`. Carrying shardId here means a
-// protected handler reaches the user's shard with no extra master lookup.
+// protected handlers via `c.get('session')`.
 export type SessionContext = {
   id: string;
   userId: string;
-  shardId: string;
 };
 
 export type Variables = {

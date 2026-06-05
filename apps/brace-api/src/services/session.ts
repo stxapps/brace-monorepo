@@ -1,6 +1,6 @@
 import { sessionsRepo } from '../db/repositories/sessions';
 import type { Bindings } from '../lib/env';
-import { hashToken,newId, newSessionToken } from '../lib/ids';
+import { hashToken, newId, newSessionToken } from '../lib/ids';
 
 // Session lifecycle, master-DB-backed. The auth GUARD (middleware/auth.ts) does
 // the per-request read directly via sessionsRepo; this service owns the WRITE
@@ -17,11 +17,10 @@ export type IssuedSession = {
 };
 
 // Mint a session for a user. We persist the token HASH (never the raw token) and
-// hand the raw token back to the caller to return to the client. shardId is
-// denormalized onto the session so the auth guard resolves the shard in one read.
+// hand the raw token back to the caller to return to the client.
 export async function issueSession(
   env: Bindings,
-  user: { id: string; shardId: string },
+  user: { id: string; },
 ): Promise<IssuedSession> {
   const token = newSessionToken();
   const sessionId = newId();
@@ -31,7 +30,6 @@ export async function issueSession(
     id: sessionId,
     tokenHash: await hashToken(token),
     userId: user.id,
-    shardId: user.shardId,
     expiresAt,
   });
 

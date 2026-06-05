@@ -6,10 +6,6 @@ import { errorHandler } from './lib/errors';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
 
-// Bindings/Variables now live in ./lib/env (typed against @cloudflare/workers-
-// types). Re-export Bindings so existing importers keep working.
-export type { Bindings } from './lib/env';
-
 // Comma-separated allow-list from the Workers binding. `env` is only undefined
 // off-Workers (e.g. app.request() in a test that passes no env); a missing
 // binding yields an empty list, which denies all cross-origin — fail secure.

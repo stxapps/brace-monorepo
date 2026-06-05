@@ -1,7 +1,7 @@
 // ID and token helpers. Uses the Web Crypto API (`crypto.*`), which is a global
 // in the Workers runtime — no Node imports, no `nodejs_compat` flag needed.
 
-// A random, collision-resistant id for rows (users, sessions, shards). UUID v4
+// A random, collision-resistant id for rows (users, sessions). UUID v4
 // is plenty for primary keys here; we don't need sortable/k-ordered ids.
 export function newId(): string {
   return crypto.randomUUID();

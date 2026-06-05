@@ -1,5 +1,5 @@
-// File-manifest repository — lives in a SHARD DB (resolve the right D1 instance
-// via shard-router.ts first). This is the representative user-data table: the
+// File-manifest repository — lives in a durable object DB (resolve the right DO instance
+// via do-router.ts first). This is the representative user-data table: the
 // per-bookmark manifest the sync engine pulls (path + version + size). The
 // encrypted blob itself lives in R2; the server only ever sees this metadata.
 // See docs/local-first-sync.md.

@@ -2,13 +2,11 @@ import { usersRepo } from '../db/repositories/users';
 import type { Bindings } from '../lib/env';
 import { ApiError } from '../lib/errors';
 import { newId } from '../lib/ids';
-import { type IssuedSession,issueSession } from './session';
-import { assignShard } from './shard-assignment';
+import { type IssuedSession, issueSession } from './session';
 
-// Account creation — the moment a user is assigned a shard. This is the heart of
-// the sharding scheme: pick a shard, write the user row in MASTER carrying that
-// shard_id, then mint a session. The user's actual data then lives in the shard
-// DB named by shard.binding_name (see db/shard-router.ts).
+// Account creation - write the user row in MASTER,
+// then mint a session. The user's actual data then lives in the durable object
+// keyed by userId.
 //
 // STATUS: skeleton. The credential side (KDF params, challenge/signature
 // verification) is NOT implemented yet and must be added with the shared
@@ -16,7 +14,6 @@ import { assignShard } from './shard-assignment';
 
 export type CreateAccountResult = {
   userId: string;
-  shardId: string;
   session: IssuedSession;
 };
 
@@ -37,22 +34,20 @@ export async function createAccount(
   // client keypair / KDF challenge) BEFORE provisioning anything, once the
   // create-account contract lands in @stxapps/shared.
 
-  // Assign a shard (atomically claims a slot below the byte cutover; 503 if none).
-  const shard = await assignShard(env.DB_MASTER);
+  // Durable object for user must be deterministically reachable by userId (may have prefix or suffix).
+
 
   const userId = newId();
   try {
-    await users.insert({ id: userId, username: input.username, shardId: shard.id });
+    await users.insert({ id: userId, username: input.username });
   } catch {
-    // UNIQUE(username) lost the race after our pre-check. The claimed shard slot
-    // is now slightly over-counted; acceptable drift (a periodic reconcile can
-    // correct user_count). Surface the conflict to the client.
+    // UNIQUE(username) lost the race after our pre-check. Surface the conflict to the client.
     throw new ApiError(409, 'username_taken', 'Username is already taken');
   }
 
   // TODO: persist credential material (pubkey / KDF params) — likely a
   // `credentials` table in MASTER keyed by userId — within the same flow.
 
-  const session = await issueSession(env, { id: userId, shardId: shard.id });
-  return { userId, shardId: shard.id, session };
+  const session = await issueSession(env, { id: userId });
+  return { userId, session };
 }

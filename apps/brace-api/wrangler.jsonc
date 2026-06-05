@@ -24,12 +24,6 @@
   "dev": {
     "port": 8787,
   },
-  // TODO: shard-size refresh cron. Add a `triggers.crons` schedule (per env
-  // below — triggers, like other bindings, are NOT inherited from the top level)
-  // and a `scheduled(ctrl, env, ctx)` handler in src/worker.ts that calls
-  // refreshShardSizes(env) (src/services/shard-assignment.ts). Until this is
-  // wired, shards.size_bytes never updates, so the byte-based assignment cutover
-  // can't advance. e.g. "triggers": { "crons": ["*/30 * * * *"] }.
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
   // top level — each environment must declare its own. Each tier is a SEPARATE
@@ -52,23 +46,16 @@
       "vars": {
         "CORS_ORIGINS": "http://localhost:3000",
       },
-      // Sharded D1: DB_MASTER holds lookup/master data (users, sessions, shard
-      // registry); DB_SHARD_N hold per-user data. Bindings are STATIC — add a
-      // DB_SHARD_2 entry (+ Bindings type + a `shards` row) to grow capacity.
-      // migrations_dir is per-binding; master and shards have separate histories
-      // (src/db/migrations/{master,shards}). See src/db/migrations/README.md.
+      // DB_MASTER holds lookup/master data (users, sessions);
+      // Bindings are STATIC.
+      // migrations_dir is per-binding; master and durable objects have separate histories
+      // (src/db/migrations/{master,dos}). See src/db/migrations/README.md.
       "d1_databases": [
         {
           "binding": "DB_MASTER",
           "database_name": "brace-master-dev",
           "database_id": "local",
           "migrations_dir": "src/db/migrations/master",
-        },
-        {
-          "binding": "DB_SHARD_1",
-          "database_name": "brace-shard-1-dev",
-          "database_id": "local",
-          "migrations_dir": "src/db/migrations/shards",
         },
       ],
       "r2_buckets": [
@@ -113,12 +100,6 @@
           "database_id": "TODO: `wrangler d1 create brace-master-staging` → paste id",
           "migrations_dir": "src/db/migrations/master",
         },
-        {
-          "binding": "DB_SHARD_1",
-          "database_name": "brace-shard-1-staging",
-          "database_id": "TODO: `wrangler d1 create brace-shard-1-staging` → paste id",
-          "migrations_dir": "src/db/migrations/shards",
-        },
       ],
       "r2_buckets": [
         {
@@ -161,12 +142,6 @@
           "database_name": "brace-master-production",
           "database_id": "TODO: `wrangler d1 create brace-master-production` → paste id",
           "migrations_dir": "src/db/migrations/master",
-        },
-        {
-          "binding": "DB_SHARD_1",
-          "database_name": "brace-shard-1-production",
-          "database_id": "TODO: `wrangler d1 create brace-shard-1-production` → paste id",
-          "migrations_dir": "src/db/migrations/shards",
         },
       ],
       "r2_buckets": [

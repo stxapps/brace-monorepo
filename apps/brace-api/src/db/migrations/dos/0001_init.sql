@@ -1,7 +1,6 @@
--- Migration 0001 (shard) — initial schema. Apply to EVERY shard DB.
--- Mirrors db/shards/schema.sql. Applied via:
---   wrangler d1 migrations apply DB_SHARD_1 --env <development|staging|production>
--- (repeat for each DB_SHARD_N binding).
+-- Migration 0001 (durable object) — initial schema. Apply to EVERY DO.
+-- Mirrors db/dos/schema.sql. Applied via:
+--   
 
 CREATE TABLE IF NOT EXISTS file_manifest (
   user_id    TEXT NOT NULL,

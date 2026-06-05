@@ -1,9 +1,9 @@
--- SHARD database — full-create snapshot (applied to EVERY shard DB).
+-- Durable object database — full-create snapshot (applied to EVERY DO DB).
 --
--- Each shard DB holds the per-user data for the users assigned to it (see the
--- shard registry in db/master/schema.sql). Every shard has the SAME schema;
--- this one file is applied to each. For changes to live shards, add a numbered
--- migration under db/migrations/shards/ and apply it to every shard binding.
+-- Each DO DB holds the per-user data for the users assigned to it.
+-- Every DO has the SAME schema;
+-- this one file is applied to each. For changes to live DOs, add a numbered
+-- migration under db/migrations/dos/ and apply it to every DO.
 -- See db/migrations/README.md.
 --
 -- Rows are scoped by user_id (there is no users table here — identity lives in
