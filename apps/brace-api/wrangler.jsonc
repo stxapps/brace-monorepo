@@ -12,7 +12,7 @@
   // Add only if a dependency needs Node built-ins (Hono + zod don't):
   // "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
@@ -34,21 +34,21 @@
     // the ids here are placeholders local mode ignores.
     "development": {
       "vars": {
-        "CORS_ORIGINS": "http://localhost:4000"
+        "CORS_ORIGINS": "http://localhost:4000",
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "brace-dev",
-          "database_id": "local"
-        }
+          "database_id": "local",
+        },
       ],
       "r2_buckets": [
         {
           "binding": "FILES",
-          "bucket_name": "brace-files-dev"
-        }
-      ]
+          "bucket_name": "brace-files-dev",
+        },
+      ],
     },
     "staging": {
       "account_id": "TODO: staging Cloudflare account id",
@@ -61,21 +61,21 @@
         // host_permissions origin (see brace-extension/wxt.config.ts), and
         // native apps have no CORS. So do NOT add chrome-extension://,
         // moz-extension://, or safari-web-extension:// origins here.
-        "CORS_ORIGINS": "https://brace.to,https://app.brace.to"
+        "CORS_ORIGINS": "https://brace.to,https://app.brace.to",
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "brace-staging",
-          "database_id": "TODO: `wrangler d1 create brace-staging` → paste id"
-        }
+          "database_id": "TODO: `wrangler d1 create brace-staging` → paste id",
+        },
       ],
       "r2_buckets": [
         {
           "binding": "FILES",
-          "bucket_name": "brace-files-staging"
-        }
-      ]
+          "bucket_name": "brace-files-staging",
+        },
+      ],
       // Custom domain (needs a real domain on the staging account):
       // "routes": [{ "pattern": "<staging-api-domain>", "custom_domain": true }]
     },
@@ -90,22 +90,22 @@
         // host_permissions origin (see brace-extension/wxt.config.ts), and
         // native apps have no CORS. So do NOT add chrome-extension://,
         // moz-extension://, or safari-web-extension:// origins here.
-        "CORS_ORIGINS": "https://brace.to,https://app.brace.to"
+        "CORS_ORIGINS": "https://brace.to,https://app.brace.to",
       },
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "brace-production",
-          "database_id": "TODO: `wrangler d1 create brace-production` → paste id"
-        }
+          "database_id": "TODO: `wrangler d1 create brace-production` → paste id",
+        },
       ],
       "r2_buckets": [
         {
           "binding": "FILES",
-          "bucket_name": "brace-files-production"
-        }
-      ]
+          "bucket_name": "brace-files-production",
+        },
+      ],
       // "routes": [{ "pattern": "<prod-api-domain>", "custom_domain": true }]
-    }
-  }
+    },
+  },
 }

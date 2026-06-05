@@ -49,11 +49,11 @@ auto-loaded `.env.production`.
 
 Files in `apps/brace-web/` (committed except `*.local`):
 
-| file               | used by                                | loaded by    |
-| ------------------ | -------------------------------------- | ------------ |
-| `.env.development` | `nx dev brace-web`                     | Next (auto)  |
-| `.env.production`  | `nx build brace-web`                   | Next (auto)  |
-| `.env.staging`     | `nx build brace-web -c staging`        | Nx `envFile` |
+| file               | used by                         | loaded by    |
+| ------------------ | ------------------------------- | ------------ |
+| `.env.development` | `nx dev brace-web`              | Next (auto)  |
+| `.env.production`  | `nx build brace-web`            | Next (auto)  |
+| `.env.staging`     | `nx build brace-web -c staging` | Nx `envFile` |
 
 Current var: `NEXT_PUBLIC_API_URL` → the matching brace-api URL. Adding a new
 var = add the line to all three files (the symmetry is deliberate: there is no
@@ -65,11 +65,11 @@ wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need th
 **`WXT_PUBLIC_`** prefix and are read via `import.meta.env.WXT_PUBLIC_*` — baked
 into the bundle just like brace-web. The mode is chosen with `--mode`:
 
-| command                     | mode          | env file           |
-| --------------------------- | ------------- | ------------------ |
-| `wxt` (dev)                 | `development` | `.env.development` |
-| `wxt build`                 | `production`  | `.env.production`  |
-| `wxt build --mode staging`  | `staging`     | `.env.staging`     |
+| command                    | mode          | env file           |
+| -------------------------- | ------------- | ------------------ |
+| `wxt` (dev)                | `development` | `.env.development` |
+| `wxt build`                | `production`  | `.env.production`  |
+| `wxt build --mode staging` | `staging`     | `.env.staging`     |
 
 **Current state:** the extension talks to the page via `browser.runtime`
 messaging and has **no API-URL env yet**. When it starts calling brace-api, add
@@ -116,11 +116,11 @@ Local dev is `wrangler dev --env development` (the `dev` target); it uses the
 Each frontend environment points at the matching brace-api environment, and
 brace-api allows the matching frontend origin back:
 
-| environment   | frontend `*_API_URL` →          | brace-api `CORS_ORIGINS` allows |
-| ------------- | ------------------------------- | ------------------------------- |
-| `development` | `http://localhost:3000`         | `http://localhost:4000`         |
-| `staging`     | staging brace-api domain        | staging frontend origin(s)      |
-| `production`  | production brace-api domain     | production frontend origin(s)   |
+| environment   | frontend `*_API_URL` →      | brace-api `CORS_ORIGINS` allows |
+| ------------- | --------------------------- | ------------------------------- |
+| `development` | `http://localhost:3000`     | `http://localhost:4000`         |
+| `staging`     | staging brace-api domain    | staging frontend origin(s)      |
+| `production`  | production brace-api domain | production frontend origin(s)   |
 
 CORS is never `*` — each API environment allows only its own frontend origin(s).
 

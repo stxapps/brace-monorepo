@@ -107,10 +107,10 @@ Stable custom domains are **required**, not optional: the frontends bake the API
 URL into their bundles, so pointing at `*.workers.dev` / `*.cloudfront.net` would
 mean rebuilding whenever an infra subdomain changes.
 
-| tier         | web (CloudFront)            | api (Worker)                    |
-| ------------ | --------------------------- | ------------------------------- |
-| `staging`    | `TODO: staging web domain`  | `TODO: staging api domain`      |
-| `production` | `TODO: prod web domain`     | `TODO: prod api domain`         |
+| tier         | web (CloudFront)           | api (Worker)               |
+| ------------ | -------------------------- | -------------------------- |
+| `staging`    | `TODO: staging web domain` | `TODO: staging api domain` |
+| `production` | `TODO: prod web domain`    | `TODO: prod api domain`    |
 
 ### cors & frontend↔backend wiring
 
@@ -139,15 +139,15 @@ Notes:
 One suffix scheme — `staging` / `production` — across **everything**, so a
 glance tells you the tier:
 
-| resource              | staging                  | production               |
-| --------------------- | ------------------------ | ------------------------ |
-| S3 bucket             | `TODO`                   | `TODO`                   |
-| CloudFront dist       | `TODO`                   | `TODO`                   |
-| Worker name / env     | `…-staging` / `staging`  | `…-prod` / `production`  |
-| D1 database           | `TODO`                   | `TODO`                   |
-| R2 bucket             | `TODO`                   | `TODO`                   |
-| web domain            | `TODO`                   | `TODO`                   |
-| api domain            | `TODO`                   | `TODO`                   |
+| resource          | staging                 | production              |
+| ----------------- | ----------------------- | ----------------------- |
+| S3 bucket         | `TODO`                  | `TODO`                  |
+| CloudFront dist   | `TODO`                  | `TODO`                  |
+| Worker name / env | `…-staging` / `staging` | `…-prod` / `production` |
+| D1 database       | `TODO`                  | `TODO`                  |
+| R2 bucket         | `TODO`                  | `TODO`                  |
+| web domain        | `TODO`                  | `TODO`                  |
+| api domain        | `TODO`                  | `TODO`                  |
 
 ### status & setup checklist
 
