@@ -4,7 +4,7 @@ import { SerwistProvider } from '@serwist/next/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ApiClientProvider } from '@stxapps/react';
-import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/theme';
+import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { api } from '../lib/api';
 

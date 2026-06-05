@@ -18,13 +18,9 @@
       "default": "./src/index.ts"
     },
     "./styles.css": "./src/styles.css",
-    "./theme": {
-      "types": "./src/theme/index.ts",
-      "import": "./src/theme/index.ts",
-      "default": "./src/theme/index.ts"
-    },
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
+    "./contexts/*": "./src/contexts/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./package.json": "./package.json"
   },

@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import { coerceThemeState, THEME_STORAGE_KEY, type ThemeState } from '@stxapps/shared';
-import { ThemeProvider, type ThemeStorage } from '@stxapps/web-ui/theme';
+import { ThemeProvider, type ThemeStorage } from '@stxapps/web-ui/contexts/theme-provider';
 
 import App from './App.tsx';
 
