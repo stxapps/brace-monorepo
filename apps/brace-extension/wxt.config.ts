@@ -14,12 +14,32 @@ export default defineConfig({
   // WXT defaults Firefox to MV2; pin MV3 on both to match the existing
   // extensions (Firefox MV3 keeps `background.scripts`, which WXT emits).
   manifestVersion: 3,
-  manifest: ({ browser }) => {
+  manifest: ({ browser, mode }) => {
     const isFirefox = browser === 'firefox';
+    // brace-api host the extension talks to, per build mode — mirrors
+    // brace-web's NEXT_PUBLIC_API_URL (dev :3000, staging/prod custom domains).
+    // `mode` is 'development' for `wxt`/`wxt dev`, 'production' for `wxt build`,
+    // and 'staging' when built with `--mode staging`.
+    //
+    // Auth is a bearer token (Authorization header) shared across web,
+    // extension, and the future mobile app — NOT a cookie. In MV3, the
+    // background/service-worker's fetches to a host_permissions origin are
+    // EXEMPT from CORS, so the extension never appears in brace-api's
+    // CORS_ORIGINS allow-list. Keep this minimal: each build ships only its own
+    // tier's host (no localhost/staging in the production store build).
+    // NOTE: content scripts get NO CORS exemption — route their API calls
+    // through background.ts rather than fetching brace-api directly.
+    const apiHost =
+      mode === 'production'
+        ? 'https://api.brace.to/*'
+        : mode === 'staging'
+          ? 'https://api.staging.brace.to/*'
+          : 'http://localhost:3000/*';
     return {
       name: 'Brace.to - Bookmark Manager',
       description:
         'Save links to visit later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
+      host_permissions: [apiHost],
       permissions: [
         'storage',
         // activeTab grants temporary host access to the current tab on click,

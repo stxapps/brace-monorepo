@@ -6,8 +6,10 @@ how each app gets its per-environment values). This doc owns the
 **infrastructure / tech stack** and the **deploy flow**.
 
 > **Status: plan / scaffold.** As of this writing nothing is deployed yet —
-> brace-api runs on Node locally, there is no `wrangler.jsonc`, and no AWS
-> stack exists. Items below marked _(planned)_ are decisions, not yet built; the
+> brace-api is Workers-only (`src/worker.ts`; local dev via `wrangler dev`), and
+> its `wrangler.jsonc` + `deploy` target exist but point at unprovisioned
+> resources (placeholder account IDs / D1 / R2), and no AWS stack exists. Items
+> below marked _(planned)_ are decisions, not yet built; the
 > [status & setup checklist](#status--setup-checklist) at the end tracks what's
 > real. `TODO:` markers flag values you must fill in (domains, account IDs, CI
 > provider).
@@ -62,9 +64,10 @@ reuse the staging bundle for production.
 
 ### brace-api → Cloudflare Workers _(planned)_
 
-Hono app. Today it runs on Node via `@hono/node-server`; production target is
-the **Workers runtime**, which means reading config from `c.env` bindings
-instead of `process.env` (see [env-files.md](./env-files.md#brace-api)).
+Hono app, **Workers-only** (`src/worker.ts`, `export default app`; no Node
+entry). Config is read at runtime from `c.env` bindings — see
+[env-files.md](./env-files.md#brace-api). Local dev is `wrangler dev` (workerd +
+local D1/R2 emulation), not Node.
 
 - **Two Cloudflare accounts** — one per tier (`account_id` differs).
 - **`wrangler.jsonc`** — named environments pin each tier to its account, with
@@ -152,8 +155,11 @@ Current reality and the work to make this doc true:
 
 - [x] brace-web env files + Nx `staging` build configuration (done — see
       [env-files.md](./env-files.md#brace-web)).
-- [ ] brace-api: migrate `process.env` reads (`PORT`, `CORS_ORIGINS`) to `c.env`
-      Workers bindings; add `wrangler.jsonc` with `staging` / `production` envs.
+- [x] brace-api: Workers-only (`src/worker.ts`); `wrangler.jsonc` (`staging` /
+      `production` envs); Nx targets in `package.json` `nx.targets` — `dev`
+      (`wrangler dev`), `build` (dry-run bundle), `deploy` (default staging,
+      `-c production`); `CORS_ORIGINS` reads `c.env`. (Fill the wrangler `TODO`s
+      and provision D1/R2 before a real deploy.)
 - [ ] Cloudflare: create the two accounts; provision D1 + R2 per account; set
       vars/secrets; wire custom domains.
 - [ ] AWS: two S3 buckets + two CloudFront distributions + shared CloudFront

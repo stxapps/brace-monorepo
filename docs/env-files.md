@@ -78,30 +78,38 @@ a `--mode staging` build target (mirroring brace-web's `staging` Nx config).
 Unlike brace-web, wxt selects the file by `--mode` natively, so no Nx `envFile`
 indirection is needed.
 
-### brace-api — Hono (Node today, Cloudflare Workers planned)
+### brace-api — Hono on Cloudflare Workers
 
-Server-side: config is read at **runtime**, never baked. Two phases:
+Server-side: config is read at **runtime**, never baked. brace-api runs **only**
+on Workers (`src/worker.ts`, `export default app`) — there is no Node entry.
 
-**Current — Node via `@hono/node-server`.** Reads `process.env` at runtime:
-`PORT` (`src/main.ts`) and `CORS_ORIGINS` (`src/app.ts`, comma-separated, default
-`http://localhost:4000`). No env-file loader is wired, so values come from the
-shell or the in-code defaults. For local dev you can add a `.env` and load it
-with `node --env-file=.env` / a tsx flag, or just rely on the defaults.
+**Config read.** `src/app.ts` resolves `CORS_ORIGINS` per-request:
+`c.env.CORS_ORIGINS` (the Workers binding) first, then
+`globalThis.process?.env?.CORS_ORIGINS`, then the `http://localhost:4000`
+default. On Workers `c.env` is the source; the `process.env` fallback only covers
+non-Workers callers like `app.request()` in jest tests. `globalThis.process`
+(not bare `process`) keeps it safe on Workers, which has no `process` global.
 
-**Planned — Cloudflare Workers, two accounts.** Workers do **not** expose
-`process.env` at runtime; config arrives as **bindings** on the request context
-(`c.env` in Hono). Moving to Workers therefore means reading from `c.env` instead
-of `process.env`. Per-environment config lives in wrangler config
-(`wrangler.jsonc`):
+**Per-environment values live in `wrangler.jsonc`**, as three wrangler
+environments matching the project's tiers — `development` / `staging` /
+`production` (staging & production each pin their own Cloudflare account via
+`account_id`; `development` has none — it's never deployed):
 
-- non-secret vars (e.g. `CORS_ORIGINS`) → `[vars]` under `env.staging` /
-  `env.production`, each pinned to its Cloudflare account (`account_id`).
-- secrets → `wrangler secret put <NAME> --env <env>` (never committed).
-- D1 / R2 → per-env `d1_databases` / `r2_buckets` bindings.
-- local dev → `wrangler dev` reads **`.dev.vars`** (gitignore it), the Workers
-  equivalent of a local `.env`.
+- non-secret vars (e.g. `CORS_ORIGINS`) → `vars` under each `env.*`. The
+  `development` env sets `CORS_ORIGINS=http://localhost:4000` so local dev needs
+  no extra file.
+- secrets → `wrangler secret put <NAME> --env staging|production` (never
+  committed).
+- D1 / R2 → per-env `d1_databases` / `r2_buckets` bindings. `development`'s are
+  emulated locally by miniflare (state under `.wrangler/`), so its ids are
+  placeholders.
+- **`.dev.vars`** (gitignored) is **only for local secrets** you can't commit to
+  `wrangler.jsonc` — not for `CORS_ORIGINS`, which lives in the `development`
+  env's `vars`. Loaded by `wrangler dev`, it overrides committed `vars` locally.
 
-There are no `NEXT_PUBLIC_`-style committed files here because nothing is public.
+Local dev is `wrangler dev --env development` (the `dev` target); it uses the
+`development` env above with locally emulated D1/R2. There are no
+`NEXT_PUBLIC_`-style committed files here because nothing is public.
 
 ### wiring the frontends to the backend
 

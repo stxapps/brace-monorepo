@@ -56,3 +56,10 @@ next-env.d.ts
 
 # Local env overrides (committed env files: .env.development, .env.production)
 .env*.local
+
+# Cloudflare Workers local vars/secrets (brace-api)
+.dev.vars
+.dev.vars.*
+
+# Cloudflare Workers local state (D1/R2 emulation, wrangler dev)
+.wrangler

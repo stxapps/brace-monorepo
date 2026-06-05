@@ -109,22 +109,32 @@ per-project override.
 
 ### bundling brace-api
 
-`brace-api` (Hono on Node) has no inherent bundler, so plain `tsc` output left
-`import '@stxapps/shared'` as a bare specifier that Node resolved at runtime to
-the package's raw `.ts` source — and crashed on the extensionless internal
-imports (`ERR_MODULE_NOT_FOUND`). The fix is to **bundle the app** so workspace
-packages are inlined, matching how the web apps consume them.
+`brace-api` runs on **Cloudflare Workers**, with `src/worker.ts`
+(`export default app`) as the entry. **wrangler** bundles it (esbuild under the
+hood), inlining the workspace `@stxapps/*` packages from source — the same way
+the web apps consume them, so the extensionless internal imports resolve.
+Third-party deps (`hono`, `@hono/zod-validator`) are inlined too, since Workers
+has no `node_modules` at runtime. There is **no Node entry** — brace-api does not
+run on Node, so there is no `main.ts` / `@hono/node-server`.
 
-- **build** — `@nx/esbuild:esbuild` executor (config in
-  `apps/brace-api/package.json` under `nx.targets`): `platform: node`,
-  `format: ['esm']`, `bundle: true`, `thirdParty: false`. Workspace `@stxapps/*`
-  packages get **inlined**; third-party deps (`hono`, `@hono/node-server`) stay
-  **external** and resolve from `node_modules` at runtime.
-- **dev** — `tsx watch src/main.ts` (esbuild under the hood; resolves source +
-  extensionless directly, no build step).
-- **typecheck** — still `tsc` (esbuild doesn't type-check); this is the type
+Targets live in `apps/brace-api/package.json` under `nx.targets` (the same place
+brace-web/brace-extension keep theirs). Since no plugin infers `build`/`deploy`
+for this app, each target declares `"executor": "nx:run-commands"` **explicitly**
+— the bare `options.command` form only resolves when a plugin already provides
+the target to merge onto (as `@nx/next` does for brace-web's `build`):
+
+- **dev** — `wrangler dev --env development`: runs the Worker in a local runtime
+  (workerd/miniflare) with **local emulation** of D1/R2 (state under
+  `.wrangler/`). The local-only `development` env in `wrangler.jsonc` supplies
+  `CORS_ORIGINS=http://localhost:4000`. Add `--remote` to run on a real edge
+  preview against the real bindings instead. Bindings live only under `env.*`,
+  so `--env` is required.
+- **build** — `wrangler deploy --env staging --dry-run --outdir dist`: bundles
+  and validates without deploying (no auth needed). Real deploys use the
+  `deploy` target (`wrangler deploy --env staging|production`); see
+  [deployment.md](./deployment.md).
+- **typecheck** — `tsc` (wrangler/esbuild don't type-check); this is the type
   gate.
 
-esbuild is a single workspace-root devDependency, shared by `@nx/esbuild`,
-`brace-api`'s build, and `@serwist/cli`'s optional-peer service-worker build in
-`brace-web` (don't redeclare it per-app).
+esbuild remains a single workspace-root devDependency for `@serwist/cli`'s
+optional-peer service-worker build in `brace-web` (don't redeclare it per-app).

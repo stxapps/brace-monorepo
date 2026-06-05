@@ -9,23 +9,24 @@
     ],
     "targets": {
       "build": {
-        "executor": "@nx/esbuild:esbuild",
+        "executor": "nx:run-commands",
         "outputs": [
-          "{options.outputPath}"
+          "{projectRoot}/dist"
         ],
         "options": {
-          "main": "apps/brace-api/src/main.ts",
-          "outputPath": "apps/brace-api/dist",
-          "outputFileName": "main.js",
-          "tsConfig": "apps/brace-api/tsconfig.json",
-          "platform": "node",
-          "format": [
-            "esm"
-          ],
-          "bundle": true,
-          "thirdParty": false,
-          "esbuildOptions": {
-            "sourcemap": true
+          "command": "wrangler deploy --env staging --dry-run --outdir dist",
+          "cwd": "apps/brace-api"
+        }
+      },
+      "deploy": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "wrangler deploy --env staging",
+          "cwd": "apps/brace-api"
+        },
+        "configurations": {
+          "production": {
+            "command": "wrangler deploy --env production"
           }
         }
       }
@@ -33,12 +34,13 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "start": "node dist/main.js"
+    "dev": "wrangler dev --env development"
   },
   "dependencies": {
-    "@hono/node-server": "^2.0.4",
     "@hono/zod-validator": "^0.8.0",
     "hono": "^4.12.23"
+  },
+  "devDependencies": {
+    "wrangler": "^4.98.0"
   }
 }

@@ -1,0 +1,111 @@
+{
+  // Cloudflare Workers config for brace-api. The code is wired — `wrangler` is
+  // installed, `src/worker.ts` is the entry, and `app.ts` reads `c.env`. What
+  // remains is filling the `TODO` values and provisioning the resources. See
+  // docs/deployment.md and docs/env-files.md#brace-api.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "brace-api",
+  // Workers entry: src/worker.ts default-exports the Hono app; the runtime calls
+  // fetch(request, env, ctx) on it.
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-01",
+  // Add only if a dependency needs Node built-ins (Hono + zod don't):
+  // "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  // --- per-tier environments -------------------------------------------------
+  // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
+  // top level — each environment must declare its own. Each tier is a SEPARATE
+  // Cloudflare account, so `account_id` differs. Worker names auto-suffix to
+  // `brace-api-staging` / `brace-api-production`. Deploy with:
+  //   wrangler deploy --env staging      (staging account's API token)
+  //   wrangler deploy --env production   (production account's API token)
+  //
+  // Secrets are NOT stored here — set them per env:
+  //   wrangler secret put <NAME> --env staging|production
+  // Non-secret config (e.g. CORS_ORIGINS) lives in `vars` below — including the
+  // local-only `development` env that `wrangler dev` uses, so it's committed and
+  // shared. `.dev.vars` (gitignored) is only for local *secrets* you can't put
+  // in this committed file.
+  "env": {
+    // Local-only — used by `wrangler dev --env development`, never deployed (no
+    // account_id). D1/R2 are emulated by miniflare (state under .wrangler/), so
+    // the ids here are placeholders local mode ignores.
+    "development": {
+      "vars": {
+        "CORS_ORIGINS": "http://localhost:4000"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "brace-dev",
+          "database_id": "local"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "brace-files-dev"
+        }
+      ]
+    },
+    "staging": {
+      "account_id": "TODO: staging Cloudflare account id",
+      "vars": {
+        // Comma-separated exact origins (corsOrigins() splits on ','). No
+        // wildcards — the matcher compares literally, so list each subdomain.
+        // Web origins ONLY. Extensions and the future mobile app authenticate
+        // with a bearer token (Authorization header), not cookies, and are NOT
+        // browser-CORS-bound: MV3 extensions exempt background fetches to their
+        // host_permissions origin (see brace-extension/wxt.config.ts), and
+        // native apps have no CORS. So do NOT add chrome-extension://,
+        // moz-extension://, or safari-web-extension:// origins here.
+        "CORS_ORIGINS": "https://brace.to,https://app.brace.to"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "brace-staging",
+          "database_id": "TODO: `wrangler d1 create brace-staging` → paste id"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "brace-files-staging"
+        }
+      ]
+      // Custom domain (needs a real domain on the staging account):
+      // "routes": [{ "pattern": "<staging-api-domain>", "custom_domain": true }]
+    },
+    "production": {
+      "account_id": "TODO: production Cloudflare account id",
+      "vars": {
+        // Comma-separated exact origins (corsOrigins() splits on ','). No
+        // wildcards — the matcher compares literally, so list each subdomain.
+        // Web origins ONLY. Extensions and the future mobile app authenticate
+        // with a bearer token (Authorization header), not cookies, and are NOT
+        // browser-CORS-bound: MV3 extensions exempt background fetches to their
+        // host_permissions origin (see brace-extension/wxt.config.ts), and
+        // native apps have no CORS. So do NOT add chrome-extension://,
+        // moz-extension://, or safari-web-extension:// origins here.
+        "CORS_ORIGINS": "https://brace.to,https://app.brace.to"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "brace-production",
+          "database_id": "TODO: `wrangler d1 create brace-production` → paste id"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "FILES",
+          "bucket_name": "brace-files-production"
+        }
+      ]
+      // "routes": [{ "pattern": "<prod-api-domain>", "custom_domain": true }]
+    }
+  }
+}
