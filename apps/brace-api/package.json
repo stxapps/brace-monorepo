@@ -29,6 +29,31 @@
             "command": "wrangler deploy --env production"
           }
         }
+      },
+      "migrate": {
+        "executor": "nx:run-commands",
+        "options": {
+          "commands": [
+            "wrangler d1 migrations apply DB_MASTER --env development",
+            "wrangler d1 migrations apply DB_SHARD_1 --env development"
+          ],
+          "parallel": false,
+          "cwd": "apps/brace-api"
+        },
+        "configurations": {
+          "staging": {
+            "commands": [
+              "wrangler d1 migrations apply DB_MASTER --env staging",
+              "wrangler d1 migrations apply DB_SHARD_1 --env staging"
+            ]
+          },
+          "production": {
+            "commands": [
+              "wrangler d1 migrations apply DB_MASTER --env production",
+              "wrangler d1 migrations apply DB_SHARD_1 --env production"
+            ]
+          }
+        }
       }
     }
   },
@@ -41,6 +66,7 @@
     "hono": "^4.12.23"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260605.1",
     "wrangler": "^4.98.0"
   }
 }

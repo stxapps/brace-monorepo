@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./out-tsc/jest",
-    "types": ["jest", "node"],
+    "types": ["@cloudflare/workers-types", "jest", "node"],
     "module": "commonjs",
     "moduleResolution": "node10",
     "verbatimModuleSyntax": false

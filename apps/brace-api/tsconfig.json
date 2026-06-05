@@ -5,7 +5,7 @@
     "noEmit": false,
     "resolveJsonModule": true,
     "lib": ["es2022"],
-    "types": ["jest", "node"],
+    "types": ["@cloudflare/workers-types", "jest", "node"],
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
