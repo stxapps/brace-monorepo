@@ -126,7 +126,7 @@ the target to merge onto (as `@nx/next` does for brace-web's `build`):
 - **dev** — `wrangler dev --env development`: runs the Worker in a local runtime
   (workerd/miniflare) with **local emulation** of D1/R2 (state under
   `.wrangler/`). The local-only `development` env in `wrangler.jsonc` supplies
-  `CORS_ORIGINS=http://localhost:4000`. Add `--remote` to run on a real edge
+  `CORS_ORIGINS=http://localhost:3000`. Add `--remote` to run on a real edge
   preview against the real bindings instead. Bindings live only under `env.*`,
   so `--env` is required.
 - **build** — `wrangler deploy --env staging --dry-run --outdir dist`: bundles

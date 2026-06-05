@@ -51,11 +51,11 @@ response })` descriptor. Reuse pure validators from `<area>/credentials.ts`
    `zValidator('query' | 'json', endpoint.request)`, and types the payload as the
    contract's response type so the handler fails to compile if the shape drifts.
    Mount it in `app.ts` via `app.route('/', <area>Routes)`. (CORS lives in
-   `app.ts` — `CORS_ORIGINS`, default `http://localhost:4000`, the web dev port.)
+   `app.ts` — `CORS_ORIGINS`, default `http://localhost:3000`, the web dev port.)
 
 3. **Client** — call `api.call(endpoint, input)`. `api` is `createApiClient`
    bound to brace-api's base URL in `apps/brace-web/src/lib/api.ts`
-   (`NEXT_PUBLIC_API_URL`, default `http://localhost:3000`). Components should go
+   (`NEXT_PUBLIC_API_URL`, default `http://localhost:8787`). Components should go
    through the TanStack Query hooks in `@stxapps/react` (which wrap
    `callEndpoint`); the background sync engine calls `callEndpoint` directly. See
    [local-first-sync.md](./local-first-sync.md) for that dividing line.

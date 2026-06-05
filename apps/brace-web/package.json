@@ -25,12 +25,12 @@
       },
       "dev": {
         "options": {
-          "command": "next dev --port 4000"
+          "command": "next dev --port 3000"
         }
       },
       "start": {
         "options": {
-          "command": "next start --port 4000"
+          "command": "next start --port 3000"
         }
       }
     }

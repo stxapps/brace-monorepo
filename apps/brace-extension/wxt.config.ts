@@ -17,7 +17,7 @@ export default defineConfig({
   manifest: ({ browser, mode }) => {
     const isFirefox = browser === 'firefox';
     // brace-api host the extension talks to, per build mode — mirrors
-    // brace-web's NEXT_PUBLIC_API_URL (dev :3000, staging/prod custom domains).
+    // brace-web's NEXT_PUBLIC_API_URL (dev :8787, staging/prod custom domains).
     // `mode` is 'development' for `wxt`/`wxt dev`, 'production' for `wxt build`,
     // and 'staging' when built with `--mode staging`.
     //
@@ -34,7 +34,7 @@ export default defineConfig({
         ? 'https://api.brace.to/*'
         : mode === 'staging'
           ? 'https://api.staging.brace.to/*'
-          : 'http://localhost:3000/*';
+          : 'http://localhost:8787/*';
     return {
       name: 'Brace.to - Bookmark Manager',
       description:
@@ -55,13 +55,13 @@ export default defineConfig({
       // action.default_title comes from the popup's <title> (entrypoints/popup).
       ...(isFirefox
         ? {
-            browser_specific_settings: {
-              gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
-            },
-          }
+          browser_specific_settings: {
+            gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
+          },
+        }
         : {
-            minimum_chrome_version: '93',
-          }),
+          minimum_chrome_version: '93',
+        }),
     };
   },
   vite: () => ({

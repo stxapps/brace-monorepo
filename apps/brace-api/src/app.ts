@@ -23,7 +23,7 @@ function corsOrigins(env: Bindings | undefined): string[] {
 
 export const app = new Hono<{ Bindings: Bindings }>();
 
-// Browser clients are cross-origin (brace-web dev on :4000, the extension from
+// Browser clients are cross-origin (brace-web dev on :3000, the extension from
 // its own origin), so allow CORS. The allow-list is resolved per-request from
 // the runtime env; credentials require echoing the specific origin (not '*').
 app.use(

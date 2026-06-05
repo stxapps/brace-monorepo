@@ -14,6 +14,16 @@
   "observability": {
     "enabled": true,
   },
+  // Pin the local `wrangler dev` port. Without this, wrangler treats 8787 as a
+  // *default* and silently falls back to a random port (8788, …) when 8787 is
+  // already taken — e.g. a leftover/zombie wrangler, or running `npm run dev`
+  // while a standalone `nx run brace-api:dev` is up. brace-web is hardcoded to
+  // http://localhost:8787 (see apps/brace-web/.env.development), so any drift
+  // makes the API "unreachable". Setting `port` explicitly makes wrangler bind
+  // 8787 or fail loudly (EADDRINUSE) instead of drifting.
+  "dev": {
+    "port": 8787,
+  },
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
   // top level — each environment must declare its own. Each tier is a SEPARATE
@@ -34,7 +44,7 @@
     // the ids here are placeholders local mode ignores.
     "development": {
       "vars": {
-        "CORS_ORIGINS": "http://localhost:4000",
+        "CORS_ORIGINS": "http://localhost:3000",
       },
       "d1_databases": [
         {

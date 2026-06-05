@@ -84,8 +84,7 @@ Server-side: config is read at **runtime**, never baked. brace-api runs **only**
 on Workers (`src/worker.ts`, `export default app`) — there is no Node entry.
 
 **Config read.** `src/app.ts` resolves `CORS_ORIGINS` per-request:
-`c.env.CORS_ORIGINS` (the Workers binding) first, then
-`globalThis.process?.env?.CORS_ORIGINS`, then the `http://localhost:4000`
+`c.env.CORS_ORIGINS` (the Workers binding) first, then the `[]`
 default. On Workers `c.env` is the source; the `process.env` fallback only covers
 non-Workers callers like `app.request()` in jest tests. `globalThis.process`
 (not bare `process`) keeps it safe on Workers, which has no `process` global.
@@ -96,7 +95,7 @@ environments matching the project's tiers — `development` / `staging` /
 `account_id`; `development` has none — it's never deployed):
 
 - non-secret vars (e.g. `CORS_ORIGINS`) → `vars` under each `env.*`. The
-  `development` env sets `CORS_ORIGINS=http://localhost:4000` so local dev needs
+  `development` env sets `CORS_ORIGINS=http://localhost:3000` so local dev needs
   no extra file.
 - secrets → `wrangler secret put <NAME> --env staging|production` (never
   committed).
@@ -118,7 +117,7 @@ brace-api allows the matching frontend origin back:
 
 | environment   | frontend `*_API_URL` →      | brace-api `CORS_ORIGINS` allows |
 | ------------- | --------------------------- | ------------------------------- |
-| `development` | `http://localhost:3000`     | `http://localhost:4000`         |
+| `development` | `http://localhost:8787`     | `http://localhost:3000`         |
 | `staging`     | staging brace-api domain    | staging frontend origin(s)      |
 | `production`  | production brace-api domain | production frontend origin(s)   |
 
