@@ -39,19 +39,27 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
 -- Shard registry: one row per shard DB. binding_name maps a logical shard id to
 -- a wrangler binding (a property on c.env; see db/shard-router.ts). status gates
--- new-account assignment ('active' = accepting; 'draining'/'readonly' = not);
--- user_count vs capacity drives least-loaded placement.
+-- new-account assignment ('active' = accepting; 'draining'/'readonly' = not).
+-- Placement is BYTE-based: a shard takes new accounts while size_bytes <
+-- max_bytes, least-full-by-bytes first (see services/shard-assignment.ts).
+-- size_bytes is refreshed from D1's meta.size_after by the refresh sweep;
+-- size_updated_at is when. max_bytes sits below D1's ~10 GB cap to leave headroom
+-- for existing users to keep growing. user_count/capacity are a secondary
+-- backstop + tiebreaker, no longer the cutover.
 CREATE TABLE IF NOT EXISTS shards (
-  id           TEXT PRIMARY KEY,
-  binding_name TEXT NOT NULL UNIQUE,
-  status       TEXT NOT NULL DEFAULT 'active', -- active | draining | readonly
-  user_count   INTEGER NOT NULL DEFAULT 0,
-  capacity     INTEGER NOT NULL,
-  created_at   INTEGER NOT NULL
+  id              TEXT PRIMARY KEY,
+  binding_name    TEXT NOT NULL UNIQUE,
+  status          TEXT NOT NULL DEFAULT 'active', -- active | draining | readonly
+  user_count      INTEGER NOT NULL DEFAULT 0,
+  capacity        INTEGER NOT NULL,
+  size_bytes      INTEGER NOT NULL DEFAULT 0,          -- last measured DB size
+  max_bytes       INTEGER NOT NULL DEFAULT 8589934592, -- 8 GiB: cutover w/ headroom under D1's 10 GB cap
+  size_updated_at INTEGER NOT NULL DEFAULT 0,          -- when size_bytes was last refreshed
+  created_at      INTEGER NOT NULL
 );
 
 -- Seed the first shard so account creation works out of the box. Matches the
 -- DB_SHARD_1 binding in wrangler.jsonc / lib/env.ts. Add a row (and a binding)
--- per shard you provision.
+-- per shard you provision. size_bytes/max_bytes/size_updated_at use defaults.
 INSERT OR IGNORE INTO shards (id, binding_name, status, user_count, capacity, created_at)
 VALUES ('shard_1', 'DB_SHARD_1', 'active', 0, 100000, unixepoch() * 1000);

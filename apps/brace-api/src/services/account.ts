@@ -37,7 +37,7 @@ export async function createAccount(
   // client keypair / KDF challenge) BEFORE provisioning anything, once the
   // create-account contract lands in @stxapps/shared.
 
-  // Assign a shard (atomically claims a capacity slot; throws 503 if full).
+  // Assign a shard (atomically claims a slot below the byte cutover; 503 if none).
   const shard = await assignShard(env.DB_MASTER);
 
   const userId = newId();

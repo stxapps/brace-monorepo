@@ -24,6 +24,12 @@
   "dev": {
     "port": 8787,
   },
+  // TODO: shard-size refresh cron. Add a `triggers.crons` schedule (per env
+  // below — triggers, like other bindings, are NOT inherited from the top level)
+  // and a `scheduled(ctrl, env, ctx)` handler in src/worker.ts that calls
+  // refreshShardSizes(env) (src/services/shard-assignment.ts). Until this is
+  // wired, shards.size_bytes never updates, so the byte-based assignment cutover
+  // can't advance. e.g. "triggers": { "crons": ["*/30 * * * *"] }.
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
   // top level — each environment must declare its own. Each tier is a SEPARATE

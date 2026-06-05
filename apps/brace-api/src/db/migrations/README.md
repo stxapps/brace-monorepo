@@ -53,6 +53,13 @@ wrangler d1 migrations list DB_MASTER --env development
    (`migrations_dir: src/db/migrations/shards`).
 3. Add `DB_SHARD_2: D1Database` to `Bindings` in `src/lib/env.ts`.
 4. Apply shard migrations to it: `wrangler d1 migrations apply DB_SHARD_2 --env <tier>`.
-5. Insert a registry row in **master** so the assigner can place users on it:
+5. Insert a registry row in **master** so the assigner can place users on it
+   (`size_bytes`/`max_bytes`/`size_updated_at` use defaults — 8 GiB cutover):
    `INSERT INTO shards (id, binding_name, status, user_count, capacity, created_at)
    VALUES ('shard_2', 'DB_SHARD_2', 'active', 0, 100000, unixepoch()*1000);`
+
+Placement is **byte-based**: a shard takes new accounts while `size_bytes <
+max_bytes` (`max_bytes` defaults to 8 GiB, headroom under D1's ~10 GB cap).
+`size_bytes` is refreshed from D1's `meta.size_after` by `refreshShardSizes`
+(`src/services/shard-assignment.ts`) — wire it to a Worker `scheduled` (cron)
+handler, or the cutover never moves.
