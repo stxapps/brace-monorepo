@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usernameAvailableQueryOptions } from '@stxapps/react';
 import type { CreateAccountValues } from '@stxapps/shared';
 
-import { api } from '../../lib/api';
+import { api } from '@/lib/api';
 
 // App-local because account creation is web-only (the extension inherits the
 // session via storage) and the submit sequence reaches for web-only crypto —

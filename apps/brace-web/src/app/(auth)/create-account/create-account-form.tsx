@@ -16,7 +16,7 @@ import {
   useCreateAccount,
   UsernameCheckError,
   UsernameTakenError,
-} from '../../hooks/auth/use-create-account';
+} from './use-create-account';
 
 // Client leaf for the create-account route. The page stays a Server Component;
 // only this interactive form (react-hook-form + zodResolver) runs on the client.

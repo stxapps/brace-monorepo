@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from '@stxapps/web-ui/components/ui/card';
 
-import { SignInForm } from '@/components/auth/sign-in-form';
+import { SignInForm } from './sign-in-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
 
