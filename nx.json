@@ -55,6 +55,9 @@
   ],
   "neverConnectToCloud": true,
   "analytics": false,
+  "tui": {
+    "enabled": false
+  },
   "targetDefaults": {
     "test": {
       "dependsOn": ["^build"]
