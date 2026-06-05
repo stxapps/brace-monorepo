@@ -36,7 +36,7 @@ app.use(
 // Baseline rate limit on EVERY endpoint (standard tier, ~60 req/60s per IP+path;
 // configured in wrangler.jsonc). Sensitive routes stack the 'tight' tier on top
 // at the route level, e.g. rateLimit('tight'). No-ops when the binding is absent
-// (tests / unconfigured env). See middleware/rate-limit.ts + config/rate-limits.ts.
+// (tests / unconfigured env). See middleware/rate-limit.ts.
 app.use('*', rateLimit('standard'));
 
 app.get('/', (c) => {

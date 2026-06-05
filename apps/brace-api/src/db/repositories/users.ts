@@ -2,41 +2,44 @@
 // identity; the user's actual data lives in the durable object
 // keyed by `user_id`.
 
-export type UserRow = {
+// Public domain entity (camelCase). Behavior can hang off this later; for now
+// it's the shape services/routes consume.
+export type UserEntity = {
   id: string;
   username: string;
   createdAt: number;
 };
 
-type UserRecord = {
+// Raw row as it sits in D1 (snake_case columns). Internal to this repo.
+type UserRow = {
   id: string;
   username: string;
   created_at: number;
 };
 
-function toRow(r: UserRecord): UserRow {
+function toEntity(r: UserRow): UserEntity {
   return { id: r.id, username: r.username, createdAt: r.created_at };
 }
 
 export function usersRepo(db: D1Database) {
   return {
-    async findById(id: string): Promise<UserRow | null> {
+    async findById(id: string): Promise<UserEntity | null> {
       const r = await db
         .prepare(`SELECT id, username, created_at FROM users WHERE id = ?`)
         .bind(id)
-        .first<UserRecord>();
-      return r ? toRow(r) : null;
+        .first<UserRow>();
+      return r ? toEntity(r) : null;
     },
 
     // Authoritative username check (the GET /auth/username-available endpoint is
     // only a cheap pre-check). `username` is stored lower-cased for a
     // case-insensitive UNIQUE constraint.
-    async findByUsername(username: string): Promise<UserRow | null> {
+    async findByUsername(username: string): Promise<UserEntity | null> {
       const r = await db
         .prepare(`SELECT id, username, created_at FROM users WHERE username = ?`)
         .bind(username.toLowerCase())
-        .first<UserRecord>();
-      return r ? toRow(r) : null;
+        .first<UserRow>();
+      return r ? toEntity(r) : null;
     },
 
     // Called by services/account.ts. The UNIQUE

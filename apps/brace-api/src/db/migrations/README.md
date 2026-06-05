@@ -10,15 +10,15 @@ brace-api uses **two database roles**, each with its own migration history:
 
 ## schema.sql vs migrations
 
-- `db/<role>/schema.sql` — the **full-create snapshot**. Authoritative shape of a
+- `db/schemas/<role>.sql` — the **full-create snapshot**. Authoritative shape of a
   brand-new DB and the at-a-glance reference. Use it to stand up a fresh DB.
 - `db/migrations/<role>/NNNN_*.sql` — **incremental** changes applied to **live**
-  DBs in order. `0001_init.sql` mirrors `schema.sql`.
+  DBs in order. `0001_init.sql` mirrors `schemas/<role>.sql`.
 
 **Rule:** any change to a deployed DB is a new numbered migration — never edit a
-live table by hand. Keep `schema.sql` and the migration set in lockstep: when you
-add `0002_*.sql`, fold the same change into `schema.sql` so a fresh DB matches a
-migrated one.
+live table by hand. Keep `schemas/<role>.sql` and the migration set in lockstep:
+when you add `0002_*.sql`, fold the same change into `schemas/<role>.sql` so a
+fresh DB matches a migrated one.
 
 ## wrangler wiring
 

@@ -2,37 +2,39 @@
 // the raw token; see lib/ids.ts) and carry user_id so the auth guard
 // resolves "bearer token -> user" in a single read.
 
-export type SessionRow = {
+// Public domain entity (camelCase). Behavior can hang off this later; for now
+// it's the shape services/routes consume.
+export type SessionEntity = {
   id: string;
   userId: string;
   expiresAt: number; // epoch ms
 };
 
-type SessionRecord = {
+// Raw row as it sits in D1 (snake_case columns). Internal to this repo.
+type SessionRow = {
   id: string;
   token_hash: string;
   user_id: string;
   expires_at: number;
 };
 
+function toEntity(r: Omit<SessionRow, 'token_hash'>): SessionEntity {
+  return { id: r.id, userId: r.user_id, expiresAt: r.expires_at };
+}
+
 export function sessionsRepo(db: D1Database) {
   return {
     // Looked up by the auth guard on every protected request. Returns null when
     // no row matches (unknown/revoked token).
-    async findByTokenHash(tokenHash: string): Promise<SessionRow | null> {
+    async findByTokenHash(tokenHash: string): Promise<SessionEntity | null> {
       const row = await db
         .prepare(
           `SELECT id, user_id, expires_at
              FROM sessions WHERE token_hash = ?`,
         )
         .bind(tokenHash)
-        .first<Omit<SessionRecord, 'token_hash'>>();
-      if (!row) return null;
-      return {
-        id: row.id,
-        userId: row.user_id,
-        expiresAt: row.expires_at,
-      };
+        .first<Omit<SessionRow, 'token_hash'>>();
+      return row ? toEntity(row) : null;
     },
 
     async insert(s: {

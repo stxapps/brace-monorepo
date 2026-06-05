@@ -4,24 +4,31 @@
 // encrypted blob itself lives in R2; the server only ever sees this metadata.
 // See docs/local-first-sync.md.
 
-export type ManifestEntry = {
+// Public domain entity (camelCase) — one entry in a user's file manifest.
+// Behavior can hang off this later; for now it's the shape the sync engine consumes.
+export type FileManifestEntity = {
   path: string;
   version: number;
   size: number;
   updatedAt: number;
 };
 
-type ManifestRecord = {
+// Raw row as it sits in D1 (snake_case columns). Internal to this repo.
+type FileManifestRow = {
   path: string;
   version: number;
   size: number;
   updated_at: number;
 };
 
+function toEntity(r: FileManifestRow): FileManifestEntity {
+  return { path: r.path, version: r.version, size: r.size, updatedAt: r.updated_at };
+}
+
 export function fileManifestRepo(db: D1Database) {
   return {
     // Incremental pull: entries changed since the client's cursor.
-    async listSince(userId: string, since: number): Promise<ManifestEntry[]> {
+    async listSince(userId: string, since: number): Promise<FileManifestEntity[]> {
       const { results } = await db
         .prepare(
           `SELECT path, version, size, updated_at
@@ -30,18 +37,13 @@ export function fileManifestRepo(db: D1Database) {
             ORDER BY updated_at ASC`,
         )
         .bind(userId, since)
-        .all<ManifestRecord>();
-      return (results ?? []).map((r) => ({
-        path: r.path,
-        version: r.version,
-        size: r.size,
-        updatedAt: r.updated_at,
-      }));
+        .all<FileManifestRow>();
+      return (results ?? []).map(toEntity);
     },
 
     // Push: record a new/edited bookmark after its blob is in R2. Last-writer-
     // wins per path (file-level conflict policy from local-first-sync.md).
-    async upsert(userId: string, e: ManifestEntry): Promise<void> {
+    async upsert(userId: string, e: FileManifestEntity): Promise<void> {
       await db
         .prepare(
           `INSERT INTO file_manifest (user_id, path, version, size, updated_at)
