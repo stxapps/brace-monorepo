@@ -17,6 +17,14 @@ export type CreateAccountResult = {
   session: IssuedSession;
 };
 
+// Cheap pre-check behind GET /v1/auth/username-available. NOT authoritative:
+// the UNIQUE(username) constraint enforced in createAccount is the real race
+// guard. `findByUsername` lower-cases for the case-insensitive lookup.
+export async function isUsernameTaken(env: Bindings, username: string): Promise<boolean> {
+  const users = usersRepo(env.MASTER_DB);
+  return (await users.findByUsername(username)) !== null;
+}
+
 export async function createAccount(
   env: Bindings,
   input: { username: string /* TODO: + credential material (pubkey / KDF salt) */ },
