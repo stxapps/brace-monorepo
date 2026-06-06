@@ -6,8 +6,9 @@ import { deriveMasterSecret } from './argon2';
 import { toHex, utf8 } from './encoding';
 
 export interface Account {
-  // Ed25519 public key (hex) — the user id the server knows us by. Safe to send.
-  vaultId: string;
+  // Ed25519 public key (hex) — the credential the server verifies us by, not an
+  // identifier (the server mints its own stable userId). Safe to send.
+  publicKey: string;
   // AES-256-GCM key, non-extractable: usable for encrypt/decrypt but its raw
   // bytes can't be read back out of JS, so XSS can use it but not exfiltrate it.
   encryptionKey: CryptoKey;
@@ -33,28 +34,26 @@ async function hkdf(
   return new Uint8Array(bits);
 }
 
-// Step 2 of account creation: passphrase → keys. Expensive (runs Argon2id in a
-// worker); call it once, then reuse the returned material for the session.
+// Step 2 of account creation: (username, password) → keys. Expensive (runs
+// Argon2id in a worker); call it once, then reuse the returned material for the
+// session. The username is the per-user salt (see deriveMasterSecret), so the
+// same password under a different username yields entirely different keys.
 //
-//   passphrase --Argon2id--> master secret
-//                              |--HKDF(auth-seed)------> Ed25519 keypair (vaultId + sign)
+//   password --Argon2id(salt=username)--> master secret
+//                              |--HKDF(auth-seed)------> Ed25519 keypair (publicKey + sign)
 //                              `--HKDF(encryption-key)-> AES-256-GCM key
-export async function deriveAccount(passphrase: string): Promise<Account> {
-  const masterSecret = await deriveMasterSecret(passphrase);
+export async function deriveAccount(password: string, username: string): Promise<Account> {
+  const masterSecret = await deriveMasterSecret(password, username);
 
   // Copy into an ArrayBuffer-backed view so Web Crypto accepts it as key material.
-  const master = await crypto.subtle.importKey(
-    'raw',
-    new Uint8Array(masterSecret),
-    'HKDF',
-    false,
-    ['deriveBits'],
-  );
+  const master = await crypto.subtle.importKey('raw', new Uint8Array(masterSecret), 'HKDF', false, [
+    'deriveBits',
+  ]);
 
   const authSeed = await hkdf(master, HKDF_INFO_AUTH_SEED, 32);
   const encryptionKeyBytes = await hkdf(master, HKDF_INFO_ENCRYPTION_KEY, 32);
 
-  const publicKey = await ed25519.getPublicKeyAsync(authSeed);
+  const publicKeyBytes = await ed25519.getPublicKeyAsync(authSeed);
 
   const encryptionKey = await crypto.subtle.importKey(
     'raw',
@@ -65,9 +64,8 @@ export async function deriveAccount(passphrase: string): Promise<Account> {
   );
 
   return {
-    vaultId: toHex(publicKey),
+    publicKey: toHex(publicKeyBytes),
     encryptionKey,
-    sign: async (payload: string) =>
-      toHex(await ed25519.signAsync(utf8(payload), authSeed)),
+    sign: async (payload: string) => toHex(await ed25519.signAsync(utf8(payload), authSeed)),
   };
 }

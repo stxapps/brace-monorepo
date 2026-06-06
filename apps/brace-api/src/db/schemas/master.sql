@@ -11,12 +11,20 @@
 -- so it never approaches D1's per-database size cap. All
 -- per-user data lives in the durable objects (see do/README.md).
 
--- Users: identity. The user's data lives in the durable objects, keyed
--- by user_id. username is stored lower-cased for a
--- case-insensitive UNIQUE.
+-- Users: identity + auth credential. The user's data lives in the durable
+-- objects, keyed by user_id. username is stored lower-cased for a
+-- case-insensitive UNIQUE. public_key is the Ed25519 credential the server
+-- verifies sign-in signatures against (hex); it is NOT an identifier — the
+-- random `id` is. It lives here as a column rather than in a separate 1:N
+-- credentials table because the encryption key is derived DIRECTLY from
+-- (username, password), so an account can never hold more than one meaningful
+-- credential (recovery/per-device/passkey would all need a different, wrapped-
+-- key architecture, not extra rows). It rotates when the password changes, so
+-- it is never denormalized into sessions.
 CREATE TABLE IF NOT EXISTS users (
   id         TEXT PRIMARY KEY,
   username   TEXT NOT NULL UNIQUE,
+  public_key TEXT NOT NULL UNIQUE,
   created_at INTEGER NOT NULL
 );
 

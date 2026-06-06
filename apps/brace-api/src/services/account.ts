@@ -44,6 +44,8 @@ export async function createAccount(
 
   // Durable object for user must be deterministically reachable by userId (may have prefix or suffix).
 
+  // TODO: persist credential material (publicKey)
+
   const userId = newId();
   try {
     await users.insert({ id: userId, username: input.username });
@@ -51,9 +53,6 @@ export async function createAccount(
     // UNIQUE(username) lost the race after our pre-check. Surface the conflict to the client.
     throw new ApiError(409, 'username_taken', 'Username is already taken');
   }
-
-  // TODO: persist credential material (pubkey / KDF params) — likely a
-  // `credentials` table in MASTER keyed by userId — within the same flow.
 
   const session = await issueSession(env, { id: userId });
   return { userId, session };

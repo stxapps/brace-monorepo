@@ -21,7 +21,5 @@ export async function decrypt(
   key: CryptoKey,
   { iv, ciphertext }: EncryptedBlob,
 ): Promise<Uint8Array> {
-  return new Uint8Array(
-    await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext),
-  );
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext));
 }

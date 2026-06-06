@@ -39,12 +39,14 @@ export function useCreateAccount() {
       }
       if (!available) throw new UsernameTakenError();
 
-      // Step 2: derive the account from the passphrase via the client KDF
-      // (Argon2id → HKDF, run off-thread in a worker). Yields the Vault_ID (the
-      // Ed25519 public key the server will know us by), a non-extractable
+      // Step 2: derive the account from (username, password) via the client
+      // KDF (Argon2id → HKDF, run off-thread in a worker). The username is the
+      // per-user salt, so two users with the same password get different keys.
+      // Yields the publicKey (the Ed25519 key the server verifies us by, not an
+      // identifier — the server mints its own userId), a non-extractable
       // AES-256-GCM key for data, and a `sign` closure over the private key —
       // the private key itself never leaves @stxapps/web-crypto.
-      const account = await deriveAccount(values.password);
+      const account = await deriveAccount(values.password, values.username);
 
       // Step 3: prove key ownership by signing a timestamped payload, then POST
       // it to exchange for a session id. The server re-checks username
@@ -52,7 +54,7 @@ export function useCreateAccount() {
       // throws UsernameTakenError and routes to the form's setError. This is a
       // write, so don't cancel it on unmount.
       const payload = JSON.stringify({
-        vaultId: account.vaultId,
+        publicKey: account.publicKey,
         username: values.username,
         action: 'create-account',
         timestamp: Date.now(),
