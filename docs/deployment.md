@@ -113,10 +113,24 @@ Stable custom domains are **required**, not optional: the frontends bake the API
 URL into their bundles, so pointing at `*.workers.dev` / `*.cloudfront.net` would
 mean rebuilding whenever an infra subdomain changes.
 
-| tier         | web (CloudFront)           | api (Worker)               |
-| ------------ | -------------------------- | -------------------------- |
-| `staging`    | `TODO: staging web domain` | `TODO: staging api domain` |
-| `production` | `TODO: prod web domain`    | `TODO: prod api domain`    |
+| tier         | web (CloudFront)       | api (Worker)           |
+| ------------ | ---------------------- | ---------------------- |
+| `staging`    | `app.staging.brace.to` | `api.staging.brace.to` |
+| `production` | `app.brace.to`         | `api.brace.to`         |
+
+Staging nests under a `staging.brace.to` subdomain (`<role>.staging.brace.to`)
+rather than going flat (`staging-<role>.brace.to`) — see
+[why nested staging](#why-nested-staging) below.
+
+**Two web origins per tier, both real API clients.** `app.*` is the application
+(brace-web, this monorepo); the **apex** (`brace.to`, `staging.brace.to`) is the
+marketing site, which also calls the api for public data (stats, health check).
+Both therefore appear in `CORS_ORIGINS` — neither is a redirect-only host. The
+marketing site is a **separate static site in its own repository** — its source,
+build, and hosting are out of scope for this doc (no `brace-marketing-*` bucket
+or distribution is managed here); only its origin is allowlisted in
+`CORS_ORIGINS`. The S3 / CloudFront rows below cover the brace-web app
+(`app.*`) only.
 
 ### cors & frontend↔backend wiring
 
@@ -145,15 +159,41 @@ Notes:
 One suffix scheme — `staging` / `production` — across **everything**, so a
 glance tells you the tier:
 
-| resource          | staging                 | production              |
-| ----------------- | ----------------------- | ----------------------- |
-| S3 bucket         | `TODO`                  | `TODO`                  |
-| CloudFront dist   | `TODO`                  | `TODO`                  |
-| Worker name / env | `…-staging` / `staging` | `…-prod` / `production` |
-| D1 database       | `TODO`                  | `TODO`                  |
-| R2 bucket         | `TODO`                  | `TODO`                  |
-| web domain        | `TODO`                  | `TODO`                  |
-| api domain        | `TODO`                  | `TODO`                  |
+| resource          | staging                            | production                            |
+| ----------------- | ---------------------------------- | ------------------------------------- |
+| S3 bucket         | `brace-web-staging`                | `brace-web-production`                |
+| CloudFront dist   | comment `brace-web-staging`        | comment `brace-web-production`        |
+| Worker name / env | `brace-api-staging` / `staging`    | `brace-api-production` / `production` |
+| D1 database       | `brace-master-db-staging`          | `brace-master-db-production`          |
+| R2 bucket         | `brace-user-files-staging`         | `brace-user-files-production`         |
+| web domain        | `app.staging.brace.to`             | `app.brace.to`                        |
+| api domain        | `api.staging.brace.to`             | `api.brace.to`                        |
+
+`brace-<resource>-<tier>` throughout — the Worker auto-suffixes its `name`
+(`brace-api` → `brace-api-staging` / `brace-api-production`), so the env name
+_is_ the tier with no separate `-prod` shorthand. The `*-dev` peers
+(`brace-master-db-dev`, `brace-user-files-dev`) are the local `wrangler dev`
+bindings and aren't deployed. S3 / CloudFront names are proposed (not yet
+provisioned); CloudFront distributions are addressed by generated ID, so the
+name lives in the distribution **comment**.
+
+#### why nested staging
+
+Staging hosts nest (`app.staging.brace.to`) instead of going flat
+(`staging-app.brace.to`) for one structural reason: **each tier is its own
+Cloudflare account** (see [topology](#topology)). A zone lives in exactly one
+account, so `brace.to` sits in the production account. Nesting lets you delegate
+the whole `staging.brace.to` subdomain (its own NS records → a separate zone) to
+the staging account, keeping the two tiers genuinely isolated. A flat
+`staging-app.brace.to` is a direct child of `brace.to` and would have to live in
+the production account's zone — breaking that isolation.
+
+Trade-off: Cloudflare Universal SSL and an ACM `*.brace.to` wildcard only cover
+one label deep, so they don't match `app.staging.brace.to`. Cloudflare Workers
+custom domains auto-provision a per-host cert (no action needed for the api),
+but the staging **web** (CloudFront + ACM) needs a `*.staging.brace.to` wildcard
+cert. Production stays on the clean apex hosts (`app.brace.to`, `api.brace.to`),
+which is what end users see.
 
 ### status & setup checklist
 

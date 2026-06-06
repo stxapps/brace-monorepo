@@ -12,7 +12,7 @@
 -- per-user data lives in the durable objects (see do/README.md).
 
 -- Users: identity. The user's data lives in the durable objects, keyed
--- by user_id + suffix. username is stored lower-cased for a
+-- by user_id. username is stored lower-cased for a
 -- case-insensitive UNIQUE.
 CREATE TABLE IF NOT EXISTS users (
   id         TEXT PRIMARY KEY,

@@ -100,7 +100,7 @@
         // host_permissions origin (see brace-extension/wxt.config.ts), and
         // native apps have no CORS. So do NOT add chrome-extension://,
         // moz-extension://, or safari-web-extension:// origins here.
-        "CORS_ORIGINS": "https://brace.to,https://app.brace.to",
+        "CORS_ORIGINS": "https://staging.brace.to,https://app.staging.brace.to",
       },
       "d1_databases": [
         {
