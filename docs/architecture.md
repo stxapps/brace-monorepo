@@ -44,7 +44,9 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 ### dependency rules
 
 Keep the dependency graph acyclic and layered. From lowest to highest:
-`shared` → `react` / `web-crypto` → `web-ui` → apps.
+`shared` → `react` → `web-ui` → apps, with `web-crypto` a sibling of
+`web-ui` (it depends only on `shared`, and like `web-ui` is consumed by apps —
+not by `web-ui`).
 
 - `shared` must not import from any other workspace package.
 - `react` may import `shared` only — not `web-ui`.
@@ -71,7 +73,8 @@ Enforcement is driven by two tag dimensions set in each project's
 | brace-expo (fut) | `type:app`    | `platform:agnostic` |
 
 - **type** enforces the layering: a project may depend only on its own layer
-  and lower ones (`app` → `ui` → `react`/`crypto` → `shared`).
+  and lower ones (`app` → `ui` → `react` → `shared`, with `crypto` a parallel
+  branch consumed only by apps: `app` → `crypto` → `shared`).
 - **platform** enforces portability: `agnostic` may depend only on `agnostic`;
   `web`/`node` may also use `agnostic` but not each other.
 

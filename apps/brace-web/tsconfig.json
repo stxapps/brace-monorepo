@@ -54,6 +54,9 @@
       "path": "../../packages/web-ui"
     },
     {
+      "path": "../../packages/web-crypto"
+    },
+    {
       "path": "../../packages/shared"
     }
   ]

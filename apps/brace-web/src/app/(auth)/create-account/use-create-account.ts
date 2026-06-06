@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { usernameAvailableQueryOptions } from '@stxapps/react';
 import type { CreateAccountValues } from '@stxapps/shared';
+import { deriveAccount } from '@stxapps/web-crypto';
 
 import { api } from '@/lib/api';
 
@@ -38,17 +39,33 @@ export function useCreateAccount() {
       }
       if (!available) throw new UsernameTakenError();
 
-      // Step 2: derive the account via client KDF (@stxapps/web-crypto, future)
-      //   → key pair.
-      // Step 3: sign a challenge and POST it to exchange for a session id. The
-      // server re-checks username uniqueness here to close the step-1→step-3
-      // race; a "taken" rejection throws UsernameTakenError and routes to the
-      // form's setError. This is a write, so don't cancel it on unmount —
-      // TODO: send a client-generated idempotency key with the POST so a retry
-      // after a dropped client (e.g. browser back mid-flight) is safe and won't
-      // create a duplicate account, rather than aborting the in-flight request.
-      // Left stubbed until the crypto package and session endpoint land.
-      console.log('create account', values);
+      // Step 2: derive the account from the passphrase via the client KDF
+      // (Argon2id → HKDF, run off-thread in a worker). Yields the Vault_ID (the
+      // Ed25519 public key the server will know us by), a non-extractable
+      // AES-256-GCM key for data, and a `sign` closure over the private key —
+      // the private key itself never leaves @stxapps/web-crypto.
+      const account = await deriveAccount(values.password);
+
+      // Step 3: prove key ownership by signing a timestamped payload, then POST
+      // it to exchange for a session id. The server re-checks username
+      // uniqueness here to close the step-1→step-3 race; a "taken" rejection
+      // throws UsernameTakenError and routes to the form's setError. This is a
+      // write, so don't cancel it on unmount.
+      const payload = JSON.stringify({
+        vaultId: account.vaultId,
+        username: values.username,
+        action: 'create-account',
+        timestamp: Date.now(),
+      });
+      const signature = await account.sign(payload);
+
+      // TODO: POST { payload, signature } to the session endpoint (pending),
+      // then persist the returned session id + account.encryptionKey in
+      // onSuccess. Send a client-generated idempotency key with the POST so a
+      // retry after a dropped client (e.g. browser back mid-flight) is safe and
+      // won't create a duplicate account, rather than aborting the in-flight
+      // request. Stubbed until the session endpoint lands.
+      console.log('create account', { username: values.username, signature });
     },
     // TODO: persist the returned session in onSuccess (auth context /
     // queryClient) rather than in the component's mutateAsync continuation —
