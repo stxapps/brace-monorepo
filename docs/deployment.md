@@ -86,6 +86,12 @@ wrangler deploy --env production   # → CF account B, with that account's API t
 Give CI a **separate API token per account** — never one token that can reach
 both tiers.
 
+Migration mechanics live next to the code they govern, one per storage layer:
+[`apps/brace-api/src/db/migrations/README.md`](../apps/brace-api/src/db/migrations/README.md)
+(D1, `wrangler`-applied) and
+[`apps/brace-api/src/do/README.md`](../apps/brace-api/src/do/README.md)
+(per-user Durable Object SQLite, migrated in code).
+
 ### brace-extension → store publishing _(planned)_
 
 The extension isn't deployed to infra; it's **packaged and published** to the

@@ -1,6 +1,6 @@
 -- Migration 0001 (master) — initial schema.
 -- Mirrors db/master/schema.sql. Applied to live master DBs via:
---   wrangler d1 migrations apply DB_MASTER --env <development|staging|production>
+--   wrangler d1 migrations apply MASTER_DB --env <development|staging|production>
 
 CREATE TABLE IF NOT EXISTS users (
   id         TEXT PRIMARY KEY,

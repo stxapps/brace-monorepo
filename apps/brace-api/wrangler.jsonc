@@ -46,24 +46,33 @@
       "vars": {
         "CORS_ORIGINS": "http://localhost:3000",
       },
-      // DB_MASTER holds lookup/master data (users, sessions);
+      // MASTER_DB holds lookup/master data (users, sessions);
       // Bindings are STATIC.
       // migrations_dir is per-binding; master and durable objects have separate histories
       // (src/db/migrations/{master,dos}). See src/db/migrations/README.md.
       "d1_databases": [
         {
-          "binding": "DB_MASTER",
-          "database_name": "brace-master-dev",
+          "binding": "MASTER_DB",
+          "database_name": "brace-master-db-dev",
           "database_id": "local",
           "migrations_dir": "src/db/migrations/master",
         },
       ],
       "r2_buckets": [
         {
-          "binding": "FILES",
-          "bucket_name": "brace-files-dev",
+          "binding": "USER_FILES",
+          "bucket_name": "brace-user-files-dev",
         },
       ],
+      // Per-user SQLite store. One DO instance per user (addressed by
+      // idFromName(userId)); the `migrations` tag below makes the class
+      // SQLite-backed (ctx.storage.sql). DO *schema* migrations are NOT here —
+      // they run in code (src/do/user-data.ts). Locally these run in miniflare
+      // (state under .wrangler/).
+      "durable_objects": {
+        "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
       // Native rate-limit bindings, one per volume tier (config/rate-limits.ts).
       // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
       // native binding allows. namespace_id is any unique positive integer.
@@ -95,18 +104,25 @@
       },
       "d1_databases": [
         {
-          "binding": "DB_MASTER",
-          "database_name": "brace-master-staging",
-          "database_id": "TODO: `wrangler d1 create brace-master-staging` → paste id",
+          "binding": "MASTER_DB",
+          "database_name": "brace-master-db-staging",
+          "database_id": "TODO: `wrangler d1 create brace-master-db-staging` → paste id",
           "migrations_dir": "src/db/migrations/master",
         },
       ],
       "r2_buckets": [
         {
-          "binding": "FILES",
-          "bucket_name": "brace-files-staging",
+          "binding": "USER_FILES",
+          "bucket_name": "brace-user-files-staging",
         },
       ],
+      // Per-user SQLite store (see development env for notes). DO *schema*
+      // migrations run in code (src/do/user-data.ts), not here; the `migrations`
+      // tag only declares the class as SQLite-backed.
+      "durable_objects": {
+        "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
       // Not inherited from the top level — each env declares its own.
       "ratelimits": [
         {
@@ -138,18 +154,25 @@
       },
       "d1_databases": [
         {
-          "binding": "DB_MASTER",
-          "database_name": "brace-master-production",
-          "database_id": "TODO: `wrangler d1 create brace-master-production` → paste id",
+          "binding": "MASTER_DB",
+          "database_name": "brace-master-db-production",
+          "database_id": "TODO: `wrangler d1 create brace-master-db-production` → paste id",
           "migrations_dir": "src/db/migrations/master",
         },
       ],
       "r2_buckets": [
         {
-          "binding": "FILES",
-          "bucket_name": "brace-files-production",
+          "binding": "USER_FILES",
+          "bucket_name": "brace-user-files-production",
         },
       ],
+      // Per-user SQLite store (see development env for notes). DO *schema*
+      // migrations run in code (src/do/user-data.ts), not here; the `migrations`
+      // tag only declares the class as SQLite-backed.
+      "durable_objects": {
+        "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
       // Not inherited from the top level — each env declares its own.
       "ratelimits": [
         {

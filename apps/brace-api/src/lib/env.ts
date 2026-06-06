@@ -1,3 +1,5 @@
+import type { UserDataDO } from '../do/user-data';
+
 // Typed Workers runtime context for the whole app. Hono is parameterized with
 // `AppEnv` (see app.ts), so `c.env` (bindings) and `c.var` (request-scoped
 // values) are typed everywhere — middleware, routes, services.
@@ -23,15 +25,19 @@ export type Bindings = {
   // --- D1 (sqlite)  ----------------------
   // D1 bindings are STATIC: a Worker can't bind a database by id at runtime.
   // So we pre-declare the master.
-  // Master holds ONLY lookup/master data (users, sessions) so
-  // it never approaches D1's size cap; user data lives in the durable objects.
-  DB_MASTER: D1Database;
+  // Master holds ONLY lookup/master data (users, sessions) so it never
+  // approaches D1's size cap; per-user data lives in the USER_DATA durable
+  // objects below.
+  MASTER_DB: D1Database;
 
-  // --- Durable Objects ----------------------
-
+  // --- Durable Objects — one per-user SQLite store ----------------------
+  // Addressed by idFromName(userId) (see do/user-data.ts → userDataStub). Holds
+  // the user's op log (and any future per-user data). The generic gives typed
+  // RPC against the DO class's methods.
+  USER_DATA: DurableObjectNamespace<UserDataDO>;
 
   // --- R2 — encrypted bookmark blobs (see docs/local-first-sync.md) -------
-  FILES: R2Bucket;
+  USER_FILES: R2Bucket;
 
   // --- Rate limiting — native binding, one binding per volume "tier" -------
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"

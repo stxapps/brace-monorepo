@@ -21,7 +21,7 @@ export async function createAccount(
   env: Bindings,
   input: { username: string /* TODO: + credential material (pubkey / KDF salt) */ },
 ): Promise<CreateAccountResult> {
-  const users = usersRepo(env.DB_MASTER);
+  const users = usersRepo(env.MASTER_DB);
 
   // Authoritative uniqueness check (the GET /auth/username-available endpoint is
   // only a pre-check). The UNIQUE constraint on users.username is the real race

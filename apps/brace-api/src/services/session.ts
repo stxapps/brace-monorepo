@@ -26,7 +26,7 @@ export async function issueSession(
   const sessionId = newId();
   const expiresAt = Date.now() + SESSION_TTL_MS;
 
-  await sessionsRepo(env.DB_MASTER).insert({
+  await sessionsRepo(env.MASTER_DB).insert({
     id: sessionId,
     tokenHash: await hashToken(token),
     userId: user.id,
@@ -37,5 +37,5 @@ export async function issueSession(
 }
 
 export async function revokeSession(env: Bindings, sessionId: string): Promise<void> {
-  await sessionsRepo(env.DB_MASTER).deleteById(sessionId);
+  await sessionsRepo(env.MASTER_DB).deleteById(sessionId);
 }

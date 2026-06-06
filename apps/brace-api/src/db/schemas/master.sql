@@ -9,7 +9,7 @@
 --
 -- The master DB holds ONLY lookup / master data — users, sessions,
 -- so it never approaches D1's per-database size cap. All
--- per-user data lives in the durable objects (see db/dos/schema.sql).
+-- per-user data lives in the durable objects (see do/README.md).
 
 -- Users: identity. The user's data lives in the durable objects, keyed
 -- by user_id + suffix. username is stored lower-cased for a

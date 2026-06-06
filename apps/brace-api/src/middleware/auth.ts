@@ -18,7 +18,7 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
     throw new ApiError(401, 'unauthorized', 'Missing bearer token');
   }
 
-  const session = await sessionsRepo(c.env.DB_MASTER).findByTokenHash(await hashToken(token));
+  const session = await sessionsRepo(c.env.MASTER_DB).findByTokenHash(await hashToken(token));
   if (!session || session.expiresAt < Date.now()) {
     throw new ApiError(401, 'unauthorized', 'Invalid or expired session');
   }

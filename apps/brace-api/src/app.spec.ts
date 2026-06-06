@@ -17,6 +17,11 @@ describe('brace-api', () => {
     await expect(res.json()).resolves.toEqual({ status: 'ok' });
   });
 
+  // NOTE: these run with no env (app.request() passes none), so "taken" is
+  // resolved against the in-memory stub Set in routes/auth.ts, NOT a DB query.
+  // They verify the contract/validation layer only — green here does not mean
+  // the real username lookup works. Update them when the users table lands
+  // (and ideally re-run against real bindings via @cloudflare/vitest-pool-workers).
   describe('GET /auth/username-available', () => {
     it('reports an available username', async () => {
       const res = await app.request('/auth/username-available?username=freshname');
