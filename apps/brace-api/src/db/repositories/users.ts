@@ -31,8 +31,8 @@ export function usersRepo(db: D1Database) {
       return r ? toEntity(r) : null;
     },
 
-    // Authoritative username check (the GET /auth/username-available endpoint is
-    // only a cheap pre-check). `username` is stored lower-cased for a
+    // Authoritative username check (the GET /v1/auth/username-available endpoint
+    // is only a cheap pre-check). `username` is stored lower-cased for a
     // case-insensitive UNIQUE constraint.
     async findByUsername(username: string): Promise<UserEntity | null> {
       const r = await db

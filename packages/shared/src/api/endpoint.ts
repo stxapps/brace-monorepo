@@ -9,6 +9,15 @@ import type { z } from 'zod';
 // derived from the app instance, forcing client → app coupling that the Nx
 // `type:`/`platform:` boundaries forbid). See docs/architecture.md.
 
+// URL version prefix for the API surface. The version is part of the wire
+// contract, so it lives in the path string here (not in each client's baseUrl —
+// `new URL('/v1/…', baseUrl)` would discard a path on baseUrl anyway) and every
+// endpoint path is built from it. Long-lived clients we don't control the update
+// cadence of (the extension, a future Expo app) can stay pinned to /v1 while the
+// web app moves on. Bumping to v2 means adding `API_V2` and migrating paths;
+// operational roots (`/`, `/health`) stay unversioned. See docs/api-contracts.md.
+export const API_V1 = '/v1';
+
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface ApiEndpoint<

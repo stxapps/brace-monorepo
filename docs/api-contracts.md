@@ -37,11 +37,36 @@ internal paths:
   `auth/credentials.ts` so a rule like username length is defined exactly once
   and enforced identically on client and server.
 
+### url versioning
+
+Every API path is versioned with a `/v1` prefix, built from the `API_V1`
+constant in `api/endpoint.ts`:
+
+```ts
+path: `${API_V1}/auth/username-available`, // → /v1/auth/username-available
+```
+
+The version is **part of the wire contract**, so it lives in the contract path
+(in `shared`) rather than in each client's `baseUrl`. That's not just stylistic:
+the client does `new URL(endpoint.path, baseUrl)`, and a leading-slash path
+**discards** any path segment on `baseUrl` — so `NEXT_PUBLIC_API_URL=…/v1` would
+be silently dropped. Keeping `/v1` in the path also means the server inherits it
+for free (`routes/auth.ts` mounts `checkUsernameEndpoint.path` verbatim), and the
+single descriptor still fully describes the wire URL.
+
+Why version at all: the extension and a future Expo app are long-lived clients
+whose update cadence we don't control. URL versioning lets an old client stay
+pinned to `/v1` while the web app moves to `/v2`. Bumping means adding an
+`API_V2` constant and migrating paths endpoint-by-endpoint. Operational roots
+(`/`, `/health`) stay **unversioned** — `app.ts` mixes both by mounting versioned
+sub-apps alongside the bare root routes.
+
 ### adding an endpoint
 
 1. **Contract** — in `packages/shared/src/<area>/endpoints.ts`, define the
    request/response zod schemas and a `defineEndpoint({ method, path, request,
-response })` descriptor. Reuse pure validators from `<area>/credentials.ts`
+response })` descriptor — prefix `path` with `` `${API_V1}/…` `` (see _url
+versioning_ above). Reuse pure validators from `<area>/credentials.ts`
    (or a sibling) rather than re-declaring field rules. It's exported
    automatically via the barrel — add an `export *` line in `src/index.ts` if the
    file is new.

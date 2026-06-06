@@ -12,8 +12,8 @@ function isUsernameTaken(username: string): boolean {
   return takenUsernames.has(username.toLowerCase());
 }
 
-// All routes carry their own '/auth/…' path (from the shared contract), so this
-// sub-app is mounted at the root in app.ts.
+// All routes carry their own '/v1/auth/…' path (from the shared contract,
+// version prefix and all), so this sub-app is mounted at the root in app.ts.
 export const authRoutes = new Hono().get(
   checkUsernameEndpoint.path,
   // Validates the query against the SAME schema the client used — the contract

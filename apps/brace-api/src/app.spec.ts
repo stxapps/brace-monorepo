@@ -1,4 +1,10 @@
+import { checkUsernameEndpoint } from '@stxapps/shared';
+
 import { app } from './app';
+
+// Build request URLs from the shared contract path so these stay correct across
+// version-prefix changes (e.g. /v1 → /v2) without editing every literal here.
+const usernamePath = checkUsernameEndpoint.path;
 
 describe('brace-api', () => {
   it('returns a welcome message on the root route', async () => {
@@ -22,23 +28,23 @@ describe('brace-api', () => {
   // They verify the contract/validation layer only — green here does not mean
   // the real username lookup works. Update them when the users table lands
   // (and ideally re-run against real bindings via @cloudflare/vitest-pool-workers).
-  describe('GET /auth/username-available', () => {
+  describe(`GET ${checkUsernameEndpoint.path}`, () => {
     it('reports an available username', async () => {
-      const res = await app.request('/auth/username-available?username=freshname');
+      const res = await app.request(`${usernamePath}?username=freshname`);
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ available: true });
     });
 
     it('reports a taken username (case-insensitive)', async () => {
-      const res = await app.request('/auth/username-available?username=Admin');
+      const res = await app.request(`${usernamePath}?username=Admin`);
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ available: false });
     });
 
     it('rejects a username that fails the shared validation rules', async () => {
-      const res = await app.request('/auth/username-available?username=no');
+      const res = await app.request(`${usernamePath}?username=no`);
 
       expect(res.status).toBe(400);
     });

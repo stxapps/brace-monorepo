@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { defineEndpoint } from '../api/endpoint';
+import { API_V1, defineEndpoint } from '../api/endpoint';
 import { usernameSchema } from './credentials';
 
 // Auth endpoint contracts. Request schemas reuse the pure validators from
@@ -17,13 +17,13 @@ export const checkUsernameResponseSchema = z.object({
 });
 export type CheckUsernameResponse = z.infer<typeof checkUsernameResponseSchema>;
 
-// GET /auth/username-available?username=… → { available }
+// GET /v1/auth/username-available?username=… → { available }
 // Cheap pre-submit check so the create-account form can flag a taken username
 // before the (future) KDF + challenge-signing dance. Not authoritative — account
 // creation still re-checks server-side to close the race.
 export const checkUsernameEndpoint = defineEndpoint({
   method: 'GET',
-  path: '/auth/username-available',
+  path: `${API_V1}/auth/username-available`,
   request: checkUsernameRequestSchema,
   response: checkUsernameResponseSchema,
 });

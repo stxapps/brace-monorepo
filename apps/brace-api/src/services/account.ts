@@ -23,8 +23,8 @@ export async function createAccount(
 ): Promise<CreateAccountResult> {
   const users = usersRepo(env.MASTER_DB);
 
-  // Authoritative uniqueness check (the GET /auth/username-available endpoint is
-  // only a pre-check). The UNIQUE constraint on users.username is the real race
+  // Authoritative uniqueness check (the GET /v1/auth/username-available endpoint
+  // is only a pre-check). The UNIQUE constraint on users.username is the real race
   // guard; this check just turns the common case into a clean 409.
   if (await users.findByUsername(input.username)) {
     throw new ApiError(409, 'username_taken', 'Username is already taken');
