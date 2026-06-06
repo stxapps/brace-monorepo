@@ -2,7 +2,7 @@
 
 ### general
 
-- Use browser.* from WXT, not raw chrome.*. You get Promise-based APIs everywhere and cross-browser compatibility without thinking about it. The only time you'd touch chrome.* directly is for Chrome-specific APIs that don't exist in the standard (rare).
+- Use browser._ from WXT, not raw chrome._. You get Promise-based APIs everywhere and cross-browser compatibility without thinking about it. The only time you'd touch chrome.\* directly is for Chrome-specific APIs that don't exist in the standard (rare).
 
 ### storage
 
@@ -13,7 +13,6 @@
 ### link preview
 
 - The popup can't make arbitrary fetch requests to external sites due to CORS. The background service worker can, since you'll declare host_permissions in your manifest. The typical flow is: popup sends a message to the background worker, background fetches the URL, extracts Open Graph metadata (title, description, image), and sends it back. You could also do this server-side via your Hono API if you prefer — that avoids permission bloat in the extension and gives you caching on R2.
-
 
 ### q1
 
@@ -35,9 +34,8 @@ Case 2: Extension page save (paste a URL) — This is the interesting middle gro
 
 Case 3: Web app save — You only have a URL. The browser might not even be open. This is the queue-based flow: save the job to the server, and the extension picks it up when available.
 
-  - the async path - writes a job to a queue and the extension polls
-  - the externally_connectable approach - If the extension is active in the browser right now, the web app sends a message directly and gets instant processing. If the sendMessage call fails (extension not installed or browser closed), fall back to enqueueing the job. This gives you the best of both: instant when possible, resilient always.
-
+- the async path - writes a job to a queue and the extension polls
+- the externally_connectable approach - If the extension is active in the browser right now, the web app sends a message directly and gets instant processing. If the sendMessage call fails (extension not installed or browser closed), fall back to enqueueing the job. This gives you the best of both: instant when possible, resilient always.
 
 The login flow would be:
 
@@ -45,7 +43,6 @@ The login flow would be:
 - Extension derives the encryption key via PBKDF2/Argon2 and stores it in chrome.storage.session
 - Extension also authenticates with your Hono API (gets a JWT or session token)
 - Both the web app and extension derive the same key from the same passphrase, so they can encrypt/decrypt each other's data
-
 
 Link preview (metadata extraction) — doesn't need a tab at all.
 
@@ -64,22 +61,19 @@ Cases 2 & 3 (extension page / queued): You need to actually show the tab briefly
 // Create a new window, load the URL, capture, close
 const win = await browser.windows.create({
   url,
-  focused: true,     // must be focused for capture
+  focused: true, // must be focused for capture
   width: 1280,
   height: 960,
   type: 'normal',
-})
+});
 
-const tab = win.tabs[0]
-await waitForTabComplete(tab.id)
-await sleep(500) // let rendering settle
+const tab = win.tabs[0];
+await waitForTabComplete(tab.id);
+await sleep(500); // let rendering settle
 
-const screenshot = await browser.tabs.captureVisibleTab(
-  win.id, 
-  { format: 'png' }
-)
+const screenshot = await browser.tabs.captureVisibleTab(win.id, { format: 'png' });
 
-await browser.windows.remove(win.id)
+await browser.windows.remove(win.id);
 ```
 
 This causes a visible flash — a window opens and closes. There's no way around it with captureVisibleTab. However, there's an alternative worth considering:
@@ -94,19 +88,19 @@ The archive (SingleFile-style DOM capture) requires a content script running in 
 // Open tab in background (not active)
 const tab = await browser.tabs.create({
   url,
-  active: false,    // stays in background
-})
+  active: false, // stays in background
+});
 
-await waitForTabComplete(tab.id)
+await waitForTabComplete(tab.id);
 
 // Inject content script — works on non-focused tabs
 const results = await browser.scripting.executeScript({
   target: { tabId: tab.id },
   func: captureFullDOM,
-})
+});
 
-const archive = results[0].result
-await browser.tabs.remove(tab.id)
+const archive = results[0].result;
+await browser.tabs.remove(tab.id);
 ```
 
 The content script can access the full DOM, inline styles, serialize everything — all without the tab being visible. The page just needs to have loaded.
@@ -124,7 +118,6 @@ My recommendation for the queued job pipeline:
 ```
 
 Steps 1–4 are invisible to the user. Only step 5 causes a brief flash. If you batch this during idle time, the user never notices. And if you decide screenshots aren't worth the disruption for queued jobs, you can skip step 5 entirely — you still get metadata and a full archive, which is arguably more valuable than a screenshot anyway.
-
 
 For your bookmark manager, the architecture maps to:
 

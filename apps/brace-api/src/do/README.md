@@ -26,7 +26,7 @@ migrations are TypeScript, versioned by `PRAGMA user_version`:
   `user-data.ts`. Entry `i` upgrades `user_version` `i → i+1`. The array holds the
   literal `CREATE` SQL, so **read it there to see the current schema** — there is
   deliberately no separate snapshot to drift out of lockstep. (Unlike master,
-  whose `master.sql` exists because it is an *applied* create script; a DO has no
+  whose `master.sql` exists because it is an _applied_ create script; a DO has no
   create-from-snapshot path — it is only ever built by replaying this array, so a
   snapshot would be pure non-applied duplication.)
 - `migrate()` runs in the DO constructor under `blockConcurrencyWhile`, so a DO

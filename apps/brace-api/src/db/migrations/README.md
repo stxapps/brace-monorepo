@@ -40,4 +40,3 @@ wrangler d1 migrations apply MASTER_DB --env staging
 # list applied/pending
 wrangler d1 migrations list MASTER_DB --env development
 ```
-

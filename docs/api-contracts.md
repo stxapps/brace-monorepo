@@ -66,7 +66,7 @@ sub-apps alongside the bare root routes.
 1. **Contract** — in `packages/shared/src/<area>/endpoints.ts`, define the
    request/response zod schemas and a `defineEndpoint({ method, path, request,
 response })` descriptor — prefix `path` with `` `${API_V1}/…` `` (see _url
-versioning_ above). Reuse pure validators from `<area>/credentials.ts`
+   versioning_ above). Reuse pure validators from `<area>/credentials.ts`
    (or a sibling) rather than re-declaring field rules. It's exported
    automatically via the barrel — add an `export *` line in `src/index.ts` if the
    file is new.

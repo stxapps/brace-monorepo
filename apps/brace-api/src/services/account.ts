@@ -44,7 +44,6 @@ export async function createAccount(
 
   // Durable object for user must be deterministically reachable by userId (may have prefix or suffix).
 
-
   const userId = newId();
   try {
     await users.insert({ id: userId, username: input.username });

@@ -44,11 +44,9 @@ export function usersRepo(db: D1Database) {
 
     // Called by services/account.ts. The UNIQUE
     // constraint on username closes the create-account race the pre-check can't.
-    async insert(u: { id: string; username: string; }): Promise<void> {
+    async insert(u: { id: string; username: string }): Promise<void> {
       await db
-        .prepare(
-          `INSERT INTO users (id, username, created_at) VALUES (?, ?, ?)`,
-        )
+        .prepare(`INSERT INTO users (id, username, created_at) VALUES (?, ?, ?)`)
         .bind(u.id, u.username.toLowerCase(), Date.now())
         .run();
     },

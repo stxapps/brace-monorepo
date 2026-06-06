@@ -18,10 +18,7 @@ export type IssuedSession = {
 
 // Mint a session for a user. We persist the token HASH (never the raw token) and
 // hand the raw token back to the caller to return to the client.
-export async function issueSession(
-  env: Bindings,
-  user: { id: string; },
-): Promise<IssuedSession> {
+export async function issueSession(env: Bindings, user: { id: string }): Promise<IssuedSession> {
   const token = newSessionToken();
   const sessionId = newId();
   const expiresAt = Date.now() + SESSION_TTL_MS;

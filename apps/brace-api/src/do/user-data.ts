@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 
-import { type OpKind, type OpLogEntity, opLogsRepo } from './repositories/op-logs';
 import type { Bindings } from '../lib/env';
+import { type OpKind, type OpLogEntity, opLogsRepo } from './repositories/op-logs';
 
 // Per-user data store. One Durable Object instance per user (addressed by
 // idFromName(userId) — see userDataStub below), giving each user an isolated,
