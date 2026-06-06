@@ -36,7 +36,7 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 - used by brace-web, brace-extension, brace-docs
 - web-only ui components
 
-#### @stxapps/web-crypto (future)
+#### @stxapps/web-crypto
 
 - used by brace-web and brace-extension
 - web-only KDF, AES-256-GCM
@@ -64,7 +64,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | shared           | `type:shared` | `platform:agnostic` |
 | react            | `type:react`  | `platform:agnostic` |
 | web-ui           | `type:ui`     | `platform:web`      |
-| web-crypto (fut) | `type:crypto` | `platform:web`      |
+| web-crypto       | `type:crypto` | `platform:web`      |
 | brace-web        | `type:app`    | `platform:web`      |
 | brace-extension  | `type:app`    | `platform:web`      |
 | brace-api        | `type:app`    | `platform:node`     |

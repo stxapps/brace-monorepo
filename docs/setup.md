@@ -19,13 +19,15 @@
   npx nx g @nx/react:lib --directory=packages/web-ui --importPath=@stxapps/web-ui --bundler=none --linter=eslint --unitTestRunner=jest --minimal
 - ask claude to generate like:
   npx nx g @nx/react:lib --directory=packages/react --importPath=@stxapps/react --bundler=none --linter=eslint --unitTestRunner=jest --minimal --no-component
+- npx nx g @nx/react:lib --directory=packages/web-crypto --importPath=@stxapps/web-crypto --bundler=none --linter=eslint --unitTestRunner=jest
+  --minimal --no-component
 
 Flag notes:
 
 - `--bundler=none` — libs are consumed directly as TS source through the
   workspace; no per-lib build step.
 - `--importPath=@stxapps/*` — npm scope is `@stxapps`; product name is brace.
-- `--no-component` on `react` only — that lib is hooks/logic, no UI components
+- `--no-component` on `react` and `web-crypto` only — those libs are hooks/logic, no UI components
   (unlike `web-ui`).
 
 #### shadcn

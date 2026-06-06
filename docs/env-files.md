@@ -115,11 +115,11 @@ Local dev is `wrangler dev --env development` (the `dev` target); it uses the
 Each frontend environment points at the matching brace-api environment, and
 brace-api allows the matching frontend origin back:
 
-| environment   | frontend `*_API_URL` →           | brace-api `CORS_ORIGINS` allows                          |
-| ------------- | -------------------------------- | ------------------------------------------------------- |
-| `development` | `http://localhost:8787`          | `http://localhost:3000`                                 |
-| `staging`     | `https://api.staging.brace.to`   | `https://staging.brace.to`, `https://app.staging.brace.to` |
-| `production`  | `https://api.brace.to`           | `https://brace.to`, `https://app.brace.to`              |
+| environment   | frontend `*_API_URL` →         | brace-api `CORS_ORIGINS` allows                            |
+| ------------- | ------------------------------ | ---------------------------------------------------------- |
+| `development` | `http://localhost:8787`        | `http://localhost:3000`                                    |
+| `staging`     | `https://api.staging.brace.to` | `https://staging.brace.to`, `https://app.staging.brace.to` |
+| `production`  | `https://api.brace.to`         | `https://brace.to`, `https://app.brace.to`                 |
 
 CORS is never `*` — each API environment allows only its own frontend
 origin(s). Each tier allows **two** web origins: the `app.*` host (the brace-web
