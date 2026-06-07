@@ -4,8 +4,9 @@
 -- db/migrations/sessions/ — keep this snapshot and the migration set in lockstep
 -- (0001_init.sql mirrors this file). See db/migrations/README.md.
 --
--- Sessions live in their OWN database, separate from the account registry
--- (ACCOUNTS_DB), for two reasons: (1) they are high-churn (created on every
+-- Sessions live in their OWN database, separate from the directory + account
+-- shards (DIRECTORY_DB, ACCOUNTS_DB_N), for two reasons: (1) they are high-churn
+-- (created on every
 -- sign-in, deleted on expiry) and shouldn't share write traffic with Tier-0
 -- account data; (2) they are NOT Tier-0 — a lost session regenerates by
 -- re-auth, so this db needs none of the irreplaceable-state backup discipline
@@ -22,7 +23,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   id            TEXT PRIMARY KEY,
   token_hash    TEXT NOT NULL UNIQUE,
   user_id       TEXT NOT NULL,
-  account_db_id TEXT,                    -- routing seam: user's accounts shard; NULL ⇒ primary
+  account_db_id TEXT NOT NULL,           -- routing: the user's accounts shard (e.g. '1'), from the directory
   created_at    INTEGER NOT NULL,
   expires_at    INTEGER NOT NULL,
   last_seen_at  INTEGER NOT NULL

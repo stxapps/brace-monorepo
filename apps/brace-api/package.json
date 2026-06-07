@@ -34,7 +34,8 @@
         "executor": "nx:run-commands",
         "options": {
           "commands": [
-            "wrangler d1 migrations apply ACCOUNTS_DB --env development",
+            "wrangler d1 migrations apply DIRECTORY_DB --env development",
+            "wrangler d1 migrations apply ACCOUNTS_DB_1 --env development",
             "wrangler d1 migrations apply SESSIONS_DB --env development"
           ],
           "parallel": false,
@@ -43,13 +44,15 @@
         "configurations": {
           "staging": {
             "commands": [
-              "wrangler d1 migrations apply ACCOUNTS_DB --env staging",
+              "wrangler d1 migrations apply DIRECTORY_DB --env staging",
+              "wrangler d1 migrations apply ACCOUNTS_DB_1 --env staging",
               "wrangler d1 migrations apply SESSIONS_DB --env staging"
             ]
           },
           "production": {
             "commands": [
-              "wrangler d1 migrations apply ACCOUNTS_DB --env production",
+              "wrangler d1 migrations apply DIRECTORY_DB --env production",
+              "wrangler d1 migrations apply ACCOUNTS_DB_1 --env production",
               "wrangler d1 migrations apply SESSIONS_DB --env production"
             ]
           }

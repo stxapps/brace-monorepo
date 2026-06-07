@@ -1,24 +1,28 @@
 import { canonicalizeUsername } from '@stxapps/shared';
 
-// Username directory repository — lives in ACCOUNTS_DB (the global uniqueness
-// namespace). Maps a canonical username → the account it resolves to, plus the
-// `account_db_id` routing seam. This is the ONE table that stays global when
-// `users`/`account_keys` shard out, so it's always queried via env.ACCOUNTS_DB,
+// Username directory repository — lives in DIRECTORY_DB (the global, never-sharded
+// uniqueness namespace). Maps a canonical username → the account it resolves to,
+// plus the `account_db_id` routing seam. Always queried via env.DIRECTORY_DB,
 // never through db-routes.
+//
+// Because the directory and the account rows are in SEPARATE databases, the
+// username can't be claimed in the same transaction as the account write. So
+// create-account is claim-then-write: claim() here (the authoritative uniqueness
+// gate), then the shard write, then release() to compensate if that write fails.
 
 // Public domain entity (camelCase).
 export type UsernameEntity = {
   username: string;
   userId: string;
-  // Which accounts db holds this user's rows; null ⇒ the primary ACCOUNTS_DB.
-  accountDbId: string | null;
+  // The accounts shard holding this user's rows (e.g. '1'); resolve via db-routes.
+  accountDbId: string;
 };
 
 // Raw row as it sits in D1 (snake_case columns). Internal to this repo.
 type UsernameRow = {
   username: string;
   user_id: string;
-  account_db_id: string | null;
+  account_db_id: string;
 };
 
 function toEntity(r: UsernameRow): UsernameEntity {
@@ -38,18 +42,35 @@ export function usernamesRepo(db: D1Database) {
       return r ? toEntity(r) : null;
     },
 
-    // Returns the prepared INSERT so create-account can batch it ATOMICALLY with
-    // the users/account_keys writes (all in ACCOUNTS_DB today). The PRIMARY KEY on
-    // username is the race-free uniqueness guard — a single constrained INSERT,
-    // not a read-then-write — so concurrent claims of the same name can't both win.
-    insertStmt(u: {
+    // CLAIM the name for this account — the race-free uniqueness gate. ON CONFLICT
+    // DO NOTHING makes a contended claim resolve without throwing: a concurrent
+    // claim of the same name writes 0 rows. Returns true if WE claimed it, false
+    // if it was already taken. (Single constrained INSERT, not a read-then-write,
+    // so two simultaneous claims can't both win.)
+    async claim(u: {
       username: string;
       userId: string;
-      accountDbId?: string | null;
-    }): D1PreparedStatement {
-      return db
-        .prepare(`INSERT INTO usernames (username, user_id, account_db_id) VALUES (?, ?, ?)`)
-        .bind(canonicalizeUsername(u.username), u.userId, u.accountDbId ?? null);
+      accountDbId: string;
+    }): Promise<boolean> {
+      const res = await db
+        .prepare(
+          `INSERT INTO usernames (username, user_id, account_db_id) VALUES (?, ?, ?)
+           ON CONFLICT(username) DO NOTHING`,
+        )
+        .bind(canonicalizeUsername(u.username), u.userId, u.accountDbId)
+        .run();
+      return res.meta.changes > 0;
+    },
+
+    // RELEASE a claim — the compensating action when the shard account write fails
+    // after a successful claim, so a crash mid-create doesn't orphan the name. The
+    // `user_id` guard ensures we only delete OUR claim, never one a (re)created
+    // account legitimately holds.
+    async release(username: string, userId: string): Promise<void> {
+      await db
+        .prepare(`DELETE FROM usernames WHERE username = ? AND user_id = ?`)
+        .bind(canonicalizeUsername(username), userId)
+        .run();
     },
   };
 }

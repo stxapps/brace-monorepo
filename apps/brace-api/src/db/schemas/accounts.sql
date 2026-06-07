@@ -1,39 +1,25 @@
--- ACCOUNTS database — full-create snapshot (authoritative "fresh DB" shape).
+-- ACCOUNTS database (a SHARD) — full-create snapshot ("fresh DB" shape).
 --
--- Run this to stand up a brand-new accounts database; read it to see the shape
--- at a glance. For changes to a LIVE db, add a numbered migration under
+-- This schema is applied to EACH account shard (ACCOUNTS_DB_1, ACCOUNTS_DB_2,
+-- …). For changes to a LIVE db, add a numbered migration under
 -- db/migrations/accounts/ — keep this snapshot and the migration set in lockstep
 -- (0001_init.sql mirrors this file). See db/migrations/README.md.
 --
--- This is the global account registry + the username directory. It holds ONLY
--- small, bounded-per-user rows (no bulk data — bookmarks live in the USER_DATA
--- durable objects), so it scales to millions of accounts. `account_db_id` is the
--- pre-cut sharding seam: when this db nears D1's 10 GB cap, `users` +
--- `account_keys` move to additional `accounts_db_N` databases while `usernames`
--- stays here as the global directory. See docs/account.md and db/db-routes.ts.
-
--- The username DIRECTORY: the global uniqueness namespace and username→account
--- map. PRIMARY KEY(username) IS the case-insensitive UNIQUE constraint, and a
--- single constrained INSERT is the race-free "claim" (no read-then-write).
--- Usernames are stored canonical (trim→NFKC→lowercase, canonicalizeUsername in
--- @stxapps/shared) so the handle matches the per-user salt input exactly.
--- account_db_id routes to the db holding this user's `users`/`account_keys`
--- rows; NULL ⇒ the primary ACCOUNTS_DB (this db). No FK to users(id): the
--- directory is global and stays here even after users/keys shard out.
-CREATE TABLE IF NOT EXISTS usernames (
-  username      TEXT PRIMARY KEY,
-  user_id       TEXT NOT NULL,
-  account_db_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);
+-- Holds a shard of account rows: `users` (identity + credential) and
+-- `account_keys` (the wrapped-DEK doors). The username is NOT here — it lives in
+-- the global `usernames` directory (DIRECTORY_DB), which owns uniqueness and
+-- routing. These two tables stay TOGETHER in the same shard forever so the
+-- credential and its Tier-0 key material commit in one transaction. Only small,
+-- bounded-per-user rows live here (no bulk data — bookmarks are in the USER_DATA
+-- durable objects), so a shard holds millions of accounts before the next one is
+-- needed. Which shard a user is in is recorded by `account_db_id` in the
+-- directory (and denormalized onto the session); resolve it via db/db-routes.ts.
 
 -- Account identity + credential. Keyed by the random server-minted user_id (the
 -- DO address). public_key is the Ed25519 credential the server verifies sign-in
 -- signatures against (hex) — NOT an identifier. Under the DEK model it is derived
--- from the random DEK, so it is STABLE across password changes (a password change
--- only re-wraps the DEK; see account_keys) and changes only on a rare DEK
--- rotation. The username is NOT stored here — it lives in the `usernames`
--- directory above, so the account row carries no shardable global key.
+-- from the random DEK, so it is STABLE across password changes (those only
+-- re-wrap the DEK; see account_keys) and changes only on a rare DEK rotation.
 CREATE TABLE IF NOT EXISTS users (
   id         TEXT PRIMARY KEY,
   public_key TEXT NOT NULL UNIQUE,
@@ -42,10 +28,9 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- The "doors": one wrapped-DEK blob per access method. Each door derives a KEK
--- and AEAD-wraps its own copy of the 32-byte DEK; any one unwraps it. This is
--- the Tier-0 key material — it lives in the SAME db as `users` (and always will,
--- even after sharding) so the credential and its wrapped DEK commit in one
--- transaction. wrapped_dek = AES-256-GCM(KEK, DEK, aad = user_id‖door_type).
+-- and AEAD-wraps its own copy of the 32-byte DEK; any one unwraps it.
+-- wrapped_dek = AES-256-GCM(KEK, DEK, aad = user_id‖door_type). Same shard as
+-- `users`, so create-account writes both in one atomic batch.
 CREATE TABLE IF NOT EXISTS account_keys (
   user_id     TEXT NOT NULL REFERENCES users(id),
   door_type   TEXT NOT NULL,            -- 'password' | 'recovery' | 'passkey'

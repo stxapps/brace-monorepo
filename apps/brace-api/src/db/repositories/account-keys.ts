@@ -1,6 +1,6 @@
 // Account-keys repository — the "doors". One wrapped-DEK blob per access method,
-// living in the SAME db as `users` (ACCOUNTS_DB today; the same shard after
-// sharding) so the credential and its Tier-0 key material commit together.
+// living in the SAME ACCOUNTS_DB_N shard as this account's `users` row, so the
+// credential and its Tier-0 key material commit together in one batch.
 
 export type DoorType = 'password' | 'recovery' | 'passkey';
 

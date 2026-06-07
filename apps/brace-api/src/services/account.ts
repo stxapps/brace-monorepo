@@ -1,4 +1,4 @@
-import { accountsDb } from '../db/db-routes';
+import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo,type DoorType } from '../db/repositories/account-keys';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
@@ -7,11 +7,19 @@ import { ApiError } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { type IssuedSession, issueSession } from './session';
 
-// Account creation under the DEK door model. The root of an account is a random
-// DEK (generated client-side, never sent); the client sends the derived public
-// key plus one wrapped-DEK blob per "door" (password at minimum). The server
-// stores the credential + wrapped blobs and mints a session. The user's actual
-// data lives in the durable object keyed by userId. See docs/account.md.
+// Account creation under the DEK door model, across separate databases. The root
+// of an account is a random DEK (generated client-side, never sent); the client
+// sends the derived public key plus one wrapped-DEK blob per "door" (password at
+// minimum). The user's actual data lives in the durable object keyed by userId.
+// See docs/account.md.
+//
+// The username DIRECTORY (DIRECTORY_DB) and the account rows (an ACCOUNTS_DB_N
+// shard) are in different databases, so this is CLAIM-THEN-WRITE rather than one
+// transaction: (1) claim the username (the authoritative uniqueness gate), (2)
+// atomically write users + account_keys in the shard, (3) release the claim if
+// (2) fails so a crash mid-create can't orphan the name. Uniqueness is always
+// enforced (directory PK) and users↔account_keys stay atomic (same shard); only
+// the claim↔account link is non-transactional, with the orphan reclaimable.
 //
 // STATUS: storage + topology are wired; the create-account CONTRACT (the shared
 // request schema carrying publicKey + door blobs) and the proof-of-possession
@@ -38,11 +46,10 @@ export type CreateAccountInput = {
 };
 
 // Cheap pre-check behind GET /v1/auth/username-available. NOT authoritative: the
-// PRIMARY KEY on usernames.username is the real race guard (see createAccount).
-// The directory lives in ACCOUNTS_DB (global), so it's queried directly, not via
-// db-routes.
+// claim in createAccount is the real race guard. The directory lives in
+// DIRECTORY_DB (global), queried directly, not via db-routes.
 export async function isUsernameTaken(env: Bindings, username: string): Promise<boolean> {
-  return (await usernamesRepo(env.ACCOUNTS_DB).findByUsername(username)) !== null;
+  return (await usernamesRepo(env.DIRECTORY_DB).findByUsername(username)) !== null;
 }
 
 export async function createAccount(
@@ -53,47 +60,48 @@ export async function createAccount(
   // and validate the door material BEFORE provisioning anything, once the
   // create-account contract lands in @stxapps/shared.
 
-  const directory = usernamesRepo(env.ACCOUNTS_DB);
+  const directory = usernamesRepo(env.DIRECTORY_DB);
+  const userId = newId();
 
-  // Cheap pre-check → clean 409 on the common case; the PK conflict in the batch
-  // below is the real race guard.
-  if (await directory.findByUsername(input.username)) {
+  // Placement: which shard this account's rows go in, stored explicitly on the
+  // account (and its directory/session rows). Today always '1'; the policy lives
+  // in assignAccountDbId(). The claim ALWAYS stays in the global directory.
+  const accountDbId = assignAccountDbId();
+
+  // (1) CLAIM the username — the authoritative, race-free uniqueness gate. A
+  // concurrent claim of the same name returns false (no row written), not an
+  // error, so a lost race is a clean 409.
+  const claimed = await directory.claim({ username: input.username, userId, accountDbId });
+  if (!claimed) {
     throw new ApiError(409, 'username_taken', 'Username is already taken');
   }
 
-  const userId = newId();
-
-  // New accounts go to the primary ACCOUNTS_DB today (account_db_id = NULL). When
-  // a shard is added, assign its id here; the username claim ALWAYS stays in the
-  // global directory (env.ACCOUNTS_DB).
-  const accountDbId: string | null = null;
-  const db = accountsDb(env, accountDbId);
-
-  // Atomic create: claim the username + write the credential + write every
-  // wrapped-DEK door in ONE D1 transaction (db.batch is all-or-nothing). All
-  // three tables live in ACCOUNTS_DB today, so db === env.ACCOUNTS_DB and this is
-  // fully atomic.
-  //
-  // NOTE (future sharding): once accountDbId is non-null, `db` is a shard and the
-  // username claim (global directory) can no longer share this batch. It splits
-  // into: (1) claim username in env.ACCOUNTS_DB, (2) atomically write
-  // users+account_keys in the shard, (3) compensate by deleting the claim if (2)
-  // fails. Uniqueness and users↔account_keys atomicity both survive; only the
-  // claim↔account link degrades to a reclaimable orphan. See docs/account.md.
-  const users = usersRepo(db);
-  const keys = accountKeysRepo(db);
+  // (2) WRITE the account in the shard — users + every wrapped-DEK door in ONE
+  // atomic batch (all-or-nothing). This is a DIFFERENT db than the directory, so
+  // it can't join the claim in a single transaction.
+  const shard = accountsDb(env, accountDbId);
+  const users = usersRepo(shard);
+  const keys = accountKeysRepo(shard);
   try {
-    await db.batch([
-      directory.insertStmt({ username: input.username, userId, accountDbId }),
+    await shard.batch([
       users.insertStmt({ id: userId, publicKey: input.publicKey }),
       ...input.doors.map((d) =>
         keys.insertStmt({ userId, doorType: d.doorType, wrappedDek: d.wrappedDek, iv: d.iv }),
       ),
     ]);
-  } catch {
-    // Lost the username race after the pre-check (PK conflict) or a constraint
-    // failed. The batch is all-or-nothing, so nothing partial was written.
-    throw new ApiError(409, 'username_taken', 'Username is already taken');
+  } catch (err) {
+    // (3) COMPENSATE: the account write failed after we claimed the name, so
+    // release the claim to avoid orphaning the username. Best-effort — if this
+    // also fails (e.g. the worker dies), a sweeper reclaims claims that have no
+    // backing `users` row after a short TTL (TODO: wire the sweeper alongside
+    // sessions.deleteExpired). Uniqueness is never violated either way.
+    await directory.release(input.username, userId).catch(() => {
+      // Best-effort: if the compensating release itself fails, the orphan claim
+      // is reclaimed by the sweeper (TODO) — never block on cleanup here.
+    });
+    // Log the cause for observability (wrangler tail); never leak it to the client.
+    console.error('createAccount shard write failed:', err);
+    throw new ApiError(500, 'account_create_failed', 'Could not create account, please retry');
   }
 
   const session = await issueSession(env, { id: userId, accountDbId });

@@ -46,15 +46,22 @@
       "vars": {
         "CORS_ORIGINS": "http://localhost:3000",
       },
-      // ACCOUNTS_DB: account registry + username directory (usernames, users,
-      // account_keys). SESSIONS_DB: bearer-token sessions (separate, high-churn,
-      // non-Tier-0). Bindings are STATIC. migrations_dir is per-binding — each db
-      // has its own history (src/db/migrations/{accounts,sessions}); durable
-      // objects migrate in code. See src/db/migrations/README.md.
+      // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
+      // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions
+      // (separate, high-churn, non-Tier-0). Bindings are STATIC. migrations_dir is
+      // per-binding — each role has its own history
+      // (src/db/migrations/{directory,accounts,sessions}); durable objects migrate
+      // in code. See src/db/migrations/README.md.
       "d1_databases": [
         {
-          "binding": "ACCOUNTS_DB",
-          "database_name": "brace-accounts-db-dev",
+          "binding": "DIRECTORY_DB",
+          "database_name": "brace-directory-db-dev",
+          "database_id": "local",
+          "migrations_dir": "src/db/migrations/directory",
+        },
+        {
+          "binding": "ACCOUNTS_DB_1",
+          "database_name": "brace-accounts-db-1-dev",
           "database_id": "local",
           "migrations_dir": "src/db/migrations/accounts",
         },
@@ -111,9 +118,15 @@
       },
       "d1_databases": [
         {
-          "binding": "ACCOUNTS_DB",
-          "database_name": "brace-accounts-db-staging",
-          "database_id": "TODO: `wrangler d1 create brace-accounts-db-staging` → paste id",
+          "binding": "DIRECTORY_DB",
+          "database_name": "brace-directory-db-staging",
+          "database_id": "TODO: `wrangler d1 create brace-directory-db-staging` → paste id",
+          "migrations_dir": "src/db/migrations/directory",
+        },
+        {
+          "binding": "ACCOUNTS_DB_1",
+          "database_name": "brace-accounts-db-1-staging",
+          "database_id": "TODO: `wrangler d1 create brace-accounts-db-1-staging` → paste id",
           "migrations_dir": "src/db/migrations/accounts",
         },
         {
@@ -167,9 +180,15 @@
       },
       "d1_databases": [
         {
-          "binding": "ACCOUNTS_DB",
-          "database_name": "brace-accounts-db-production",
-          "database_id": "TODO: `wrangler d1 create brace-accounts-db-production` → paste id",
+          "binding": "DIRECTORY_DB",
+          "database_name": "brace-directory-db-production",
+          "database_id": "TODO: `wrangler d1 create brace-directory-db-production` → paste id",
+          "migrations_dir": "src/db/migrations/directory",
+        },
+        {
+          "binding": "ACCOUNTS_DB_1",
+          "database_name": "brace-accounts-db-1-production",
+          "database_id": "TODO: `wrangler d1 create brace-accounts-db-1-production` → paste id",
           "migrations_dir": "src/db/migrations/accounts",
         },
         {

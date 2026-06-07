@@ -19,10 +19,10 @@ export type IssuedSession = {
 // Mint a session for a user. We persist the token HASH (never the raw token) and
 // hand the raw token back to the caller to return to the client. `accountDbId`
 // is denormalized onto the session so the auth guard can route to the user's
-// accounts shard without a directory hop (null ⇒ primary ACCOUNTS_DB).
+// accounts shard without a directory hop.
 export async function issueSession(
   env: Bindings,
-  user: { id: string; accountDbId?: string | null },
+  user: { id: string; accountDbId: string },
 ): Promise<IssuedSession> {
   const token = newSessionToken();
   const sessionId = newId();
@@ -32,7 +32,7 @@ export async function issueSession(
     id: sessionId,
     tokenHash: await hashToken(token),
     userId: user.id,
-    accountDbId: user.accountDbId ?? null,
+    accountDbId: user.accountDbId,
     expiresAt,
   });
 

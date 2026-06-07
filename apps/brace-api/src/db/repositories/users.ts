@@ -1,7 +1,8 @@
-// User repository — the account identity + credential, in ACCOUNTS_DB (the same
-// shard as account_keys after sharding). The username is NOT here — it lives in
-// the `usernames` directory; this row is keyed by the random user_id. The user's
-// actual data lives in the durable object keyed by that same user_id.
+// User repository — the account identity + credential, in an ACCOUNTS_DB_N shard
+// (always the same shard as this account's account_keys). The username is NOT
+// here — it lives in the `usernames` directory (DIRECTORY_DB); this row is keyed
+// by the random user_id. The user's actual data lives in the durable object keyed
+// by that same user_id.
 
 // Public domain entity (camelCase).
 export type UserEntity = {

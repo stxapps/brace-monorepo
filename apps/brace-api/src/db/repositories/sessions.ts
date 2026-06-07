@@ -9,8 +9,8 @@
 export type SessionEntity = {
   id: string;
   userId: string;
-  // Which accounts db holds this user's rows; null ⇒ the primary ACCOUNTS_DB.
-  accountDbId: string | null;
+  // The accounts shard holding this user's rows (e.g. '1'); resolve via db-routes.
+  accountDbId: string;
   expiresAt: number; // epoch ms
 };
 
@@ -19,7 +19,7 @@ type SessionRow = {
   id: string;
   token_hash: string;
   user_id: string;
-  account_db_id: string | null;
+  account_db_id: string;
   expires_at: number;
 };
 
@@ -51,7 +51,7 @@ export function sessionsRepo(db: D1Database) {
       id: string;
       tokenHash: string;
       userId: string;
-      accountDbId?: string | null;
+      accountDbId: string;
       expiresAt: number;
     }): Promise<void> {
       await db
@@ -59,7 +59,7 @@ export function sessionsRepo(db: D1Database) {
           `INSERT INTO sessions (id, token_hash, user_id, account_db_id, created_at, expires_at, last_seen_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(s.id, s.tokenHash, s.userId, s.accountDbId ?? null, Date.now(), s.expiresAt, Date.now())
+        .bind(s.id, s.tokenHash, s.userId, s.accountDbId, Date.now(), s.expiresAt, Date.now())
         .run();
     },
 

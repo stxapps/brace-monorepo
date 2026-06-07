@@ -24,8 +24,8 @@ describe('brace-api', () => {
   });
 
   describe(`GET ${checkUsernameEndpoint.path}`, () => {
-    // The available/taken paths query the `usernames` directory in ACCOUNTS_DB.
-    // app.request() passes NO env, so `c.env.ACCOUNTS_DB` is undefined and the
+    // The available/taken paths query the `usernames` directory in DIRECTORY_DB.
+    // app.request() passes NO env, so `c.env.DIRECTORY_DB` is undefined and the
     // handler can't run — these are skipped until we test against real bindings
     // via @cloudflare/vitest-pool-workers. (They were silently 500-ing before;
     // skipping is the honest state, not a green that proves nothing.)

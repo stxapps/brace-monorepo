@@ -1,13 +1,7 @@
 -- Migration 0001 (accounts) — initial schema. Mirrors db/schemas/accounts.sql.
--- Applied to live accounts DBs via:
---   wrangler d1 migrations apply ACCOUNTS_DB --env <development|staging|production>
-
-CREATE TABLE IF NOT EXISTS usernames (
-  username      TEXT PRIMARY KEY,
-  user_id       TEXT NOT NULL,
-  account_db_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);
+-- Applied to EACH account shard via:
+--   wrangler d1 migrations apply ACCOUNTS_DB_1 --env <development|staging|production>
+--   (and ACCOUNTS_DB_2, … as shards are added)
 
 CREATE TABLE IF NOT EXISTS users (
   id         TEXT PRIMARY KEY,

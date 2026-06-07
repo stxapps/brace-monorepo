@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   id            TEXT PRIMARY KEY,
   token_hash    TEXT NOT NULL UNIQUE,
   user_id       TEXT NOT NULL,
-  account_db_id TEXT,
+  account_db_id TEXT NOT NULL,
   created_at    INTEGER NOT NULL,
   expires_at    INTEGER NOT NULL,
   last_seen_at  INTEGER NOT NULL
