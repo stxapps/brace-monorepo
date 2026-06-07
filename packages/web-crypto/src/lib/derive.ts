@@ -1,6 +1,10 @@
 import * as ed25519 from '@noble/ed25519';
 
-import { HKDF_INFO_AUTH_SEED, HKDF_INFO_ENCRYPTION_KEY } from '@stxapps/shared';
+import {
+  deriveUserSalt,
+  HKDF_INFO_AUTH_SEED,
+  HKDF_INFO_ENCRYPTION_KEY,
+} from '@stxapps/shared';
 
 import { deriveMasterSecret } from './argon2';
 import { toHex, utf8 } from './encoding';
@@ -36,14 +40,16 @@ async function hkdf(
 
 // Step 2 of account creation: (username, password) → keys. Expensive (runs
 // Argon2id in a worker); call it once, then reuse the returned material for the
-// session. The username is the per-user salt (see deriveMasterSecret), so the
+// session. The salt is derived from the username (see deriveUserSalt), so the
 // same password under a different username yields entirely different keys.
 //
-//   password --Argon2id(salt=username)--> master secret
+//   salt = SHA-256(APP_SALT ‖ canonical username)
+//   password --Argon2id(salt)--> master secret
 //                              |--HKDF(auth-seed)------> Ed25519 keypair (publicKey + sign)
 //                              `--HKDF(encryption-key)-> AES-256-GCM key
-export async function deriveAccount(password: string, username: string): Promise<Account> {
-  const masterSecret = await deriveMasterSecret(password, username);
+export async function deriveAccount(username: string, password: string): Promise<Account> {
+  const salt = deriveUserSalt(username);
+  const masterSecret = await deriveMasterSecret(password, salt);
 
   // Copy into an ArrayBuffer-backed view so Web Crypto accepts it as key material.
   const master = await crypto.subtle.importKey('raw', new Uint8Array(masterSecret), 'HKDF', false, [

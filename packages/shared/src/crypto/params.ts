@@ -8,16 +8,21 @@
 // is per-platform (web uses @stxapps/web-crypto), but the numbers must be one
 // source of truth shared by all of them.
 
-// PRE-LAUNCH: replace with a real high-entropy constant before the first real
-// user. The actual Argon2 salt is per-user — SHA-256(APP_SALT || canonical
-// username) — so two users who pick the same password still derive different
-// keys (the unique username is the per-user salt). This constant is the
-// app-wide domain separator folded into every salt: it defends against
-// precomputed tables shared across apps/users, while the no-accounts model
-// keeps everything recomputable on any client from (username, password)
-// alone, with nothing salt-related stored server-side. It can never change
-// once users exist.
-export const APP_SALT = 'brace_v2_global_salt_2026_x8f9a';
+// App-wide domain separator folded into every per-user salt. The actual Argon2
+// salt is per-user — SHA-256(APP_SALT || canonical username) — so two users who
+// pick the same password still derive different keys (the unique username is the
+// per-user salt). This constant defends against precomputed tables shared across
+// apps/users, while the no-accounts model keeps everything recomputable on any
+// client from (username, password) alone, with nothing salt-related stored
+// server-side.
+//
+// NOT a secret — it ships in every client bundle; its only job is to be a
+// stable, unique, high-entropy namespace, so it must NEVER CHANGE once real
+// users exist (changing it re-derives every key and locks everyone out). The
+// `brace.app-salt.v1.` prefix is a human-readable version namespace; the
+// 256-bit base64url tail is the actual entropy (crypto.randomBytes(32)). To
+// rotate in a hypothetical migration, mint a `.v2.` constant — never edit this.
+export const APP_SALT = 'brace.app-salt.v1.AS0_1XNd72q_HoSAgW1Vs1e6-W389XTsi_Iy3udOoCw';
 
 export const ARGON2_PARAMS = {
   parallelism: 1,

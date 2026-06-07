@@ -46,7 +46,7 @@ export function useCreateAccount() {
       // identifier — the server mints its own userId), a non-extractable
       // AES-256-GCM key for data, and a `sign` closure over the private key —
       // the private key itself never leaves @stxapps/web-crypto.
-      const account = await deriveAccount(values.password, values.username);
+      const account = await deriveAccount(values.username, values.password,);
 
       // Step 3: prove key ownership by signing a timestamped payload, then POST
       // it to exchange for a session id. The server re-checks username

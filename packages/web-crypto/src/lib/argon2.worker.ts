@@ -8,9 +8,9 @@ import { ARGON2_PARAMS } from '@stxapps/shared';
 // pulling the conflicting WebWorker lib into a package that compiles against
 // DOM.
 //
-// The per-user salt is computed by the caller (deriveMasterSecret) and arrives
-// ready-to-use, so the worker stays a pure Argon2id step with no knowledge of
-// how the salt is built.
+// The per-user salt is computed upstream (deriveAccount → deriveUserSalt in
+// @stxapps/shared) and arrives ready-to-use, so the worker stays a pure
+// Argon2id step with no knowledge of how the salt is built.
 const ctx = globalThis as unknown as {
   onmessage: ((event: MessageEvent<{ password: string; salt: Uint8Array }>) => void) | null;
   postMessage: (message: unknown) => void;

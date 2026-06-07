@@ -2,25 +2,26 @@
 
 How a brace account works: there is **no account on the server** in the
 traditional sense — the user's `(username, password)` pair _is_ the account.
-From it the client deterministically derives every key it needs. See
-[architecture.md](./architecture.md) for package layering,
+From it the client deterministically derives a **key-encryption-key** that
+unwraps a random **data key**, and from that data key it derives every key it
+needs. See [architecture.md](./architecture.md) for package layering,
 [api-contracts.md](./api-contracts.md) for how the create-account endpoint is
 typed, and [local-first-sync.md](./local-first-sync.md) for what the derived
 encryption key protects. The crypto implementation lives in
 `@stxapps/web-crypto`; the frozen parameters and validators live in
 `@stxapps/shared` (`crypto/params.ts`, `auth/credentials.ts`).
 
-### the model: a password-derived wallet
+### the model: a password-derived wallet, with extra doors
 
 brace is a **zero-knowledge** bookmark manager. The server stores only
-ciphertext and never sees the password, the master secret, or any private key.
-That makes the account model structurally identical to a **crypto wallet**:
+ciphertext and never sees the password, the data key, or any private key. That
+makes the account model structurally identical to a **crypto wallet**:
 
 - the secret **is** the account — no email, no server-side password reset;
-- keys are derived **deterministically** from the secret, the same way every
-  time, on every device;
-- **there is no recovery.** Lose the password and the data is gone, exactly like
-  losing a wallet seed phrase. This must be communicated clearly in the UI.
+- keys are derived **deterministically**, the same way every time, on every
+  device;
+- the default door is the password, and **if it is the only door, there is no
+  recovery** — lose it and the data is gone, exactly like a wallet seed phrase.
 
 The one place it differs from a wallet is the part that matters most — **where
 the entropy comes from** — and that difference drives every rule below.
@@ -30,59 +31,149 @@ the entropy comes from** — and that difference drives every rule below.
 | entropy source      | **forced random** (~256 bits) | **user-chosen** — whatever they pick                        |
 | offline brute force | infeasible, period            | feasible **if the password is weak**                        |
 | per-guess cost      | —                             | Argon2id (64 MiB, ~1–3s) — raises cost, **adds no entropy** |
-| recovery            | none                          | none                                                        |
+| recovery            | none                          | optional — see [the doors](#the-doors)                      |
 
 A wallet _forces_ high entropy; brace _trusts the user_ to choose it. Argon2id
 (memory-hard) makes each guess expensive — this is what defeated the old
 SHA-256 "brain wallets" that got drained — and the per-user salt stops shared
-rainbow tables. But neither manufactures entropy: **the security of an account
-is bounded by the entropy of its password.** A generated 6-word passphrase
+rainbow tables. But neither manufactures entropy: **the security of the password
+door is bounded by the entropy of the password.** A generated 6-word passphrase
 approaches wallet-grade; `Summer2026!` does not.
 
-> The product goal is _wallet-grade safety with better UX_ — users pick their
-> own username and password instead of memorizing a random seed. That only holds
-> if we steer them toward enough password entropy (see [generated
-> password](#generated-password-recommended-default) below). UX convenience must
-> not quietly become a weak-key generator.
+> The product goal is _wallet-grade safety with better UX_. Two things buy that:
+> (1) steering users toward enough password entropy (see [generated
+> password](#generated-password-recommended-default)), and (2) the **DEK door
+> model** below, which lets us add a recovery code / passkey as _additional_
+> doors without giving the server the ability to decrypt anything. UX
+> convenience must not quietly become a weak-key generator.
+
+### the DEK / KEK door model
+
+The root of an account is **not** the password. It is a random **DEK** (data
+encryption key) — 32 bytes from a CSPRNG, generated once at create-account and
+never derived from anything. The keypair and encryption key are derived from the
+**DEK**; each access method ("door") derives a **KEK** (key-encryption-key) that
+**wraps** (AEAD-encrypts) its own copy of the DEK:
+
+```
+                         random DEK  (32 bytes, the real root)
+                          │
+        ┌─────────────────┼──────────────────┐
+        │                 │                  │
+   password-KEK      recovery-KEK        passkey-KEK      ← each door derives a KEK
+        │                 │                  │
+   wrap(DEK)         wrap(DEK)           wrap(DEK)        ← N wrapped blobs,
+        │                 │                  │              stored server-side (ciphertext)
+        └────── any one unwraps ──▶ DEK ─────┘
+                                     │
+                                     ├─ HKDF(info="brace-auth-seed") ──▶ Ed25519 keypair
+                                     │                                     ├─ publicKey  (credential, sent)
+                                     │                                     └─ sign()     (private key, never leaves the module)
+                                     └─ HKDF(info="brace-encryption-key") ──▶ AES-256-GCM key (non-extractable, never sent)
+```
+
+Any single door unwraps the same DEK; the DEK derives everything else.
+
+**Why a DEK instead of encrypting the data once per door:** the indirection lets
+us **encrypt the data once and open it through many cheap, independently
+revocable doors.** Data is encrypted under the DEK; each door wraps only the
+32-byte DEK. Adding/removing a door, or changing a password, re-wraps 32 bytes
+and **never touches the data**. Without it, every door would have to encrypt all
+the data and a password change would re-encrypt everything.
+
+The wrapped blobs are ciphertext, so storing them server-side stays
+**zero-knowledge** — the server holds locked boxes it can't open. It hands a
+door's blob to anyone who asks for a username (it's needed _before_ auth); that
+exposure is the same as today, where an attacker with the `publicKey` or any
+ciphertext can mount an offline Argon2id attack on a weak password.
+
+### the doors
+
+| door              | input entropy     | KDF for the KEK                                   | when                   |
+| ----------------- | ----------------- | ------------------------------------------------- | ---------------------- |
+| **password**      | low (user-chosen) | **Argon2id** (memory-hard) over the per-user salt | always (primary)       |
+| **recovery code** | high (CSPRNG)     | **HKDF** (input already high-entropy)             | launch                 |
+| **passkey**       | high (PRF secret) | **HKDF** over the WebAuthn PRF output             | later, where supported |
+
+- **password door** — `password-KEK = Argon2id(password, salt)`, where
+  `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the per-user
+  salt described below). Memory-hard because the input is low-entropy.
+- **recovery code** — generated with `crypto.getRandomValues` (≥256 bits, shown
+  once as grouped base32). Already high-entropy, so a cheap
+  `recovery-KEK = HKDF(recoveryCode, info="brace-recovery-kek")` suffices.
+- **passkey** — needs the **WebAuthn PRF extension** (built on `hmac-secret`):
+  the authenticator returns a stable per-credential pseudorandom secret, and
+  `passkey-KEK = HKDF(prfSecret, …)`. A plain passkey only _signs_ — it can't
+  decrypt — so PRF is what turns it into a door. PRF is on Chrome + Safari with
+  platform authenticators but not universal; fall back to password/recovery
+  where it's missing. A platform passkey synced via iCloud Keychain / Google
+  Password Manager is a **per-device door the platform backs up for free** — the
+  door users are least likely to lose.
+
+**Wrapping format.** Wrap with an **AEAD** (AES-256-GCM) so a wrong/tampered
+blob fails cleanly, and bind each blob to context with the AAD so a malicious
+server can't swap one door's blob for another's:
+
+```
+blob = AES-256-GCM(key = KEK, plaintext = DEK, aad = userId ‖ doorType)
+stored per door: { doorType, iv, ciphertext+tag }
+```
+
+> **Security floor = the weakest door.** An attacker takes the easiest of the
+> doors, so every door must be strong: the recovery code CSPRNG-generated, the
+> passkey hardware-backed. The recovery code is the one humans mishandle —
+> generate it, never let users type their own.
+
+### rotation & revocation — two tiers
+
+| tier              | trigger                                             | work                                                                                                      | publicKey / data |
+| ----------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------- |
+| **door rotation** | change password, add/remove recovery, revoke device | re-derive that one KEK; re-wrap or **delete** that blob                                                   | **unchanged**    |
+| **DEK rotation**  | DEK believed exposed                                | new DEK; re-derive keypair (**publicKey changes**) + enc key; **re-encrypt all data**; re-wrap every door | changes — rare   |
+
+Revoking a device is just deleting that door's wrapped blob (plus its `sessions`
+row) — no re-encryption, as long as the DEK itself wasn't exposed.
 
 ### the derivation pipeline
 
-One synchronous pass, run once at sign-in / create-account inside a Web Worker
-(Argon2id is ~1–3 s of CPU, kept off the main thread):
+One synchronous pass, run inside a Web Worker (Argon2id is ~1–3 s of CPU, kept
+off the main thread). On **sign-in**:
 
 ```
 (username, password)
-        │
-        │  salt = SHA-256(APP_SALT ‖ canonicalUsername)   ← per-user salt
+        │  salt = SHA-256(APP_SALT ‖ canonicalUsername)
         ▼
-   Argon2id(password, salt)  ──▶  master secret (32 bytes)
+   Argon2id(password, salt)  ──▶  password-KEK
         │
-        ├─ HKDF(info="brace-auth-seed") ──▶ Ed25519 keypair
-        │                                     ├─ publicKey  (credential, sent)
-        │                                     └─ sign()     (private key, never leaves the module)
+        │  AEAD-unwrap the fetched password-door blob   (wrong password fails on the GCM tag)
+        ▼
+       DEK (32 bytes)
         │
-        └─ HKDF(info="brace-encryption-key") ──▶ AES-256-GCM key (non-extractable, never sent)
+        ├─ HKDF(info="brace-auth-seed") ──▶ Ed25519 keypair → publicKey, sign()
+        └─ HKDF(info="brace-encryption-key") ──▶ AES-256-GCM key
 ```
+
+On **create-account** the DEK is generated fresh (not unwrapped), then wrapped
+under each chosen door.
 
 - **Per-user salt** — `SHA-256(APP_SALT ‖ canonicalizeUsername(username))`.
   Folding the unique username in means two users who pick the _same_ password
-  still derive different keys, with nothing stored server-side (any client
-  recomputes it from `(username, password)` alone). `APP_SALT` is the app-wide
-  domain separator that defends against precomputed tables shared across apps.
-  The username is a **public, deterministic** salt: it de-duplicates passwords
-  but does not hide a targeted user, so the real cost against a focused attacker
-  is Argon2id's memory-hardness, not the salt.
-- **`master secret`** never leaves `@stxapps/web-crypto`; only the two derived
-  sub-keys (and the public key / signatures) are used outside it.
+  derive different `password-KEK`s, with nothing stored server-side beyond the
+  wrapped blob. `APP_SALT` is the app-wide domain separator against precomputed
+  tables shared across apps. The username is a **public, deterministic** salt:
+  it de-duplicates passwords but doesn't hide a targeted user, so the real cost
+  against a focused attacker is Argon2id's memory-hardness, not the salt.
+- **`DEK`** and the derived sub-keys never leave `@stxapps/web-crypto`; only the
+  public key / signatures cross the boundary.
 - **`publicKey`** is the Ed25519 public key (hex). It is a **credential**, not an
-  identifier — see [the two identifiers](#the-two-identifiers) below.
+  identifier — see [the two identifiers](#the-two-identifiers).
 
-These parameters are a **frozen cross-platform contract** in
-`crypto/params.ts`: web, extension, and the future Expo client must all derive
-with the exact same `APP_SALT`, `ARGON2_PARAMS`, HKDF labels, and
-`canonicalizeUsername` rule, or the same password produces different keys and
-the user is locked out of their data. **They can never change once real users
-exist.**
+These parameters are a **frozen cross-platform contract** in `crypto/params.ts`:
+web, extension, and the future Expo client must all use the exact same
+`APP_SALT`, `ARGON2_PARAMS`, HKDF labels, AEAD scheme, and `canonicalizeUsername`
+rule, or a door fails to unwrap the DEK and the user is locked out. **They can
+never change once real users exist.** (The DEK is random, so it is _not_ part of
+the frozen contract — only the machinery that derives KEKs and unwraps it is.)
 
 ### username — rules and why
 
@@ -96,11 +187,14 @@ identically on the form and the server:
 | canonicalization | `trim → NFKC → lowercase` | one deterministic form (`canonicalizeUsername`)             |
 
 The username does double duty: it is the **public handle** (the server's
-case-insensitive `UNIQUE` key) _and_ the **per-user salt input**. Because it is
-folded into key derivation, the canonicalization rule is part of the frozen
-contract and the username is **effectively permanent** — changing it would
-re-derive every key and re-key all data. Treat a rename as "create a new account
-and migrate," not an editable profile field.
+case-insensitive `UNIQUE` key) _and_ the **password door's salt input**. Because
+the canonicalization rule is folded into KEK derivation it is part of the frozen
+contract. But note the DEK model **decouples the username from the data**: it
+salts only the `password-KEK`, not the DEK. So a rename re-derives that one KEK
+and re-wraps the DEK — it does **not** re-key data — which makes an editable
+username feasible later if we want it (re-wrap + update the `UNIQUE` handle),
+rather than "create a new account and migrate." Until that's built, treat it as
+effectively permanent.
 
 ### password — rules and entropy
 
@@ -140,8 +234,8 @@ their own only behind a strength gate:
   using `crypto.getRandomValues` (a CSPRNG — never `Math.random`);
 - present it like a wallet seed: show it once, "copy" + "I've written this
   down" confirmation, and a plain "there is no recovery" warning;
-- the words are just a high-entropy `password` — they flow through the exact
-  same pipeline above, so **no derivation changes are needed**, only UI.
+- the words are just a high-entropy `password` — they flow through the password
+  door above, so **no derivation changes are needed**, only UI.
 
 This keeps the promise: a user _can_ pick their own username and password (good
 UX), but the **safe path is the default path** (wallet-grade entropy), rather
@@ -152,33 +246,33 @@ than relying on every user to invent a strong secret.
 A common source of confusion: an account has **one identifier and one
 credential**, not "two ids."
 
-| name        | what it is                                                                                                                       | derived/stored where                                       | sent to server?        |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------- |
-| `userId`    | the account's **stable primary key** — random, server-minted (`newId()`); also the Durable Object address (`idFromName(userId)`) | brace-api `users` table                                    | issued _by_ the server |
-| `publicKey` | the **credential** — Ed25519 public key the server verifies signatures against                                                   | derived on the client; stored as a `users.public_key` column | yes (it's public)      |
+| name        | what it is                                                                                                                       | derived/stored where                                             | sent to server?        |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------- |
+| `userId`    | the account's **stable primary key** — random, server-minted (`newId()`); also the Durable Object address (`idFromName(userId)`) | brace-api `users` table                                          | issued _by_ the server |
+| `publicKey` | the **credential** — Ed25519 public key the server verifies signatures against                                                   | derived on the client from the DEK; stored as `users.public_key` | yes (it's public)      |
 
 Why keep a separate random `userId` instead of using the `publicKey` as the id:
 
-- **rotation** — changing the password changes the `publicKey`; a stable
-  `userId` lets the credential change without re-addressing the DO or rewriting
-  every foreign key. (For the same reason, `public_key` is **never denormalized
-  into `sessions`** the way `user_id` is — `user_id` is immutable and read on
-  every request; `public_key` is mutable and read only at sign-in.)
-- **no credential leakage** — keeping a separate id means the public key lives
-  in exactly one place rather than being sprinkled across sessions, op-logs, and
-  every reference.
+- **stability / addressing** — a stable `userId` is the immutable DO address and
+  foreign-key target. With the DEK model the `publicKey` is now **stable across
+  password changes** (a password change only re-wraps the DEK; the DEK-derived
+  keypair is unchanged) and changes _only_ on the rare DEK rotation — but
+  `userId` stays the one value safe to denormalize (e.g. into `sessions`) and
+  reference everywhere. `public_key` is **not denormalized into `sessions`**:
+  `user_id` is immutable and read on every request; `public_key` is read only at
+  sign-in.
+- **no credential leakage** — a separate id keeps the public key in exactly one
+  place rather than sprinkled across sessions, op-logs, and every reference.
 
-`publicKey` is stored as a **column on `users`**, not in a separate 1:N
-`credentials` table. The multi-credential future a credentials table would buy
-(recovery key, per-device key, passkey) **does not apply here**, because the
-encryption key is derived _directly_ from `(username, password)` — there is only
-one door to the data, exactly like a wallet seed (see [the
-model](#the-model-a-password-derived-wallet)). A passkey or per-device key could
-authenticate to the server but still couldn't _decrypt_ anything, and device
-revocation is already handled by deleting the device's `sessions` row. Adding
-real recovery would mean switching to a random data-key wrapped by multiple
-key-encryption-keys — its own new storage either way, which a `credentials`
-table would neither enable nor block. So one column, one credential.
+**One credential, many doors — and why that's not a contradiction.** There are
+now several doors, but they are about **decryption** (unwrapping the DEK), not
+**authentication**. The server still verifies exactly one thing: a signature
+from the DEK-derived `publicKey`. So `publicKey` stays a single **column** on
+`users`, not a 1:N `credentials` table — the multiplicity lives in the
+`account_keys` table (one wrapped-DEK row per door), not in server credentials.
+A passkey or
+recovery code unwraps the DEK, after which the client derives the same keypair
+and authenticates with it; no door is its own server credential.
 
 So: identify by `userId` (and the human-facing `username`), **authenticate** by
 a signature the `publicKey` verifies. The client proves ownership by signing a
@@ -186,35 +280,245 @@ timestamped `{ publicKey, username, action, timestamp }` payload with the
 Ed25519 private key at create-account / sign-in.
 
 > **The load-bearing sign-in check.** The server **cannot** verify that a
-> keypair was honestly derived from `(username, password)` — a client can sign a
-> valid payload with _any_ keypair and _any_ username. That is fine, but only if
-> the server, on sign-in, checks the presented `publicKey` against the
-> **stored** `users.public_key` for that username — not merely that the
-> signature is internally valid for the publicKey in the payload. Skipping that
-> comparison would let anyone "sign in" with their own key. So the server must:
-> (1) verify the signature against `payload.publicKey` (proof of possession);
-> (2) confirm `payload.publicKey === users.public_key` for `payload.username`;
-> (3) check `action` and a fresh `timestamp` (context + replay binding). On
-> create-account there is no stored key yet, so step 2 is replaced by the
-> `username` UNIQUE check, and the presented `publicKey` is what gets stored.
+> keypair was honestly derived — a client can sign a valid payload with _any_
+> keypair and _any_ username. That is fine, but only if the server, on sign-in,
+> checks the presented `publicKey` against the **stored** `users.public_key` for
+> that username — not merely that the signature is internally valid. The flow:
+> (1) client sends username → server returns the **password-door** wrapped blob;
+> (2) client unwraps the DEK with `Argon2id(password, salt)` (a wrong password
+> fails on the GCM tag), derives the keypair, and signs; (3) server verifies the
+> signature against `payload.publicKey`, confirms
+> `payload.publicKey === users.public_key` for the username, and checks `action`
+>
+> - a fresh `timestamp`. Skipping the comparison in step 3 would let anyone
+>   "sign in" with their own key. On create-account there is no stored key yet, so
+>   that comparison is replaced by the `username` UNIQUE check, the presented
+>   `publicKey` is stored, and the door blobs are stored alongside it.
 
 > **STATUS — partially built:** the client derives `publicKey` and signs the
-> payload (`use-create-account.ts`); the server side that stores it (the
-> `users.public_key` column) and runs the sign-in check above is **not
+> payload (`use-create-account.ts`); the DEK indirection, the wrapped-blob
+> storage, the `users.public_key` column, and the sign-in check above are **not
 > implemented yet** — see the TODOs in `apps/brace-api/src/services/account.ts`
 > and [api-contracts.md](./api-contracts.md).
 
+### storage durability — the most critical state in the system
+
+The DEK model introduces a hard new dependency that direct derivation did not
+have. Spell it out, because the failure is fatal and silent:
+
+> **The wrapped-DEK blobs and the `users` table are Tier-0, irreplaceable
+> state. If they are lost, the account is dead — permanently, with correct
+> credentials.** The DEK is _random_; nothing can recompute it. Lose every
+> wrapped copy and all doors are gone, so the encrypted bookmarks — which still
+> sit safely in storage — can never be decrypted again. This is strictly worse
+> than the old direct-derivation model, where `(username, password)` alone
+> regenerated the keys from nothing. Recovery doors do **not** save you here: a
+> recovery code is a _KEK_, not a copy of the DEK, so it only defends against
+> _forgetting the password_ — never against _us losing the blob_. Different
+> failure mode, no overlap.
+
+The `users` row is equally load-bearing: it is the auth credential
+(`public_key`) and the uniqueness namespace (`username`). Losing it loses
+sign-in and orphans the data.
+
+So this Tier-0 state — the `users` row **and** the wrapped DEKs — lives together
+in **D1**, in one transactional store with one point-in-time-recovery timeline.
+Only the **bulk encrypted bookmarks** (large, and already mirrored by the
+client's local-first copy) go to R2.
+
+#### the split: D1 for the account + keys, R2 for bulk ciphertext
+
+| store                 | holds                                             | why                                                                   |
+| --------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| **D1** (SQLite)       | `users` + `account_keys` (**wrapped DEK inline**) | relational, `UNIQUE` username, single transaction, 30-day Time Travel |
+| **R2** (object store) | the bulk encrypted bookmark blobs                 | large, cheap, no egress; not key material                             |
+
+A wrapped DEK is ~80 bytes (32-byte DEK + IV + GCM tag), so it lives **inline in
+D1**, in the same row as its index — not in R2. R2 has no native object
+versioning and would force a second store with no shared transaction; D1 keeps
+the keys atomic with the credential and gives them free 30-day PITR. Reserve R2
+for what it's actually best at — the large bookmark ciphertext — which the
+client also holds locally, so an R2 loss degrades to a re-sync, not a death.
+
+Concrete D1 schema:
+
+```sql
+CREATE TABLE users (
+  user_id    TEXT PRIMARY KEY,           -- random, server-minted (newId())
+  username   TEXT NOT NULL,              -- canonical form (already NFKC+lowercased)
+  public_key TEXT NOT NULL,              -- ed25519 hex — the credential
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_users_username ON users(username);
+
+-- one row per door; the wrapped DEK lives inline, no second store
+CREATE TABLE account_keys (
+  user_id     TEXT NOT NULL REFERENCES users(user_id),
+  door_type   TEXT NOT NULL,             -- 'password' | 'recovery' | 'passkey'
+  wrapped_dek BLOB NOT NULL,             -- AES-256-GCM(KEK, DEK), aad = userId‖doorType
+  iv          BLOB NOT NULL,             -- GCM nonce for this wrap
+  version     INTEGER NOT NULL,          -- bumped on each re-wrap (audit/debug)
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (user_id, door_type)
+);
+```
+
+#### the rules
+
+1. **One store, one transaction.** Create-account writes the `users` row and its
+   `account_keys` rows in a **single D1 transaction** — there is no cross-store
+   ordering to get wrong and no orphan window. (The bulk ciphertext goes to R2
+   separately, but it is _not_ key material: a missing bulk blob is recoverable
+   from the client's local copy, so it isn't Tier-0.)
+2. **Re-wrap is one atomic UPDATE.** A password change re-derives the
+   password-KEK and `UPDATE`s that door's `wrapped_dek` / `iv` / `version` in
+   place, atomically. Time Travel is the safety net if a bad write slips through
+   — no manual versioned-blob dance needed (that complexity only existed to
+   paper over R2's lack of versioning).
+3. **Revoke = delete the door's row**, deliberately (plus its `sessions` row).
+   The DEK is unchanged, so the other doors keep working — no re-encryption.
+4. **Bulk R2 hygiene.** Keep the bookmark bucket free of any lifecycle rule that
+   could silently expire a user's server copy; route deletes through a separate
+   admin path, not the hot request path.
+
+#### backups & replication (set up before launch)
+
+- **D1 (`users` + `account_keys` + the wrapped DEKs):** Time Travel is always on
+  and free — any point in the **last 30 days** is restorable on a **single
+  timeline** covering the credential and its keys together
+  (`wrangler d1 time-travel restore`). For retention beyond 30 days, run a
+  **scheduled D1 export** (REST API + Workflows / a Cron-triggered Worker) daily,
+  and copy at least the weekly dump **off Cloudflare** (e.g. to S3) so a
+  platform-level account problem can't take the Tier-0 state with it.
+- **R2 (bulk ciphertext):** R2 is durable but **not versioned**. This data is
+  lower-stakes (the client's local-first copy is a second replica), but still
+  guard against accidental delete/overwrite with **R2 event notifications →
+  Queue → Worker** replicating writes to a second bucket.
+- **Test restores.** A backup you have never restored is not a backup —
+  periodically restore D1 to a scratch DB and confirm a sample of wrapped DEKs
+  still unwrap.
+
+#### why not the per-user Durable Object?
+
+We already run a Durable Object per user (`idFromName(userId)`), so it's natural
+to ask why the keys don't live there. **Backup is no longer the reason not to** —
+SQLite-backed DOs now have **30-day point-in-time recovery, on by default**
+(only the legacy KV-backed DOs lack it). The reasons are structural:
+
+1. **You can't reach the DO without D1 first.** The DO is addressed by `userId`,
+   but sign-in presents a **username**. The username→userId resolution and the
+   global `UNIQUE(username)` constraint can only live in a global store (D1) — a
+   per-user DO can't enforce global uniqueness. So D1 is unavoidable regardless;
+   the only question is whether the keys join it there.
+2. **Keys-in-DO recreates the two-store hazard.** `users` in D1 + wrapped DEK in
+   the DO is the same split-brain (ordering, orphans, reconciliation) as
+   D1↔R2 — just relocated. Inline in D1 collapses it to one transaction.
+3. **The password-door blob is read _pre-auth_.** Serving it from D1 is a cheap
+   indexed read; serving it from the DO wakes the user's object on every sign-in
+   attempt — including attacker username-probes — adding latency and a
+   force-instantiation DoS surface.
+4. **One restore timeline, not N.** D1 PITR restores the credential and its keys
+   together with one command; DO PITR is per-object, so a _consistent_ restore
+   across the registry plus every affected DO is far harder.
+
+The DO's real job is the user's **bookmark data / sync / op-log** (strong
+per-user consistency, now PITR-backed). Keep that there; keep the tiny, pre-auth,
+Tier-0 wrapped DEK beside its credential in D1.
+
+#### future: sharding D1 (not needed yet, just don't foreclose it)
+
+A single 10 GB D1 holds **millions** of accounts (≈1–1.5 KB each), so this is
+years away or never. But D1 caps at 10 GB/db (with 50k dbs/account) and is
+designed to scale by **sharding across many small databases**, so it's worth
+knowing the path stays open — and which invariants keep it open.
+
+What makes shard-later easy here is the access shape, not luck:
+
+- **Shard key = `userId`.** It's random (`newId()`) and uniform, and _every_
+  access is "by this user" → a single shard. Routing is a pure function of the
+  key, never a scan.
+- **Bounded rows per user** (1 in `users`, ≤3 in `account_keys`) means no single
+  user can overflow a shard, distribution stays even, and migrating to shards
+  later is an **online, user-by-user** move (read a user's handful of rows,
+  write them to the target shard, update the directory). This holds _only_
+  because per-user-unbounded data (bookmarks) lives in R2 / the per-user DO —
+  **never put unbounded per-user data in D1**, or this property breaks.
+
+The one genuinely cross-shard concern is the global **`UNIQUE(username)`**
+constraint: usernames can't be unique across shards keyed by `userId`. Solve it
+with a tiny global **directory** table — `username → (userId, shardId)` — which
+sign-in hits first (it arrives with a username, not a userId) to both resolve
+the shard and enforce uniqueness. At ~70 B/row that directory holds **~100M+
+usernames in one 10 GB db**, so the unshardable part outscales the sharded part
+by an order of magnitude. (Algorithmic `hash(userId) % N` routing avoids a
+directory but makes changing `N` a rehash/move; the directory costs one hop but
+allows moving individual users and uneven shards.)
+
+Two things to **avoid**, as they would make sharding hard:
+
+- **Sequential / fan-out search** ("try db1, then db2…") — O(N) per lookup and it
+  breaks uniqueness ("first match wins" lets two shards both claim a username).
+  Always route deterministically via the directory or hash.
+- **Cross-user JOINs in D1** (global feeds, social graphs, "search all users") —
+  these become cross-shard scatter-gather. Everything today is per-user; keep it
+  that way.
+
+#### client-side resilience (defense in depth, not a substitute)
+
+- An active client caches the **unwrapped DEK** locally (IndexedDB, as a
+  non-extractable `CryptoKey`), so a transient server hiccup never locks a live
+  session. A _fresh_ device still depends entirely on server durability — which
+  is why the D1 backup discipline above is non-negotiable.
+- Optionally let the user **download their wrapped-DEK blob** as an explicit
+  user-held backup file — a last-ditch copy that survives even total server loss
+  (still useless without a door's secret, so it stays zero-knowledge).
+
+> Cloudflare references: [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/),
+> [D1 export](https://developers.cloudflare.com/d1/wrangler-commands/),
+> [D1 limits (10 GB/db, 50k dbs)](https://developers.cloudflare.com/d1/platform/limits/),
+> [SQLite-backed DO storage + PITR](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
+> R2 has **no** native object versioning as of 2026-06; keys live in D1 for that
+> reason, and bulk R2 data is replicated rather than versioned.
+
+### rollout — adopt the architecture now, ship doors later
+
+The architecture is the decision; the doors are incremental. Doing the DEK
+indirection **before real users exist** is the whole point — afterwards, adding
+it is a re-key migration of every account.
+
+- **Phase 0 — now, pre-launch.** Make the root a random DEK with a **single
+  password door**. UX is identical to direct derivation, but every later door is
+  additive (wrap another copy of the DEK), not a migration.
+- **Phase 1 — launch.** Add the generated **recovery code** as a second door.
+  Weak-ish alone (people misplace codes), but its failure mode is independent of
+  forgetting a password, so it still cuts catastrophic loss.
+- **Phase 2 — later.** Add the **passkey (PRF)** door where supported — the
+  platform-synced, per-device door that actually survives.
+
+Messaging shifts from "don't lose your password" to **"lose _all_ your doors and
+the data is gone."**
+
 ### open items before launch
 
-- **`APP_SALT`** is still a placeholder (`crypto/params.ts`) — replace with a
-  real high-entropy constant before the first real user; it can never change
-  after.
+- **DEK indirection (Phase 0)** — adopt the random-DEK root + password door
+  _before_ the first real user; it's free now and a migration later.
+- **`APP_SALT`** — ✅ set to a real 256-bit high-entropy constant
+  (`crypto/params.ts`, `brace.app-salt.v1.…`). It can never change after the
+  first real user; a hypothetical rotation mints a `.v2.` constant rather than
+  editing it.
 - **Entropy gate** — add the strength meter + hard floor described above.
 - **Generated passphrase** — build the default-generate flow.
-- **No-recovery messaging** — make the "lose the password = lose the data"
-  consequence explicit in the create-account UI, the way wallets warn about seed
-  phrases.
-- **Server credential storage + signature verification** — store the
-  `publicKey` on create-account (`users.public_key`) and run the load-bearing
-  sign-in check (verify signature, then match against the stored key — see [the
-  two identifiers](#the-two-identifiers)).
+- **No-recovery messaging** — make the "lose all your doors = lose the data"
+  consequence explicit in the create-account UI.
+- **Server credential + key storage and signature verification** — store the
+  `publicKey` (`users.public_key`) and the wrapped-DEK blobs on create-account,
+  and run the load-bearing sign-in check (verify signature, then match against
+  the stored key — see [the two identifiers](#the-two-identifiers)).
+- **Recovery code (Phase 1) / passkey PRF (Phase 2)** — additional doors, added
+  by wrapping the DEK; no derivation-contract change.
+- **Storage durability** — the Tier-0 work in [storage
+  durability](#storage-durability--the-most-critical-state-in-the-system):
+  the `account_keys` table with the **wrapped DEK inline in D1** (one
+  transaction with `users`), the daily D1 export + off-platform copy, and a
+  restore drill. None of this can wait until after the first real user.
