@@ -71,14 +71,17 @@ export const createAccountRequestSchema = z.object({
 });
 export type CreateAccountRequest = z.infer<typeof createAccountRequestSchema>;
 
+// Only the raw bearer `token` (the capability the client authenticates with) and
+// its `expiresAt` cross the wire. The session row's PK (`sessionId`) is
+// server-internal — the auth guard resolves a session by hashing the token, and an
+// authenticated logout revokes it without the client ever holding its id.
 export const createAccountResponseSchema = z.object({
   token: z.string(),
-  sessionId: z.string(),
   expiresAt: z.number(),
 });
 export type CreateAccountResponse = z.infer<typeof createAccountResponseSchema>;
 
-// POST /v1/auth/create-account → { token, sessionId, expiresAt }
+// POST /v1/auth/create-account → { token, expiresAt }
 // Registers an account: verifies proof-of-possession, claims the username, stores
 // the publicKey + wrapped DEK (password door), and returns a fresh session. The
 // directory claim re-checks uniqueness server-side to close the type→submit race.

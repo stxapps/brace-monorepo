@@ -64,7 +64,6 @@ export const authRoutes = new Hono<AppEnv>()
 
       const body: CreateAccountResponse = {
         token: result.session.token,
-        sessionId: result.session.sessionId,
         expiresAt: result.session.expiresAt,
       };
       return c.json(body, 201);

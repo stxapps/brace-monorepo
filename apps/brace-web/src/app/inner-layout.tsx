@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiClientProvider } from '@stxapps/react';
 import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
+import { AuthProvider } from '../contexts/auth-provider';
 import { api } from '../lib/api';
 
 // Stable identity across renders (the provider keys effects off it).
@@ -85,9 +86,11 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
       </Suspense>
       <QueryClientProvider client={queryClient}>
         <ApiClientProvider client={api}>
-          <ThemeProvider storage={themeStorage}>
-            <SafeArea>{children}</SafeArea>
-          </ThemeProvider>
+          <AuthProvider>
+            <ThemeProvider storage={themeStorage}>
+              <SafeArea>{children}</SafeArea>
+            </ThemeProvider>
+          </AuthProvider>
         </ApiClientProvider>
       </QueryClientProvider>
     </SerwistProvider>

@@ -12,11 +12,14 @@ import {
 } from '@stxapps/shared';
 import { createAccount } from '@stxapps/web-crypto';
 
+import { useAuth } from '@/contexts/auth-provider';
 import { api } from '@/lib/api';
 
-// App-local because account creation is web-only (the extension inherits the
-// session via storage) and the submit sequence reaches for web-only crypto —
-// `platform:web` deps can't live in the `platform:agnostic` @stxapps/react.
+// App-local because account creation is web-only and the submit sequence reaches
+// for web-only crypto — `platform:web` deps can't live in the `platform:agnostic`
+// @stxapps/react. (The extension doesn't share this live session: the
+// non-extractable encryptionKey can't cross the web↔extension boundary, so the
+// extension unlocks on its own — its own sign-in — rather than inheriting it.)
 // This is the TanStack analog of a redux-thunk: one async unit you "dispatch"
 // (mutate), with isPending/error for free and onSuccess as the store update.
 
@@ -28,6 +31,7 @@ export class UsernameCheckError extends Error {}
 
 export function useCreateAccount() {
   const queryClient = useQueryClient();
+  const { setSession } = useAuth();
 
   return useMutation({
     mutationFn: async (values: CreateAccountValues) => {
@@ -92,10 +96,20 @@ export function useCreateAccount() {
       // stash in client-only state alongside the session token.
       return { session, encryptionKey: account.encryptionKey };
     },
-    // TODO: persist the result in onSuccess (auth context / queryClient) rather
-    // than in the component's mutateAsync continuation — onSuccess is hook-level
-    // and survives the form unmounting (browser back), so a success that lands
-    // after navigation isn't lost. The component keeps only the failure→setError
-    // mapping, which is UI feedback and fine to drop when the form is gone.
+    // Persist via the auth context in onSuccess (not the component's mutateAsync
+    // continuation) because it's hook-level and survives the form unmounting (e.g.
+    // browser back), so a success that lands after navigation isn't lost.
+    // setSession both writes the session store and flips app auth state to
+    // authenticated, so the UI reacts to the new login. The component keeps only
+    // the failure→setError mapping, which is UI feedback and fine to drop when
+    // gone. `values` is the original mutate() input, so the username is here.
+    onSuccess: async ({ session, encryptionKey }, values) => {
+      await setSession({
+        username: values.username,
+        token: session.token,
+        expiresAt: session.expiresAt,
+        encryptionKey,
+      });
+    },
   });
 }
