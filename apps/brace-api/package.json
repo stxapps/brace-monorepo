@@ -34,7 +34,8 @@
         "executor": "nx:run-commands",
         "options": {
           "commands": [
-            "wrangler d1 migrations apply MASTER_DB --env development"
+            "wrangler d1 migrations apply ACCOUNTS_DB --env development",
+            "wrangler d1 migrations apply SESSIONS_DB --env development"
           ],
           "parallel": false,
           "cwd": "apps/brace-api"
@@ -42,12 +43,14 @@
         "configurations": {
           "staging": {
             "commands": [
-              "wrangler d1 migrations apply MASTER_DB --env staging"
+              "wrangler d1 migrations apply ACCOUNTS_DB --env staging",
+              "wrangler d1 migrations apply SESSIONS_DB --env staging"
             ]
           },
           "production": {
             "commands": [
-              "wrangler d1 migrations apply MASTER_DB --env production"
+              "wrangler d1 migrations apply ACCOUNTS_DB --env production",
+              "wrangler d1 migrations apply SESSIONS_DB --env production"
             ]
           }
         }

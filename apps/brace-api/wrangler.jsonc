@@ -46,16 +46,23 @@
       "vars": {
         "CORS_ORIGINS": "http://localhost:3000",
       },
-      // MASTER_DB holds lookup/master data (users, sessions);
-      // Bindings are STATIC.
-      // migrations_dir is per-binding; master and durable objects have separate histories
-      // (src/db/migrations/{master,dos}). See src/db/migrations/README.md.
+      // ACCOUNTS_DB: account registry + username directory (usernames, users,
+      // account_keys). SESSIONS_DB: bearer-token sessions (separate, high-churn,
+      // non-Tier-0). Bindings are STATIC. migrations_dir is per-binding — each db
+      // has its own history (src/db/migrations/{accounts,sessions}); durable
+      // objects migrate in code. See src/db/migrations/README.md.
       "d1_databases": [
         {
-          "binding": "MASTER_DB",
-          "database_name": "brace-master-db-dev",
+          "binding": "ACCOUNTS_DB",
+          "database_name": "brace-accounts-db-dev",
           "database_id": "local",
-          "migrations_dir": "src/db/migrations/master",
+          "migrations_dir": "src/db/migrations/accounts",
+        },
+        {
+          "binding": "SESSIONS_DB",
+          "database_name": "brace-sessions-db-dev",
+          "database_id": "local",
+          "migrations_dir": "src/db/migrations/sessions",
         },
       ],
       "r2_buckets": [
@@ -104,10 +111,16 @@
       },
       "d1_databases": [
         {
-          "binding": "MASTER_DB",
-          "database_name": "brace-master-db-staging",
-          "database_id": "TODO: `wrangler d1 create brace-master-db-staging` → paste id",
-          "migrations_dir": "src/db/migrations/master",
+          "binding": "ACCOUNTS_DB",
+          "database_name": "brace-accounts-db-staging",
+          "database_id": "TODO: `wrangler d1 create brace-accounts-db-staging` → paste id",
+          "migrations_dir": "src/db/migrations/accounts",
+        },
+        {
+          "binding": "SESSIONS_DB",
+          "database_name": "brace-sessions-db-staging",
+          "database_id": "TODO: `wrangler d1 create brace-sessions-db-staging` → paste id",
+          "migrations_dir": "src/db/migrations/sessions",
         },
       ],
       "r2_buckets": [
@@ -154,10 +167,16 @@
       },
       "d1_databases": [
         {
-          "binding": "MASTER_DB",
-          "database_name": "brace-master-db-production",
-          "database_id": "TODO: `wrangler d1 create brace-master-db-production` → paste id",
-          "migrations_dir": "src/db/migrations/master",
+          "binding": "ACCOUNTS_DB",
+          "database_name": "brace-accounts-db-production",
+          "database_id": "TODO: `wrangler d1 create brace-accounts-db-production` → paste id",
+          "migrations_dir": "src/db/migrations/accounts",
+        },
+        {
+          "binding": "SESSIONS_DB",
+          "database_name": "brace-sessions-db-production",
+          "database_id": "TODO: `wrangler d1 create brace-sessions-db-production` → paste id",
+          "migrations_dir": "src/db/migrations/sessions",
         },
       ],
       "r2_buckets": [

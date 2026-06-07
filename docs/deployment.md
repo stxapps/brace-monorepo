@@ -164,7 +164,7 @@ glance tells you the tier:
 | S3 bucket         | `brace-web-staging`             | `brace-web-production`                |
 | CloudFront dist   | comment `brace-web-staging`     | comment `brace-web-production`        |
 | Worker name / env | `brace-api-staging` / `staging` | `brace-api-production` / `production` |
-| D1 database       | `brace-master-db-staging`       | `brace-master-db-production`          |
+| D1 databases      | `brace-accounts-db-staging`, `brace-sessions-db-staging` | `brace-accounts-db-production`, `brace-sessions-db-production` |
 | R2 bucket         | `brace-user-files-staging`      | `brace-user-files-production`         |
 | web domain        | `app.staging.brace.to`          | `app.brace.to`                        |
 | api domain        | `api.staging.brace.to`          | `api.brace.to`                        |
@@ -172,8 +172,8 @@ glance tells you the tier:
 `brace-<resource>-<tier>` throughout — the Worker auto-suffixes its `name`
 (`brace-api` → `brace-api-staging` / `brace-api-production`), so the env name
 _is_ the tier with no separate `-prod` shorthand. The `*-dev` peers
-(`brace-master-db-dev`, `brace-user-files-dev`) are the local `wrangler dev`
-bindings and aren't deployed. S3 / CloudFront names are proposed (not yet
+(`brace-accounts-db-dev`, `brace-sessions-db-dev`, `brace-user-files-dev`) are
+the local `wrangler dev` bindings and aren't deployed. S3 / CloudFront names are proposed (not yet
 provisioned); CloudFront distributions are addressed by generated ID, so the
 name lives in the distribution **comment**.
 

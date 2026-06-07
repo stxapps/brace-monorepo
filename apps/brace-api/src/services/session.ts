@@ -2,10 +2,10 @@ import { sessionsRepo } from '../db/repositories/sessions';
 import type { Bindings } from '../lib/env';
 import { hashToken, newId, newSessionToken } from '../lib/ids';
 
-// Session lifecycle, master-DB-backed. The auth GUARD (middleware/auth.ts) does
-// the per-request read directly via sessionsRepo; this service owns the WRITE
-// side — minting and revoking sessions — used by the sign-in / create-account
-// flows.
+// Session lifecycle, SESSIONS_DB-backed. The auth GUARD (middleware/auth.ts)
+// does the per-request read directly via sessionsRepo; this service owns the
+// WRITE side — minting and revoking sessions — used by the sign-in /
+// create-account flows.
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -17,16 +17,22 @@ export type IssuedSession = {
 };
 
 // Mint a session for a user. We persist the token HASH (never the raw token) and
-// hand the raw token back to the caller to return to the client.
-export async function issueSession(env: Bindings, user: { id: string }): Promise<IssuedSession> {
+// hand the raw token back to the caller to return to the client. `accountDbId`
+// is denormalized onto the session so the auth guard can route to the user's
+// accounts shard without a directory hop (null ⇒ primary ACCOUNTS_DB).
+export async function issueSession(
+  env: Bindings,
+  user: { id: string; accountDbId?: string | null },
+): Promise<IssuedSession> {
   const token = newSessionToken();
   const sessionId = newId();
   const expiresAt = Date.now() + SESSION_TTL_MS;
 
-  await sessionsRepo(env.MASTER_DB).insert({
+  await sessionsRepo(env.SESSIONS_DB).insert({
     id: sessionId,
     tokenHash: await hashToken(token),
     userId: user.id,
+    accountDbId: user.accountDbId ?? null,
     expiresAt,
   });
 
@@ -34,5 +40,5 @@ export async function issueSession(env: Bindings, user: { id: string }): Promise
 }
 
 export async function revokeSession(env: Bindings, sessionId: string): Promise<void> {
-  await sessionsRepo(env.MASTER_DB).deleteById(sessionId);
+  await sessionsRepo(env.SESSIONS_DB).deleteById(sessionId);
 }

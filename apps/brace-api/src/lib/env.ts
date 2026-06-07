@@ -23,12 +23,22 @@ export type Bindings = {
   CORS_ORIGINS: string;
 
   // --- D1 (sqlite)  ----------------------
-  // D1 bindings are STATIC: a Worker can't bind a database by id at runtime.
-  // So we pre-declare the master.
-  // Master holds ONLY lookup/master data (users, sessions) so it never
-  // approaches D1's size cap; per-user data lives in the USER_DATA durable
-  // objects below.
-  MASTER_DB: D1Database;
+  // D1 bindings are STATIC: a Worker can't bind a database by id at runtime, so
+  // every database is pre-declared here and in wrangler.jsonc. Both hold ONLY
+  // small, bounded-per-user rows (no bulk data — that's in USER_DATA below), so
+  // neither approaches D1's 10 GB cap for a long time.
+  //
+  // ACCOUNTS_DB — the global account registry + username directory: `usernames`
+  // (uniqueness namespace), `users` (identity + credential), `account_keys`
+  // (wrapped-DEK doors). This is where create-account writes atomically. When it
+  // nears the cap, `users`/`account_keys` shard into `accounts_db_N` while
+  // `usernames` stays here as the global directory — resolve shards via
+  // db/db-routes.ts, never bind one directly outside it.
+  ACCOUNTS_DB: D1Database;
+  // SESSIONS_DB — bearer-token sessions only. Separate db: high-churn and NOT
+  // Tier-0 (a lost session regenerates by re-auth), so it's isolated from the
+  // account registry's write traffic and backup discipline. See sessions.sql.
+  SESSIONS_DB: D1Database;
 
   // --- Durable Objects — one per-user SQLite store ----------------------
   // Addressed by idFromName(userId) (see do/user-data.ts → userDataStub). Holds
@@ -51,6 +61,10 @@ export type Bindings = {
 export type SessionContext = {
   id: string;
   userId: string;
+  // The user's accounts shard (null ⇒ primary ACCOUNTS_DB), carried from the
+  // session so protected handlers route account/data reads without a directory
+  // hop. See db/db-routes.ts.
+  accountDbId: string | null;
 };
 
 export type Variables = {

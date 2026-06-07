@@ -1,12 +1,16 @@
-// Session repository — lives in the MASTER DB. We store the token HASH (never
-// the raw token; see lib/ids.ts) and carry user_id so the auth guard
-// resolves "bearer token -> user" in a single read.
+// Session repository — lives in SESSIONS_DB (its own database; see
+// schemas/sessions.sql for why). We store the token HASH (never the raw token;
+// see lib/ids.ts) and carry user_id + account_db_id so the auth guard resolves
+// "bearer token -> user -> which accounts db" in a single read, with no
+// directory hop.
 
 // Public domain entity (camelCase). Behavior can hang off this later; for now
 // it's the shape services/routes consume.
 export type SessionEntity = {
   id: string;
   userId: string;
+  // Which accounts db holds this user's rows; null ⇒ the primary ACCOUNTS_DB.
+  accountDbId: string | null;
   expiresAt: number; // epoch ms
 };
 
@@ -15,11 +19,17 @@ type SessionRow = {
   id: string;
   token_hash: string;
   user_id: string;
+  account_db_id: string | null;
   expires_at: number;
 };
 
 function toEntity(r: Omit<SessionRow, 'token_hash'>): SessionEntity {
-  return { id: r.id, userId: r.user_id, expiresAt: r.expires_at };
+  return {
+    id: r.id,
+    userId: r.user_id,
+    accountDbId: r.account_db_id,
+    expiresAt: r.expires_at,
+  };
 }
 
 export function sessionsRepo(db: D1Database) {
@@ -29,7 +39,7 @@ export function sessionsRepo(db: D1Database) {
     async findByTokenHash(tokenHash: string): Promise<SessionEntity | null> {
       const row = await db
         .prepare(
-          `SELECT id, user_id, expires_at
+          `SELECT id, user_id, account_db_id, expires_at
              FROM sessions WHERE token_hash = ?`,
         )
         .bind(tokenHash)
@@ -41,14 +51,15 @@ export function sessionsRepo(db: D1Database) {
       id: string;
       tokenHash: string;
       userId: string;
+      accountDbId?: string | null;
       expiresAt: number;
     }): Promise<void> {
       await db
         .prepare(
-          `INSERT INTO sessions (id, token_hash, user_id, created_at, expires_at, last_seen_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO sessions (id, token_hash, user_id, account_db_id, created_at, expires_at, last_seen_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(s.id, s.tokenHash, s.userId, Date.now(), s.expiresAt, Date.now())
+        .bind(s.id, s.tokenHash, s.userId, s.accountDbId ?? null, Date.now(), s.expiresAt, Date.now())
         .run();
     },
 
@@ -56,8 +67,8 @@ export function sessionsRepo(db: D1Database) {
       await db.prepare(`DELETE FROM sessions WHERE id = ?`).bind(id).run();
     },
 
-    // Housekeeping: drop expired rows so the master table stays small. Call from
-    // a scheduled handler (cron trigger) once that's wired.
+    // Housekeeping: drop expired rows so the sessions table stays small. Call
+    // from a scheduled handler (cron trigger) once that's wired.
     async deleteExpired(now: number = Date.now()): Promise<void> {
       await db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).bind(now).run();
     },

@@ -340,21 +340,38 @@ the keys atomic with the credential and gives them free 30-day PITR. Reserve R2
 for what it's actually best at — the large bookmark ciphertext — which the
 client also holds locally, so an R2 loss degrades to a re-sync, not a death.
 
-Concrete D1 schema:
+Concrete D1 schema. The Tier-0 tables live in **`ACCOUNTS_DB`**; the username is
+held in a separate **`usernames` directory** table (not a column on `users`) so
+it's already the global uniqueness namespace that survives sharding — see
+[the sharding seam](#future-sharding-d1--the-seam-is-pre-cut). Sessions live in a
+**separate `SESSIONS_DB`** (high-churn, not Tier-0). Both are mirrored in
+`apps/brace-api/src/db/schemas/{accounts,sessions}.sql`.
 
 ```sql
+-- ACCOUNTS_DB ---------------------------------------------------------------
+
+-- the global uniqueness namespace + username→account map. PK = the UNIQUE check;
+-- a single constrained INSERT is the race-free claim. account_db_id is the
+-- sharding seam: NULL ⇒ the user's rows live in this primary ACCOUNTS_DB.
+CREATE TABLE usernames (
+  username      TEXT PRIMARY KEY,        -- canonical (trim→NFKC→lowercase)
+  user_id       TEXT NOT NULL,
+  account_db_id TEXT                     -- NULL ⇒ primary ACCOUNTS_DB
+);
+CREATE INDEX idx_usernames_user_id ON usernames(user_id);
+
 CREATE TABLE users (
-  user_id    TEXT PRIMARY KEY,           -- random, server-minted (newId())
-  username   TEXT NOT NULL,              -- canonical form (already NFKC+lowercased)
-  public_key TEXT NOT NULL,              -- ed25519 hex — the credential
+  id         TEXT PRIMARY KEY,           -- random, server-minted (newId())
+  public_key TEXT NOT NULL UNIQUE,       -- ed25519 hex — the credential
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
-CREATE UNIQUE INDEX idx_users_username ON users(username);
 
--- one row per door; the wrapped DEK lives inline, no second store
+-- one row per door; the wrapped DEK lives inline, no second store. Stays in the
+-- SAME db as `users` (the same shard after sharding) so credential + key commit
+-- together.
 CREATE TABLE account_keys (
-  user_id     TEXT NOT NULL REFERENCES users(user_id),
+  user_id     TEXT NOT NULL REFERENCES users(id),
   door_type   TEXT NOT NULL,             -- 'password' | 'recovery' | 'passkey'
   wrapped_dek BLOB NOT NULL,             -- AES-256-GCM(KEK, DEK), aad = userId‖doorType
   iv          BLOB NOT NULL,             -- GCM nonce for this wrap
@@ -362,6 +379,22 @@ CREATE TABLE account_keys (
   created_at  INTEGER NOT NULL,
   PRIMARY KEY (user_id, door_type)
 );
+
+-- SESSIONS_DB ---------------------------------------------------------------
+
+-- bearer-token sessions. account_db_id denormalized so the auth guard routes
+-- "token → user → accounts shard" in one read. No FK (different db); not Tier-0.
+CREATE TABLE sessions (
+  id            TEXT PRIMARY KEY,
+  token_hash    TEXT NOT NULL UNIQUE,
+  user_id       TEXT NOT NULL,
+  account_db_id TEXT,
+  created_at    INTEGER NOT NULL,
+  expires_at    INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL
+);
+CREATE INDEX idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
 ```
 
 #### the rules
@@ -426,12 +459,30 @@ The DO's real job is the user's **bookmark data / sync / op-log** (strong
 per-user consistency, now PITR-backed). Keep that there; keep the tiny, pre-auth,
 Tier-0 wrapped DEK beside its credential in D1.
 
-#### future: sharding D1 (not needed yet, just don't foreclose it)
+#### future: sharding D1 — the seam is pre-cut
 
-A single 10 GB D1 holds **millions** of accounts (≈1–1.5 KB each), so this is
-years away or never. But D1 caps at 10 GB/db (with 50k dbs/account) and is
-designed to scale by **sharding across many small databases**, so it's worth
-knowing the path stays open — and which invariants keep it open.
+A single 10 GB D1 holds **millions** of accounts (≈1 KB each — `users` +
+`account_keys`), so actually needing a second one is years away or never. But
+because this is greenfield, we **pre-cut the sharding seam now** (cheapest it'll
+ever be) so capacity is never a worry and adding it later migrates nobody:
+
+- the **`usernames` directory** is already its own table (the global uniqueness
+  namespace), separate from `users`/`account_keys`;
+- every row carries a nullable **`account_db_id`** (`usernames` + `sessions`);
+  `NULL` ⇒ the primary `ACCOUNTS_DB`;
+- **`db/db-routes.ts`** (`accountsDb(env, accountDbId)`) resolves the id → D1
+  binding by **reading** the stored id, never hashing the userId — so a user
+  never moves once assigned;
+- **sessions** already live in their own `SESSIONS_DB`.
+
+Adding a shard is then: provision `accounts_db_1`, add its binding + a `case` in
+`db-routes.ts`, and point new signups at it (`services/account.ts`). Existing
+users (`NULL`) stay put; the `usernames` directory stays in `ACCOUNTS_DB`. The
+one cost deferred to that day is that `create-account` stops being a single-DB
+transaction — the directory claim and the shard write split, degrading to
+claim-then-compensate (uniqueness and `users`↔`account_keys` atomicity both
+survive; worst case is a reclaimable orphan username). See
+[the rules](#the-rules).
 
 What makes shard-later easy here is the access shape, not luck:
 
@@ -511,14 +562,17 @@ the data is gone."**
 - **Generated passphrase** — build the default-generate flow.
 - **No-recovery messaging** — make the "lose all your doors = lose the data"
   consequence explicit in the create-account UI.
-- **Server credential + key storage and signature verification** — store the
-  `publicKey` (`users.public_key`) and the wrapped-DEK blobs on create-account,
-  and run the load-bearing sign-in check (verify signature, then match against
-  the stored key — see [the two identifiers](#the-two-identifiers)).
+- **Server credential + key storage and signature verification** — the storage
+  side is **✅ built**: `usernames` + `users.public_key` + `account_keys`
+  (wrapped DEK inline) write in one atomic `db.batch` in `services/account.ts`.
+  Still open: the **shared create-account contract** carrying `publicKey` + door
+  blobs (no route calls `createAccount` yet), and the **load-bearing sign-in
+  check** (verify signature, then match against the stored key — see [the two
+  identifiers](#the-two-identifiers)).
 - **Recovery code (Phase 1) / passkey PRF (Phase 2)** — additional doors, added
   by wrapping the DEK; no derivation-contract change.
-- **Storage durability** — the Tier-0 work in [storage
-  durability](#storage-durability--the-most-critical-state-in-the-system):
-  the `account_keys` table with the **wrapped DEK inline in D1** (one
-  transaction with `users`), the daily D1 export + off-platform copy, and a
-  restore drill. None of this can wait until after the first real user.
+- **Storage durability** — schema/topology is **✅ built**: the `account_keys`
+  table with the **wrapped DEK inline in `ACCOUNTS_DB`** (one transaction with
+  `users` + the `usernames` claim), sessions split into `SESSIONS_DB`, and the
+  `account_db_id` sharding seam. Still open (don't wait for the first real user):
+  the daily D1 export + off-platform copy, and a restore drill.
