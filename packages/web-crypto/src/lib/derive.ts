@@ -10,7 +10,7 @@ import {
 } from '@stxapps/shared';
 
 import { decrypt, encrypt } from './aes';
-import { deriveMasterSecret } from './argon2';
+import { deriveArgon2Hash } from './argon2';
 import { toHex, utf8 } from './encoding';
 
 export interface Account {
@@ -25,11 +25,12 @@ export interface Account {
   sign: (payload: string) => Promise<string>;
 }
 
-// A wrapped copy of the DEK for one door, ready to persist server-side (an
-// `account_keys` row). `wrappedDek` is the AES-256-GCM ciphertext+tag, `iv` its
-// nonce; `doorType` selects which KEK unwraps it. The wrapped DEK is ciphertext,
-// so it is safe to send and store (zero-knowledge — the server holds a locked box).
-export interface WrappedDoor {
+// One door's persisted record (an `account_keys` row): a wrapped copy of the DEK
+// plus the IV, tagged by `doorType`. `wrappedDek` is the AES-256-GCM
+// ciphertext+tag, `iv` its nonce; `doorType` selects which KEK unwraps it. The
+// wrapped DEK is ciphertext, so it is safe to send and store (zero-knowledge —
+// the server holds a locked box).
+export interface Door {
   doorType: DoorType;
   wrappedDek: Uint8Array<ArrayBuffer>;
   iv: Uint8Array<ArrayBuffer>;
@@ -38,7 +39,7 @@ export interface WrappedDoor {
 // create-account result: the live keys PLUS the wrapped password door to send to
 // the server. (Sign-in returns a bare Account — the door already exists.)
 export interface NewAccount extends Account {
-  passwordDoor: WrappedDoor;
+  passwordDoor: Door;
 }
 
 // HKDF needs a salt; the DEK is already uniformly random, so an empty salt is the
@@ -98,7 +99,7 @@ async function deriveFromDek(dek: Uint8Array<ArrayBuffer>): Promise<Account> {
 // @stxapps/shared so every platform produces byte-identical KEKs.
 async function derivePasswordKek(username: string, password: string): Promise<CryptoKey> {
   const salt = deriveUserSalt(username);
-  const kekBytes = await deriveMasterSecret(password, salt);
+  const kekBytes = await deriveArgon2Hash(password, salt);
   // Copy into an ArrayBuffer-backed view so Web Crypto accepts it as key material.
   return crypto.subtle.importKey('raw', new Uint8Array(kekBytes), { name: 'AES-GCM' }, false, [
     'encrypt',

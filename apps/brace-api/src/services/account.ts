@@ -1,5 +1,7 @@
+import type { DoorType } from '@stxapps/shared';
+
 import { accountsDb, assignAccountDbId } from '../db/db-routes';
-import { accountKeysRepo, type DoorType } from '../db/repositories/account-keys';
+import { accountKeysRepo } from '../db/repositories/account-keys';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
 import type { Bindings } from '../lib/env';

@@ -330,18 +330,18 @@ the blob — that is the load-bearing mitigation.
 
 **Could we gate the blob behind a proof instead?** Requiring the client to prove
 knowledge of a password-derived secret before the server releases the blob would
-convert the *offline* attack into an *online*, rate-limitable one. Two limits
-make this a poor trade *today*:
+convert the _offline_ attack into an _online_, rate-limitable one. Two limits
+make this a poor trade _today_:
 
 - A naive "store a KEK public key, require a challenge signature" only helps if
   that verifier is **never served pre-auth** (otherwise it's just another offline
   oracle), and it still **does not survive a DB breach**: the verifier sits in the
   same row as the `wrapped_dek`, so a dump yields the blob and it's offline-
-  attackable anyway. Gating defends only the *pre-auth-fetch* vector — a random
+  attackable anyway. Gating defends only the _pre-auth-fetch_ vector — a random
   external scraper — and mostly only when the password is weak, which is exactly
   what the entropy gate removes. It overlaps heavily with "require strong
   passwords" while adding frozen-contract surface.
-- The *correct* strong form is a **PAKE — specifically OPAQUE** (asymmetric PAKE).
+- The _correct_ strong form is a **PAKE — specifically OPAQUE** (asymmetric PAKE).
   Its `export_key` output is designed precisely to encrypt a client-side secret
   like our DEK, and because a server-held OPRF key participates in deriving the
   KEK, the blob alone is useless without online interaction (and the OPRF key can
