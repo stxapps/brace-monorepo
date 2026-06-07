@@ -47,11 +47,7 @@ export function usernamesRepo(db: D1Database) {
     // claim of the same name writes 0 rows. Returns true if WE claimed it, false
     // if it was already taken. (Single constrained INSERT, not a read-then-write,
     // so two simultaneous claims can't both win.)
-    async claim(u: {
-      username: string;
-      userId: string;
-      accountDbId: string;
-    }): Promise<boolean> {
+    async claim(u: { username: string; userId: string; accountDbId: string }): Promise<boolean> {
       const res = await db
         .prepare(
           `INSERT INTO usernames (username, user_id, account_db_id) VALUES (?, ?, ?)

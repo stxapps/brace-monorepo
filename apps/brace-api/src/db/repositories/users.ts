@@ -34,7 +34,7 @@ export function usersRepo(db: D1Database) {
     },
 
     // Returns the prepared INSERT so create-account can batch it atomically with
-    // the username/account_keys writes.
+    // the users/account_keys writes.
     insertStmt(u: { id: string; publicKey: string }): D1PreparedStatement {
       const now = Date.now();
       return db

@@ -339,10 +339,10 @@ local-first copy) go to R2.
 
 #### the split: D1 for the account + keys, R2 for bulk ciphertext
 
-| store                 | holds                                                          | why                                                       |
-| --------------------- | ------------------------------------------------------------- | --------------------------------------------------------- |
+| store                 | holds                                                                       | why                                               |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------- |
 | **D1** (SQLite)       | `usernames` (directory) · `users` + `account_keys` (per shard) · `sessions` | relational, `UNIQUE` username, per-db Time Travel |
-| **R2** (object store) | the bulk encrypted bookmark blobs                             | large, cheap, no egress; not key material                 |
+| **R2** (object store) | the bulk encrypted bookmark blobs                                           | large, cheap, no egress; not key material         |
 
 A wrapped DEK is ~80 bytes (32-byte DEK + IV + GCM tag), so it lives **inline in
 D1**, in the same row as its index — not in R2. R2 has no native object

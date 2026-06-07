@@ -1,10 +1,6 @@
 import * as ed25519 from '@noble/ed25519';
 
-import {
-  deriveUserSalt,
-  HKDF_INFO_AUTH_SEED,
-  HKDF_INFO_ENCRYPTION_KEY,
-} from '@stxapps/shared';
+import { deriveUserSalt, HKDF_INFO_AUTH_SEED, HKDF_INFO_ENCRYPTION_KEY } from '@stxapps/shared';
 
 import { deriveMasterSecret } from './argon2';
 import { toHex, utf8 } from './encoding';

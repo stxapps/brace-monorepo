@@ -159,15 +159,15 @@ Notes:
 One suffix scheme — `staging` / `production` — across **everything**, so a
 glance tells you the tier:
 
-| resource          | staging                         | production                            |
-| ----------------- | ------------------------------- | ------------------------------------- |
-| S3 bucket         | `brace-web-staging`             | `brace-web-production`                |
-| CloudFront dist   | comment `brace-web-staging`     | comment `brace-web-production`        |
-| Worker name / env | `brace-api-staging` / `staging` | `brace-api-production` / `production` |
+| resource          | staging                                                                                  | production                                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| S3 bucket         | `brace-web-staging`                                                                      | `brace-web-production`                                                                            |
+| CloudFront dist   | comment `brace-web-staging`                                                              | comment `brace-web-production`                                                                    |
+| Worker name / env | `brace-api-staging` / `staging`                                                          | `brace-api-production` / `production`                                                             |
 | D1 databases      | `brace-directory-db-staging`, `brace-accounts-db-1-staging`, `brace-sessions-db-staging` | `brace-directory-db-production`, `brace-accounts-db-1-production`, `brace-sessions-db-production` |
-| R2 bucket         | `brace-user-files-staging`      | `brace-user-files-production`         |
-| web domain        | `app.staging.brace.to`          | `app.brace.to`                        |
-| api domain        | `api.staging.brace.to`          | `api.brace.to`                        |
+| R2 bucket         | `brace-user-files-staging`                                                               | `brace-user-files-production`                                                                     |
+| web domain        | `app.staging.brace.to`                                                                   | `app.brace.to`                                                                                    |
+| api domain        | `api.staging.brace.to`                                                                   | `api.brace.to`                                                                                    |
 
 `brace-<resource>-<tier>` throughout — the Worker auto-suffixes its `name`
 (`brace-api` → `brace-api-staging` / `brace-api-production`), so the env name

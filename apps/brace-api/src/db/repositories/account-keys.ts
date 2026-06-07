@@ -49,7 +49,7 @@ export function accountKeysRepo(db: D1Database) {
     },
 
     // Returns the prepared INSERT so create-account can batch it atomically with
-    // the username/users writes. `version` starts at 1 and is bumped on each
+    // the users/account_keys writes. `version` starts at 1 and is bumped on each
     // re-wrap (e.g. password change) so the row is auditable.
     insertStmt(k: {
       userId: string;
