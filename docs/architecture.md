@@ -43,6 +43,14 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 - used by brace-web and brace-extension
 - web-only KDF, AES-256-GCM
 
+#### @stxapps/web-react
+
+- used by brace-web, brace-extension, brace-docs
+- web-only React hooks/contexts/logic — the web-only sibling of `@stxapps/react`
+  (same React-logic layer, but free to use browser-only APIs like IndexedDB and
+  Web Crypto). Home for things shared across the web apps that aren't components
+  (those live in `web-ui`) or pure crypto (that lives in `web-crypto`).
+
 ### dependency rules
 
 Keep the dependency graph acyclic and layered. From lowest to highest:
@@ -54,9 +62,12 @@ not by `web-ui`).
 - `react` may import `shared` only — not `web-ui`.
 - `web-ui` may import `shared` and `react` — not the other way around.
 - `web-crypto` may import `shared` only.
+- `web-react` is the web-only sibling of `react` (same React-logic layer, but
+  `platform:web`): it may import `shared` and `react`. Apps consume it; `web-ui`
+  does not.
 - Apps may import any package; **packages must never import an app.**
-- `web-ui` and `web-crypto` are web-only — do not import them from code meant
-  to run on Expo/native (`react` and `shared` stay platform-agnostic).
+- `web-ui`, `web-crypto`, and `web-react` are web-only — do not import them from
+  code meant to run on Expo/native (`react` and `shared` stay platform-agnostic).
 
 These rules are **enforced at lint time** by `@nx/enforce-module-boundaries`
 (config in `eslint.config.mjs`) — an illegal import fails `npm run lint`.
@@ -69,6 +80,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | react            | `type:react`  | `platform:agnostic` |
 | web-ui           | `type:ui`     | `platform:web`      |
 | web-crypto       | `type:crypto` | `platform:web`      |
+| web-react        | `type:react`  | `platform:web`      |
 | brace-web        | `type:app`    | `platform:web`      |
 | brace-extension  | `type:app`    | `platform:web`      |
 | brace-api        | `type:app`    | `platform:node`     |
