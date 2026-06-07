@@ -111,13 +111,23 @@ ciphertext can mount an offline Argon2id attack on a weak password.
   door users are least likely to lose.
 
 **Wrapping format.** Wrap with an **AEAD** (AES-256-GCM) so a wrong/tampered
-blob fails cleanly, and bind each blob to context with the AAD so a malicious
-server can't swap one door's blob for another's:
+blob fails cleanly, and bind each blob to its door with the AAD so a malicious
+server can't pass off one door's blob as another's:
 
 ```
-blob = AES-256-GCM(key = KEK, plaintext = DEK, aad = userId ‖ doorType)
+blob = AES-256-GCM(key = KEK, plaintext = DEK, aad = doorType)
 stored per door: { doorType, iv, ciphertext+tag }
 ```
+
+The AAD is **only the `doorType`, deliberately not the user.** The KEK already
+binds the user — the password door folds the username into its salt (so a
+cross-user blob unwraps with a different KEK and fails the GCM tag anyway), and
+the recovery/passkey KEKs come from a per-user secret. Re-binding the user in the
+AAD would be redundant _and_ would couple every door to the username, so a future
+username change (which by design re-wraps only the password door) would have to
+re-wrap the username-independent doors too. `doorType` is the one piece of
+context not already carried by the KEK, so it is the whole AAD. (Defined once as
+`dekWrapAad` in `crypto/doors.ts`, part of the frozen contract.)
 
 > **Security floor = the weakest door.** An attacker takes the easiest of the
 > doors, so every door must be strong: the recovery code CSPRNG-generated, the
@@ -301,6 +311,58 @@ Ed25519 private key at create-account / sign-in.
 > implemented yet** — see the TODOs in `apps/brace-api/src/services/account.ts`
 > and [api-contracts.md](./api-contracts.md).
 
+### why the wrapped DEK is served pre-auth — the offline-attack surface
+
+Step 1 of the sign-in check hands the **password-door `wrapped_dek` to anyone who
+names a username**, before any authentication. It has to: the client can't derive
+anything until it has the blob. So the blob is an **offline brute-force oracle** —
+an attacker fetches it once, then locally runs `Argon2id(guess, salt)` → try to
+AEAD-unwrap → the GCM tag confirms a hit, with **no server round-trip and so no
+rate-limit**. This is the same exposure direct derivation had (the `publicKey`
+was the oracle then); the DEK model neither adds nor removes it.
+
+**The defense is entropy, not secrecy of the blob.** Like a wallet, the
+derivation is semi-public and the entropy is the wall: against a 6-word generated
+passphrase (~77 bits) the freely-served blob is not a practical risk, while
+`Summer2026!` falls regardless of how the blob is served. This is why the open
+items lead with the **entropy gate + generated passphrase** rather than gating
+the blob — that is the load-bearing mitigation.
+
+**Could we gate the blob behind a proof instead?** Requiring the client to prove
+knowledge of a password-derived secret before the server releases the blob would
+convert the *offline* attack into an *online*, rate-limitable one. Two limits
+make this a poor trade *today*:
+
+- A naive "store a KEK public key, require a challenge signature" only helps if
+  that verifier is **never served pre-auth** (otherwise it's just another offline
+  oracle), and it still **does not survive a DB breach**: the verifier sits in the
+  same row as the `wrapped_dek`, so a dump yields the blob and it's offline-
+  attackable anyway. Gating defends only the *pre-auth-fetch* vector — a random
+  external scraper — and mostly only when the password is weak, which is exactly
+  what the entropy gate removes. It overlaps heavily with "require strong
+  passwords" while adding frozen-contract surface.
+- The *correct* strong form is a **PAKE — specifically OPAQUE** (asymmetric PAKE).
+  Its `export_key` output is designed precisely to encrypt a client-side secret
+  like our DEK, and because a server-held OPRF key participates in deriving the
+  KEK, the blob alone is useless without online interaction (and the OPRF key can
+  live in a KMS so a DB-only breach stays safe). That is genuinely "best" for the
+  password door — at the cost of real complexity, scarce audited Workers
+  implementations, and a frozen-contract commitment.
+
+**The DEK indirection keeps OPAQUE a future, isolated swap.** Each door wraps the
+same DEK independently, so the password door could later become OPAQUE (use its
+`export_key` as that door's KEK) **without touching the DEK, the data, or the
+recovery/passkey doors**. High-entropy doors (recovery code, passkey-PRF) never
+need a PAKE — offline-attacking a 256-bit secret is infeasible — so a hybrid
+(password = OPAQUE, others = plain KEK-wrap) composes cleanly with the model.
+
+**Decision (pre-launch):** keep the blob served pre-auth; lean on the entropy
+gate + generated passphrase as the real defense; add cheap **rate-limiting +
+username-enumeration protection** on the blob-fetch path to blunt mass-scraping.
+Treat OPAQUE as the documented upgrade path for the password door, adopted only
+if online-only (or KMS-isolated breach-resistant) password protection becomes a
+requirement; skip the naive KEK-signature half-measure.
+
 ### storage durability — the most critical state in the system
 
 The DEK model introduces a hard new dependency that direct derivation did not
@@ -388,7 +450,7 @@ CREATE TABLE users (
 CREATE TABLE account_keys (
   user_id     TEXT NOT NULL REFERENCES users(id),
   door_type   TEXT NOT NULL,             -- 'password' | 'recovery' | 'passkey'
-  wrapped_dek BLOB NOT NULL,             -- AES-256-GCM(KEK, DEK), aad = userId‖doorType
+  wrapped_dek BLOB NOT NULL,             -- AES-256-GCM(KEK, DEK), aad = doorType
   iv          BLOB NOT NULL,             -- GCM nonce for this wrap
   version     INTEGER NOT NULL,          -- bumped on each re-wrap (audit/debug)
   created_at  INTEGER NOT NULL,
@@ -609,8 +671,17 @@ the data is gone."**
   signature, then match against the stored key — see [the two
   identifiers](#the-two-identifiers)), and the **orphan-claim sweeper** (reclaim
   claims with no backing `users` row, alongside `sessions.deleteExpired`).
+- **Blob-fetch hardening** — the password-door `wrapped_dek` is served pre-auth
+  (it must be), so add **rate-limiting + username-enumeration protection** on that
+  path to blunt mass-scraping of the offline-attack oracle. Not a substitute for
+  the entropy gate — see [why the wrapped DEK is served
+  pre-auth](#why-the-wrapped-dek-is-served-pre-auth--the-offline-attack-surface).
 - **Recovery code (Phase 1) / passkey PRF (Phase 2)** — additional doors, added
   by wrapping the DEK; no derivation-contract change.
+- **OPAQUE password door (future, optional)** — the documented upgrade path if
+  online-only (or KMS-isolated breach-resistant) password protection becomes a
+  requirement; swap the password door's KEK for OPAQUE's `export_key` in isolation
+  — no DEK/data/other-door change. Skip the naive KEK-signature half-measure.
 - **Storage durability** — schema/topology is **✅ built**: three databases
   (`DIRECTORY_DB`, `ACCOUNTS_DB_1`, `SESSIONS_DB`), `account_keys` with the
   **wrapped DEK inline** in the shard, and the `account_db_id` routing seam. Still

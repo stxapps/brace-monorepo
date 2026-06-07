@@ -29,8 +29,9 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- The "doors": one wrapped-DEK blob per access method. Each door derives a KEK
 -- and AEAD-wraps its own copy of the 32-byte DEK; any one unwraps it.
--- wrapped_dek = AES-256-GCM(KEK, DEK, aad = user_id‖door_type). Same shard as
--- `users`, so create-account writes both in one atomic batch.
+-- wrapped_dek = AES-256-GCM(KEK, DEK, aad = door_type) — the KEK already binds
+-- the user (the password salt folds in the username), so the AAD only binds the
+-- door. Same shard as `users`, so create-account writes both in one atomic batch.
 CREATE TABLE IF NOT EXISTS account_keys (
   user_id     TEXT NOT NULL REFERENCES users(id),
   door_type   TEXT NOT NULL,            -- 'password' | 'recovery' | 'passkey'

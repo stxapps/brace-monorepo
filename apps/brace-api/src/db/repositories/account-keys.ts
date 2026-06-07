@@ -2,7 +2,7 @@
 // living in the SAME ACCOUNTS_DB_N shard as this account's `users` row, so the
 // credential and its Tier-0 key material commit together in one batch.
 
-export type DoorType = 'password' | 'recovery' | 'passkey';
+import type { DoorType } from '@stxapps/shared';
 
 // Public domain entity (camelCase). Bytes are surfaced as Uint8Array; D1 returns
 // BLOBs as ArrayBuffer, converted in toEntity.

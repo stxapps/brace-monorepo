@@ -1,8 +1,8 @@
 type WorkerResult = { ok: true; hash: Uint8Array } | { ok: false; error: string };
 
 // Runs Argon2id(password, salt) in a dedicated worker and resolves the 32-byte
-// master secret. This is the thin, web-specific KDF step: the per-user salt is
-// computed by the caller (deriveAccount, via `deriveUserSalt` in
+// password-KEK. This is the thin, web-specific KDF step: the per-user salt is
+// computed by the caller (derivePasswordKek, via `deriveUserSalt` in
 // @stxapps/shared) and handed in ready-to-use, so this and the worker stay a
 // dumb Argon2id step with no knowledge of how the salt is built — the future
 // native client reuses the same salt and only swaps this Argon2id call. The

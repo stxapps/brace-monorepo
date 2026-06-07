@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { usernameAvailableQueryOptions } from '@stxapps/react';
 import type { CreateAccountValues } from '@stxapps/shared';
-import { deriveAccount } from '@stxapps/web-crypto';
+import { createAccount } from '@stxapps/web-crypto';
 
 import { api } from '@/lib/api';
 
@@ -39,14 +39,16 @@ export function useCreateAccount() {
       }
       if (!available) throw new UsernameTakenError();
 
-      // Step 2: derive the account from (username, password) via the client
-      // KDF (Argon2id → HKDF, run off-thread in a worker). The username is the
-      // per-user salt, so two users with the same password get different keys.
-      // Yields the publicKey (the Ed25519 key the server verifies us by, not an
-      // identifier — the server mints its own userId), a non-extractable
-      // AES-256-GCM key for data, and a `sign` closure over the private key —
-      // the private key itself never leaves @stxapps/web-crypto.
-      const account = await deriveAccount(values.username, values.password);
+      // Step 2: create the account's keys from (username, password) via the
+      // client KDF (Argon2id → HKDF, run off-thread in a worker). The root is a
+      // fresh random DEK; the password-KEK (Argon2id over the username salt, so
+      // two users with the same password get different keys) wraps it. Yields the
+      // publicKey (the Ed25519 key the server verifies us by, not an identifier —
+      // the server mints its own userId), a non-extractable AES-256-GCM key for
+      // data, a `sign` closure over the private key (which never leaves
+      // @stxapps/web-crypto), and `passwordDoor` — the wrapped DEK to persist
+      // server-side.
+      const account = await createAccount(values.username, values.password);
 
       // Step 3: prove key ownership by signing a timestamped payload, then POST
       // it to exchange for a session id. The server re-checks username
@@ -61,13 +63,19 @@ export function useCreateAccount() {
       });
       const signature = await account.sign(payload);
 
-      // TODO: POST { payload, signature } to the session endpoint (pending),
-      // then persist the returned session id + account.encryptionKey in
-      // onSuccess. Send a client-generated idempotency key with the POST so a
-      // retry after a dropped client (e.g. browser back mid-flight) is safe and
-      // won't create a duplicate account, rather than aborting the in-flight
-      // request. Stubbed until the session endpoint lands.
-      console.log('create account', { username: values.username, signature });
+      // TODO: POST { payload, signature, passwordDoor } to the create-account
+      // endpoint (pending) — the server stores publicKey + the wrapped DEK
+      // (account.passwordDoor) and returns a session id, which we persist
+      // alongside account.encryptionKey in onSuccess. Send a client-generated
+      // idempotency key with the POST so a retry after a dropped client (e.g.
+      // browser back mid-flight) is safe and won't create a duplicate account,
+      // rather than aborting the in-flight request. Stubbed until the endpoint
+      // lands.
+      console.log('create account', {
+        username: values.username,
+        signature,
+        passwordDoor: account.passwordDoor,
+      });
     },
     // TODO: persist the returned session in onSuccess (auth context /
     // queryClient) rather than in the component's mutateAsync continuation —

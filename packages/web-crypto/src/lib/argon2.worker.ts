@@ -8,7 +8,7 @@ import { ARGON2_PARAMS } from '@stxapps/shared';
 // pulling the conflicting WebWorker lib into a package that compiles against
 // DOM.
 //
-// The per-user salt is computed upstream (deriveAccount → deriveUserSalt in
+// The per-user salt is computed upstream (derivePasswordKek → deriveUserSalt in
 // @stxapps/shared) and arrives ready-to-use, so the worker stays a pure
 // Argon2id step with no knowledge of how the salt is built.
 const ctx = globalThis as unknown as {
