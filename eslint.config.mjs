@@ -24,7 +24,7 @@ export default [
             '@stxapps/web-ui/**',
           ],
           depConstraints: [
-            // Layering (type): shared <- react/crypto <- ui <- app.
+            // Layering (type): shared <- crypto <- react <- ui <- app.
             // A project may only depend on its own layer and lower ones.
             {
               sourceTag: 'type:app',
@@ -42,7 +42,7 @@ export default [
             },
             {
               sourceTag: 'type:react',
-              onlyDependOnLibsWithTags: ['type:react', 'type:shared'],
+              onlyDependOnLibsWithTags: ['type:react', 'type:crypto', 'type:shared'],
             },
             {
               sourceTag: 'type:crypto',
@@ -52,9 +52,9 @@ export default [
               sourceTag: 'type:shared',
               onlyDependOnLibsWithTags: ['type:shared'],
             },
-            // Platform: agnostic code must stay portable; web/node may also use
-            // agnostic libs. This keeps web-only libs (ui, crypto) out of the
-            // node api and out of platform-agnostic packages.
+            // Platform: agnostic code must stay portable; web/worker may also
+            // use agnostic libs. This keeps web-only libs (ui, crypto) out of
+            // the Cloudflare Workers api and out of platform-agnostic packages.
             {
               sourceTag: 'platform:agnostic',
               onlyDependOnLibsWithTags: ['platform:agnostic'],
@@ -64,8 +64,8 @@ export default [
               onlyDependOnLibsWithTags: ['platform:web', 'platform:agnostic'],
             },
             {
-              sourceTag: 'platform:node',
-              onlyDependOnLibsWithTags: ['platform:node', 'platform:agnostic'],
+              sourceTag: 'platform:worker',
+              onlyDependOnLibsWithTags: ['platform:worker', 'platform:agnostic'],
             },
           ],
         },

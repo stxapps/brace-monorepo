@@ -5,7 +5,7 @@
   "nx": {
     "tags": [
       "type:app",
-      "platform:node"
+      "platform:worker"
     ],
     "targets": {
       "build": {

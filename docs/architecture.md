@@ -40,7 +40,7 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 
 #### @stxapps/web-crypto
 
-- used by brace-web and brace-extension
+- used by brace-web, brace-extension, and web-react
 - web-only KDF, AES-256-GCM
 
 #### @stxapps/web-react
@@ -54,17 +54,23 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 ### dependency rules
 
 Keep the dependency graph acyclic and layered. From lowest to highest:
-`shared` → `react` → `web-ui` → apps, with `web-crypto` a sibling of
-`web-ui` (it depends only on `shared`, and like `web-ui` is consumed by apps —
-not by `web-ui`).
+`shared` → `web-crypto` → `web-react` → `web-ui` → apps. `web-crypto` sits
+below the React-logic layer in the type dimension (so React logic may build on
+crypto primitives), but because it's `platform:web` the only thing that
+actually imports it there is the `platform:web` sibling `web-react` — the
+platform-agnostic `react` can't reach it. `web-crypto` itself depends only on
+`shared` and is also consumed directly by apps.
 
 - `shared` must not import from any other workspace package.
-- `react` may import `shared` only — not `web-ui`.
+- `react` may import `shared` and `web-crypto` (at the type layer) — not
+  `web-ui`. In practice the platform-agnostic `react` lib still can't reach
+  `web-crypto` (it's `platform:web`); only the `platform:web` sibling
+  `web-react` does.
 - `web-ui` may import `shared` and `react` — not the other way around.
 - `web-crypto` may import `shared` only.
 - `web-react` is the web-only sibling of `react` (same React-logic layer, but
-  `platform:web`): it may import `shared` and `react`. Apps consume it; `web-ui`
-  does not.
+  `platform:web`): it may import `shared`, `react`, and `web-crypto`. Apps
+  consume it; `web-ui` does not.
 - Apps may import any package; **packages must never import an app.**
 - `web-ui`, `web-crypto`, and `web-react` are web-only — do not import them from
   code meant to run on Expo/native (`react` and `shared` stay platform-agnostic).
@@ -83,14 +89,17 @@ Enforcement is driven by two tag dimensions set in each project's
 | web-react        | `type:react`  | `platform:web`      |
 | brace-web        | `type:app`    | `platform:web`      |
 | brace-extension  | `type:app`    | `platform:web`      |
-| brace-api        | `type:app`    | `platform:node`     |
-| brace-expo (fut) | `type:app`    | `platform:agnostic` |
+| brace-api        | `type:app`    | `platform:worker`   |
+| brace-expo (fut) | `type:app`    | `platform:expo`     |
 
 - **type** enforces the layering: a project may depend only on its own layer
-  and lower ones (`app` → `ui` → `react` → `shared`, with `crypto` a parallel
-  branch consumed only by apps: `app` → `crypto` → `shared`).
+  and lower ones (`app` → `ui` → `react` → `crypto` → `shared`). `crypto` sits
+  below `react` so React logic can build on it, and is also consumed directly by
+  apps (`app` → `crypto` → `shared`).
 - **platform** enforces portability: `agnostic` may depend only on `agnostic`;
-  `web`/`node` may also use `agnostic` but not each other.
+  `web`/`worker` may also use `agnostic` but not each other. (`worker` is the
+  Cloudflare Workers runtime — web-standards, not Node — see `bundling
+  brace-api` below.)
 
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.
