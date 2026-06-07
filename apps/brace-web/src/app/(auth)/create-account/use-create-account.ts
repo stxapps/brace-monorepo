@@ -3,7 +3,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { usernameAvailableQueryOptions } from '@stxapps/react';
-import type { CreateAccountValues } from '@stxapps/shared';
+import {
+  ApiError,
+  bytesToHex,
+  createAccountEndpoint,
+  type CreateAccountPayload,
+  type CreateAccountValues,
+} from '@stxapps/shared';
 import { createAccount } from '@stxapps/web-crypto';
 
 import { api } from '@/lib/api';
@@ -50,38 +56,46 @@ export function useCreateAccount() {
       // server-side.
       const account = await createAccount(values.username, values.password);
 
-      // Step 3: prove key ownership by signing a timestamped payload, then POST
-      // it to exchange for a session id. The server re-checks username
-      // uniqueness here to close the step-1→step-3 race; a "taken" rejection
-      // throws UsernameTakenError and routes to the form's setError. This is a
-      // write, so don't cancel it on unmount.
+      // Step 3: prove key ownership by signing a timestamped payload — which also
+      // carries the wrapped password door, so the signature covers exactly what
+      // the server persists — then POST it to exchange for a session. The signed
+      // value is the EXACT JSON string the server verifies against, so we stringify
+      // once and both sign and send that string (see createAccountRequestSchema).
       const payload = JSON.stringify({
-        publicKey: account.publicKey,
-        username: values.username,
         action: 'create-account',
+        username: values.username,
+        publicKey: account.publicKey,
+        passwordDoor: {
+          wrappedDek: bytesToHex(account.passwordDoor.wrappedDek),
+          iv: bytesToHex(account.passwordDoor.iv),
+        },
         timestamp: Date.now(),
-      });
+      } satisfies CreateAccountPayload);
       const signature = await account.sign(payload);
 
-      // TODO: POST { payload, signature, passwordDoor } to the create-account
-      // endpoint (pending) — the server stores publicKey + the wrapped DEK
-      // (account.passwordDoor) and returns a session id, which we persist
-      // alongside account.encryptionKey in onSuccess. Send a client-generated
-      // idempotency key with the POST so a retry after a dropped client (e.g.
-      // browser back mid-flight) is safe and won't create a duplicate account,
-      // rather than aborting the in-flight request. Stubbed until the endpoint
-      // lands.
-      console.log('create account', {
-        username: values.username,
-        signature,
-        passwordDoor: account.passwordDoor,
-      });
+      // POST to exchange the proof for a session. The server re-checks username
+      // uniqueness here (the directory claim) to close the step-1→step-3 race; a
+      // 409 routes back to the form's setError as UsernameTakenError. This is a
+      // write, so it isn't cancelled on unmount.
+      // TODO: send a client-generated idempotency key so a retry after a dropped
+      // client (e.g. browser back mid-flight) can't create a duplicate account.
+      let session;
+      try {
+        session = await api.call(createAccountEndpoint, { payload, signature });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) throw new UsernameTakenError();
+        throw err;
+      }
+
+      // The encryptionKey is the non-extractable AES key for the user's data; it
+      // can't be serialized, so it rides back with the session for onSuccess to
+      // stash in client-only state alongside the session token.
+      return { session, encryptionKey: account.encryptionKey };
     },
-    // TODO: persist the returned session in onSuccess (auth context /
-    // queryClient) rather than in the component's mutateAsync continuation —
-    // onSuccess is hook-level and survives the form unmounting (browser back),
-    // so a success that lands after navigation isn't lost. The component keeps
-    // only the failure→setError mapping, which is UI feedback and fine to drop
-    // when the form is gone.
+    // TODO: persist the result in onSuccess (auth context / queryClient) rather
+    // than in the component's mutateAsync continuation — onSuccess is hook-level
+    // and survives the form unmounting (browser back), so a success that lands
+    // after navigation isn't lost. The component keeps only the failure→setError
+    // mapping, which is UI feedback and fine to drop when the form is gone.
   });
 }

@@ -23,10 +23,11 @@ import { type IssuedSession, issueSession } from './session';
 // enforced (directory PK) and users↔account_keys stay atomic (same shard); only
 // the claim↔account link is non-transactional, with the orphan reclaimable.
 //
-// STATUS: storage + topology are wired; the create-account CONTRACT (the shared
-// request schema carrying publicKey + door blobs) and the proof-of-possession
-// check are still open items — no route calls createAccount yet. See the TODO
-// below and docs/account.md "open items".
+// STATUS: wired end-to-end. POST /v1/auth/create-account (routes/auth.ts) verifies
+// proof-of-possession + the signed contract (verifyAuthProof over the shared
+// createAccountPayloadSchema), then calls this to claim + write. This service owns
+// only the claim-then-write; the route owns transport + proof. The orphan-claim
+// sweeper is still open — see docs/account.md "open items".
 
 export type CreateAccountResult = {
   userId: string;
@@ -58,9 +59,9 @@ export async function createAccount(
   env: Bindings,
   input: CreateAccountInput,
 ): Promise<CreateAccountResult> {
-  // TODO: verify proof-of-possession of the keypair (the sign-in check analog)
-  // and validate the door material BEFORE provisioning anything, once the
-  // create-account contract lands in @stxapps/shared.
+  // Proof-of-possession and contract/door validation already happened upstream in
+  // the route (verifyAuthProof + the zod request schema), so this trusts its typed
+  // input and owns only the claim-then-write.
 
   const directory = usernamesRepo(env.DIRECTORY_DB);
   const userId = newId();

@@ -6,6 +6,8 @@
 //
 // The root of an account is a random DEK; each door derives a KEK that AEAD-wraps
 // its own copy of the DEK (account_keys row: { doorType, wrappedDek, iv }).
+import { utf8 } from './encoding';
+
 export type DoorType = 'password' | 'recovery' | 'passkey';
 
 export const DOOR_PASSWORD = 'password' satisfies DoorType;
@@ -25,5 +27,4 @@ export const DOOR_PASSKEY = 'passkey' satisfies DoorType;
 // username change (which only re-wraps the password door, by design) have to
 // re-wrap the username-independent doors too. doorType is the one piece of context
 // not already in the KEK, so it is the whole AAD.
-export const dekWrapAad = (doorType: DoorType): Uint8Array<ArrayBuffer> =>
-  new Uint8Array(new TextEncoder().encode(doorType));
+export const dekWrapAad = (doorType: DoorType): Uint8Array<ArrayBuffer> => utf8(doorType);

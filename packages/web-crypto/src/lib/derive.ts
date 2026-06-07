@@ -1,17 +1,18 @@
 import * as ed25519 from '@noble/ed25519';
 
 import {
+  bytesToHex,
   dekWrapAad,
   deriveUserSalt,
   DOOR_PASSWORD,
   type DoorType,
   HKDF_INFO_AUTH_SEED,
   HKDF_INFO_ENCRYPTION_KEY,
+  utf8,
 } from '@stxapps/shared';
 
 import { decrypt, encrypt } from './aes';
 import { deriveArgon2Hash } from './argon2';
-import { toHex, utf8 } from './encoding';
 
 export interface Account {
   // Ed25519 public key (hex) — the credential the server verifies us by, not an
@@ -86,9 +87,9 @@ async function deriveFromDek(dek: Uint8Array<ArrayBuffer>): Promise<Account> {
   );
 
   return {
-    publicKey: toHex(publicKeyBytes),
+    publicKey: bytesToHex(publicKeyBytes),
     encryptionKey,
-    sign: async (payload: string) => toHex(await ed25519.signAsync(utf8(payload), authSeed)),
+    sign: async (payload: string) => bytesToHex(await ed25519.signAsync(utf8(payload), authSeed)),
   };
 }
 
