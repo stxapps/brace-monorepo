@@ -7,7 +7,7 @@ import { sessionsRepo } from '../db/repositories/sessions';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
 import { hashToken } from '../lib/ids';
-import { createAccount,type CreateAccountInput } from './account';
+import { createAccount, type CreateAccountInput } from './account';
 
 // These exercise the part of brace-api a Node runner can't: createAccount's
 // claim-then-write across TWO databases (the global directory + an accounts
@@ -25,7 +25,13 @@ function input(overrides: Partial<CreateAccountInput> = {}): CreateAccountInput 
   return {
     username: 'alice',
     publicKey: uniquePublicKey(),
-    doors: [{ doorType: 'password', wrappedDek: new Uint8Array([1, 2, 3]), iv: new Uint8Array([4, 5, 6]) }],
+    doors: [
+      {
+        doorType: 'password',
+        wrappedDek: new Uint8Array([1, 2, 3]),
+        iv: new Uint8Array([4, 5, 6]),
+      },
+    ],
     ...overrides,
   };
 }
@@ -50,7 +56,9 @@ describe('createAccount', () => {
     expect(doors[0]).toMatchObject({ userId, doorType: 'password' });
 
     // (3) a session was minted — only the token HASH is stored, so look it up by hash
-    const stored = await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(session.token));
+    const stored = await sessionsRepo(env.SESSIONS_DB).findByTokenHash(
+      await hashToken(session.token),
+    );
     expect(stored).toMatchObject({ userId, accountDbId: '1' });
   });
 

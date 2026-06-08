@@ -7,12 +7,7 @@
     "outDir": "./out-tsc/vitest",
     "types": ["@cloudflare/workers-types", "node"]
   },
-  "include": [
-    "vitest.config.ts",
-    "test/**/*.ts",
-    "src/**/*.test.ts",
-    "src/**/*.spec.ts"
-  ],
+  "include": ["vitest.config.ts", "test/**/*.ts", "src/**/*.test.ts", "src/**/*.spec.ts"],
   "references": [
     {
       "path": "./tsconfig.json"

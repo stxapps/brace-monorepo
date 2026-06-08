@@ -23,9 +23,13 @@ export async function verifyEd25519(
   message: string,
   signatureHex: string,
 ): Promise<boolean> {
-  const key = await crypto.subtle.importKey('raw', hexToBytes(publicKeyHex), { name: 'Ed25519' }, false, [
-    'verify',
-  ]);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    hexToBytes(publicKeyHex),
+    { name: 'Ed25519' },
+    false,
+    ['verify'],
+  );
   return crypto.subtle.verify(
     'Ed25519',
     key,

@@ -99,7 +99,7 @@ Enforcement is driven by two tag dimensions set in each project's
 - **platform** enforces portability: `agnostic` may depend only on `agnostic`;
   `web`/`worker` may also use `agnostic` but not each other. (`worker` is the
   Cloudflare Workers runtime — web-standards, not Node — see `bundling
-  brace-api` below.)
+brace-api` below.)
 
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.
