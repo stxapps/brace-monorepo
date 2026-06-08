@@ -9,6 +9,8 @@ local-first data path (local store + encrypted file sync),
 (typed once in `@stxapps/shared`, shared by server and clients),
 [account.md](./account.md) for the password-derived account model (key
 derivation, username/password rules, the wallet comparison),
+[extension.md](./extension.md) for the brace-extension auth flow (own sign-in,
+no inherited session) and the move-shared-auth-code-later decision,
 [env-files.md](./env-files.md) for per-app environment configuration across
 `development` / `staging` / `production`, and [deployment.md](./deployment.md)
 for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
