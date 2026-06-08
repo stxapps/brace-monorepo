@@ -1,4 +1,5 @@
-import { applyD1Migrations, env } from 'cloudflare:test';
+import { applyD1Migrations } from 'cloudflare:test';
+import { env } from 'cloudflare:workers';
 
 // Runs in the Workers runtime before each test file (vitest `setupFiles`). The
 // pool's D1 databases start EMPTY — vitest-pool-workers does not auto-apply
