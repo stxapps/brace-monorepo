@@ -305,11 +305,16 @@ Ed25519 private key at create-account / sign-in.
 >   that comparison is replaced by the `username` UNIQUE check, the presented
 >   `publicKey` is stored, and the door blobs are stored alongside it.
 
-> **STATUS — partially built:** the client derives `publicKey` and signs the
-> payload (`use-create-account.ts`); the DEK indirection, the wrapped-blob
-> storage, the `users.public_key` column, and the sign-in check above are **not
-> implemented yet** — see the TODOs in `apps/brace-api/src/services/account.ts`
-> and [api-contracts.md](./api-contracts.md).
+> **STATUS — built:** create-account and sign-in are both wired end-to-end. The
+> DEK indirection, wrapped-blob storage, and the `users.public_key` column exist
+> (`services/account.ts`); the client derives `publicKey` and signs at both
+> create-account (`use-create-account.ts`) and sign-in (`use-sign-in.ts`). The
+> three-step sign-in check above is implemented: GET `/v1/auth/password-door`
+> serves the blob (step 1), `unlockAccount` unwraps + signs client-side (step 2),
+> and POST `/v1/auth/sign-in` runs `verifyAuthProof` then `signIn`, which compares
+> `payload.publicKey === users.public_key` (step 3). Still open: the
+> **orphan-claim sweeper** and the **enumeration hardening** on the pre-auth blob
+> fetch (the route is rate-limited but doesn't yet mask username existence).
 
 ### why the wrapped DEK is served pre-auth — the offline-attack surface
 
@@ -662,19 +667,22 @@ the data is gone."**
 - **Generated passphrase** — build the default-generate flow.
 - **No-recovery messaging** — make the "lose all your doors = lose the data"
   consequence explicit in the create-account UI.
-- **Server credential + key storage and signature verification** — the storage
-  side is **✅ built**: `createAccount` claims the username in `DIRECTORY_DB`,
-  writes `users.public_key` + `account_keys` (wrapped DEK inline) atomically in
-  the shard, and releases the claim on failure (`services/account.ts`). Still
-  open: the **shared create-account contract** carrying `publicKey` + door blobs
-  (no route calls `createAccount` yet), the **load-bearing sign-in check** (verify
-  signature, then match against the stored key — see [the two
-  identifiers](#the-two-identifiers)), and the **orphan-claim sweeper** (reclaim
-  claims with no backing `users` row, alongside `sessions.deleteExpired`).
+- **Server credential + key storage and signature verification** — **✅ built**.
+  Storage: `createAccount` claims the username in `DIRECTORY_DB`, writes
+  `users.public_key` + `account_keys` (wrapped DEK inline) atomically in the shard,
+  and releases the claim on failure. The **create-account contract** (POST
+  `/v1/auth/create-account`) and the **load-bearing sign-in check** (GET
+  `/v1/auth/password-door` → `unlockAccount` client-side → POST `/v1/auth/sign-in`,
+  which verifies the signature then matches `payload.publicKey` against the stored
+  key — see [the two identifiers](#the-two-identifiers)) are both wired
+  (`services/account.ts`, `routes/auth.ts`). Still open: the **orphan-claim
+  sweeper** (reclaim claims with no backing `users` row, alongside
+  `sessions.deleteExpired`).
 - **Blob-fetch hardening** — the password-door `wrapped_dek` is served pre-auth
-  (it must be), so add **rate-limiting + username-enumeration protection** on that
-  path to blunt mass-scraping of the offline-attack oracle. Not a substitute for
-  the entropy gate — see [why the wrapped DEK is served
+  (it must be). **Rate-limiting is in place** (the route stacks the tight tier);
+  still open is **username-enumeration protection** so the path can't be probed for
+  which usernames exist (today a 404 vs 200 distinguishes them). Neither is a
+  substitute for the entropy gate — see [why the wrapped DEK is served
   pre-auth](#why-the-wrapped-dek-is-served-pre-auth--the-offline-attack-surface).
 - **Recovery code (Phase 1) / passkey PRF (Phase 2)** — additional doors, added
   by wrapping the DEK; no derivation-contract change.

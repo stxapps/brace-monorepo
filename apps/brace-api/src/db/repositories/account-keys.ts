@@ -35,8 +35,9 @@ function toEntity(r: AccountKeyRow): AccountKeyEntity {
 
 export function accountKeysRepo(db: D1Database) {
   return {
-    // All doors for an account. Sign-in reads the 'password' door's blob (served
-    // pre-auth) to unwrap the DEK; settings UIs list every door.
+    // All doors for an account — settings UIs that list every door. Sign-in wants
+    // only ONE door, so it uses findByUserIdAndDoorType (a point-lookup) instead of
+    // fetching every door's wrapped DEK here and discarding all but one.
     async findByUserId(userId: string): Promise<AccountKeyEntity[]> {
       const { results } = await db
         .prepare(
@@ -46,6 +47,24 @@ export function accountKeysRepo(db: D1Database) {
         .bind(userId)
         .all<AccountKeyRow>();
       return results.map(toEntity);
+    },
+
+    // One specific door by its FULL primary key (user_id, door_type) — an exact
+    // index point-lookup, not a scan, so it reads just that door's wrapped DEK
+    // without pulling the others over the wire (matters on the pre-auth password-
+    // door fetch). Returns null when the user has no door of that type.
+    async findByUserIdAndDoorType(
+      userId: string,
+      doorType: DoorType,
+    ): Promise<AccountKeyEntity | null> {
+      const r = await db
+        .prepare(
+          `SELECT user_id, door_type, wrapped_dek, iv, version
+             FROM account_keys WHERE user_id = ? AND door_type = ?`,
+        )
+        .bind(userId, doorType)
+        .first<AccountKeyRow>();
+      return r ? toEntity(r) : null;
     },
 
     // Returns the prepared INSERT so create-account can batch it atomically with

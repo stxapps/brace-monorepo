@@ -6,22 +6,34 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@stxapps/web-ui/components/ui/field';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 
+import { InvalidCredentialsError, useSignIn } from './use-sign-in';
+
 // Client leaf for the sign-in route. The page stays a Server Component; only
 // this interactive form (react-hook-form + zodResolver) runs on the client.
 export function SignInForm() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useSignInForm();
+  const signIn = useSignIn();
 
   async function onSubmit(values: SignInValues) {
-    // Inputs are already validated by zodResolver. Remaining steps, left for later:
-    //   1. derive the account via client KDF (@stxapps/web-crypto) → key pair
-    //   2. sign a challenge and POST it to exchange for a session id
-    // For bad credentials, surface it on the form:
-    //   setError('root', { message: 'Incorrect username or password' });
-    console.log('sign in', values);
+    // Inputs are already validated by zodResolver. The hook owns the submit sequence
+    // (fetch door → unwrap DEK → sign → session); here we only map its typed failure
+    // onto the form. await keeps isSubmitting true for the duration. We don't tell
+    // username from password apart — both surface as one root error, matching the
+    // generic, enumeration-safe message the hook collapses them into.
+    try {
+      await signIn.mutateAsync(values);
+    } catch (err) {
+      if (err instanceof InvalidCredentialsError) {
+        setError('root', { message: 'Incorrect username or password' });
+      } else {
+        setError('root', { message: 'Could not sign in. Please try again.' });
+      }
+    }
   }
 
   return (
@@ -53,6 +65,7 @@ export function SignInForm() {
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             Sign in
           </Button>
+          <FieldError errors={errors.root ? [errors.root] : undefined} />
         </Field>
       </FieldGroup>
     </form>

@@ -1,4 +1,4 @@
-import type { DoorType } from '@stxapps/shared';
+import { DOOR_PASSWORD, type DoorType } from '@stxapps/shared';
 
 import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
@@ -109,4 +109,63 @@ export async function createAccount(
 
   const session = await issueSession(env, { id: userId, accountDbId });
   return { userId, session };
+}
+
+// Sign-in, step 1 (PRE-AUTH): hand back the password door's wrapped DEK for a
+// username so the client can unwrap the DEK and derive its keys. Resolve the
+// username through the directory (the only username→account map), then read the
+// 'password' door from the user's shard. A missing user or door is a generic
+// not-found — the route renders it as the same opaque failure as a wrong password,
+// so this can't be used as a username-existence oracle. (Mass-scraping of this
+// offline-attack oracle is blunted by the route's rate limit; richer
+// enumeration hardening is still an open item — see docs/account.md.)
+export async function getPasswordDoor(
+  env: Bindings,
+  username: string,
+): Promise<{ wrappedDek: Uint8Array; iv: Uint8Array }> {
+  const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(username);
+  if (!entry) throw new ApiError(404, 'not_found', 'No account for that username');
+
+  const password = await accountKeysRepo(accountsDb(env, entry.accountDbId)).findByUserIdAndDoorType(
+    entry.userId,
+    DOOR_PASSWORD,
+  );
+  if (!password) throw new ApiError(404, 'not_found', 'No password door for that account');
+
+  return { wrappedDek: password.wrappedDek, iv: password.iv };
+}
+
+// Sign-in, step 3: mint a session for a proven sign-in. Proof-of-possession (the
+// signature over the payload, freshness, and action) is verified upstream in the
+// route via verifyAuthProof; this owns THE load-bearing check — that the presented
+// `publicKey` equals the STORED credential for the username — plus the session
+// mint. Without that comparison anyone could "sign in" with their own keypair (see
+// docs/account.md "the load-bearing sign-in check"). Every credential miss returns
+// the SAME opaque 401 so it leaks neither which username exists nor why it failed.
+export async function signIn(
+  env: Bindings,
+  input: { username: string; publicKey: string },
+): Promise<{ userId: string; session: IssuedSession }> {
+  const invalid = () =>
+    new ApiError(401, 'invalid_credentials', 'Incorrect username or password');
+
+  const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(input.username);
+  if (!entry) throw invalid();
+
+  const user = await usersRepo(accountsDb(env, entry.accountDbId)).findById(entry.userId);
+  if (!user) {
+    // The directory points at a user row that must exist (both are Tier-0, written
+    // together). A dangling pointer is a server-side inconsistency, not a caller
+    // error — log it for observability but still answer opaquely.
+    console.error('signIn: directory references missing user', entry.userId);
+    throw invalid();
+  }
+
+  // publicKey is a public credential (not a secret), so a plain compare is fine —
+  // there's no secret to leak via timing. It must match the key the signature was
+  // already verified against upstream.
+  if (input.publicKey !== user.publicKey) throw invalid();
+
+  const session = await issueSession(env, { id: user.id, accountDbId: entry.accountDbId });
+  return { userId: user.id, session };
 }

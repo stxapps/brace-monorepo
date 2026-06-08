@@ -92,6 +92,72 @@ export const createAccountEndpoint = defineEndpoint({
   response: createAccountResponseSchema,
 });
 
+// --- sign in -----------------------------------------------------------------
+
+// Step 1 of sign-in is a PRE-AUTH door fetch: the client names a username and
+// gets back that account's password-door wrapped DEK, which it unwraps with
+// Argon2id(password, salt) to recover the DEK and derive its keys. A wrong
+// password fails on the GCM tag client-side — that IS the password check; nothing
+// is compared here. Served before authentication because the client can't derive
+// anything without the blob (it's the offline-attack oracle the entropy gate
+// defends — see docs/account.md "why the wrapped DEK is served pre-auth").
+export const passwordDoorRequestSchema = z.object({
+  username: usernameSchema,
+});
+export type PasswordDoorRequest = z.infer<typeof passwordDoorRequestSchema>;
+
+// The response is exactly the wrapped password door — same { wrappedDek, iv } wire
+// shape the client sends UP at create-account, reused here for the round trip.
+export type PasswordDoorResponse = z.infer<typeof wirePasswordDoorSchema>;
+
+// GET /v1/auth/password-door?username=… → { wrappedDek, iv }
+export const passwordDoorEndpoint = defineEndpoint({
+  method: 'GET',
+  path: `${API_V1}/auth/password-door`,
+  request: passwordDoorRequestSchema,
+  response: wirePasswordDoorSchema,
+});
+
+// Step 3: the signed proof the client POSTs to exchange for a session. Mirrors the
+// create-account payload, but with `action: 'sign-in'` (so a create-account proof
+// can't be replayed here, and vice versa) and NO passwordDoor — the door already
+// exists server-side; this flow only proves possession of the DEK-derived key. The
+// server verifies the signature over the EXACT JSON string, then checks
+// `publicKey` against the STORED credential for the username (the load-bearing
+// check — see docs/account.md "the two identifiers").
+export const signInPayloadSchema = z.object({
+  action: z.literal('sign-in'),
+  username: usernameSchema,
+  publicKey: hexBytes(32),
+  timestamp: z.number().int(),
+});
+export type SignInPayload = z.infer<typeof signInPayloadSchema>;
+
+// POST body: the signed payload as a raw JSON STRING plus its Ed25519 signature —
+// a string (not a nested object) for the same reason as create-account: the server
+// must verify the signature over the same bytes the client signed.
+export const signInRequestSchema = z.object({
+  payload: z.string(),
+  signature: hexBytes(64),
+});
+export type SignInRequest = z.infer<typeof signInRequestSchema>;
+
+export const signInResponseSchema = z.object({
+  token: z.string(),
+  expiresAt: z.number(),
+});
+export type SignInResponse = z.infer<typeof signInResponseSchema>;
+
+// POST /v1/auth/sign-in → { token, expiresAt }
+// Verifies proof-of-possession, confirms the presented publicKey matches the
+// stored credential for the username, and returns a fresh session.
+export const signInEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/sign-in`,
+  request: signInRequestSchema,
+  response: signInResponseSchema,
+});
+
 // --- sign out ---------------------------------------------------------------
 
 // No request fields: the session to revoke is identified by the bearer token
