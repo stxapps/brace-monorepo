@@ -313,8 +313,11 @@ Ed25519 private key at create-account / sign-in.
 > serves the blob (step 1), `unlockAccount` unwraps + signs client-side (step 2),
 > and POST `/v1/auth/sign-in` runs `verifyAuthProof` then `signIn`, which compares
 > `payload.publicKey === users.public_key` (step 3). Still open: the
-> **orphan-claim sweeper** and the **enumeration hardening** on the pre-auth blob
-> fetch (the route is rate-limited but doesn't yet mask username existence).
+> **orphan-claim sweeper**. (Username existence is observable **by design** — `GET
+> /v1/auth/username-available` requires it for signup — so the pre-auth blob fetch
+> is rate-limited but deliberately not existence-masked; that's an accepted
+> property, not a gap. See [why the wrapped DEK is served
+> pre-auth](#why-the-wrapped-dek-is-served-pre-auth--the-offline-attack-surface).)
 
 ### why the wrapped DEK is served pre-auth — the offline-attack surface
 
@@ -362,8 +365,10 @@ need a PAKE — offline-attacking a 256-bit secret is infeasible — so a hybrid
 (password = OPAQUE, others = plain KEK-wrap) composes cleanly with the model.
 
 **Decision (pre-launch):** keep the blob served pre-auth; lean on the entropy
-gate + generated passphrase as the real defense; add cheap **rate-limiting +
-username-enumeration protection** on the blob-fetch path to blunt mass-scraping.
+gate + generated passphrase as the real defense; add cheap **rate-limiting** on the
+blob-fetch path to blunt mass-scraping. Username existence stays observable **by
+design** — `GET /v1/auth/username-available` requires it for signup, so masking the
+blob fetch in isolation would buy nothing; it is rate-limited, not existence-masked.
 Treat OPAQUE as the documented upgrade path for the password door, adopted only
 if online-only (or KMS-isolated breach-resistant) password protection becomes a
 requirement; skip the naive KEK-signature half-measure.
@@ -678,12 +683,6 @@ the data is gone."**
   (`services/account.ts`, `routes/auth.ts`). Still open: the **orphan-claim
   sweeper** (reclaim claims with no backing `users` row, alongside
   `sessions.deleteExpired`).
-- **Blob-fetch hardening** — the password-door `wrapped_dek` is served pre-auth
-  (it must be). **Rate-limiting is in place** (the route stacks the tight tier);
-  still open is **username-enumeration protection** so the path can't be probed for
-  which usernames exist (today a 404 vs 200 distinguishes them). Neither is a
-  substitute for the entropy gate — see [why the wrapped DEK is served
-  pre-auth](#why-the-wrapped-dek-is-served-pre-auth--the-offline-attack-surface).
 - **Recovery code (Phase 1) / passkey PRF (Phase 2)** — additional doors, added
   by wrapping the DEK; no derivation-contract change.
 - **OPAQUE password door (future, optional)** — the documented upgrade path if

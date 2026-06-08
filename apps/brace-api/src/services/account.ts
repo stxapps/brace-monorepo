@@ -114,11 +114,19 @@ export async function createAccount(
 // Sign-in, step 1 (PRE-AUTH): hand back the password door's wrapped DEK for a
 // username so the client can unwrap the DEK and derive its keys. Resolve the
 // username through the directory (the only username→account map), then read the
-// 'password' door from the user's shard. A missing user or door is a generic
-// not-found — the route renders it as the same opaque failure as a wrong password,
-// so this can't be used as a username-existence oracle. (Mass-scraping of this
-// offline-attack oracle is blunted by the route's rate limit; richer
-// enumeration hardening is still an open item — see docs/account.md.)
+// 'password' door from the user's shard. A missing user or door is a 404; a hit is
+// a 200 with the blob. The client maps that 404 to the same "incorrect username or
+// password" message as a wrong password, so the UI stays opaque — but on the wire
+// the 404-vs-200 still distinguishes which usernames exist.
+//
+// AWARENESS (not a TODO): that existence signal is ACCEPTED, by design. Masking it
+// here in isolation would buy nothing, because GET /v1/auth/username-available
+// (isUsernameTaken, above) is an intentional existence oracle that signup UX
+// requires — it already leaks the same bit, cheaply. So username existence is
+// observable on purpose; this path is rate-limited to blunt mass-scraping, not
+// existence-masked. The real defense for this pre-auth offline-attack oracle is
+// password entropy (the entropy gate / generated passphrase), not blob secrecy —
+// see docs/account.md "why the wrapped DEK is served pre-auth".
 export async function getPasswordDoor(
   env: Bindings,
   username: string,

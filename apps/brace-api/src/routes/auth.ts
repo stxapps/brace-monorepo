@@ -82,15 +82,17 @@ export const authRoutes = new Hono<AppEnv>()
   .get(
     passwordDoorEndpoint.path,
     // Pre-auth and an offline-attack oracle (it hands the wrapped DEK to anyone who
-    // names a username), so stack the tight tier to blunt mass-scraping — the
-    // rate-limit half of the documented blob-fetch hardening. See docs/account.md.
+    // names a username), so stack the tight tier to blunt mass-scraping. Rate-limiting
+    // is the defense here; username existence stays observable by design (see the
+    // AWARENESS note on getPasswordDoor and docs/account.md).
     rateLimit('tight'),
     zValidator('query', passwordDoorEndpoint.request),
     async (c) => {
       const { username } = c.req.valid('query');
-      // A missing user/door throws a generic 404 inside the service; the client
-      // maps it to the same "incorrect username or password" as a wrong password,
-      // so this stays opaque about which usernames exist.
+      // A missing user/door throws a 404 inside the service; the client maps it to
+      // the same "incorrect username or password" as a wrong password, so the UI
+      // stays opaque — though the 404-vs-200 is still an existence signal on the
+      // wire, which we accept (see getPasswordDoor's AWARENESS note).
       const door = await getPasswordDoor(c.env, username);
       const body: PasswordDoorResponse = {
         wrappedDek: bytesToHex(door.wrappedDek),
