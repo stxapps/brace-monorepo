@@ -20,10 +20,12 @@ listing). See [../../../../docs/local-first-sync.md](../../../../docs/local-firs
 
 There is no external `wrangler` command to migrate a DO, and the schema must be
 **inlined in the bundle** (a Worker can't read `.sql` files at runtime). So
-migrations are TypeScript, versioned by `PRAGMA user_version`:
+migrations are TypeScript, versioned by a tiny `schema_version` table (NOT
+`PRAGMA user_version` — workerd's DO SQLite authorizer rejects that PRAGMA with
+`SQLITE_AUTH`, which would brick the DO on construction):
 
 - The single source of truth is the **`MIGRATIONS` array + `migrate()`** in
-  `user-data.ts`. Entry `i` upgrades `user_version` `i → i+1`. The array holds the
+  `user-data.ts`. Entry `i` upgrades `schema_version` `i → i+1`. The array holds the
   literal `CREATE` SQL, so **read it there to see the current schema** — there is
   deliberately no separate snapshot to drift out of lockstep. (Unlike master,
   whose `master.sql` exists because it is an _applied_ create script; a DO has no

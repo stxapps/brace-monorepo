@@ -5,7 +5,7 @@
     "noEmit": false,
     "resolveJsonModule": true,
     "lib": ["es2022"],
-    "types": ["@cloudflare/workers-types", "jest", "node"],
+    "types": ["@cloudflare/workers-types", "node"],
     "outDir": "dist",
     "rootDir": "src",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
@@ -15,7 +15,8 @@
     "out-tsc",
     "dist",
     "node_modules",
-    "jest.config.ts",
+    "vitest.config.ts",
+    "test",
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
     "eslint.config.js",

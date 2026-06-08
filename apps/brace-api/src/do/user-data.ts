@@ -10,15 +10,16 @@ import { type OpKind, type OpLogEntity, opLogsRepo } from './repositories/op-log
 // and a per-user alarm() can drive op-log compaction later.
 //
 // MIGRATIONS ARE IN CODE. A DO's SQLite is NOT a D1 database — `wrangler d1
-// migrations apply` does not touch it. We version the schema with
-// `PRAGMA user_version` and apply any pending statements on construction, before
-// the instance serves a request (blockConcurrencyWhile). The schema snapshot in
-// do/README.md mirrors this for at-a-glance reference only and is not applied by
-// any tool. See do/README.md.
+// migrations apply` does not touch it. We track the applied version in a tiny
+// `schema_version` table (NOT `PRAGMA user_version`: workerd's DO SQLite
+// authorizer rejects that PRAGMA with SQLITE_AUTH) and apply any pending
+// statements on construction, before the instance serves a request
+// (blockConcurrencyWhile). The schema snapshot in do/README.md mirrors this for
+// at-a-glance reference only and is not applied by any tool. See do/README.md.
 
-// Ordered schema versions: entry i upgrades user_version i -> i+1. APPEND ONLY —
-// never edit a shipped entry (DOs already past it won't re-run it). Each entry is
-// a list of single statements (SqlStorage.exec runs one statement per call).
+// Ordered schema versions: entry i upgrades schema_version i -> i+1. APPEND ONLY
+// — never edit a shipped entry (DOs already past it won't re-run it). Each entry
+// is a list of single statements (SqlStorage.exec runs one statement per call).
 const MIGRATIONS: string[][] = [
   // 0 -> 1: initial append-only op log. AUTOINCREMENT (not bare rowid) so seq is
   // strictly increasing and never reused even after compaction deletes old rows.
@@ -35,12 +36,23 @@ const MIGRATIONS: string[][] = [
 ];
 
 function migrate(sql: SqlStorage): void {
-  const current = Number(sql.exec(`PRAGMA user_version`).one().user_version);
+  // Schema version lives in a tiny dedicated table, NOT `PRAGMA user_version`:
+  // workerd's Durable Object SQLite authorizer rejects `PRAGMA user_version`
+  // (SQLITE_AUTH), so the PRAGMA approach silently bricks the DO on construction.
+  // A one-row table is plain DML the authorizer allows and stays transactional
+  // with the migration statements.
+  sql.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`);
+  const row = sql.exec(`SELECT version FROM schema_version LIMIT 1`).toArray()[0] as
+    | { version: number }
+    | undefined;
+  const current = row ? Number(row.version) : 0;
+
   for (let v = current; v < MIGRATIONS.length; v++) {
     for (const stmt of MIGRATIONS[v]) sql.exec(stmt);
-    // PRAGMA can't be parameterized; v + 1 is a controlled integer, so the
-    // template interpolation is safe.
-    sql.exec(`PRAGMA user_version = ${v + 1}`);
+  }
+  if (current < MIGRATIONS.length) {
+    sql.exec(`DELETE FROM schema_version`);
+    sql.exec(`INSERT INTO schema_version (version) VALUES (?)`, MIGRATIONS.length);
   }
 }
 

@@ -40,8 +40,14 @@
   // in this committed file.
   "env": {
     // Local-only — used by `wrangler dev --env development`, never deployed (no
-    // account_id). D1/R2 are emulated by miniflare (state under .wrangler/), so
-    // the ids here are placeholders local mode ignores.
+    // account_id). D1/R2 are emulated by miniflare (state under .wrangler/). The
+    // ids here are placeholders (no real Cloudflare DB is hit locally) BUT they
+    // must be DISTINCT: miniflare keys each local D1 store by `database_id`, so
+    // reusing one id (e.g. "local") collapses all three roles into a single
+    // physical SQLite db. That bites both `wrangler dev` and the Workers test
+    // pool — e.g. `applyD1Migrations` dedupes by migration name in a shared
+    // `d1_migrations` table, so identically-named migrations across roles get
+    // skipped. Keep one id per role.
     "development": {
       "vars": {
         "CORS_ORIGINS": "http://localhost:3000",
@@ -56,19 +62,19 @@
         {
           "binding": "DIRECTORY_DB",
           "database_name": "brace-directory-db-dev",
-          "database_id": "local",
+          "database_id": "directory-db-local",
           "migrations_dir": "src/db/migrations/directory",
         },
         {
           "binding": "ACCOUNTS_DB_1",
           "database_name": "brace-accounts-db-1-dev",
-          "database_id": "local",
+          "database_id": "accounts-db-1-local",
           "migrations_dir": "src/db/migrations/accounts",
         },
         {
           "binding": "SESSIONS_DB",
           "database_name": "brace-sessions-db-dev",
-          "database_id": "local",
+          "database_id": "sessions-db-local",
           "migrations_dir": "src/db/migrations/sessions",
         },
       ],
