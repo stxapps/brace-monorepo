@@ -161,8 +161,16 @@ the target to merge onto (as `@nx/next` does for brace-web's `build`):
   and validates without deploying (no auth needed). Real deploys use the
   `deploy` target (`wrangler deploy --env staging|production`); see
   [deployment.md](./deployment.md).
-- **typecheck** — `tsc` (wrangler/esbuild don't type-check); this is the type
-  gate.
+- **typecheck** — `tsc --noEmit` (wrangler/esbuild don't type-check); this is the
+  type gate. Declared as an explicit `typecheck` **npm script** in
+  `package.json` (`tsc --noEmit -p tsconfig.app.json && … -p tsconfig.spec.json`,
+  app sources then specs) rather than left to the `@nx/js/typescript` plugin's
+  inferred target: that inferred target is `tsc --build`-based and auto-disables
+  itself into a green-exiting `echo` whenever a referenced tsconfig sets
+  `noEmit: true` — which `tsconfig.spec.json` does (you don't emit test files).
+  Left inferred, `npm run typecheck` would silently skip brace-api. An npm script
+  named `typecheck` overrides the inferred target (the same reason brace-web's own
+  `tsc --noEmit` script works), so nx runs the real `tsc`.
 
 esbuild remains a single workspace-root devDependency for `@serwist/cli`'s
 optional-peer service-worker build in `brace-web` (don't redeclare it per-app).

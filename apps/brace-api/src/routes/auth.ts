@@ -8,12 +8,16 @@ import {
   createAccountPayloadSchema,
   type CreateAccountResponse,
   hexToBytes,
+  signOutEndpoint,
+  type SignOutResponse,
 } from '@stxapps/shared';
 
 import { verifyAuthProof } from '../lib/auth-proof';
 import type { AppEnv } from '../lib/env';
+import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rate-limit';
 import { createAccount, isUsernameTaken } from '../services/account';
+import { revokeSession } from '../services/session';
 
 // All routes carry their own '/v1/auth/…' path (from the shared contract,
 // version prefix and all), so this sub-app is mounted at the root in app.ts.
@@ -67,5 +71,18 @@ export const authRoutes = new Hono<AppEnv>()
         expiresAt: result.session.expiresAt,
       };
       return c.json(body, 201);
+    },
+  )
+  .post(
+    signOutEndpoint.path,
+    // Protected: the bearer token names the session to revoke. requireAuth
+    // resolves it onto the context (404/expired tokens 401 out before here).
+    requireAuth,
+    async (c) => {
+      // Idempotent delete — a token that already passed requireAuth has a live
+      // row; deleting it makes the token stop authenticating immediately.
+      await revokeSession(c.env, c.get('session').id);
+      const body: SignOutResponse = { ok: true };
+      return c.json(body);
     },
   );

@@ -34,7 +34,9 @@ interface AuthContextValue {
   username: string | null;
   // Adopt a freshly created / signed-in session: persist it and flip to authed.
   setSession: (record: SessionRecord) => Promise<void>;
-  // Drop the local session. TODO: also revoke server-side once that endpoint lands.
+  // Drop the LOCAL session only. Server-side revocation lives in the user-driven
+  // useSignOut hook (which POSTs sign-out, then calls this); this stays local so
+  // it can also serve the onSessionInvalid path, where the token is already dead.
   signOut: () => Promise<void>;
 }
 

@@ -91,3 +91,28 @@ export const createAccountEndpoint = defineEndpoint({
   request: createAccountRequestSchema,
   response: createAccountResponseSchema,
 });
+
+// --- sign out ---------------------------------------------------------------
+
+// No request fields: the session to revoke is identified by the bearer token
+// (the auth guard resolves it), so the body is empty. An object schema (rather
+// than nothing) keeps the contract uniform — the client still sends `{}` as JSON.
+export const signOutRequestSchema = z.object({});
+export type SignOutRequest = z.infer<typeof signOutRequestSchema>;
+
+export const signOutResponseSchema = z.object({
+  ok: z.literal(true),
+});
+export type SignOutResponse = z.infer<typeof signOutResponseSchema>;
+
+// POST /v1/auth/sign-out → { ok: true }
+// Revokes the current session server-side (deletes its row, so the bearer token
+// stops authenticating). Protected: requires the session's bearer token. The
+// client also drops its local session regardless, so a network failure here
+// still signs the user out locally — the row then ages out via TTL.
+export const signOutEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/sign-out`,
+  request: signOutRequestSchema,
+  response: signOutResponseSchema,
+});

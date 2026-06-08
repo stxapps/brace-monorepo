@@ -59,3 +59,8 @@ Flag notes:
 - npm install serwist -w @stxapps/brace-web
 - npm install @serwist/next -w @stxapps/brace-web
 - npm install @serwist/cli --save-dev -w @stxapps/brace-web
+
+#### wrangler
+
+- rm -rf apps/brace-api/.wrangler/state/v3/d1 or rm -rf apps/brace-api/.wrangler/state
+- npx nx run brace-api:migrate

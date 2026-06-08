@@ -70,7 +70,8 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --env development"
+    "dev": "wrangler dev --env development",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",
