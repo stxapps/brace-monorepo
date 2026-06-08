@@ -126,10 +126,9 @@ export async function getPasswordDoor(
   const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(username);
   if (!entry) throw new ApiError(404, 'not_found', 'No account for that username');
 
-  const password = await accountKeysRepo(accountsDb(env, entry.accountDbId)).findByUserIdAndDoorType(
-    entry.userId,
-    DOOR_PASSWORD,
-  );
+  const password = await accountKeysRepo(
+    accountsDb(env, entry.accountDbId),
+  ).findByUserIdAndDoorType(entry.userId, DOOR_PASSWORD);
   if (!password) throw new ApiError(404, 'not_found', 'No password door for that account');
 
   return { wrappedDek: password.wrappedDek, iv: password.iv };
@@ -146,8 +145,7 @@ export async function signIn(
   env: Bindings,
   input: { username: string; publicKey: string },
 ): Promise<{ userId: string; session: IssuedSession }> {
-  const invalid = () =>
-    new ApiError(401, 'invalid_credentials', 'Incorrect username or password');
+  const invalid = () => new ApiError(401, 'invalid_credentials', 'Incorrect username or password');
 
   const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(input.username);
   if (!entry) throw invalid();

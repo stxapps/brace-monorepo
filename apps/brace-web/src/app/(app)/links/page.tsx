@@ -1,4 +1,4 @@
-import { SignOutButton } from "./sign-out-button";
+import { SignOutButton } from './sign-out-button';
 
 export default function LinksPage() {
   return (

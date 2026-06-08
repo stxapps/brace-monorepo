@@ -89,7 +89,11 @@ describe('brace-api', () => {
   }
 
   async function sign(keyPair: CryptoKeyPair, payload: string): Promise<string> {
-    const sig = await crypto.subtle.sign('Ed25519', keyPair.privateKey, new TextEncoder().encode(payload));
+    const sig = await crypto.subtle.sign(
+      'Ed25519',
+      keyPair.privateKey,
+      new TextEncoder().encode(payload),
+    );
     return bytesToHex(new Uint8Array(sig));
   }
 
@@ -98,7 +102,9 @@ describe('brace-api', () => {
   // opaquely; only the client ever unwraps.
   const door = { wrappedDek: new Uint8Array(48).fill(7), iv: new Uint8Array(12).fill(9) };
 
-  async function seedAccount(username: string): Promise<{ keyPair: CryptoKeyPair; publicKey: string }> {
+  async function seedAccount(
+    username: string,
+  ): Promise<{ keyPair: CryptoKeyPair; publicKey: string }> {
     const kp = await newKeyPair();
     await createAccount(env, {
       username,
@@ -150,14 +156,20 @@ describe('brace-api', () => {
         timestamp: Date.now(),
       });
 
-      const res = await app.request(signInEndpoint.path, body(payload, await sign(keyPair, payload)), env);
+      const res = await app.request(
+        signInEndpoint.path,
+        body(payload, await sign(keyPair, payload)),
+        env,
+      );
 
       expect(res.status).toBe(200);
       const json = (await res.json()) as { token: string; expiresAt: number };
       expect(typeof json.token).toBe('string');
       expect(typeof json.expiresAt).toBe('number');
       // The session is real — resolvable by token hash, exactly what the auth guard reads.
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(json.token))).not.toBeNull();
+      expect(
+        await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(json.token)),
+      ).not.toBeNull();
     });
 
     it('rejects a valid proof for an unknown username with an opaque 401', async () => {
@@ -169,7 +181,11 @@ describe('brace-api', () => {
         timestamp: Date.now(),
       });
 
-      const res = await app.request(signInEndpoint.path, body(payload, await sign(keyPair, payload)), env);
+      const res = await app.request(
+        signInEndpoint.path,
+        body(payload, await sign(keyPair, payload)),
+        env,
+      );
 
       expect(res.status).toBe(401);
     });
@@ -187,7 +203,11 @@ describe('brace-api', () => {
         timestamp: Date.now(),
       });
 
-      const res = await app.request(signInEndpoint.path, body(payload, await sign(other.keyPair, payload)), env);
+      const res = await app.request(
+        signInEndpoint.path,
+        body(payload, await sign(other.keyPair, payload)),
+        env,
+      );
 
       expect(res.status).toBe(401);
     });
@@ -203,7 +223,11 @@ describe('brace-api', () => {
         timestamp: Date.now(),
       });
 
-      const res = await app.request(signInEndpoint.path, body(payload, await sign(keyPair, payload)), env);
+      const res = await app.request(
+        signInEndpoint.path,
+        body(payload, await sign(keyPair, payload)),
+        env,
+      );
 
       expect(res.status).toBe(400);
     });
