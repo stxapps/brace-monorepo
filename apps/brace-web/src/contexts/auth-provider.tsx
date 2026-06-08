@@ -27,17 +27,26 @@ import {
 // out of the component tree.
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+// Why we left 'authenticated'. Lets AuthGuard pick the right destination: a
+// deliberate 'signed-out' goes home to '/', while 'expired' (or a direct visit,
+// reason null) goes to /sign-in?next= so the user can resume where they were.
+type EndReason = 'signed-out' | 'expired';
 
 interface AuthContextValue {
   status: AuthStatus;
   isAuthenticated: boolean;
   username: string | null;
+  // Set when status is 'unauthenticated'; null on a direct visit that never had a
+  // session this load. AuthGuard reads it to choose home vs. /sign-in?next=.
+  reason: EndReason | null;
   // Adopt a freshly created / signed-in session: persist it and flip to authed.
   setSession: (record: SessionRecord) => Promise<void>;
   // Drop the LOCAL session only. Server-side revocation lives in the user-driven
   // useSignOut hook (which POSTs sign-out, then calls this); this stays local so
   // it can also serve the onSessionInvalid path, where the token is already dead.
-  signOut: () => Promise<void>;
+  // The reason it records steers AuthGuard's post-sign-out redirect: defaults to a
+  // deliberate 'signed-out' (→ '/'); the invalid-session path passes 'expired'.
+  signOut: (reason?: EndReason) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -48,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // client render (both 'loading'), so there's no hydration mismatch.
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [username, setUsername] = useState<string | null>(null);
+  const [reason, setReason] = useState<EndReason | null>(null);
 
   // Hydrate from IndexedDB once on mount. An expired session is cleared and
   // treated as signed-out.
@@ -60,7 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUsername(s.username);
           setStatus('authenticated');
         } else {
-          if (s) void clearSession();
+          // A stored-but-expired session is an 'expired' reason (the user had a
+          // session that lapsed); no session at all stays null (a direct visit).
+          if (s) {
+            void clearSession();
+            setReason('expired');
+          }
           setUsername(null);
           setStatus('unauthenticated');
         }
@@ -76,12 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setSession = useCallback(async (record: SessionRecord) => {
     await saveSession(record);
     setUsername(record.username);
+    setReason(null);
     setStatus('authenticated');
   }, []);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (reason: EndReason = 'signed-out') => {
     await clearSession();
     setUsername(null);
+    setReason(reason);
     setStatus('unauthenticated');
   }, []);
 
@@ -97,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onSessionInvalid(() => {
         if (signingOut.current) return;
         signingOut.current = true;
-        void signOut().finally(() => {
+        void signOut('expired').finally(() => {
           signingOut.current = false;
         });
       }),
@@ -105,8 +122,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, isAuthenticated: status === 'authenticated', username, setSession, signOut }),
-    [status, username, setSession, signOut],
+    () => ({
+      status,
+      isAuthenticated: status === 'authenticated',
+      username,
+      reason,
+      setSession,
+      signOut,
+    }),
+    [status, username, reason, setSession, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

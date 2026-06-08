@@ -29,8 +29,10 @@ export function useSignOut() {
       }
 
       // Step 2: drop the local session (clears the session store + flips app auth
-      // state to unauthenticated). AuthGuard then bounces protected routes to
-      // /sign-in. This is the step that actually signs the user out client-side.
+      // state to unauthenticated). No reason arg, so this records the default
+      // 'signed-out' — AuthGuard sees a deliberate sign-out and sends the user home
+      // to '/', not /sign-in?next=. This is the step that actually signs the user
+      // out client-side.
       await signOut();
     },
   });

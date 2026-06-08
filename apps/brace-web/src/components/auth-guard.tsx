@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode } from 'react';
-import { redirect } from 'next/navigation';
+import { redirect, usePathname, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../contexts/auth-provider';
 
@@ -17,11 +17,25 @@ import { useAuth } from '../contexts/auth-provider';
 // history semantics we want). Redirecting in render rather than an effect means
 // protected content never paints for a signed-out user, with no intermediate null
 // frame or effect round-trip.
+//
+// Where we send a non-authenticated user depends on WHY they're here (auth `reason`):
+// a deliberate 'signed-out' goes home to '/', since offering to return them to the
+// page they just left would be silly. Everything else — an 'expired' session or a
+// direct visit (reason null) — bounces to /sign-in with the full intended path
+// (including any query string) stashed in `?next=`, so sign-in can return them there
+// instead of dumping everyone on /links (GuestGuard reads the param).
 export function AuthGuard({ children }: { children: ReactNode }) {
-  const { status } = useAuth();
+  const { status, reason } = useAuth();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   if (status === 'loading') return null;
-  if (status === 'unauthenticated') redirect('/sign-in');
+  if (status === 'unauthenticated') {
+    if (reason === 'signed-out') redirect('/');
+    const query = searchParams.toString();
+    const next = query ? `${pathname}?${query}` : pathname;
+    redirect(`/sign-in?next=${encodeURIComponent(next)}`);
+  }
 
   return children;
 }
