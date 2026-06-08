@@ -17,5 +17,6 @@ CREATE TABLE IF NOT EXISTS account_keys (
   iv          BLOB NOT NULL,
   version     INTEGER NOT NULL,
   created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
   PRIMARY KEY (user_id, door_type)
 );

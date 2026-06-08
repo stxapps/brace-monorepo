@@ -50,10 +50,10 @@ export function usernamesRepo(db: D1Database) {
     async claim(u: { username: string; userId: string; accountDbId: string }): Promise<boolean> {
       const res = await db
         .prepare(
-          `INSERT INTO usernames (username, user_id, account_db_id) VALUES (?, ?, ?)
+          `INSERT INTO usernames (username, user_id, account_db_id, created_at) VALUES (?, ?, ?, ?)
            ON CONFLICT(username) DO NOTHING`,
         )
-        .bind(canonicalizeUsername(u.username), u.userId, u.accountDbId)
+        .bind(canonicalizeUsername(u.username), u.userId, u.accountDbId, Date.now())
         .run();
       return res.meta.changes > 0;
     },

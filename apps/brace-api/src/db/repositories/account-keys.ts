@@ -77,12 +77,13 @@ export function accountKeysRepo(db: D1Database) {
       iv: Uint8Array;
       version?: number;
     }): D1PreparedStatement {
+      const now = Date.now();
       return db
         .prepare(
-          `INSERT INTO account_keys (user_id, door_type, wrapped_dek, iv, version, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO account_keys (user_id, door_type, wrapped_dek, iv, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .bind(k.userId, k.doorType, k.wrappedDek, k.iv, k.version ?? 1, Date.now());
+        .bind(k.userId, k.doorType, k.wrappedDek, k.iv, k.version ?? 1, now, now);
     },
   };
 }

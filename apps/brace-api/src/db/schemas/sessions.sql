@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   account_db_id TEXT NOT NULL,           -- routing: the user's accounts shard (e.g. '1'), from the directory
   created_at    INTEGER NOT NULL,
   expires_at    INTEGER NOT NULL,
-  last_seen_at  INTEGER NOT NULL
+  last_seen_at  INTEGER NOT NULL         -- not in use yet (see middleware/auth.ts)
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);

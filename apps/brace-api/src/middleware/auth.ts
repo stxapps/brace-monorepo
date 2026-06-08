@@ -24,6 +24,14 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
     throw new ApiError(401, 'unauthorized', 'Invalid or expired session');
   }
 
+  // NOTE: we deliberately do NOT bump `last_seen_at` here. Nothing reads it yet,
+  // and an UPDATE on every authenticated request is a write on the hot path (D1
+  // writes go to the primary region, unlike the replica-served read above). When a
+  // feature needs it (sessions/devices UI, sliding expiry), do it THROTTLED and OFF
+  // the critical path: only write when last_seen_at is stale (e.g. >10 min — add it
+  // to findByTokenHash first), and fire it via c.executionCtx.waitUntil so it never
+  // blocks the response.
+
   c.set('session', {
     id: session.id,
     userId: session.userId,

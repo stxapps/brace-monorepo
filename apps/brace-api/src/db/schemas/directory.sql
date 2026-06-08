@@ -27,6 +27,7 @@
 CREATE TABLE IF NOT EXISTS usernames (
   username      TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL,
-  account_db_id TEXT NOT NULL
+  account_db_id TEXT NOT NULL,
+  created_at    INTEGER NOT NULL          -- when the name was claimed (audit only; never updated — claim/release only, no in-place mutation)
 );
 CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);

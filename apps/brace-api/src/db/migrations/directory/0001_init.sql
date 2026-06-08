@@ -5,6 +5,7 @@
 CREATE TABLE IF NOT EXISTS usernames (
   username      TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL,
-  account_db_id TEXT NOT NULL
+  account_db_id TEXT NOT NULL,
+  created_at    INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);

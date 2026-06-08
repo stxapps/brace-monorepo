@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS account_keys (
   wrapped_dek BLOB NOT NULL,
   iv          BLOB NOT NULL,            -- GCM nonce for this wrap
   version     INTEGER NOT NULL,         -- bumped on each re-wrap (audit/debug)
-  created_at  INTEGER NOT NULL,
+  created_at  INTEGER NOT NULL,         -- door first created (stable across re-wraps)
+  updated_at  INTEGER NOT NULL,         -- last re-wrap; = created_at at insert (a re-wrap UPDATEs in place, bumping version)
   PRIMARY KEY (user_id, door_type)
 );
