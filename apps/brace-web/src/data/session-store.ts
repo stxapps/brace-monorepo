@@ -52,6 +52,27 @@ export function getToken(): string | null {
   return current.token;
 }
 
+// "The active session is no longer valid" notifier. Fired by the api client when
+// the server rejects our bearer token (401) or a request is attempted with an
+// expired one; the auth provider subscribes and drops to signed-out. This keeps
+// the api client a pure reader — it signals, it doesn't mutate session state. The
+// provider stays the sole writer (saveSession/clearSession).
+type SessionInvalidListener = () => void;
+const invalidListeners = new Set<SessionInvalidListener>();
+
+// Subscribe; returns an unsubscribe fn.
+export function onSessionInvalid(listener: SessionInvalidListener): () => void {
+  invalidListeners.add(listener);
+  return () => invalidListeners.delete(listener);
+}
+
+// Notify subscribers — a pure fan-out. Deduping any reaction (e.g. collapsing a
+// double signOut from concurrent failing requests) is the subscriber's concern,
+// not this passive store's; it owns the lifecycle being guarded.
+export function notifySessionInvalid(): void {
+  for (const listener of invalidListeners) listener();
+}
+
 function hasIndexedDb(): boolean {
   return typeof indexedDB !== 'undefined';
 }

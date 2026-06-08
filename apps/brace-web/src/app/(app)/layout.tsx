@@ -1,17 +1,12 @@
-import { redirect } from 'next/navigation';
+import { AuthGuard } from '@/components/auth-guard';
 
-// Guard for the signed-in app (/links, /settings, …). Once auth is wired,
-// resolve the session here (cookie / session id) and bounce unauthenticated
-// visitors to /sign-in. Left permissive for now so the pages are viewable
-// during development — flip `isSignedIn` to the real check.
-async function getSession(): Promise<{ isSignedIn: boolean }> {
-  // TODO: read the session from cookies and validate against brace-api.
-  return { isSignedIn: true };
-}
-
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { isSignedIn } = await getSession();
-  if (!isSignedIn) redirect('/sign-in');
-
-  return <div className="min-h-screen">{children}</div>;
+// Guard for the signed-in app (/links, /settings, …). The gate is client-side
+// (AuthGuard) because the session lives in IndexedDB, not a cookie — the server
+// can't see it. This layout stays a server component and just wraps the subtree.
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthGuard>
+      <div className="min-h-screen">{children}</div>
+    </AuthGuard>
+  );
 }

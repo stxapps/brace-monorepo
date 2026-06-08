@@ -7,10 +7,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
-import { clearSession, loadSession, saveSession, type SessionRecord } from '../data/session-store';
+import {
+  clearSession,
+  loadSession,
+  onSessionInvalid,
+  saveSession,
+  type SessionRecord,
+} from '../data/session-store';
 
 // App-level auth state. Web-only (like the session store it reads): account
 // creation / sign-in happen on the web app, and the extension inherits the
@@ -75,6 +82,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsername(null);
     setStatus('unauthenticated');
   }, []);
+
+  // React to the api client detecting an invalid session (server 401, or a
+  // mid-session token expiry) by dropping to signed-out. AuthGuard then bounces
+  // protected routes to /sign-in. The ref collapses a burst of concurrent failing
+  // requests into a single signOut — set synchronously before the async call, so
+  // it doesn't lean on clearSession's internal timing — and resets after so a
+  // later re-login can be invalidated again.
+  const signingOut = useRef(false);
+  useEffect(
+    () =>
+      onSessionInvalid(() => {
+        if (signingOut.current) return;
+        signingOut.current = true;
+        void signOut().finally(() => {
+          signingOut.current = false;
+        });
+      }),
+    [signOut],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({ status, isAuthenticated: status === 'authenticated', username, setSession, signOut }),
