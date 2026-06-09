@@ -2,7 +2,7 @@
 
 How brace keeps data on the device as the source of truth and syncs encrypted
 files to the server. See [architecture.md](./architecture.md) for the package
-layering, [setup.md](./setup.md) for scaffold history, and
+layering, and
 [api-contracts.md](./api-contracts.md) for the contract-first endpoint pattern
 this builds on.
 
@@ -141,8 +141,8 @@ Cloudflare R2 storage: 1 link/bookmark = 1 encrypted file
     {
       "title": "Some Article",
       "url": "https://...",
-      "tags": ["tech", "reading"],
-      "list": "Work",
+      "tags": ["tag_id_1", "tag_id_2"],
+      "list": "list_id_1",
       "page-archive": "{random-id}.enc",
       "createdAt": "...",
       "updatedAt": "..."
@@ -152,8 +152,10 @@ Cloudflare R2 storage: 1 link/bookmark = 1 encrypted file
     + links/bookmarks
     + settings
     + list names, tag names
-      - Solve conflicts on key level for Settings, All list names, All tag names
-      - sync per row, how to delete? per row in op_logs?
+      - In links/bookmarks, only store list name id and tag name ids so users can rename them easily.
+      - Must have id-to-name mapping for both list name and tag name
+      - If listname/tagname mapping is a file, how to solve conflicts?
+        + sync per row, how to delete? per row / per listname/tagname id in op_logs?
     + purchase
 
 Sync
