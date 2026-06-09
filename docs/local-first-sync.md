@@ -76,13 +76,29 @@ It talks to the API through the shared **contract client** (see
 `callEndpoint` directly — no hooks:
 
 ```ts
-import { callEndpoint, syncPullEndpoint } from '@stxapps/shared';
+import { callEndpoint, opsListEndpoint } from '@stxapps/shared';
 const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await callEndpoint(
   { baseUrl: API_URL },
-  syncPullEndpoint,
-  { since: syncCursor, limit: 500 }, // syncCursor is a timestamp, not a seq
+  opsListEndpoint,
+  // the cursor is the compound (updatedAt, path), not a seq — see *the ops/list endpoint*
+  { since: syncCursor, sincePath: syncCursorPath, limit: 500 },
 );
 ```
+
+The whole control plane is **four endpoints**, two per resource — `ops` (the
+op-log entries) and `files` (the R2 objects):
+
+```
+GET  /v1/ops/list      incremental pull: ops since the cursor      (→ the ops/list endpoint)
+POST /v1/ops/commit    record a committed mutation (HEADs R2)      (→ the three flows: push)
+GET  /v1/files/list    fallback full R2 listing (download-truth)   (→ fallback full sync)
+POST /v1/files/sign    mint presigned R2 URL(s); op: 'put' | 'get' (→ authorization & quota)
+```
+
+The blob bytes themselves never touch the API — the client PUTs/GETs R2 directly
+over a `files/sign` URL. So `files/sign` is the **only** endpoint on the hot path
+of bulk data, and it's deliberately a thin envelope check (ownership + quota), not
+a content gateway.
 
 ### storage layout
 
@@ -90,11 +106,11 @@ const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await callEndpoint(
 encrypted file. Random ids — never content-derived — so filenames leak nothing:
 
 ```
-/users/{uid}/meta/{id}.enc       ← encrypted bookmark metadata (small, < ~2 KB)
-/users/{uid}/files/{id}.enc      ← encrypted content / archived page / screenshot
-/users/{uid}/tags/{id}.enc       ← encrypted { id, name, updatedAt }
-/users/{uid}/lists/{id}.enc      ← encrypted { id, name, updatedAt }
-/users/{uid}/settings.enc        ← encrypted user settings
+/users/{uid}/meta/{id}.enc        ← encrypted bookmark metadata (small, < ~2 KB)
+/users/{uid}/files/{id}.enc       ← encrypted content / archived page / screenshot
+/users/{uid}/tags/{id}.enc        ← encrypted { id, name, updatedAt }
+/users/{uid}/lists/{id}.enc       ← encrypted { id, name, updatedAt }
+/users/{uid}/settings/general.enc ← encrypted general user settings
 ```
 
 A bookmark's metadata references the other files by id; the reference graph lives
@@ -167,6 +183,14 @@ tag/list names.
   touches no bookmarks. Rename = `put`; delete = `delete`. This is what lets two
   devices rename two *different* tags concurrently without clobbering each other
   — a single shared `tags.enc` file under LWW could not.
+- **Settings use a fixed `settings/` namespace** (`settings/general.enc` today).
+  Unlike every other file — a random id (see *storage layout*) — these are
+  **well-known paths** baked into client code, the one non-random-id family.
+  Splitting by concern under `settings/` rather than one monolithic `settings.enc`
+  is the same LWW-isolation move as tags/lists: a separately-written concern can
+  later get its own `settings/<concern>.enc` so an unrelated settings edit on
+  another device can't clobber it. Because the paths are fixed, **adding** a new
+  `settings/<concern>.enc` needs no migration; renaming an existing one would.
 - **Dangling ids are normal and must be tolerated.** Deleting `tags/{id}.enc`
   leaves bookmark metadata that still lists that id; a content file referenced by
   metadata may not be downloaded yet. In both cases the UI must **skip the
@@ -193,7 +217,7 @@ downloaded here — they come on demand. For 5 000 bookmarks at ~500 bytes of
 metadata each that's ~2.5 MB — manageable. Set `syncCursor` to the **newest
 `updatedAt` among the files listed**.
 
-**2. Incremental sync (next visit).** Call the sync endpoint with `syncCursor`,
+**2. Incremental sync (next visit).** Call `GET /v1/ops/list` with `syncCursor`,
 get the ops whose `updatedAt` is newer than the cursor, apply them (download +
 decrypt + store for `put`, remove for `delete`), and advance `syncCursor` to the
 **newest `updatedAt` in the response** (not the server's current newest — anything
@@ -210,10 +234,11 @@ delete a bookmark:         delete metadata first, then content files
 
 The per-file commit protocol (3 round-trips):
 
-1. request a signed upload URL from the API (the Worker verifies the path is
-   under `/users/{authedUid}/` — see *authorization & quota*);
+1. `POST /v1/files/sign` with `{ op: 'put', paths: [...] }` to mint signed upload
+   URL(s) (the Worker verifies each path is under `/users/{authedUid}/` and checks
+   quota — see *authorization & quota*);
 2. encrypt and PUT the blob directly to R2 via the signed URL;
-3. `POST /sync/commit` with the uploaded path; the Worker **`HEAD`s the object**
+3. `POST /v1/ops/commit` with the uploaded path; the Worker **`HEAD`s the object**
    — which both confirms it exists in R2 and reads R2's authoritative
    `LastModified` — records the op with that timestamp (`appendOp`), and returns
    `{ updatedAt }`. The `HEAD` does double duty: existence check *and* the single
@@ -223,30 +248,35 @@ The pending-ops entry stays in the queue until step 3 returns. **Crash recovery
 falls out of this for free:** if the client dies between the R2 PUT and the
 commit, the entry is still queued; on retry it re-PUTs (harmless — a fresh IV,
 but R2 PUTs are atomic so it just overwrites with equivalent ciphertext) and
-commits. **Commit must be idempotent:** a second `put` op for the same path is
-harmless because applying an op just means "re-download the latest version of
-that path," so a duplicate costs one redundant download and nothing else. Never
-fail a commit on a duplicate path.
+commits. **Commit is idempotent in effect:** re-committing a path appends another
+op row (the log isn't deduped on write), but applying any op just means
+"re-download the latest version of that path," so a duplicate costs one redundant
+download and nothing else — server-side op coalescing (see *deferred*) trims the
+extra rows later. Never fail a commit on a duplicate path.
 
 The store records the **R2 `LastModified` returned by commit** as the file's
-`updatedAt` and advances `syncCursor` to it — never the local clock. Because both
-incremental and fallback compare against R2's single clock, there is no
-cross-device skew to reconcile. (A `delete` op has no surviving object to `HEAD`,
-so its `updated_at` is the **deletion commit time** — a `deletedAt` — on the
-Worker's clock rather than R2's. That mismatch is harmless because paths are
-**immutable random ids**: a path's life is only ever `put`…`put`…`delete`, never
-`delete`→`put`, so the two clocks never have to order a put against a delete on
-the same path, and nothing can be resurrected by skew.)
+`updatedAt` and advances `syncCursor` to it — never the local clock. Every `put`
+is therefore stamped on R2's clock — the same value the client stores locally and
+the fallback listing reads back — so there is no cross-device skew to reconcile
+for any write that has a surviving object. (A `delete` op has no surviving object
+to `HEAD`, so its `updated_at` is the **deletion commit time** — a `deletedAt` —
+on the Worker's clock rather than R2's; the `updated_at` column thus mixes the two
+clocks. That mismatch is harmless because paths are **immutable random ids**: a
+path's life is only ever `put`…`put`…`delete`, never `delete`→`put`, so the two
+clocks never have to order a put against a delete on the same path, and nothing
+can be resurrected by skew.)
 
-### the sync endpoint
+### the ops/list endpoint
 
 The cursor is a **timestamp — R2's `LastModified`** — not a sequence number (see
-*storage layout* for why `seq` stays internal). The pull endpoint returns the ops
-newer than the cursor plus the retained-range bounds, so the client can tell
-incremental from fallback:
+*storage layout* for why `seq` stays internal). Strictly it is the **compound key
+`(updatedAt, path)`**, so the wire cursor is the pair `since` + `sincePath` (see
+*Cursor precision & pagination* below). The pull endpoint returns the ops newer
+than the cursor plus the retained-range bounds, so the client can tell incremental
+from fallback:
 
 ```
-GET /v1/sync?since=2026-04-13T10:00:00.000Z&limit=500
+GET /v1/ops/list?since=2026-04-13T10:00:00.000Z&sincePath=meta/m_abc.enc&limit=500
 → {
     ops: [{ op, path, updatedAt }, ...],   // ordered by (updatedAt, path)
     oldestUpdatedAt,   // min updated_at still retained — null on an empty log
@@ -268,18 +298,29 @@ Routing:
 | condition                                   | meaning                                 | action            |
 | ------------------------------------------- | --------------------------------------- | ----------------- |
 | `since` unset (never synced)                | new device / new account                | **first sync** (list R2; empty ⇒ nothing to do) |
+| `since` set but bounds `null`               | cursor exists, log empty — wiped/reset beneath a returning client | **fallback** sync |
 | `since > newestUpdatedAt`                   | cursor ahead of the log — log was reset | **fallback** sync |
 | `since < oldestUpdatedAt`                   | ops before the cursor were compacted    | **fallback** sync |
-| `oldestUpdatedAt ≤ since < newestUpdatedAt` | normal — newer ops exist                | apply `ops`       |
-| `since == newestUpdatedAt`                  | nothing newer                           | up to date        |
+| `oldestUpdatedAt ≤ since ≤ newestUpdatedAt` | normal — run the keyset query           | apply `ops` (empty result ⇒ already up to date) |
 
-Two things this encodes — both because **an empty op log never means "no data";
+What these rows encode — all because **an empty op log never means "no data";
 only R2 can answer that** (the log is a disposable accelerator, rebuildable from
 an R2 listing):
 
 - **No cursor ⇒ first/full sync** (flow #1 — list R2), never the incremental
   path. So "nothing to do" is only reached after actually listing R2 and finding
   it empty — a wiped log can't be mistaken for a new account.
+- **A cursor against `null` bounds ⇒ fallback.** A client with a cursor proves it
+  synced before, so an empty log (both bounds `null`) means the log was wiped or
+  reset under it — re-list R2 rather than reporting "up to date." This is the
+  same wiped-log case as the row below, reached when compaction (or a rebuild)
+  emptied the log entirely rather than just trimming past the cursor.
+- **`oldestUpdatedAt ≤ since ≤ newestUpdatedAt` is inclusive at the top on
+  purpose.** `since == newestUpdatedAt` is *not* a separate "up to date" branch:
+  because the cursor is the compound `(updatedAt, path)`, the newest millisecond
+  can still hold ops with a higher `path` tiebreak the client hasn't seen. So the
+  keyset query always runs at the boundary; an empty result is what means "already
+  up to date," not the timestamp comparison.
 - **`since > newestUpdatedAt` ⇒ fallback**, not "up to date." A healthy server's
   newest timestamp is always ≥ any cursor it issued (the client only stores
   cursors the server minted, and compaction never trims the newest), so a cursor
@@ -289,13 +330,20 @@ an R2 listing):
   re-list R2.
 
 **Cursor precision & pagination.** Because several files can share a millisecond,
-the cursor is really the compound key `(updatedAt, path)` and the pull is a
-**keyset** scan ordered by `(updated_at, path)` — without the `path` tiebreak, a
-single millisecond holding more than `limit` ops could never be paged past. A
-long-offline client pages forward (advance the cursor to the last op's
-`(updatedAt, path)`) while `hasMore` is true. None of `oldestUpdatedAt` /
-`newestUpdatedAt` / this keyset query exists in `op-logs.ts` yet — they're the
-methods to add (the current `listSince`/`append` key off `seq`).
+the cursor is the compound key `(updatedAt, path)` and the pull is a **keyset**
+scan: `WHERE (updated_at, path) > (since, sincePath)` ordered by
+`(updated_at, path)`. Both halves go over the wire — the `since` *and* `sincePath`
+query params above — because without the `path` tiebreak a single millisecond
+holding more than `limit` ops could never be paged past, and the
+`since == newestUpdatedAt` boundary couldn't distinguish "consumed every op at
+that ms" from "more remain with a higher path." A long-offline client pages
+forward by advancing **both** params to the last op's `(updatedAt, path)` while
+`hasMore` is true. (`sincePath` is omitted only right after first sync, whose
+cursor is a bare newest-`updatedAt` with no tiebreak yet; the server treats a
+missing `sincePath` as the low sentinel, so the scan includes every op at that
+millisecond.) None of `oldestUpdatedAt` / `newestUpdatedAt` / this keyset query
+exists in `op-logs.ts` yet — they're the methods to add (the current
+`listSince`/`append` key off `seq`).
 
 > Verify R2's `LastModified` precision before building — `.head()` returns
 > `uploaded` as a `Date`; confirm it's millisecond, not second. The
@@ -439,11 +487,13 @@ the same size the server already observes, so no additional leak.)
 Because the server can't inspect contents, it must enforce policy on the
 **envelope**:
 
-- the Worker issuing a signed URL **must verify the requested path is under
-  `/users/{authedUid}/`** — otherwise one user could mint a URL for another's
-  path;
-- enforce a **per-user file-count and byte quota** at signed-URL issuance — the
-  only place abuse can be bounded when content is opaque.
+- on **every** `POST /v1/files/sign` (both `op: 'put'` and `op: 'get'`), the
+  Worker **must verify each requested path is under `/users/{authedUid}/`** —
+  otherwise one user could mint a URL for another's path;
+- on `op: 'put'`, additionally enforce a **per-user file-count and byte quota** at
+  issuance — the only place abuse can be bounded when content is opaque. `op: 'get'`
+  needs no quota (reading your own data), so download URLs can be **minted in
+  batch** for a fast first sync without per-blob round-trips.
 
 ### where TanStack Query fits
 
