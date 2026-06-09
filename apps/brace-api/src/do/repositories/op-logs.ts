@@ -13,8 +13,7 @@ export type OpLogEntity = {
   seq: number;
   op: OpKind;
   path: string;
-  size: number;
-  createdAt: number;
+  updatedAt: number;
 };
 
 // Raw row as it sits in SQLite (snake_case columns). Internal to this repo.
@@ -22,12 +21,11 @@ type OpLogRow = {
   seq: number;
   op: OpKind;
   path: string;
-  size: number;
-  created_at: number;
+  updated_at: number;
 };
 
 function toEntity(r: OpLogRow): OpLogEntity {
-  return { seq: r.seq, op: r.op, path: r.path, size: r.size, createdAt: r.created_at };
+  return { seq: r.seq, op: r.op, path: r.path, updatedAt: r.updated_at };
 }
 
 // Bound to a SqlStorage handle (the DO's `ctx.storage.sql`). SqlStorage is
@@ -40,7 +38,7 @@ export function opLogsRepo(sql: SqlStorage) {
     listSince(since: number, limit: number): OpLogEntity[] {
       const rows = sql
         .exec<OpLogRow>(
-          `SELECT seq, op, path, size, created_at
+          `SELECT seq, op, path, updated_at
              FROM op_logs
             WHERE seq > ?
             ORDER BY seq ASC
@@ -56,16 +54,15 @@ export function opLogsRepo(sql: SqlStorage) {
     // last — a crash in between leaves an R2 object with no op, which the
     // R2-listing fallback heals; never trust the log for "does this file exist").
     // Returns the new monotonic seq the client stores as its cursor.
-    append(op: OpKind, path: string, size: number, createdAt: number): number {
+    append(op: OpKind, path: string, updatedAt: number): number {
       const row = sql
         .exec<{ seq: number }>(
-          `INSERT INTO op_logs (op, path, size, created_at)
-           VALUES (?, ?, ?, ?)
+          `INSERT INTO op_logs (op, path, updated_at)
+           VALUES (?, ?, ?)
            RETURNING seq`,
           op,
           path,
-          size,
-          createdAt,
+          updatedAt,
         )
         .one();
       return row.seq;

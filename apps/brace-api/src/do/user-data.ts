@@ -28,8 +28,7 @@ const MIGRATIONS: string[][] = [
        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
        op         TEXT NOT NULL,
        path       TEXT NOT NULL,
-       size       INTEGER NOT NULL DEFAULT 0,
-       created_at INTEGER NOT NULL
+       updated_at INTEGER NOT NULL
      )`,
     `CREATE INDEX IF NOT EXISTS idx_op_logs_path ON op_logs(path)`,
   ],
@@ -74,10 +73,32 @@ export class UserDataDO extends DurableObject<Bindings> {
     return opLogsRepo(this.sql).listSince(since, limit);
   }
 
-  // RPC: record a committed file mutation (call AFTER the R2 write succeeds).
+  // RPC: record a committed file mutation. Call AFTER the R2 write succeeds — the
+  // log must never point at an object that isn't in R2 (op-without-object 404s
+  // every client that pulls it; an object with no op is harmless and healed by
+  // the fallback R2 listing). See docs/local-first-sync.md.
+  //
+  // The stored `updated_at` is the op log's cursor clock, sourced per op kind:
+  //  - put:    R2's authoritative `LastModified`, read via this HEAD. The HEAD is
+  //            also the existence check upholding the invariant above — a missing
+  //            object throws, so NO op is logged.
+  //  - delete: the worker's commit clock (no object survives to HEAD). Mixing the
+  //            two clocks is safe because paths are immutable random ids — a path
+  //            is only ever put…put…delete, so a put and a delete on it never have
+  //            to be ordered against each other.
   // Returns the new monotonic seq the client stores as its cursor.
-  appendOp(op: OpKind, path: string, size = 0): number {
-    return opLogsRepo(this.sql).append(op, path, size, Date.now());
+  async appendOp(op: OpKind, path: string): Promise<number> {
+    let updatedAt: number;
+    if (op === 'put') {
+      const object = await this.env.USER_FILES.head(path);
+      if (!object) {
+        throw new Error(`appendOp: no R2 object at "${path}" — refusing to log a put without an object`);
+      }
+      updatedAt = object.uploaded.getTime();
+    } else {
+      updatedAt = Date.now();
+    }
+    return opLogsRepo(this.sql).append(op, path, updatedAt);
   }
 }
 

@@ -131,7 +131,7 @@ A bookmark's metadata references the other files by id; the reference graph live
 **Per-user op log** lives in a **Cloudflare Durable Object** (one DO per user,
 addressed by `idFromName(userId)`), backed by the DO's SQLite. See
 `apps/brace-api/src/do/user-data.ts` and `do/repositories/op-logs.ts`. Each row is
-`{ seq, op: 'put' | 'delete', path, size, updated_at }`, where **`updated_at` is
+`{ seq, op: 'put' | 'delete', path, updated_at }`, where **`updated_at` is
 R2's `LastModified`** for that path (read via a `HEAD` at commit — see *push*),
 and the **client's sync cursor is that timestamp**, never `seq`.
 
@@ -479,8 +479,7 @@ its timestamps, and access patterns** (which blobs are fetched when). It does
 **not** learn titles, URLs, tag/list names, or the metadata→content reference
 graph (all inside the ciphertext). Keeping metadata uniformly small (`< ~2 KB`)
 blunts size correlation. Acceptable for a bookmark manager — named here so it's a
-decision, not an accident. (`size` is stored in plaintext in the op log; that's
-the same size the server already observes, so no additional leak.)
+decision, not an accident.
 
 ### authorization & quota
 
@@ -494,6 +493,13 @@ Because the server can't inspect contents, it must enforce policy on the
   issuance — the only place abuse can be bounded when content is opaque. `op: 'get'`
   needs no quota (reading your own data), so download URLs can be **minted in
   batch** for a fast first sync without per-blob round-trips.
+
+The byte total backing that quota is **not** summed from the op log — the log is
+compactable and disposable, so it would undercount. It comes from a separate,
+durable **per-path size map** (`path → size`, set from the commit `HEAD` on `put`,
+read-and-subtracted on `delete` — a delete has no object left to `HEAD`, so the
+size to free must already be recorded). That map, not the op log, is where size is
+persisted; the op-log row is just `{ seq, op, path, updated_at }`.
 
 ### where TanStack Query fits
 
