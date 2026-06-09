@@ -13,6 +13,7 @@ import {
 import { createAccount } from '@stxapps/web-crypto';
 
 import { useAuth } from '@/contexts/auth-provider';
+import { seedNewAccount } from '@/data/sync-store';
 import { api } from '@/lib/api';
 
 // App-local because account creation is web-only and the submit sequence reaches
@@ -104,6 +105,12 @@ export function useCreateAccount() {
     // the failure→setError mapping, which is UI feedback and fine to drop when
     // gone. `values` is the original mutate() input, so the username is here.
     onSuccess: async ({ session, encryptionKey }, values) => {
+      // A brand-new account has no server data, so mark its first sync done up
+      // front (empty cursor). This lets SyncGate render the app immediately with
+      // no pull — the sign-in path, which has no such flag, blocks on a full
+      // sync instead. Seed before setSession so the flag is in place by the time
+      // the auth flip navigates into the (app) layout. See sync-store.
+      await seedNewAccount(values.username);
       await setSession({
         username: values.username,
         token: session.token,

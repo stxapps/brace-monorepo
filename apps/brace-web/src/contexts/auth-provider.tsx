@@ -18,6 +18,7 @@ import {
   saveSession,
   type SessionRecord,
 } from '../data/session-store';
+import { clearSyncData } from '../data/sync-store';
 
 // App-level auth state. Web-only (like the session store it reads): account
 // creation / sign-in happen on the web app, and the extension inherits the
@@ -96,7 +97,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async (reason: EndReason = 'signed-out') => {
-    await clearSession();
+    // Drop the session AND the synced local data together. The local store holds
+    // DECRYPTED bookmarks, so leaving them behind would let the next user on this
+    // device read the previous user's plaintext. One active session per device
+    // (see session-store), so a full wipe is correct; both clears run regardless
+    // of which one rejects. Covers the onSessionInvalid (expired) path too.
+    await Promise.allSettled([clearSession(), clearSyncData()]);
     setUsername(null);
     setReason(reason);
     setStatus('unauthenticated');

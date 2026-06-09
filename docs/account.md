@@ -313,9 +313,9 @@ Ed25519 private key at create-account / sign-in.
 > serves the blob (step 1), `unlockAccount` unwraps + signs client-side (step 2),
 > and POST `/v1/auth/sign-in` runs `verifyAuthProof` then `signIn`, which compares
 > `payload.publicKey === users.public_key` (step 3). Still open: the
-> **orphan-claim sweeper**. (Username existence is observable **by design** — `GET
-> /v1/auth/username-available` requires it for signup — so the pre-auth blob fetch
-> is rate-limited but deliberately not existence-masked; that's an accepted
+> **orphan-claim sweeper**. (Username existence is observable **by design** —
+> `GET /v1/auth/username-available` requires it for signup — so the pre-auth blob
+> fetch is rate-limited but deliberately not existence-masked; that's an accepted
 > property, not a gap. See [why the wrapped DEK is served
 > pre-auth](#why-the-wrapped-dek-is-served-pre-auth--the-offline-attack-surface).)
 
