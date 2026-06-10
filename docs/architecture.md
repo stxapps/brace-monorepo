@@ -172,5 +172,18 @@ the target to merge onto (as `@nx/next` does for brace-web's `build`):
   named `typecheck` overrides the inferred target (the same reason brace-web's own
   `tsc --noEmit` script works), so nx runs the real `tsc`.
 
+  Both passes are **self-contained — no prior build required.** `tsconfig.spec.json`
+  deliberately **compiles the app sources directly** (`include: src/**/*.ts`) instead
+  of pulling app types via a project `reference` to the composite `tsconfig.app.json`.
+  A `tsc -p` reference resolves the referenced composite project's types from its
+  emitted `dist/*.d.ts` — which this `--noEmit` typecheck never writes — so a
+  reference made `npx nx typecheck @stxapps/brace-api` fail with `TS6305` on a clean
+  clone or after any add/move/rename/delete under `src` (stale `dist/`). Compiling
+  from source removes that `dist/` dependency entirely. The split still pulls its
+  weight: the **app pass** (`tsconfig.app.json`, Workers-only types, no `node`) is
+  the portability gate on app source; the **spec pass** adds the specs and
+  `node` / `cloudflare:test` types. **Do not re-add the `references` block to
+  `tsconfig.spec.json`** — it reintroduces the prebuilt-`dist/` requirement.
+
 esbuild remains a single workspace-root devDependency for `@serwist/cli`'s
 optional-peer service-worker build in `brace-web` (don't redeclare it per-app).
