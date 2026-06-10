@@ -134,6 +134,11 @@ export const authRoutes = new Hono<AppEnv>()
     signOutEndpoint.path,
     // Protected: the bearer token names the session to revoke. requireAuth
     // resolves it onto the context (404/expired tokens 401 out before here).
+    // No 'tight' tier here (unlike the pre-auth routes above): this is authed,
+    // cheap (one idempotent delete), and self-limiting — the first call removes
+    // the row, so repeats 401 at requireAuth before the handler. Tightening it
+    // would also be counterproductive: sign-out should reliably succeed so the
+    // token actually gets revoked. The global 'standard' tier is enough.
     requireAuth,
     async (c) => {
       // Idempotent delete — a token that already passed requireAuth has a live
