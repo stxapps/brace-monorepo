@@ -20,7 +20,13 @@ export function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+// One encoder reused across calls: TextEncoder is stateless and `.encode()` is
+// synchronous, so a singleton is safe and avoids per-call alloc. Created lazily
+// on first use (not at module load) so merely importing `shared` never assumes a
+// `TextEncoder` global — some test environments only define it once running.
+let encoder: InstanceType<typeof TextEncoder> | undefined;
+
 // Returns an ArrayBuffer-backed view (not SharedArrayBuffer) so the result is
 // accepted directly as a Web Crypto `BufferSource`.
 export const utf8 = (s: string): Uint8Array<ArrayBuffer> =>
-  new Uint8Array(new TextEncoder().encode(s));
+  new Uint8Array((encoder ??= new TextEncoder()).encode(s));

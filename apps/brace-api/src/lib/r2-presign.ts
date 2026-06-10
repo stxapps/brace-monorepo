@@ -10,6 +10,8 @@
 // workerd — no Node, no extra dependency to bundle. Credentials come from
 // per-env config/secrets (see lib/env.ts R2_* + wrangler.jsonc).
 
+import { bytesToHex, utf8 } from '@stxapps/shared';
+
 export type R2Credentials = {
   accountId: string;
   accessKeyId: string;
@@ -29,8 +31,6 @@ const REGION = 'auto'; // R2 ignores region but SigV4 requires one; 'auto' is ca
 const SERVICE = 's3';
 const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
 
-const encoder = new TextEncoder();
-
 // RFC 3986 encode. encodeURIComponent leaves !'()* unescaped, which AWS requires
 // escaped; `encodeKey` additionally keeps '/' literal so path separators survive.
 function rfc3986(value: string): string {
@@ -44,15 +44,8 @@ function encodeKey(key: string): string {
   return key.split('/').map(rfc3986).join('/');
 }
 
-function toHex(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let out = '';
-  for (const b of bytes) out += b.toString(16).padStart(2, '0');
-  return out;
-}
-
 async function sha256Hex(message: string): Promise<string> {
-  return toHex(await crypto.subtle.digest('SHA-256', encoder.encode(message)));
+  return bytesToHex(new Uint8Array(await crypto.subtle.digest('SHA-256', utf8(message))));
 }
 
 async function hmac(key: ArrayBuffer | Uint8Array, message: string): Promise<ArrayBuffer> {
@@ -63,13 +56,13 @@ async function hmac(key: ArrayBuffer | Uint8Array, message: string): Promise<Arr
     false,
     ['sign'],
   );
-  return crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message));
+  return crypto.subtle.sign('HMAC', cryptoKey, utf8(message));
 }
 
 // The SigV4 signing key: HMAC-chain the secret through date → region → service →
 // 'aws4_request'. Derived per request (cheap) rather than cached.
 async function signingKey(secret: string, datestamp: string): Promise<ArrayBuffer> {
-  const kDate = await hmac(encoder.encode(`AWS4${secret}`), datestamp);
+  const kDate = await hmac(utf8(`AWS4${secret}`), datestamp);
   const kRegion = await hmac(kDate, REGION);
   const kService = await hmac(kRegion, SERVICE);
   return hmac(kService, 'aws4_request');
@@ -115,8 +108,8 @@ export async function presignR2Url(
     await sha256Hex(canonicalRequest),
   ].join('\n');
 
-  const signature = toHex(
-    await hmac(await signingKey(creds.secretAccessKey, dateStamp), stringToSign),
+  const signature = bytesToHex(
+    new Uint8Array(await hmac(await signingKey(creds.secretAccessKey, dateStamp), stringToSign)),
   );
 
   return `https://${host}${canonicalUri}?${query.toString()}&X-Amz-Signature=${signature}`;
