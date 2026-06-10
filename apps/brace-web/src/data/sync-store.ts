@@ -2,10 +2,9 @@
 
 // Read/write helpers over the per-account sync bookkeeping row (see db.ts). This
 // is the seam the SyncProvider and the sync engine both go through, so the gate
-// invariant ("firstSyncDoneAt > 0 ⇒ local store is complete up to lastSeq") has
-// one owner. Deliberately tiny and side-effect-light — no network, no React.
+// invariant ("firstSyncDoneAt > 0 ⇒ local store is complete up to the cursor")
+// has one owner. Deliberately tiny and side-effect-light — no network, no React.
 
-// TODO: Should create and use separate IndexedDB db for syncMeta like session-store for session?
 import { db, type SyncMetaRecord } from './db';
 
 export type { SyncMetaRecord } from './db';
@@ -17,7 +16,7 @@ export function getSyncMeta(username: string): Promise<SyncMetaRecord | undefine
 }
 
 // Has the blocking first sync completed for this account on this device? Drives
-// SyncGate: true → render local data + sync in background; false → block on a
+// InitialSyncGate: true → render local data + sync in background; false → block on a
 // full pull. Absent row counts as not-done.
 export async function isFirstSyncDone(username: string): Promise<boolean> {
   const meta = await getSyncMeta(username);
@@ -30,23 +29,43 @@ export async function isFirstSyncDone(username: string): Promise<boolean> {
 // network round-trip — the create-account hook calls this alongside setSession.
 // Encoding "new account" as a persisted flag here (rather than threading a
 // create-vs-sign-in boolean through React) keeps SyncProvider's logic uniform.
+// The cursor starts empty — `(0, '')` — since there's nothing pulled yet.
 export function seedNewAccount(username: string): Promise<string> {
-  return db.syncMeta.put({ username, lastSeq: 0, firstSyncDoneAt: Date.now() });
+  return db.syncMeta.put({
+    username,
+    syncCursor: 0,
+    syncCursorPath: '',
+    firstSyncDoneAt: Date.now(),
+  });
 }
 
 // Sign-in path: call once the initial full pull has finished (all blobs
 // downloaded, decrypted, written). Atomic on purpose — only flip the flag after
 // the snapshot is complete, so an interrupted first sync stays "not done" and
-// re-blocks (then resumes from lastSeq) on the next load rather than leaving a
-// partial store looking finished.
-export function markFirstSyncDone(username: string, lastSeq: number): Promise<string> {
-  return db.syncMeta.put({ username, lastSeq, firstSyncDoneAt: Date.now() });
+// re-blocks (then resumes from the cursor) on the next load rather than leaving a
+// partial store looking finished. The first cursor is the newest `updatedAt`
+// among the listed files — a bare timestamp with no path tiebreak yet, so
+// `syncCursorPath` stays empty (the server treats a missing `sincePath` as the
+// low sentinel on the next incremental pull).
+export function markFirstSyncDone(username: string, syncCursor: number): Promise<string> {
+  return db.syncMeta.put({
+    username,
+    syncCursor,
+    syncCursorPath: '',
+    firstSyncDoneAt: Date.now(),
+  });
 }
 
-// Advance the op-log cursor after an incremental pull applies a batch. Leaves
-// firstSyncDoneAt untouched.
-export async function advanceCursor(username: string, lastSeq: number): Promise<void> {
-  await db.syncMeta.update(username, { lastSeq });
+// Advance the compound `(updatedAt, path)` cursor after an incremental pull
+// applies a batch — to the newest op's `(updatedAt, path)` seen. Both halves move
+// together: a later millisecond resets the path tiebreak. Leaves firstSyncDoneAt
+// untouched.
+export async function advanceCursor(
+  username: string,
+  syncCursor: number,
+  syncCursorPath: string,
+): Promise<void> {
+  await db.syncMeta.update(username, { syncCursor, syncCursorPath });
 }
 
 // Tear down synced data on sign-out. The local store holds DECRYPTED bookmarks,
@@ -56,9 +75,12 @@ export async function advanceCursor(username: string, lastSeq: number): Promise<
 // the onSessionInvalid path) alongside clearSession.
 export async function clearSyncData(username?: string): Promise<void> {
   if (username) {
-    await db.syncMeta.delete(username);
-    // TODO: also delete this account's links once link rows carry an owner.
+    await Promise.all([
+      db.syncMeta.delete(username),
+      db.pendingOps.where('username').equals(username).delete(),
+      // TODO: also delete this account's links once link rows carry an owner.
+    ]);
     return;
   }
-  await Promise.all([db.links.clear(), db.syncMeta.clear()]);
+  await Promise.all([db.links.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);
 }

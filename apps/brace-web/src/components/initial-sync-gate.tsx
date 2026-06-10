@@ -14,9 +14,9 @@ import { useSync } from '../contexts/sync-provider';
 // - 'error'                        → message + retry
 // - 'ready'                        → the app (background sync may still run)
 //
-// TODO: Rename to explicit that this is only first/initial sync.
-//   Maybe "InitialSyncGate" or "FirstSyncGate".
-export function SyncGate({ children }: { children: ReactNode }) {
+// Named for what it gates: only the FIRST (initial) sync blocks here. By design,
+// subsequent incremental/background syncs never gate the UI (see sync-provider).
+export function InitialSyncGate({ children }: { children: ReactNode }) {
   const { status, retry } = useSync();
 
   if (status === 'ready') return children;

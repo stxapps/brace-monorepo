@@ -19,7 +19,7 @@ import { useAuth } from './auth-provider';
 // Sync state for the signed-in app — deliberately SEPARATE from auth state (see
 // auth-provider). Auth answers "do you have a session?" and drives redirects;
 // sync answers "is the local store ready?" and drives an in-route loading screen
-// (SyncGate), never a redirect. Folding this into AuthStatus/EndReason would
+// (InitialSyncGate), never a redirect. Folding this into AuthStatus/EndReason would
 // muddy a type that's specifically about why you became unauthenticated.
 //
 // The branch is decided by the persisted first-sync flag (sync-store), not by
@@ -28,9 +28,6 @@ import { useAuth } from './auth-provider';
 //   not done       → 'syncing-initial' (blocking full pull), then 'ready'
 // Account creation seeds the flag at signup, so it lands in the first branch
 // with no network round-trip.
-
-// TODO: This is currently only about the first sync.
-//   We must support subsequent syncs too.
 
 type SyncStatus =
   | 'checking' // reading the flag from IndexedDB
@@ -47,7 +44,6 @@ interface SyncContextValue {
 const SyncStateContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  // TODO: verify no need username?
   const { username, status: authStatus } = useAuth();
   const [status, setStatus] = useState<SyncStatus>('checking');
   // Bumped by retry() to re-run the effect.

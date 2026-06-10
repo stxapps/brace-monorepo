@@ -106,7 +106,7 @@ export function useCreateAccount() {
     // gone. `values` is the original mutate() input, so the username is here.
     onSuccess: async ({ session, encryptionKey }, values) => {
       // A brand-new account has no server data, so mark its first sync done up
-      // front (empty cursor). This lets SyncGate render the app immediately with
+      // front (empty cursor). This lets InitialSyncGate render the app immediately with
       // no pull — the sign-in path, which has no such flag, blocks on a full
       // sync instead. Seed before setSession so the flag is in place by the time
       // the auth flip navigates into the (app) layout. See sync-store.
