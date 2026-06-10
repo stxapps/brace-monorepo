@@ -51,7 +51,8 @@ export type Bindings = {
   // --- R2 — encrypted bookmark blobs (see docs/local-first-sync.md) -------
   // The binding reads/writes objects from inside the Worker (commit HEADs, the
   // fallback listing). It can NOT mint browser-usable signed URLs, so `files/sign`
-  // presigns R2's S3 endpoint with the access keys below instead (lib/r2-presign.ts).
+  // presigns R2's S3 endpoint with the access keys below instead (r2/presign.ts).
+  // All R2 access goes through the r2/user-files gateway.
   USER_FILES: R2Bucket;
 
   // R2 S3-API credentials for presigning. Account id + bucket name are non-secret

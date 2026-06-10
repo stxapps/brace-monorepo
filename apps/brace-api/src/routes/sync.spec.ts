@@ -9,7 +9,7 @@ import {
 } from '@stxapps/shared';
 
 import { app } from '../app';
-import { userFileKey } from '../lib/r2-keys';
+import { userFileKey } from '../r2/keys';
 import { issueSession } from '../services/session';
 
 // End-to-end coverage of the four-endpoint sync control plane through the real

@@ -2,7 +2,7 @@ import { runInDurableObject } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
-import { userFileKey } from '../lib/r2-keys';
+import { userFileKey } from '../r2/keys';
 import { type UserDataDO, userDataStub } from './user-data';
 
 // The Durable Object is the other thing a Node runner can't test: its schema is

@@ -3,7 +3,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { OpEntry, OpsListResponse } from '@stxapps/shared';
 
 import type { Bindings } from '../lib/env';
-import { userFileKey } from '../lib/r2-keys';
+import { userFilesRepo } from '../r2/user-files';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
 import { type OpKind, opLogsRepo } from './repositories/op-logs';
 
@@ -120,13 +120,13 @@ export class UserDataDO extends DurableObject<Bindings> {
     const sizes = fileSizesRepo(this.sql);
     let updatedAt: number;
     if (op === 'put') {
-      const object = await this.env.USER_FILES.head(userFileKey(userId, path));
+      const object = await userFilesRepo(this.env).head(userId, path);
       if (!object) {
         throw new Error(
           `commitOp: no R2 object at "${path}" — refusing to log a put without an object`,
         );
       }
-      updatedAt = object.uploaded.getTime();
+      updatedAt = object.updatedAt;
       sizes.set(path, object.size);
     } else {
       updatedAt = Date.now();
