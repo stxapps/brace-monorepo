@@ -49,7 +49,20 @@ export type Bindings = {
   USER_DATA: DurableObjectNamespace<UserDataDO>;
 
   // --- R2 — encrypted bookmark blobs (see docs/local-first-sync.md) -------
+  // The binding reads/writes objects from inside the Worker (commit HEADs, the
+  // fallback listing). It can NOT mint browser-usable signed URLs, so `files/sign`
+  // presigns R2's S3 endpoint with the access keys below instead (lib/r2-presign.ts).
   USER_FILES: R2Bucket;
+
+  // R2 S3-API credentials for presigning. Account id + bucket name are non-secret
+  // `vars`; the access key pair are SECRETS (`wrangler secret put R2_ACCESS_KEY_ID
+  // / R2_SECRET_ACCESS_KEY --env …`). All four are per-env (see wrangler.jsonc).
+  // The bucket name is duplicated here because the runtime R2 binding doesn't
+  // expose its own name, and the S3 endpoint path needs it.
+  R2_ACCOUNT_ID: string;
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  R2_BUCKET: string;
 
   // --- Rate limiting — native binding, one binding per volume "tier" -------
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"

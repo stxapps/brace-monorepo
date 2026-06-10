@@ -5,6 +5,7 @@ import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
+import { syncRoutes } from './routes/sync';
 
 // Comma-separated allow-list from the Workers binding. `env` is only undefined
 // off-Workers (e.g. app.request() in a test that passes no env); a missing
@@ -48,3 +49,8 @@ app.get('/health', (c) => {
 });
 
 app.route('/', authRoutes);
+
+// Local-first sync control plane (ops/list, ops/commit, files/list, files/sign).
+// All four are protected and namespace every path under the authed user; see
+// routes/sync.ts and docs/local-first-sync.md.
+app.route('/', syncRoutes);

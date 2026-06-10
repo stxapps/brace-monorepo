@@ -51,6 +51,15 @@
     "development": {
       "vars": {
         "CORS_ORIGINS": "http://localhost:3000",
+        // R2 S3-API credentials for presigning (lib/r2-presign.ts). LOCAL-ONLY
+        // placeholders — `wrangler dev` and the Workers test pool emulate R2 with
+        // miniflare, so these never authenticate against real R2; the presigned
+        // URLs they produce are only ever shape-checked locally, never fetched.
+        // In staging/prod the key pair are SECRETS, not vars (see those envs).
+        "R2_ACCOUNT_ID": "local-account-id",
+        "R2_ACCESS_KEY_ID": "local-access-key-id",
+        "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
+        "R2_BUCKET": "brace-user-files-dev",
       },
       // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
       // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions
@@ -121,6 +130,14 @@
         // native apps have no CORS. So do NOT add chrome-extension://,
         // moz-extension://, or safari-web-extension:// origins here.
         "CORS_ORIGINS": "https://staging.brace.to,https://app.staging.brace.to",
+        // R2 presigning config (lib/r2-presign.ts). account_id + bucket are
+        // non-secret vars; the key PAIR are secrets, set separately:
+        //   wrangler secret put R2_ACCESS_KEY_ID --env staging
+        //   wrangler secret put R2_SECRET_ACCESS_KEY --env staging
+        // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
+        // bucket below. See docs/deployment.md.
+        "R2_ACCOUNT_ID": "TODO: staging Cloudflare account id (same as account_id)",
+        "R2_BUCKET": "brace-user-files-staging",
       },
       "d1_databases": [
         {
@@ -183,6 +200,14 @@
         // native apps have no CORS. So do NOT add chrome-extension://,
         // moz-extension://, or safari-web-extension:// origins here.
         "CORS_ORIGINS": "https://brace.to,https://app.brace.to",
+        // R2 presigning config (lib/r2-presign.ts). account_id + bucket are
+        // non-secret vars; the key PAIR are secrets, set separately:
+        //   wrangler secret put R2_ACCESS_KEY_ID --env production
+        //   wrangler secret put R2_SECRET_ACCESS_KEY --env production
+        // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
+        // bucket below. See docs/deployment.md.
+        "R2_ACCOUNT_ID": "TODO: production Cloudflare account id (same as account_id)",
+        "R2_BUCKET": "brace-user-files-production",
       },
       "d1_databases": [
         {

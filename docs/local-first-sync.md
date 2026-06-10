@@ -95,10 +95,19 @@ GET  /v1/files/list    fallback full R2 listing (download-truth)   (→ fallback
 POST /v1/files/sign    mint presigned R2 URL(s); op: 'put' | 'get' (→ authorization & quota)
 ```
 
+All four live in `apps/brace-api/src/routes/sync.ts` (each behind `requireAuth`).
+The op-plane endpoints (`ops/list`, `ops/commit`) are thin passthroughs to the
+user's Durable Object; the file-plane logic — paging R2, the quota gate, the
+presigner — is in `services/sync.ts`. The shared contracts are in
+`@stxapps/shared` (`sync/endpoints.ts`).
+
 The blob bytes themselves never touch the API — the client PUTs/GETs R2 directly
 over a `files/sign` URL. So `files/sign` is the **only** endpoint on the hot path
 of bulk data, and it's deliberately a thin envelope check (ownership + quota), not
-a content gateway.
+a content gateway. The signed URL is an **AWS SigV4 presign of R2's S3 endpoint**
+(`lib/r2-presign.ts`), because the Workers R2 _binding_ can read/write objects
+from inside the Worker but can't mint a URL the browser can use directly; the S3
+access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` / `lib/env.ts`).
 
 ### storage layout
 
@@ -167,8 +176,8 @@ is:
 - `op-without-object` (an op-log entry whose R2 object doesn't exist) is **much
   worse**: every client that pulls that op tries to download a 404.
 
-That asymmetry is exactly why `appendOp` runs **after** the R2 write succeeds
-(see the `appendOp` comment in `user-data.ts`).
+That asymmetry is exactly why the op-log append runs **after** the R2 write
+succeeds (see the `commitOp` comment in `user-data.ts`).
 
 ### data model: everything is one entity per file
 
@@ -240,7 +249,8 @@ The per-file commit protocol (3 round-trips):
 2. encrypt and PUT the blob directly to R2 via the signed URL;
 3. `POST /v1/ops/commit` with the uploaded path; the Worker **`HEAD`s the object**
    — which both confirms it exists in R2 and reads R2's authoritative
-   `LastModified` — records the op with that timestamp (`appendOp`), and returns
+   `LastModified` — records the op with that timestamp (the DO's `commitOp`, which
+   also stores R2's reported object size in the per-user quota map), and returns
    `{ updatedAt }`. The `HEAD` does double duty: existence check _and_ the single
    clock that incremental and fallback both compare against.
 
@@ -341,14 +351,16 @@ forward by advancing **both** params to the last op's `(updatedAt, path)` while
 `hasMore` is true. (`sincePath` is omitted only right after first sync, whose
 cursor is a bare newest-`updatedAt` with no tiebreak yet; the server treats a
 missing `sincePath` as the low sentinel, so the scan includes every op at that
-millisecond.) None of `oldestUpdatedAt` / `newestUpdatedAt` / this keyset query
-exists in `op-logs.ts` yet — they're the methods to add (the current
-`listSince`/`append` key off `seq`).
+millisecond.) This keyset query and the `oldestUpdatedAt` / `newestUpdatedAt`
+bounds live in `op-logs.ts` (`listSince` keysets on `(updated_at, path)`;
+`bounds()` returns `MIN`/`MAX(updated_at)`), surfaced to the route by the DO's
+`listOps` RPC in `user-data.ts`. `seq` stays internal — it orders ties and drives
+compaction, but never goes over the wire.
 
-> Verify R2's `LastModified` precision before building — `.head()` returns
-> `uploaded` as a `Date`; confirm it's millisecond, not second. The
-> `(updatedAt, path)` keyset stays correct either way, but coarser granularity
-> means more ties to page through.
+> R2's `LastModified` arrives as `.head().uploaded` (a `Date`); the op log stores
+> `uploaded.getTime()` — epoch **milliseconds**. The `(updatedAt, path)` keyset
+> stays correct at any granularity, but ms keeps ties (and the pagination through
+> them) rare.
 
 ### a sync cycle: reconcile, then push, then pull
 
@@ -486,9 +498,14 @@ decision, not an accident.
 Because the server can't inspect contents, it must enforce policy on the
 **envelope**:
 
-- on **every** `POST /v1/files/sign` (both `op: 'put'` and `op: 'get'`), the
-  Worker **must verify each requested path is under `/users/{authedUid}/`** —
-  otherwise one user could mint a URL for another's path;
+- the wire carries each path **relative to the user's root** (`meta/{id}.enc`, …),
+  never the `/users/{uid}/` prefix. On **every** `POST /v1/files/sign` (and every
+  `ops/*` / `files/*` call) the Worker derives the `/users/{authedUid}/` prefix
+  from the session and prepends it (`lib/r2-keys.ts`), so a path can only ever
+  resolve under the **caller's** namespace — one user **cannot** name another's
+  object. The contract (`syncPathSchema` in `@stxapps/shared`) additionally pins
+  the shape to a known namespace, so there's no separator or traversal sequence to
+  smuggle a key outside it;
 - on `op: 'put'`, additionally enforce a **per-user file-count and byte quota** at
   issuance — the only place abuse can be bounded when content is opaque. `op: 'get'`
   needs no quota (reading your own data), so download URLs can be **minted in
@@ -496,10 +513,13 @@ Because the server can't inspect contents, it must enforce policy on the
 
 The byte total backing that quota is **not** summed from the op log — the log is
 compactable and disposable, so it would undercount. It comes from a separate,
-durable **per-path size map** (`path → size`, set from the commit `HEAD` on `put`,
-read-and-subtracted on `delete` — a delete has no object left to `HEAD`, so the
-size to free must already be recorded). That map, not the op log, is where size is
-persisted; the op-log row is just `{ seq, op, path, updated_at }`.
+durable **per-path size map** — the `file_sizes` table in the same per-user DO
+(`do/repositories/file-sizes.ts`): `path → size`, set from the commit `HEAD` on
+`put`, read-and-subtracted on `delete` (a delete has no object left to `HEAD`, so
+the size to free must already be recorded). That map, not the op log, is where size
+is persisted; the op-log row is just `{ seq, op, path, updated_at }`. The limits
+themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the DO's
+`usage()` before any `put` URL is minted.
 
 ### where TanStack Query fits
 

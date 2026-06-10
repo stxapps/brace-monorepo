@@ -1,7 +1,11 @@
 import { DurableObject } from 'cloudflare:workers';
 
+import type { OpEntry, OpsListResponse } from '@stxapps/shared';
+
 import type { Bindings } from '../lib/env';
-import { type OpKind, type OpLogEntity, opLogsRepo } from './repositories/op-logs';
+import { userFileKey } from '../lib/r2-keys';
+import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
+import { type OpKind, opLogsRepo } from './repositories/op-logs';
 
 // Per-user data store. One Durable Object instance per user (addressed by
 // idFromName(userId) — see userDataStub below), giving each user an isolated,
@@ -23,6 +27,11 @@ import { type OpKind, type OpLogEntity, opLogsRepo } from './repositories/op-log
 const MIGRATIONS: string[][] = [
   // 0 -> 1: initial append-only op log. AUTOINCREMENT (not bare rowid) so seq is
   // strictly increasing and never reused even after compaction deletes old rows.
+  // the keyset cursor index + the durable per-path size map. The op-list
+  // pull is a keyset scan ordered by (updated_at, path) (op-logs.ts listSince), so
+  // index that exact tuple. `file_sizes` is the quota's source of truth — set on
+  // every committed put, read-and-subtracted on delete (file-sizes.ts) — kept
+  // separate from the compactable op log so it never undercounts.
   [
     `CREATE TABLE IF NOT EXISTS op_logs (
        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +40,11 @@ const MIGRATIONS: string[][] = [
        updated_at INTEGER NOT NULL
      )`,
     `CREATE INDEX IF NOT EXISTS idx_op_logs_path ON op_logs(path)`,
+    `CREATE INDEX IF NOT EXISTS idx_op_logs_cursor ON op_logs(updated_at, path)`,
+    `CREATE TABLE IF NOT EXISTS file_sizes (
+       path TEXT PRIMARY KEY,
+       size INTEGER NOT NULL
+     )`,
   ],
 ];
 
@@ -68,39 +82,64 @@ export class UserDataDO extends DurableObject<Bindings> {
     });
   }
 
-  // RPC: incremental pull. Ops after `since`, oldest first, capped at `limit`.
-  listOpsSince(since: number, limit = 500): OpLogEntity[] {
-    return opLogsRepo(this.sql).listSince(since, limit);
+  // RPC: incremental pull (GET /v1/ops/list). Keyset scan over the compound cursor
+  // (updatedAt, path) plus the retained-range bounds the client routes on. Asks for
+  // limit+1 to detect `hasMore` without a second COUNT, then trims to `limit`. The
+  // wire shape drops the internal `seq` (op-logs.ts keeps it for ordering only).
+  listOps(since: number | null, sincePath: string | null, limit = 500): OpsListResponse {
+    const repo = opLogsRepo(this.sql);
+    const rows = repo.listSince(since, sincePath, limit + 1);
+    const hasMore = rows.length > limit;
+    const ops: OpEntry[] = rows
+      .slice(0, limit)
+      .map((r) => ({ op: r.op, path: r.path, updatedAt: r.updatedAt }));
+    const { oldestUpdatedAt, newestUpdatedAt } = repo.bounds();
+    return { ops, oldestUpdatedAt, newestUpdatedAt, hasMore };
   }
 
-  // RPC: record a committed file mutation. Call AFTER the R2 write succeeds — the
-  // log must never point at an object that isn't in R2 (op-without-object 404s
-  // every client that pulls it; an object with no op is harmless and healed by
-  // the fallback R2 listing). See docs/local-first-sync.md.
+  // RPC: record a committed file mutation (POST /v1/ops/commit). Call AFTER the R2
+  // write succeeds — the log must never point at an object that isn't in R2
+  // (op-without-object 404s every client that pulls it; an object with no op is
+  // harmless and healed by the fallback R2 listing). See docs/local-first-sync.md.
   //
-  // The stored `updated_at` is the op log's cursor clock, sourced per op kind:
+  // `path` is the wire-relative path; the R2 object lives under the per-user prefix,
+  // so we build the full key from `userId` (the DO can't recover its own
+  // idFromName, so the caller passes it). The stored `updated_at` is the op log's
+  // cursor clock, sourced per op kind:
   //  - put:    R2's authoritative `LastModified`, read via this HEAD. The HEAD is
   //            also the existence check upholding the invariant above — a missing
-  //            object throws, so NO op is logged.
-  //  - delete: the worker's commit clock (no object survives to HEAD). Mixing the
-  //            two clocks is safe because paths are immutable random ids — a path
-  //            is only ever put…put…delete, so a put and a delete on it never have
-  //            to be ordered against each other.
-  // Returns the new monotonic seq the client stores as its cursor.
-  async appendOp(op: OpKind, path: string): Promise<number> {
+  //            object throws, so NO op is logged. R2's reported size is recorded in
+  //            the quota map in the same step.
+  //  - delete: the worker's commit clock (no object survives to HEAD), and the
+  //            path's recorded size is freed from the quota map. Mixing the two
+  //            clocks is safe because paths are immutable random ids — a path is
+  //            only ever put…put…delete, so a put and a delete on it never have to
+  //            be ordered against each other.
+  // Returns the recorded `updatedAt` the client stores and advances its cursor to.
+  async commitOp(userId: string, op: OpKind, path: string): Promise<{ updatedAt: number }> {
+    const sizes = fileSizesRepo(this.sql);
     let updatedAt: number;
     if (op === 'put') {
-      const object = await this.env.USER_FILES.head(path);
+      const object = await this.env.USER_FILES.head(userFileKey(userId, path));
       if (!object) {
         throw new Error(
-          `appendOp: no R2 object at "${path}" — refusing to log a put without an object`,
+          `commitOp: no R2 object at "${path}" — refusing to log a put without an object`,
         );
       }
       updatedAt = object.uploaded.getTime();
+      sizes.set(path, object.size);
     } else {
       updatedAt = Date.now();
+      sizes.remove(path);
     }
-    return opLogsRepo(this.sql).append(op, path, updatedAt);
+    opLogsRepo(this.sql).append(op, path, updatedAt);
+    return { updatedAt };
+  }
+
+  // RPC: current storage usage for this user, read by the `files/sign` put-quota
+  // check. Sourced from the durable size map, never the compactable op log.
+  usage(): FileUsage {
+    return fileSizesRepo(this.sql).usage();
   }
 }
 
