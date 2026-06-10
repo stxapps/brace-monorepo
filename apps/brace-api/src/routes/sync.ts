@@ -16,7 +16,7 @@ import { userDataStub } from '../do/user-data';
 import type { AppEnv } from '../lib/env';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
-import { commitOp, listUserFiles, signUserUrls } from '../services/sync';
+import { commitOp, listUserFiles, signUserFileUrls } from '../services/sync';
 
 // Local-first sync control plane — the four endpoints the background sync engine
 // drives (docs/local-first-sync.md). Every route carries its own '/v1/…' path from
@@ -80,9 +80,9 @@ export const syncRoutes = new Hono<AppEnv>()
       const { op, paths } = c.req.valid('json');
       const { userId } = c.get('session');
       // put: quota-checked at issuance, then short-lived PUT URLs. get: no quota,
-      // longer-lived GET URLs minted in batch. signUserUrls namespaces every path
-      // under the caller's prefix, so cross-user signing is structurally impossible.
-      const urls = await signUserUrls(c.env, userId, op, paths);
+      // longer-lived GET URLs minted in batch. signUserFileUrls namespaces every
+      // path under the caller's prefix, so cross-user signing is structurally impossible.
+      const urls = await signUserFileUrls(c.env, userId, op, paths);
       const body: FilesSignResponse = { urls };
       return c.json(body);
     },

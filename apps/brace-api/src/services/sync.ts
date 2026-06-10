@@ -60,7 +60,7 @@ export async function commitOp(
 // additionally clears the per-user quota at issuance (the only place abuse is
 // boundable when content is opaque); `get` needs no quota (reading your own
 // data), so download URLs batch freely.
-export async function signUserUrls(
+export async function signUserFileUrls(
   env: Bindings,
   userId: string,
   op: SignOp,
