@@ -21,13 +21,13 @@ const GET_URL_TTL_SECONDS = 60 * 60; // 1 hour
 // Assemble the R2 S3 credentials from env, failing loudly if a deploy is missing
 // one — a misconfigured signer must not silently hand out unusable URLs.
 function r2Credentials(env: Bindings): R2Credentials {
-  const { R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = env;
-  if (!R2_ACCOUNT_ID || !R2_BUCKET || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+  const { R2_ACCOUNT_ID, R2_USER_FILES_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = env;
+  if (!R2_ACCOUNT_ID || !R2_USER_FILES_BUCKET || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
     throw new ApiError(500, 'r2_unconfigured', 'R2 signing credentials are not configured');
   }
   return {
     accountId: R2_ACCOUNT_ID,
-    bucket: R2_BUCKET,
+    bucket: R2_USER_FILES_BUCKET,
     accessKeyId: R2_ACCESS_KEY_ID,
     secretAccessKey: R2_SECRET_ACCESS_KEY,
   };

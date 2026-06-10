@@ -56,13 +56,16 @@ export type Bindings = {
 
   // R2 S3-API credentials for presigning. Account id + bucket name are non-secret
   // `vars`; the access key pair are SECRETS (`wrangler secret put R2_ACCESS_KEY_ID
-  // / R2_SECRET_ACCESS_KEY --env …`). All four are per-env (see wrangler.jsonc).
-  // The bucket name is duplicated here because the runtime R2 binding doesn't
-  // expose its own name, and the S3 endpoint path needs it.
+  // / R2_SECRET_ACCESS_KEY --env …`). All are per-env (see wrangler.jsonc). The
+  // account id + access keys are account-scoped, so they're shared across every
+  // bucket; only the bucket *name* is per-bucket (hence the `_USER_FILES_` infix —
+  // a second bucket gets its own `R2_<NAME>_BUCKET` var, same creds). The name is
+  // duplicated here because the runtime R2 binding doesn't expose its own name,
+  // and the S3 endpoint path needs it.
   R2_ACCOUNT_ID: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
-  R2_BUCKET: string;
+  R2_USER_FILES_BUCKET: string;
 
   // --- Rate limiting — native binding, one binding per volume "tier" -------
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"

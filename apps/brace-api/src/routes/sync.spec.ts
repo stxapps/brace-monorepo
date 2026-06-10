@@ -8,9 +8,9 @@ import {
   opsListEndpoint,
 } from '@stxapps/shared';
 
-import { userFileKey } from './lib/r2-keys';
-import { issueSession } from './services/session';
-import { app } from './app';
+import { app } from '../app';
+import { userFileKey } from '../lib/r2-keys';
+import { issueSession } from '../services/session';
 
 // End-to-end coverage of the four-endpoint sync control plane through the real
 // Hono app + the real (miniflare) bindings: a per-user Durable Object op log, R2,

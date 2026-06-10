@@ -59,7 +59,7 @@
         "R2_ACCOUNT_ID": "local-account-id",
         "R2_ACCESS_KEY_ID": "local-access-key-id",
         "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
-        "R2_BUCKET": "brace-user-files-dev",
+        "R2_USER_FILES_BUCKET": "brace-user-files-dev",
       },
       // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
       // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions
@@ -137,7 +137,7 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/deployment.md.
         "R2_ACCOUNT_ID": "TODO: staging Cloudflare account id (same as account_id)",
-        "R2_BUCKET": "brace-user-files-staging",
+        "R2_USER_FILES_BUCKET": "brace-user-files-staging",
       },
       "d1_databases": [
         {
@@ -207,7 +207,7 @@
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/deployment.md.
         "R2_ACCOUNT_ID": "TODO: production Cloudflare account id (same as account_id)",
-        "R2_BUCKET": "brace-user-files-production",
+        "R2_USER_FILES_BUCKET": "brace-user-files-production",
       },
       "d1_databases": [
         {
