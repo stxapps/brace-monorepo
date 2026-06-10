@@ -1,4 +1,4 @@
-import type { FileEntry, SignedUrl } from '@stxapps/shared';
+import type { FilesListResponse, SignedUrl } from '@stxapps/shared';
 
 import type { Bindings } from '../lib/env';
 import { ApiError } from '../lib/errors';
@@ -34,27 +34,30 @@ function r2Credentials(env: Bindings): R2Credentials {
 export function userFilesRepo(env: Bindings) {
   const bucket = env.USER_FILES;
   return {
-    // Page the whole per-user prefix (R2 list caps at 1000/call) into wire-relative
-    // paths with R2's own LastModified — the fallback full sync (GET /v1/files/list)
-    // the client reconciles against.
-    async list(userId: string): Promise<FileEntry[]> {
+    // ONE page of the per-user prefix as wire-relative paths with R2's own
+    // LastModified — the fallback full sync (GET /v1/files/list) the client
+    // reconciles against. The client drives the paging: `pageToken` is R2's own
+    // list cursor passed straight through (opaque), and `nextPageToken` is R2's
+    // cursor when the page is truncated, else null. R2 caps a list at 1000 keys,
+    // so the caller's `limit` rides that same ceiling.
+    async listPage(
+      userId: string,
+      pageToken: string | undefined,
+      limit: number,
+    ): Promise<FilesListResponse> {
       const prefix = userPrefix(userId);
-      const files: FileEntry[] = [];
-      let cursor: string | undefined;
+      const page = await bucket.list({ prefix, cursor: pageToken, limit });
+      const files = [];
 
-      do {
-        const page = await bucket.list({ prefix, cursor });
-        for (const object of page.objects) {
-          const path = stripUserPrefix(userId, object.key);
-          // Defensive: list({ prefix }) only returns keys under the prefix, so a
-          // non-match shouldn't occur — skip rather than serve a malformed path.
-          if (path === null) continue;
-          files.push({ path, updatedAt: object.uploaded.getTime() });
-        }
-        cursor = page.truncated ? page.cursor : undefined;
-      } while (cursor);
+      for (const object of page.objects) {
+        const path = stripUserPrefix(userId, object.key);
+        // Defensive: list({ prefix }) only returns keys under the prefix, so a
+        // non-match shouldn't occur — skip rather than serve a malformed path.
+        if (path === null) continue;
+        files.push({ path, updatedAt: object.uploaded.getTime() });
+      }
 
-      return files;
+      return { files, nextPageToken: page.truncated ? page.cursor : null };
     },
 
     // HEAD a user's object: R2's LastModified (as `updatedAt`) + `size`, or null if

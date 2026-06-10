@@ -90,10 +90,19 @@ op-log entries) and `files` (the R2 objects):
 
 ```
 GET  /v1/ops/list      incremental pull: ops since the cursor      (→ the ops/list endpoint)
-POST /v1/ops/commit    record a committed mutation (HEADs R2)      (→ the three flows: push)
-GET  /v1/files/list    fallback full R2 listing (download-truth)   (→ fallback full sync)
+POST /v1/ops/commit    record committed mutations (batched, HEADs R2) (→ the three flows: push)
+GET  /v1/files/list    fallback R2 listing, paginated (download-truth) (→ fallback full sync)
 POST /v1/files/sign    mint presigned R2 URL(s); op: 'put' | 'get' (→ authorization & quota)
 ```
+
+**Every endpoint is bounded — never one-path-per-call, never unbounded.** The two
+shapes bound differently: the **reads** (`ops/list`, `files/list`) return many and
+**paginate** under a `limit`/page size, so a client pages forward with a cursor
+rather than pulling an open-ended response; the **writes** (`ops/commit`,
+`files/sign`) accept many and **batch** under a `.min(1).max(1000)` array, so a
+first-sync push of thousands of files is a handful of round trips, and a request
+over the cap `400`s at the contract before any work runs (the abuse gate). The
+batch caps for the two writes are the same number (`1000`).
 
 All four live in `apps/brace-api/src/routes/sync.ts` (each behind `requireAuth`).
 The op-plane endpoints (`ops/list`, `ops/commit`) are thin passthroughs to the
@@ -177,7 +186,7 @@ is:
   worse**: every client that pulls that op tries to download a 404.
 
 That asymmetry is exactly why the op-log append runs **after** the R2 write
-succeeds (see the `commitOp` comment in `user-data.ts`).
+succeeds (see the `commitOps` comment in `user-data.ts`).
 
 ### data model: everything is one entity per file
 
@@ -241,28 +250,45 @@ create / edit a bookmark:  upload content files first, metadata file LAST
 delete a bookmark:         delete metadata first, then content files
 ```
 
-The per-file commit protocol (3 round-trips):
+The commit protocol (3 round-trips), **batched** across files — `files/sign` and
+`ops/commit` each take an array (up to 1000), so a multi-file create or a
+first-sync push is a handful of round trips, not one per file:
 
 1. `POST /v1/files/sign` with `{ op: 'put', paths: [...] }` to mint signed upload
    URL(s) (the Worker verifies each path is under `/users/{authedUid}/` and checks
    quota — see _authorization & quota_);
-2. encrypt and PUT the blob directly to R2 via the signed URL;
-3. `POST /v1/ops/commit` with the uploaded path; the Worker **`HEAD`s the object**
-   — which both confirms it exists in R2 and reads R2's authoritative
-   `LastModified` — records the op with that timestamp (the DO's `commitOp`, which
-   also stores R2's reported object size in the per-user quota map), and returns
-   `{ updatedAt }`. The `HEAD` does double duty: existence check _and_ the single
-   clock that incremental and fallback both compare against.
+2. encrypt and PUT each blob directly to R2 via its signed URL;
+3. `POST /v1/ops/commit` with `{ ops: [{ op, path }, …] }`; for each `put` the
+   Worker **`HEAD`s the object** — which both confirms it exists in R2 and reads
+   R2's authoritative `LastModified` — records the op with that timestamp (the DO's
+   `commitOps`, which also stores R2's reported object size in the per-user quota
+   map). The per-put HEADs fan out in parallel; one DO RPC then writes the whole
+   batch. The Worker returns `{ results: [{ path, updatedAt }, …], failed: [{ path,
+   reason }, …] }` — `results` for the committed ops, `failed` for the refused ones.
+   The `HEAD` does double duty: existence check _and_ the single clock that
+   incremental and fallback both compare against.
 
-The pending-ops entry stays in the queue until step 3 returns. **Crash recovery
-falls out of this for free:** if the client dies between the R2 PUT and the
-commit, the entry is still queued; on retry it re-PUTs (harmless — a fresh IV,
-but R2 PUTs are atomic so it just overwrites with equivalent ciphertext) and
-commits. **Commit is idempotent in effect:** re-committing a path appends another
-op row (the log isn't deduped on write), but applying any op just means
-"re-download the latest version of that path," so a duplicate costs one redundant
-download and nothing else — server-side op coalescing (see _deferred_) trims the
-extra rows later. Never fail a commit on a duplicate path.
+A `put` whose R2 object is **missing** (its PUT never landed, or died before the
+commit) is **not recorded — logging it would break the op-without-object
+invariant** — and is reported in `failed` with `reason: 'no_object'`. So every op
+the client sent gets an **explicit per-path outcome** (a path in neither `results`
+nor `failed` is a server bug the client can detect), rather than inferring failure
+from absence. On `no_object` the client re-PUTs + re-commits the gap next drain;
+commit is idempotent, so a retry costs at most one redundant download. `reason` is
+a typed enum so the deferred R2-conditional-write upgrade can add a `'stale'`
+outcome (client action: re-_pull_ then retry — a different branch). A `delete`
+always commits.
+
+The pending-ops entry stays in the queue until its path appears in step 3's
+`results` (a `failed` path stays queued for retry). **Crash recovery falls out of this for free:** if the client dies
+between the R2 PUT and the commit, the entry is still queued; on retry it re-PUTs
+(harmless — a fresh IV, but R2 PUTs are atomic so it just overwrites with
+equivalent ciphertext) and commits. **Commit is idempotent in effect:**
+re-committing a path appends another op row (the log isn't deduped on write), but
+applying any op just means "re-download the latest version of that path," so a
+duplicate costs one redundant download and nothing else — server-side op
+coalescing (see _deferred_) trims the extra rows later. Never fail a commit on a
+duplicate path.
 
 The store records the **R2 `LastModified` returned by commit** as the file's
 `updatedAt` and advances `syncCursor` to it — never the local clock. Every `put`
@@ -406,12 +432,30 @@ When routing lands on fallback (`since` older than `oldestUpdatedAt`, or ahead o
 `newestUpdatedAt`), the op log can't reconstruct what changed, so the client
 reconciles directly against R2. The fallback endpoint lists paths with their
 `updatedAt` — which is **R2's own `LastModified`** (the timestamp R2 stamps on
-every PUT, and the same value the client stores locally on each sync):
+every PUT, and the same value the client stores locally on each sync) — **one R2
+page per call**:
 
 ```
-GET /v1/files/list
-→ [ { path: "meta/m_abc.enc", updatedAt: "2026-04-13T10:00:00Z" }, ... ]
+GET /v1/files/list?limit=1000
+→ {
+    files: [ { path: "meta/m_abc.enc", updatedAt: 1744538400000 }, ... ],
+    nextPageToken: "…" | null,   // R2's opaque list cursor; null when complete
+  }
 ```
+
+The whole namespace can be thousands of objects, and each R2 `list()` is one
+subrequest capped at 1000 keys, so the listing is paged: the client passes
+`nextPageToken` back as `pageToken` and **loops until it comes back null**.
+`pageToken` is **opaque** — it's R2's own list cursor relayed straight through, not
+a path or a keyset on `(updatedAt, path)` like `ops/list` (that endpoint queries
+the DO's SQLite, where we own the ordering; this one rides R2's native cursor over
+a listing we don't control — R2 lists in key order, not time order). Two
+consequences: the client **can't stop early** (the newest `updatedAt` can sit on
+any page, since key order ≠ time order — see the cursor note below), and the
+listing is **not a snapshot** (pages span concurrent writes). The non-snapshot is
+safe here precisely because fallback is download-authoritative and
+`updatedAt`-compared: anything that changes mid-listing carries a fresh
+`LastModified` and is simply caught on the next sync.
 
 Using R2's own clock — not a separately-minted timestamp — is what lets fallback
 recover a _commit-died edit_ (`object-without-op`, case B): the new bytes carry a
@@ -434,8 +478,10 @@ no user prompt. The comparison uses the **stored server `updatedAt`**, never
 Dexie's local write time.
 
 After reconciling, set `syncCursor` to the **newest `updatedAt` among the listed
-files** — reconstructed straight from R2, with no dependence on the op log — so
-the next visit resumes normal incremental sync. In the `since > newestUpdatedAt`
+files — taken across _all_ pages**, not just the last one (R2 returns key order,
+not time order, so the newest timestamp can land on any page) — reconstructed
+straight from R2, with no dependence on the op log, so the next visit resumes
+normal incremental sync. In the `since > newestUpdatedAt`
 case this lowers the cursor _below_ the stale value it had: R2 is the source of
 truth, the old cursor pointed past what exists, so it's reset down to reality.
 This is the resume a `seq` cursor couldn't give you: there is no sequence number

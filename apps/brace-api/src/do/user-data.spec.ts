@@ -10,23 +10,24 @@ import { userDataStub } from './user-data';
 // the cursor semantics hold, and the quota map tracks. RPC methods are awaited
 // across the stub.
 //
-// commitOp is now a pure write against the DO's own SQLite — the R2 HEAD (put
-// existence check + R2's LastModified/size) lives in services/sync.ts, which
-// passes the results in. So these tests hand commitOp explicit (updatedAt, size)
-// values and assert they round-trip; the R2-first handshake is covered end-to-end
-// in routes/sync.spec.ts.
+// commitOps is now a pure batched write against the DO's own SQLite — the R2 HEAD
+// (put existence check + R2's LastModified/size, and dropping puts with no object)
+// lives in services/sync.ts, which passes only the survivors in. So these tests
+// hand commitOps explicit (updatedAt, size) entries and assert they round-trip;
+// the R2-first handshake is covered end-to-end in routes/sync.spec.ts.
 describe('UserDataDO op log', () => {
   it('commits ops and reads them back over the (updatedAt, path) cursor', async () => {
     const stub = userDataStub(env, 'user-a');
 
-    const putA = await stub.commitOp('put', 'meta/a.enc', 1000, 3);
-    const putB = await stub.commitOp('put', 'meta/b.enc', 2000, 5);
-    const delA = await stub.commitOp('delete', 'meta/a.enc', 3000, 0);
+    const { results } = await stub.commitOps([
+      { op: 'put', path: 'meta/a.enc', updatedAt: 1000, size: 3 },
+      { op: 'put', path: 'meta/b.enc', updatedAt: 2000, size: 5 },
+      { op: 'delete', path: 'meta/a.enc', updatedAt: 3000, size: 0 },
+    ]);
 
-    // commitOp returns the recorded updatedAt the client advances its cursor to.
-    expect(putA.updatedAt).toBe(1000);
-    expect(putB.updatedAt).toBe(2000);
-    expect(delA.updatedAt).toBe(3000);
+    // commitOps returns each recorded updatedAt (input order) the client advances
+    // its cursor to.
+    expect(results.map((r) => r.updatedAt)).toEqual([1000, 2000, 3000]);
 
     // A full pull from the start (null cursor) returns every op, ordered by
     // (updatedAt, path).
@@ -47,7 +48,7 @@ describe('UserDataDO op log', () => {
     const stub = userDataStub(env, 'user-page');
     let ts = 1000;
     for (const id of ['a', 'b', 'c']) {
-      await stub.commitOp('put', `meta/${id}.enc`, ts, 1);
+      await stub.commitOps([{ op: 'put', path: `meta/${id}.enc`, updatedAt: ts, size: 1 }]);
       ts += 1000;
     }
 
@@ -76,7 +77,9 @@ describe('UserDataDO op log', () => {
   it('isolates each user log in its own DO instance', async () => {
     // Distinct userIds map to distinct DO instances (idFromName), so logs don't
     // bleed across users — the per-user isolation the DO model buys us.
-    await userDataStub(env, 'user-b').commitOp('put', 'meta/only.enc', 1000, 1);
+    await userDataStub(env, 'user-b').commitOps([
+      { op: 'put', path: 'meta/only.enc', updatedAt: 1000, size: 1 },
+    ]);
 
     const otherUser = await userDataStub(env, 'user-c').listOps(null, null, 500);
     expect(otherUser.ops).toHaveLength(0);

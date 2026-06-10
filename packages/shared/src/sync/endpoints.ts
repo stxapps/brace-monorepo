@@ -84,29 +84,61 @@ export const opsListEndpoint = defineEndpoint({
   response: opsListResponseSchema,
 });
 
-// --- POST /v1/ops/commit — record a committed mutation ----------------------
+// --- POST /v1/ops/commit — record committed mutations -----------------------
 
-// Sent AFTER the client's R2 PUT (for `put`) succeeds. The server HEADs the
-// object — confirming it exists and reading R2's authoritative `LastModified` —
-// records the op with that timestamp, and returns it. A `delete` has no surviving
-// object to HEAD, so it's stamped on the commit clock server-side. Commit is
-// idempotent in effect: re-committing a path just appends another op row, which
-// costs one redundant download and nothing else (see "the three flows: push").
-export const opsCommitRequestSchema = z.object({
+// One mutation to record, sent AFTER its R2 PUT (for `put`) succeeds. Batched —
+// the client drains its pending-ops queue in one round trip (a first-sync push is
+// thousands of files), and the server fans the per-put HEADs out in parallel
+// rather than paying a request each. Capped at 1000 (same bound as files/sign);
+// over the cap the whole request 400s at the contract before any work runs — the
+// abuse gate.
+export const commitOpSchema = z.object({
   op: opKindSchema,
   path: syncPathSchema,
 });
+export type CommitOp = z.infer<typeof commitOpSchema>;
+
+export const opsCommitRequestSchema = z.object({
+  ops: z.array(commitOpSchema).min(1).max(1000),
+});
 export type OpsCommitRequest = z.infer<typeof opsCommitRequestSchema>;
 
-// The R2 `LastModified` (put) or deletion commit time (delete) the server
-// recorded. The client stores this as the path's `updatedAt` and advances its
-// `syncCursor` to it — never the local clock.
-export const opsCommitResponseSchema = z.object({
+// One COMMITTED op: the path and the `updatedAt` the server stamped — R2's
+// `LastModified` for a put (read via the commit HEAD), the deletion commit time
+// for a delete. The client stores this as the path's `updatedAt`, advances its
+// `syncCursor` to it (never the local clock), and clears the path from its
+// pending-ops queue.
+export const commitResultSchema = z.object({
+  path: z.string(),
   updatedAt: z.number(),
+});
+export type CommitResult = z.infer<typeof commitResultSchema>;
+
+// One op the server did NOT record, with the reason — so the client gets an
+// explicit outcome per path rather than inferring failure from absence. `reason`
+// is an enum, not a free string, so the client can branch:
+//  - 'no_object' — the `put`'s R2 object is missing (its PUT never landed, or died
+//    before this commit). Recording it would break the op-without-object invariant
+//    (every puller would 404), so the server refuses it; the client re-PUTs + re-
+//    commits. Commit is idempotent, so a retry costs at most one redundant download.
+// (R2 conditional writes, when added, will introduce a 'stale' reason whose client
+// action is re-PULL then retry — a different branch, which is why this is typed.)
+export const commitFailureSchema = z.object({
+  path: z.string(),
+  reason: z.enum(['no_object']),
+});
+export type CommitFailure = z.infer<typeof commitFailureSchema>;
+
+// `results` are the committed ops; `failed` are the ones refused, with a reason.
+// Together they account for every op the client sent (a path in neither is a
+// server bug the client can detect). `failed` is empty in the common case.
+export const opsCommitResponseSchema = z.object({
+  results: z.array(commitResultSchema),
+  failed: z.array(commitFailureSchema),
 });
 export type OpsCommitResponse = z.infer<typeof opsCommitResponseSchema>;
 
-// POST /v1/ops/commit → { updatedAt }
+// POST /v1/ops/commit → { results: [{ path, updatedAt }, …], failed: [{ path, reason }, …] }
 export const opsCommitEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/ops/commit`,
@@ -116,10 +148,15 @@ export const opsCommitEndpoint = defineEndpoint({
 
 // --- GET /v1/files/list — fallback full R2 listing --------------------------
 
-// No request fields: the user is identified by the bearer token, and the listing
-// is the whole namespace. The empty object keeps the contract uniform with the
-// rest (the client still sends no params for a GET).
-export const filesListRequestSchema = z.object({});
+// Paginated: the whole namespace can be thousands of objects, and each R2
+// `list()` is one subrequest capped at 1000 keys, so the server can't safely
+// stream it all in one Worker invocation. `pageToken` is OPAQUE — it's R2's own
+// list cursor passed straight back; never parse it or treat it as a path. Absent
+// on the first page. `limit` caps the page at R2's 1000-key ceiling.
+export const filesListRequestSchema = z.object({
+  pageToken: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(1000),
+});
 export type FilesListRequest = z.infer<typeof filesListRequestSchema>;
 
 // One R2 object as the fallback sees it: its relative `path` and R2's own
@@ -132,12 +169,20 @@ export const fileEntrySchema = z.object({
 });
 export type FileEntry = z.infer<typeof fileEntrySchema>;
 
-// The full listing as a bare array (download-authoritative truth). The server
-// pages through R2 internally, so the client gets every object in one response.
-export const filesListResponseSchema = z.array(fileEntrySchema);
+// One page of the download-authoritative listing. `nextPageToken` is R2's cursor
+// when the listing is truncated, else null. The client pages until it's null and
+// sets `syncCursor` to the newest `updatedAt` across ALL pages — R2 lists in key
+// order, not time order, so the newest timestamp can sit on any page. The listing
+// is NOT a snapshot (pages span concurrent writes), which is safe here because
+// fallback is download-authoritative and `updatedAt`-compared — anything that
+// changes mid-listing carries a fresh `LastModified` and is caught next sync.
+export const filesListResponseSchema = z.object({
+  files: z.array(fileEntrySchema),
+  nextPageToken: z.string().nullable(),
+});
 export type FilesListResponse = z.infer<typeof filesListResponseSchema>;
 
-// GET /v1/files/list → [{ path, updatedAt }, …]
+// GET /v1/files/list?pageToken=…&limit=… → { files: [{ path, updatedAt }, …], nextPageToken }
 export const filesListEndpoint = defineEndpoint({
   method: 'GET',
   path: `${API_V1}/files/list`,

@@ -1,6 +1,13 @@
-import type { FileEntry, OpsCommitResponse, SignedUrl, SignOp } from '@stxapps/shared';
+import type {
+  CommitFailure,
+  CommitOp,
+  FilesListResponse,
+  OpsCommitResponse,
+  SignedUrl,
+  SignOp,
+} from '@stxapps/shared';
 
-import type { OpKind } from '../do/repositories/op-logs';
+import type { CommitEntry } from '../do/user-data';
 import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { ApiError } from '../lib/errors';
@@ -20,38 +27,57 @@ import { userFilesRepo } from '../r2/user-files';
 const PUT_URL_TTL_SECONDS = 5 * 60; // 5 minutes
 const GET_URL_TTL_SECONDS = 60 * 60; // 1 hour
 
-// Fallback full sync (GET /v1/files/list): every object under the user's prefix
-// with R2's own `LastModified` — the download-authoritative truth the client
-// reconciles against. The R2 paging lives in the bucket gateway.
-export async function listUserFiles(env: Bindings, userId: string): Promise<FileEntry[]> {
-  return userFilesRepo(env).list(userId);
-}
-
-// Record a committed mutation (POST /v1/ops/commit) — the R2-first, log-last
-// handshake. For a `put` we HEAD R2: that doubles as the existence check
-// upholding the op-without-object invariant (a missing object throws here, so NO
-// op is logged) and reads R2's authoritative `LastModified` + size, which the DO
-// stores as the op's cursor clock and quota entry. A `delete` has no surviving
-// object to HEAD, so the deletion is stamped on the worker's commit clock and the
-// path's recorded size is freed. The DO append itself is a pure SQLite write.
-export async function commitOp(
+// Fallback full sync (GET /v1/files/list): ONE page of objects under the user's
+// prefix with R2's own `LastModified` — the download-authoritative truth the
+// client reconciles against. The client drives the paging via `pageToken` (R2's
+// opaque list cursor); the R2 call lives in the bucket gateway.
+export async function listUserFiles(
   env: Bindings,
   userId: string,
-  op: OpKind,
-  path: string,
-): Promise<OpsCommitResponse> {
-  const stub = userDataStub(env, userId);
-  if (op === 'delete') return stub.commitOp('delete', path, Date.now(), 0);
+  pageToken: string | undefined,
+  limit: number,
+): Promise<FilesListResponse> {
+  return userFilesRepo(env).listPage(userId, pageToken, limit);
+}
 
-  const object = await userFilesRepo(env).head(userId, path);
-  if (!object) {
-    throw new ApiError(
-      409,
-      'no_object',
-      `no R2 object at "${path}" — refusing to log a put without an object`,
-    );
+// Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last
+// handshake, batched. For each `put` we HEAD R2: that doubles as the existence
+// check upholding the op-without-object invariant and reads R2's authoritative
+// `LastModified` + size, which the DO stores as the op's cursor clock and quota
+// entry. The HEADs fan out in parallel — the win of batching. A `put` whose
+// object is MISSING is not logged (that would 404 every puller) but is reported in
+// `failed` with reason 'no_object', so the client gets an explicit per-path
+// outcome and re-PUTs + re-commits. A `delete` has no surviving object to HEAD, so
+// it's stamped on the worker's commit clock and the path's recorded size is freed.
+// A single DO RPC then writes every surviving entry (one round trip to the user's
+// serialized SQLite). `results` + `failed` together account for every op sent.
+export async function commitOps(
+  env: Bindings,
+  userId: string,
+  ops: CommitOp[],
+): Promise<OpsCommitResponse> {
+  const repo = userFilesRepo(env);
+  const now = Date.now();
+
+  const resolved = await Promise.all(
+    ops.map(async ({ op, path }): Promise<CommitEntry | CommitFailure> => {
+      if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
+      const object = await repo.head(userId, path);
+      if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
+      return { op, path, updatedAt: object.updatedAt, size: object.size };
+    }),
+  );
+
+  const entries: CommitEntry[] = [];
+  const failed: CommitFailure[] = [];
+  for (const r of resolved) {
+    if ('reason' in r) failed.push(r);
+    else entries.push(r);
   }
-  return stub.commitOp('put', path, object.updatedAt, object.size);
+
+  if (entries.length === 0) return { results: [], failed };
+  const { results } = await userDataStub(env, userId).commitOps(entries);
+  return { results, failed };
 }
 
 // Mint presigned R2 URLs (POST /v1/files/sign). Paths arrive already shape-

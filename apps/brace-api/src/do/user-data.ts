@@ -1,10 +1,21 @@
 import { DurableObject } from 'cloudflare:workers';
 
-import type { OpEntry, OpsListResponse } from '@stxapps/shared';
+import type { CommitResult, OpEntry, OpsListResponse } from '@stxapps/shared';
 
 import type { Bindings } from '../lib/env';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
 import { type OpKind, opLogsRepo } from './repositories/op-logs';
+
+// One mutation ready to record — what the service hands the DO after resolving
+// each op against R2. `updatedAt`/`size` are sourced per kind in services/sync.ts:
+// a put carries R2's `LastModified` + reported size; a delete carries the worker's
+// commit clock and size 0 (the freed size is read from the quota map, not here).
+export type CommitEntry = {
+  op: OpKind;
+  path: string;
+  updatedAt: number;
+  size: number;
+};
 
 // Per-user data store. One Durable Object instance per user (addressed by
 // idFromName(userId) — see userDataStub below), giving each user an isolated,
@@ -96,30 +107,39 @@ export class UserDataDO extends DurableObject<Bindings> {
     return { ops, oldestUpdatedAt, newestUpdatedAt, hasMore };
   }
 
-  // RPC: record a committed file mutation (POST /v1/ops/commit). A pure write
-  // against this DO's own SQLite — the R2 side (the put existence check + reading
-  // R2's `LastModified`/size) is done by the caller in services/sync.ts, which
-  // passes the results in. The log must never point at an object that isn't in R2
-  // (op-without-object 404s every client that pulls it; an object with no op is
-  // harmless and healed by the fallback R2 listing), so the service HEADs R2 and
-  // refuses to call this for a put with no object. See docs/local-first-sync.md.
+  // RPC: record committed file mutations (POST /v1/ops/commit), batched. Pure
+  // writes against this DO's own SQLite — the R2 side (each put's existence check
+  // + reading R2's `LastModified`/size, and dropping puts with no object) is done
+  // by the caller in services/sync.ts, which passes only the survivors in. The log
+  // must never point at an object that isn't in R2 (op-without-object 404s every
+  // client that pulls it; an object with no op is harmless and healed by the
+  // fallback R2 listing), so the service HEADs R2, never hands a put without an
+  // object here, and reports those in the response's `failed` (not this RPC, which
+  // only ever sees survivors and so returns only `results`). See
+  // docs/local-first-sync.md.
   //
-  // `path` is the wire-relative path (the DO is the user's whole scope, so rows
-  // carry no userId). `updatedAt` is the op log's cursor clock, sourced per kind:
+  // Each entry's `path` is the wire-relative path (the DO is the user's whole
+  // scope, so rows carry no userId). `updatedAt` is the op log's cursor clock,
+  // sourced per kind by the service:
   //  - put:    R2's authoritative `LastModified`, with `size` its reported size,
   //            recorded in the quota map.
   //  - delete: the worker's commit clock (no object survives to HEAD), and the
   //            path's recorded size is freed from the quota map (`size` ignored).
   // Mixing the two clocks is safe because paths are immutable random ids — a path
   // is only ever put…put…delete, so a put and a delete on it never have to be
-  // ordered against each other.
-  // Returns the recorded `updatedAt` the client stores and advances its cursor to.
-  commitOp(op: OpKind, path: string, updatedAt: number, size: number): { updatedAt: number } {
+  // ordered against each other. Running the whole batch in one RPC keeps it to a
+  // single round trip to this serialized SQLite. Returns each entry's recorded
+  // `updatedAt`, in input order, for the client to store and advance its cursor to.
+  commitOps(entries: CommitEntry[]): { results: CommitResult[] } {
     const sizes = fileSizesRepo(this.sql);
-    if (op === 'put') sizes.set(path, size);
-    else sizes.remove(path);
-    opLogsRepo(this.sql).append(op, path, updatedAt);
-    return { updatedAt };
+    const ops = opLogsRepo(this.sql);
+    const results = entries.map(({ op, path, updatedAt, size }) => {
+      if (op === 'put') sizes.set(path, size);
+      else sizes.remove(path);
+      ops.append(op, path, updatedAt);
+      return { path, updatedAt };
+    });
+    return { results };
   }
 
   // RPC: current storage usage for this user, read by the `files/sign` put-quota

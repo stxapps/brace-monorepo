@@ -16,7 +16,7 @@ import { userDataStub } from '../do/user-data';
 import type { AppEnv } from '../lib/env';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
-import { commitOp, listUserFiles, signUserFileUrls } from '../services/sync';
+import { commitOps, listUserFiles, signUserFileUrls } from '../services/sync';
 
 // Local-first sync control plane — the four endpoints the background sync engine
 // drives (docs/local-first-sync.md). Every route carries its own '/v1/…' path from
@@ -49,26 +49,31 @@ export const syncRoutes = new Hono<AppEnv>()
     );
     return c.json(body);
   })
-  // --- ops/commit — record a committed mutation ----------------------------
+  // --- ops/commit — record committed mutations (batched) -------------------
   .post(
     opsCommitEndpoint.path,
     rateLimit('tight', userRateLimitKey),
     zValidator('json', opsCommitEndpoint.request),
     async (c) => {
-      const { op, path } = c.req.valid('json');
+      const { ops } = c.req.valid('json');
       const { userId } = c.get('session');
-      // For a put the service HEADs the object (existence check + R2's LastModified +
-      // its size for the quota map); for a delete it stamps the commit clock and
-      // frees the size. A put with no R2 object throws — never log an op the log
-      // can't back (op-without-object 404s every puller). See docs/local-first-sync.md.
-      const body: OpsCommitResponse = await commitOp(c.env, userId, op, path);
+      // For each put the service HEADs the object (existence check + R2's
+      // LastModified + its size for the quota map); for a delete it stamps the
+      // commit clock and frees the size. A put with no R2 object is dropped from
+      // the batch — never log an op the log can't back (op-without-object 404s
+      // every puller), so `results` omits it and the client retries. The contract
+      // caps `ops` at 1000; over the cap zValidator 400s before any work runs.
+      const body: OpsCommitResponse = await commitOps(c.env, userId, ops);
       return c.json(body);
     },
   )
-  // --- files/list — fallback full R2 listing -------------------------------
+  // --- files/list — fallback R2 listing (paginated) ------------------------
   .get(filesListEndpoint.path, zValidator('query', filesListEndpoint.request), async (c) => {
+    const { pageToken, limit } = c.req.valid('query');
     const { userId } = c.get('session');
-    const body: FilesListResponse = await listUserFiles(c.env, userId);
+    // One R2 page per call; the client pages via nextPageToken (R2's opaque list
+    // cursor) until it's null. See docs/local-first-sync.md "fallback full sync".
+    const body: FilesListResponse = await listUserFiles(c.env, userId, pageToken, limit);
     return c.json(body);
   })
   // --- files/sign — mint presigned R2 URL(s) -------------------------------

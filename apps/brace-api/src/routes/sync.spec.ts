@@ -43,7 +43,7 @@ describe('sync control plane', () => {
         (
           await app.request(
             opsCommitEndpoint.path,
-            json({}, { op: 'put', path: 'meta/a.enc' }),
+            json({}, { ops: [{ op: 'put', path: 'meta/a.enc' }] }),
             env,
           )
         ).status,
@@ -68,15 +68,21 @@ describe('sync control plane', () => {
 
       const commit = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { op: 'put', path: 'meta/m1.enc' }),
+        json(auth, { ops: [{ op: 'put', path: 'meta/m1.enc' }] }),
         env,
       );
       expect(commit.status).toBe(200);
-      const committed = (await commit.json()) as { updatedAt: number };
-      expect(typeof committed.updatedAt).toBe('number');
+      const { results, failed } = (await commit.json()) as {
+        results: { path: string; updatedAt: number }[];
+        failed: { path: string; reason: string }[];
+      };
+      expect(failed).toEqual([]);
+      expect(results).toHaveLength(1);
+      expect(results[0].path).toBe('meta/m1.enc');
+      expect(typeof results[0].updatedAt).toBe('number');
       // Commit recorded R2's own LastModified.
       const head = await env.USER_FILES.head(userFileKey(userId, 'meta/m1.enc'));
-      expect(committed.updatedAt).toBe(head?.uploaded.getTime());
+      expect(results[0].updatedAt).toBe(head?.uploaded.getTime());
 
       const list = await app.request(`${opsListEndpoint.path}`, { headers: auth }, env);
       expect(list.status).toBe(200);
@@ -87,10 +93,41 @@ describe('sync control plane', () => {
         hasMore: boolean;
       };
       expect(pulled.ops).toEqual([
-        { op: 'put', path: 'meta/m1.enc', updatedAt: committed.updatedAt },
+        { op: 'put', path: 'meta/m1.enc', updatedAt: results[0].updatedAt },
       ]);
-      expect(pulled.newestUpdatedAt).toBe(committed.updatedAt);
+      expect(pulled.newestUpdatedAt).toBe(results[0].updatedAt);
       expect(pulled.hasMore).toBe(false);
+    });
+
+    it('commits a batch and reports puts whose R2 object is missing in failed', async () => {
+      const { userId, auth } = await authFor('sync-commit-batch-1');
+      // Two of the three puts have objects in R2; the third never landed.
+      await env.USER_FILES.put(userFileKey(userId, 'meta/a.enc'), 'aa');
+      await env.USER_FILES.put(userFileKey(userId, 'files/b.enc'), 'bb');
+
+      const commit = await app.request(
+        opsCommitEndpoint.path,
+        json(auth, {
+          ops: [
+            { op: 'put', path: 'meta/a.enc' },
+            { op: 'put', path: 'meta/missing.enc' },
+            { op: 'put', path: 'files/b.enc' },
+          ],
+        }),
+        env,
+      );
+      expect(commit.status).toBe(200);
+      const { results, failed } = (await commit.json()) as {
+        results: { path: string; updatedAt: number }[];
+        failed: { path: string; reason: string }[];
+      };
+      // The two real objects commit; the missing path is reported in failed.
+      expect(results.map((r) => r.path).sort()).toEqual(['files/b.enc', 'meta/a.enc']);
+      expect(failed).toEqual([{ path: 'meta/missing.enc', reason: 'no_object' }]);
+
+      const list = await app.request(opsListEndpoint.path, { headers: auth }, env);
+      const pulled = (await list.json()) as { ops: { path: string }[] };
+      expect(pulled.ops.map((o) => o.path).sort()).toEqual(['files/b.enc', 'meta/a.enc']);
     });
 
     it('advances past the cursor and reports null bounds for a fresh user', async () => {
@@ -109,24 +146,28 @@ describe('sync control plane', () => {
       const { auth } = await authFor('sync-badpath-1');
       const res = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { op: 'put', path: '../../etc/passwd' }),
+        json(auth, { ops: [{ op: 'put', path: '../../etc/passwd' }] }),
         env,
       );
       expect(res.status).toBe(400);
     });
 
-    it('refuses to commit a put with no R2 object (op-without-object invariant)', async () => {
-      // The service HEADs R2 before logging: a put for a path that isn't in R2
-      // must 409 and leave the log untouched, so no client ever pulls an op that
-      // 404s. (No env.USER_FILES.put here — the object is absent.)
+    it('reports a put with no R2 object in failed without erroring (op-without-object invariant)', async () => {
+      // The service HEADs R2 before logging: a put for a path that isn't in R2 is
+      // refused — the request still 200s with empty results, the path in failed,
+      // and the log untouched, so no client ever pulls an op that 404s. (No
+      // env.USER_FILES.put here — the object is absent.)
       const { auth } = await authFor('sync-noobject-1');
       const res = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { op: 'put', path: 'meta/missing.enc' }),
+        json(auth, { ops: [{ op: 'put', path: 'meta/missing.enc' }] }),
         env,
       );
-      expect(res.status).toBe(409);
-      expect((await res.json()) as { error: string }).toMatchObject({ error: 'no_object' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        results: [],
+        failed: [{ path: 'meta/missing.enc', reason: 'no_object' }],
+      });
 
       const list = await app.request(opsListEndpoint.path, { headers: auth }, env);
       expect(((await list.json()) as { ops: unknown[] }).ops).toHaveLength(0);
@@ -143,9 +184,48 @@ describe('sync control plane', () => {
 
       const res = await app.request(filesListEndpoint.path, { headers: auth }, env);
       expect(res.status).toBe(200);
-      const files = (await res.json()) as { path: string; updatedAt: number }[];
+      const { files, nextPageToken } = (await res.json()) as {
+        files: { path: string; updatedAt: number }[];
+        nextPageToken: string | null;
+      };
       expect(files.map((f) => f.path).sort()).toEqual(['meta/x.enc', 'tags/t.enc']);
       expect(files.every((f) => typeof f.updatedAt === 'number')).toBe(true);
+      // Two objects, well under the page limit, so the listing is complete.
+      expect(nextPageToken).toBeNull();
+    });
+
+    it('pages the listing when more objects remain than the limit', async () => {
+      const { userId, auth } = await authFor('sync-list-page-1');
+      for (const id of ['a', 'b', 'c']) {
+        await env.USER_FILES.put(userFileKey(userId, `meta/${id}.enc`), id);
+      }
+
+      // limit=2 over 3 objects ⇒ first page is full and carries a nextPageToken.
+      const first = await app.request(`${filesListEndpoint.path}?limit=2`, { headers: auth }, env);
+      const page1 = (await first.json()) as {
+        files: { path: string }[];
+        nextPageToken: string | null;
+      };
+      expect(page1.files).toHaveLength(2);
+      expect(typeof page1.nextPageToken).toBe('string');
+
+      // Resume from the token ⇒ the remaining object, no more.
+      const token = encodeURIComponent(page1.nextPageToken as string);
+      const second = await app.request(
+        `${filesListEndpoint.path}?limit=2&pageToken=${token}`,
+        { headers: auth },
+        env,
+      );
+      const page2 = (await second.json()) as {
+        files: { path: string }[];
+        nextPageToken: string | null;
+      };
+      expect(page2.files).toHaveLength(1);
+      expect(page2.nextPageToken).toBeNull();
+
+      // The two pages together cover every object exactly once.
+      const all = [...page1.files, ...page2.files].map((f) => f.path).sort();
+      expect(all).toEqual(['meta/a.enc', 'meta/b.enc', 'meta/c.enc']);
     });
   });
 
