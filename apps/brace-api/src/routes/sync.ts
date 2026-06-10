@@ -16,7 +16,7 @@ import { userDataStub } from '../do/user-data';
 import type { AppEnv } from '../lib/env';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
-import { listUserFiles, signUserUrls } from '../services/sync';
+import { commitOp, listUserFiles, signUserUrls } from '../services/sync';
 
 // Local-first sync control plane — the four endpoints the background sync engine
 // drives (docs/local-first-sync.md). Every route carries its own '/v1/…' path from
@@ -57,11 +57,11 @@ export const syncRoutes = new Hono<AppEnv>()
     async (c) => {
       const { op, path } = c.req.valid('json');
       const { userId } = c.get('session');
-      // For a put the DO HEADs the object (existence check + R2's LastModified +
+      // For a put the service HEADs the object (existence check + R2's LastModified +
       // its size for the quota map); for a delete it stamps the commit clock and
       // frees the size. A put with no R2 object throws — never log an op the log
       // can't back (op-without-object 404s every puller). See docs/local-first-sync.md.
-      const body: OpsCommitResponse = await userDataStub(c.env, userId).commitOp(userId, op, path);
+      const body: OpsCommitResponse = await commitOp(c.env, userId, op, path);
       return c.json(body);
     },
   )

@@ -114,6 +114,23 @@ describe('sync control plane', () => {
       );
       expect(res.status).toBe(400);
     });
+
+    it('refuses to commit a put with no R2 object (op-without-object invariant)', async () => {
+      // The service HEADs R2 before logging: a put for a path that isn't in R2
+      // must 409 and leave the log untouched, so no client ever pulls an op that
+      // 404s. (No env.USER_FILES.put here — the object is absent.)
+      const { auth } = await authFor('sync-noobject-1');
+      const res = await app.request(
+        opsCommitEndpoint.path,
+        json(auth, { op: 'put', path: 'meta/missing.enc' }),
+        env,
+      );
+      expect(res.status).toBe(409);
+      expect((await res.json()) as { error: string }).toMatchObject({ error: 'no_object' });
+
+      const list = await app.request(opsListEndpoint.path, { headers: auth }, env);
+      expect(((await list.json()) as { ops: unknown[] }).ops).toHaveLength(0);
+    });
   });
 
   describe(`GET ${filesListEndpoint.path}`, () => {

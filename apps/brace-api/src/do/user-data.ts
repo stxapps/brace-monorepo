@@ -3,7 +3,6 @@ import { DurableObject } from 'cloudflare:workers';
 import type { OpEntry, OpsListResponse } from '@stxapps/shared';
 
 import type { Bindings } from '../lib/env';
-import { userFilesRepo } from '../r2/user-files';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
 import { type OpKind, opLogsRepo } from './repositories/op-logs';
 
@@ -97,41 +96,28 @@ export class UserDataDO extends DurableObject<Bindings> {
     return { ops, oldestUpdatedAt, newestUpdatedAt, hasMore };
   }
 
-  // RPC: record a committed file mutation (POST /v1/ops/commit). Call AFTER the R2
-  // write succeeds — the log must never point at an object that isn't in R2
+  // RPC: record a committed file mutation (POST /v1/ops/commit). A pure write
+  // against this DO's own SQLite — the R2 side (the put existence check + reading
+  // R2's `LastModified`/size) is done by the caller in services/sync.ts, which
+  // passes the results in. The log must never point at an object that isn't in R2
   // (op-without-object 404s every client that pulls it; an object with no op is
-  // harmless and healed by the fallback R2 listing). See docs/local-first-sync.md.
+  // harmless and healed by the fallback R2 listing), so the service HEADs R2 and
+  // refuses to call this for a put with no object. See docs/local-first-sync.md.
   //
-  // `path` is the wire-relative path; the R2 object lives under the per-user prefix,
-  // so we build the full key from `userId` (the DO can't recover its own
-  // idFromName, so the caller passes it). The stored `updated_at` is the op log's
-  // cursor clock, sourced per op kind:
-  //  - put:    R2's authoritative `LastModified`, read via this HEAD. The HEAD is
-  //            also the existence check upholding the invariant above — a missing
-  //            object throws, so NO op is logged. R2's reported size is recorded in
-  //            the quota map in the same step.
+  // `path` is the wire-relative path (the DO is the user's whole scope, so rows
+  // carry no userId). `updatedAt` is the op log's cursor clock, sourced per kind:
+  //  - put:    R2's authoritative `LastModified`, with `size` its reported size,
+  //            recorded in the quota map.
   //  - delete: the worker's commit clock (no object survives to HEAD), and the
-  //            path's recorded size is freed from the quota map. Mixing the two
-  //            clocks is safe because paths are immutable random ids — a path is
-  //            only ever put…put…delete, so a put and a delete on it never have to
-  //            be ordered against each other.
+  //            path's recorded size is freed from the quota map (`size` ignored).
+  // Mixing the two clocks is safe because paths are immutable random ids — a path
+  // is only ever put…put…delete, so a put and a delete on it never have to be
+  // ordered against each other.
   // Returns the recorded `updatedAt` the client stores and advances its cursor to.
-  async commitOp(userId: string, op: OpKind, path: string): Promise<{ updatedAt: number }> {
+  commitOp(op: OpKind, path: string, updatedAt: number, size: number): { updatedAt: number } {
     const sizes = fileSizesRepo(this.sql);
-    let updatedAt: number;
-    if (op === 'put') {
-      const object = await userFilesRepo(this.env).head(userId, path);
-      if (!object) {
-        throw new Error(
-          `commitOp: no R2 object at "${path}" — refusing to log a put without an object`,
-        );
-      }
-      updatedAt = object.updatedAt;
-      sizes.set(path, object.size);
-    } else {
-      updatedAt = Date.now();
-      sizes.remove(path);
-    }
+    if (op === 'put') sizes.set(path, size);
+    else sizes.remove(path);
     opLogsRepo(this.sql).append(op, path, updatedAt);
     return { updatedAt };
   }

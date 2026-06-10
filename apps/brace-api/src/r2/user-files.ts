@@ -60,10 +60,7 @@ export function userFilesRepo(env: Bindings) {
     // HEAD a user's object: R2's LastModified (as `updatedAt`) + `size`, or null if
     // absent. The op-commit existence check and the quota size source (see the put
     // branch of UserDataDO.commitOp).
-    async head(
-      userId: string,
-      path: string,
-    ): Promise<{ updatedAt: number; size: number } | null> {
+    async head(userId: string, path: string): Promise<{ updatedAt: number; size: number } | null> {
       const object = await bucket.head(userFileKey(userId, path));
       if (!object) return null;
       return { updatedAt: object.uploaded.getTime(), size: object.size };
