@@ -130,6 +130,50 @@ describe('sync control plane', () => {
       expect(pulled.ops.map((o) => o.path).sort()).toEqual(['files/b.enc', 'meta/a.enc']);
     });
 
+    it('commits a delete: removes the R2 object, logs the op, frees the listing', async () => {
+      const { userId, auth } = await authFor('sync-delete-1');
+      // Put-then-commit so the object, its op, and its quota entry all exist.
+      await env.USER_FILES.put(userFileKey(userId, 'meta/d1.enc'), 'ciphertext');
+      await app.request(
+        opsCommitEndpoint.path,
+        json(auth, { ops: [{ op: 'put', path: 'meta/d1.enc' }] }),
+        env,
+      );
+
+      const commit = await app.request(
+        opsCommitEndpoint.path,
+        json(auth, { ops: [{ op: 'delete', path: 'meta/d1.enc' }] }),
+        env,
+      );
+      expect(commit.status).toBe(200);
+      const { results, failed } = (await commit.json()) as {
+        results: { path: string; updatedAt: number }[];
+        failed: unknown[];
+      };
+      expect(failed).toEqual([]);
+      expect(results.map((r) => r.path)).toEqual(['meta/d1.enc']);
+
+      // The object is GONE from R2 — the server deletes it at commit (the client
+      // can't: files/sign mints only PUT/GET URLs). R2 is truth, so without this
+      // the download-authoritative fallback would resurrect every deleted file.
+      await expect(env.USER_FILES.head(userFileKey(userId, 'meta/d1.enc'))).resolves.toBeNull();
+      const listing = await app.request(filesListEndpoint.path, { headers: auth }, env);
+      expect(((await listing.json()) as { files: unknown[] }).files).toEqual([]);
+
+      // Both ops are in the log; the delete is stamped on the commit clock.
+      const list = await app.request(opsListEndpoint.path, { headers: auth }, env);
+      const pulled = (await list.json()) as { ops: { op: string; path: string }[] };
+      expect(pulled.ops.map((o) => o.op)).toEqual(['put', 'delete']);
+
+      // Re-committing the delete is idempotent — the absent key is a no-op.
+      const again = await app.request(
+        opsCommitEndpoint.path,
+        json(auth, { ops: [{ op: 'delete', path: 'meta/d1.enc' }] }),
+        env,
+      );
+      expect(again.status).toBe(200);
+    });
+
     it('advances past the cursor and reports null bounds for a fresh user', async () => {
       const { auth } = await authFor('sync-fresh-1');
       const res = await app.request(opsListEndpoint.path, { headers: auth }, env);

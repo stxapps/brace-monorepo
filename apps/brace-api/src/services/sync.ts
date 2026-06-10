@@ -51,6 +51,13 @@ export async function listUserFiles(
 // it's stamped on the worker's commit clock and the path's recorded size is freed.
 // A single DO RPC then writes every surviving entry (one round trip to the user's
 // serialized SQLite). `results` + `failed` together account for every op sent.
+//
+// The R2 object of every `delete` is removed HERE, server-side — files/sign mints
+// only PUT/GET URLs, so the client never DELETEs R2 directly. R2 first, log last,
+// the same direction as puts: a commit that dies between the two leaves an absent
+// object with no op — invisible to incremental pull, healed by the fallback — and
+// a retried delete is a no-op. One bulk binding call keeps the delete-metadata-
+// first window the client's op ordering asks for negligible.
 export async function commitOps(
   env: Bindings,
   userId: string,
@@ -58,6 +65,11 @@ export async function commitOps(
 ): Promise<OpsCommitResponse> {
   const repo = userFilesRepo(env);
   const now = Date.now();
+
+  await repo.deleteMany(
+    userId,
+    ops.filter((o) => o.op === 'delete').map((o) => o.path),
+  );
 
   const resolved = await Promise.all(
     ops.map(async ({ op, path }): Promise<CommitEntry | CommitFailure> => {

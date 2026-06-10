@@ -69,6 +69,16 @@ export function userFilesRepo(env: Bindings) {
       return { updatedAt: object.uploaded.getTime(), size: object.size };
     },
 
+    // Delete a user's objects — the server side of a committed `delete` op (the
+    // client can't do it itself: files/sign mints only PUT/GET URLs). One bulk
+    // binding call; deleting an absent key is a no-op, so a retried commit stays
+    // idempotent. Callers stay within the contract's 1000-op batch cap, which
+    // matches the binding's 1000-key bulk-delete ceiling.
+    async deleteMany(userId: string, paths: string[]): Promise<void> {
+      if (paths.length === 0) return;
+      await bucket.delete(paths.map((path) => userFileKey(userId, path)));
+    },
+
     // Mint presigned URLs for the given wire-relative paths, each namespaced under
     // the caller's prefix here — so cross-user signing is structurally impossible
     // (the key can only resolve under `users/{userId}/`). Credentials are assembled

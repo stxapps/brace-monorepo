@@ -7,13 +7,26 @@
 // only ever sees ciphertext. No auth header here — the signature in the URL is
 // the credential.
 
+// Carries the HTTP status so callers can branch on it — the one the sync engine
+// cares about is a GET 404 (the object was deleted between the op pull / listing
+// and the fetch), which it skips rather than failing the whole cycle.
+export class BlobRequestError extends Error {
+  constructor(
+    readonly method: 'PUT' | 'GET',
+    readonly status: number,
+  ) {
+    super(`R2 ${method} failed (${status})`);
+    this.name = 'BlobRequestError';
+  }
+}
+
 export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promise<void> {
   const res = await fetch(url, { method: 'PUT', body });
-  if (!res.ok) throw new Error(`R2 PUT failed (${res.status})`);
+  if (!res.ok) throw new BlobRequestError('PUT', res.status);
 }
 
 export async function getBlob(url: string): Promise<Uint8Array> {
   const res = await fetch(url, { method: 'GET' });
-  if (!res.ok) throw new Error(`R2 GET failed (${res.status})`);
+  if (!res.ok) throw new BlobRequestError('GET', res.status);
   return new Uint8Array(await res.arrayBuffer());
 }

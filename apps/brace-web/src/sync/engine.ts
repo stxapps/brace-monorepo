@@ -25,10 +25,10 @@ import {
 
 import { db } from '../data/db';
 import { clearPendingPaths, listPendingOps, type PendingOp } from '../data/pending-store';
-import { advanceCursor, getSyncMeta, markFirstSyncDone } from '../data/sync-store';
+import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
 import { api } from '../lib/api';
 import { decryptEntity, encryptEntity } from './crypto';
-import { getBlob, putBlob } from './r2';
+import { BlobRequestError, getBlob, putBlob } from './r2';
 
 // Everything the engine needs to run a sync, passed in by the caller (SyncProvider)
 // rather than read from session-store — so this module stays free of session/auth
@@ -82,11 +82,40 @@ export async function runInitialSync(ctx: SyncContext): Promise<void> {
   await markFirstSyncDone(ctx.username, newest);
 }
 
+// Single-flight per account. Overlapping calls (the post-ready background pull, an
+// edit-triggered requestSync, a retry) coalesce: a caller during a run shares the
+// in-flight promise, and at most one trailing rerun picks up whatever changed
+// after that run's snapshot. Serializing cycles keeps two drains from
+// double-committing the same pending ops and keeps cursor writes ordered within
+// this tab; across tabs, advanceCursor's forward-only guard covers the rest.
+const inflightSyncs = new Map<string, Promise<void>>();
+const rerunRequests = new Set<string>();
+
 // A returning-visit sync (docs flow #2 + "a sync cycle"): reconcile, then push,
 // then pull. Non-blocking — failures surface a quiet retry, they don't gate the
 // UI. Routes itself to the download-authoritative fallback when the op log can't
 // answer (wiped, compacted past the cursor, or behind it).
-export async function runIncrementalSync(ctx: SyncContext): Promise<void> {
+export function runIncrementalSync(ctx: SyncContext): Promise<void> {
+  const key = ctx.username;
+  const inflight = inflightSyncs.get(key);
+  if (inflight) {
+    rerunRequests.add(key);
+    return inflight;
+  }
+  const run = (async () => {
+    try {
+      await incrementalSyncOnce(ctx);
+      while (rerunRequests.delete(key)) await incrementalSyncOnce(ctx);
+    } finally {
+      inflightSyncs.delete(key);
+      rerunRequests.delete(key);
+    }
+  })();
+  inflightSyncs.set(key, run);
+  return run;
+}
+
+async function incrementalSyncOnce(ctx: SyncContext): Promise<void> {
   const meta = await getSyncMeta(ctx.username);
   // The cursor is the compound key (updatedAt, path); both halves go over the wire
   // as opsListEndpoint's `since` + `sincePath`. `since` is always sent (even 0, for
@@ -114,7 +143,8 @@ export async function runIncrementalSync(ctx: SyncContext): Promise<void> {
 // Lazy content fetch (docs "data model — metadata vs. content"): pull one
 // `files/{id}.enc` blob on demand (open/scroll), decrypt, and cache it in Dexie so
 // re-views are instant and offline. Returns the decrypted bytes, or undefined if
-// the path isn't known locally yet.
+// the path isn't known locally — or no longer exists server-side (deleted on
+// another device, the delete op not yet pulled; the next sync removes the record).
 export async function loadEntityContent(
   ctx: SyncContext,
   path: string,
@@ -124,7 +154,12 @@ export async function loadEntityContent(
   if (rec.data) return rec.data;
   const url = (await signPaths('get', [path])).get(path);
   if (!url) return undefined;
-  const data = await decryptEntity(ctx.encryptionKey, await getBlob(url));
+  const blob = await getBlob(url).catch((err: unknown) => {
+    if (err instanceof BlobRequestError && err.status === 404) return undefined;
+    throw err;
+  });
+  if (!blob) return undefined;
+  const data = await decryptEntity(ctx.encryptionKey, blob);
   await db.links.update(path, { data });
   return data;
 }
@@ -194,38 +229,42 @@ async function incrementalCycle(
 // --- the cycle: fallback (download-authoritative) ---------------------------
 
 // When the op log can't reconstruct the delta, reconcile directly against a full
-// R2 listing (docs "fallback full sync"). The server list is truth, so a
-// server-side deletion is never resurrected; the pending queue distinguishes a
-// genuine local create from a stale leftover.
+// R2 listing (docs "fallback full sync"). The server list is truth for every path
+// WITHOUT a pending local op — so a server-side deletion is never resurrected and
+// a stale leftover is dropped. A pending op is a genuine unsynced local intent,
+// resolved exactly as the incremental cycle resolves it — local-wins — so a
+// fallback (an infra event: log wiped/compacted/reset) never silently flips a
+// conflict to server-wins: a pending edit is pushed over the server copy, and a
+// pending delete is pushed rather than resurrected by the listing.
 async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<void> {
   const files = await listAllFiles();
   const serverMap = new Map(files.map((f) => [f.path, f.updatedAt]));
+  const pendingPaths = new Set(pending.map((p) => p.path));
 
-  // Server side: download anything new or newer than the stored local `updatedAt`.
-  const downloads: Entry[] = [];
-  for (const f of files) {
-    const local = await db.links.get(f.path);
-    if (!local || f.updatedAt > local.updatedAt) downloads.push(f);
-  }
+  // Server side: download anything new or newer than the stored local `updatedAt`
+  // — except paths with a pending op, which local-wins reserves for the push.
+  const locals = await db.links.bulkGet(files.map((f) => f.path));
+  const downloads = files.filter((f, i) => {
+    if (pendingPaths.has(f.path)) return false;
+    const local = locals[i];
+    return !local || f.updatedAt > local.updatedAt;
+  });
 
-  // Local side: a local-only path that ISN'T a pending create was deleted on the
-  // server — drop it. (A local-only pending create is pushed below.)
-  const pendingCreate = new Set(pending.filter((p) => p.op === 'put').map((p) => p.path));
+  // Local side: a local-only path with no pending op was deleted on the server —
+  // drop it. (A local-only path with a pending put is an unpushed create.)
   const localDeletes: string[] = [];
   for (const key of await db.links.toCollection().primaryKeys()) {
     const path = key as string;
-    if (serverMap.has(path)) continue;
-    if (!pendingCreate.has(path)) localDeletes.push(path);
+    if (serverMap.has(path) || pendingPaths.has(path)) continue;
+    localDeletes.push(path);
   }
 
-  // Push only local-only creates; download-authoritative means any other pending op
-  // (a create the server already has, or a delete the listing contradicts) loses to
-  // the server copy, so drop those from the queue without pushing.
-  const toPush = pending.filter((p) => p.op === 'put' && !serverMap.has(p.path));
-  const dropPaths = pending
-    .filter((p) => !(p.op === 'put' && !serverMap.has(p.path)))
-    .map((p) => p.path);
-  await clearPendingPaths(ctx.username, dropPaths);
+  // Push every pending op except a delete whose object is already gone
+  // server-side — nothing left to delete, so clear it instead of committing a
+  // redundant op.
+  const isStaleDelete = (p: PendingOp) => p.op === 'delete' && !serverMap.has(p.path);
+  await clearPendingPaths(ctx.username, pending.filter(isStaleDelete).map((p) => p.path));
+  const toPush = pending.filter((p) => !isStaleDelete(p));
 
   const committed = await pushPending(ctx, toPush);
   await storeDownloads(ctx, downloads);
@@ -233,8 +272,9 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<vo
 
   // Cursor = newest (updatedAt, path) across ALL pages (R2 lists in key order, not
   // time order, so the newest can sit on any page) plus our commits. This is
-  // reconstructed straight from R2 with no op-log dependence, and in the
-  // cursor-ahead case it intentionally lowers the cursor back to reality.
+  // reconstructed straight from R2 with no op-log dependence — resetCursor, not
+  // advanceCursor, because the cursor-ahead case intentionally LOWERS the cursor
+  // back to reality.
   let cursorTs = 0;
   let cursorPath = '';
   for (const f of files) {
@@ -249,7 +289,7 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<vo
       cursorPath = c.path;
     }
   }
-  await advanceCursor(ctx.username, cursorTs, cursorPath);
+  await resetCursor(ctx.username, cursorTs, cursorPath);
 }
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
@@ -330,16 +370,28 @@ async function uploadBlobs(
 // --- download / store / delete ----------------------------------------------
 
 // Fetch, decrypt, and store a set of entries. Content (`files/`) records keep only
-// their `updatedAt` — the blob stays lazy (and any previously-cached `data` is
-// dropped so a stale copy isn't served after an update). The index is sign-get'd in
-// batch, then GET + decrypt + store at bounded concurrency.
+// their `updatedAt` — the blob stays lazy (and a CHANGED record drops any
+// previously-cached `data` so a stale copy isn't served after an update). The
+// index is sign-get'd in batch, then GET + decrypt + store at bounded concurrency.
 async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void> {
   if (entries.length === 0) return;
 
-  const content = entries.filter((e) => isContentPath(e.path));
-  const index = entries.filter((e) => !isContentPath(e.path));
+  // Skip paths whose local record is already current (same-or-newer server stamp,
+  // with the decrypted bytes present for an index path). That makes a re-run of an
+  // interrupted first sync RESUME instead of re-downloading everything, makes a
+  // re-pulled echo of our own commit free, and keeps a current content record's
+  // lazily-cached blob.
+  const locals = await db.links.bulkGet(entries.map((e) => e.path));
+  const stale = entries.filter((e, i) => {
+    const local = locals[i];
+    if (!local || local.updatedAt < e.updatedAt) return true;
+    return !isContentPath(e.path) && !local.data;
+  });
 
-  for (const e of content) await db.links.put({ id: e.path, updatedAt: e.updatedAt });
+  const content = stale.filter((e) => isContentPath(e.path));
+  const index = stale.filter((e) => !isContentPath(e.path));
+
+  await db.links.bulkPut(content.map((e) => ({ id: e.path, updatedAt: e.updatedAt })));
   if (index.length === 0) return;
 
   const urls = await signPaths(
@@ -349,7 +401,14 @@ async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void>
   await mapLimit(index, BLOB_CONCURRENCY, async (e) => {
     const url = urls.get(e.path);
     if (!url) return;
-    const data = await decryptEntity(ctx.encryptionKey, await getBlob(url));
+    const blob = await getBlob(url).catch((err: unknown) => {
+      // Deleted between the op pull / listing and this GET: the delete op sits
+      // past our window and reconciles next sync — skip it, don't fail the cycle.
+      if (err instanceof BlobRequestError && err.status === 404) return undefined;
+      throw err;
+    });
+    if (!blob) return;
+    const data = await decryptEntity(ctx.encryptionKey, blob);
     await db.links.put({ id: e.path, updatedAt: e.updatedAt, data });
   });
 }

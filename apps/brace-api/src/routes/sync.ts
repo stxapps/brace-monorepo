@@ -58,8 +58,9 @@ export const syncRoutes = new Hono<AppEnv>()
       const { ops } = c.req.valid('json');
       const { userId } = c.get('session');
       // For each put the service HEADs the object (existence check + R2's
-      // LastModified + its size for the quota map); for a delete it stamps the
-      // commit clock and frees the size. A put with no R2 object is dropped from
+      // LastModified + its size for the quota map); for a delete it removes the
+      // R2 object itself (the client can't — files/sign mints only PUT/GET URLs),
+      // stamps the commit clock, and frees the size. A put with no R2 object is dropped from
       // the batch — never log an op the log can't back (op-without-object 404s
       // every puller), so `results` omits it and the client retries. The contract
       // caps `ops` at 1000; over the cap zValidator 400s before any work runs.

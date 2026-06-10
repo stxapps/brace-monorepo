@@ -15,14 +15,16 @@ import { useSync } from '../contexts/sync-provider';
 // - 'ready'                        → the app (background sync may still run)
 //
 // Named for what it gates: only the FIRST (initial) sync blocks here. By design,
-// subsequent incremental/background syncs never gate the UI (see sync-provider).
+// subsequent incremental/background syncs never gate the UI — they report on the
+// separate bgSync dimension instead (see sync-provider).
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { status, retry } = useSync();
+  const { storeStatus, retry } = useSync();
 
-  if (status === 'ready') return children;
+  if (storeStatus === 'ready') return children;
 
-  // TODO: Show error only for the initial sync, not subsequent background syncs.
-  if (status === 'error') {
+  // Only the blocking initial sync can land here: background syncs report on
+  // bgSync and never set the gate's 'error'.
+  if (storeStatus === 'error') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p>Couldn’t sync your links.</p>

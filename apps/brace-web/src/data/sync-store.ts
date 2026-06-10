@@ -42,8 +42,9 @@ export function seedNewAccount(username: string): Promise<string> {
 // Sign-in path: call once the initial full pull has finished (all blobs
 // downloaded, decrypted, written). Atomic on purpose — only flip the flag after
 // the snapshot is complete, so an interrupted first sync stays "not done" and
-// re-blocks (then resumes from the cursor) on the next load rather than leaving a
-// partial store looking finished. The first cursor is the newest `updatedAt`
+// re-blocks on the next load rather than leaving a partial store looking
+// finished (the re-run resumes rather than restarts: the engine skips records
+// already stored at the listed `updatedAt`). The first cursor is the newest `updatedAt`
 // among the listed files — a bare timestamp with no path tiebreak yet, so
 // `syncCursorPath` stays empty (the server treats a missing `sincePath` as the
 // low sentinel on the next incremental pull).
@@ -56,11 +57,34 @@ export function markFirstSyncDone(username: string, syncCursor: number): Promise
   });
 }
 
-// Advance the compound `(updatedAt, path)` cursor after an incremental pull
-// applies a batch — to the newest op's `(updatedAt, path)` seen. Both halves move
-// together: a later millisecond resets the path tiebreak. Leaves firstSyncDoneAt
-// untouched.
+// Advance the compound `(updatedAt, path)` cursor after an incremental cycle —
+// to the newest op's `(updatedAt, path)` seen. Both halves move together: a later
+// millisecond resets the path tiebreak. FORWARD-ONLY, read-and-compare in one
+// transaction: IndexedDB is shared across tabs, so a slower tab's cycle finishing
+// late must not drag the cursor back below what a faster one already consumed
+// (regression is harmless — just a redundant re-pull — but free to prevent).
+// Leaves firstSyncDoneAt untouched.
 export async function advanceCursor(
+  username: string,
+  syncCursor: number,
+  syncCursorPath: string,
+): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    const meta = await db.syncMeta.get(username);
+    if (!meta) return; // signed out mid-cycle — nothing to advance
+    const ahead =
+      syncCursor > meta.syncCursor ||
+      (syncCursor === meta.syncCursor && syncCursorPath > meta.syncCursorPath);
+    if (!ahead) return;
+    await db.syncMeta.update(username, { syncCursor, syncCursorPath });
+  });
+}
+
+// Set the cursor to a value reconstructed straight from an R2 listing — the
+// download-authoritative fallback. UNCONDITIONAL, unlike advanceCursor: the
+// cursor-ahead fallback case exists precisely to LOWER a stale cursor back to
+// what R2 actually holds.
+export async function resetCursor(
   username: string,
   syncCursor: number,
   syncCursorPath: string,

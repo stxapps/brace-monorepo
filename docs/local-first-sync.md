@@ -90,7 +90,7 @@ op-log entries) and `files` (the R2 objects):
 
 ```
 GET  /v1/ops/list      incremental pull: ops since the cursor      (→ the ops/list endpoint)
-POST /v1/ops/commit    record committed mutations (batched, HEADs R2) (→ the three flows: push)
+POST /v1/ops/commit    record committed mutations (batched; HEADs puts, deletes objects) (→ the three flows: push)
 GET  /v1/files/list    fallback R2 listing, paginated (download-truth) (→ fallback full sync)
 POST /v1/files/sign    mint presigned R2 URL(s); op: 'put' | 'get' (→ authorization & quota)
 ```
@@ -277,7 +277,12 @@ from absence. On `no_object` the client re-PUTs + re-commits the gap next drain;
 commit is idempotent, so a retry costs at most one redundant download. `reason` is
 a typed enum so the deferred R2-conditional-write upgrade can add a `'stale'`
 outcome (client action: re-_pull_ then retry — a different branch). A `delete`
-always commits.
+always commits — and its R2 object is removed by the **Worker itself** at commit
+(one bulk binding call per batch; `files/sign` mints only `put`/`get` URLs, so the
+client never DELETEs R2 directly). R2 first, log last, the same direction as puts:
+a commit that dies between the object delete and the log append leaves an absent
+object with no op — invisible to incremental pull, healed by the fallback — and a
+retried delete of an absent key is a no-op.
 
 The pending-ops entry stays in the queue until its path appears in step 3's
 `results` (a `failed` path stays queued for retry). **Crash recovery falls out of this for free:** if the client dies
@@ -300,7 +305,10 @@ on the Worker's clock rather than R2's; the `updated_at` column thus mixes the t
 clocks. That mismatch is harmless because paths are **immutable random ids**: a
 path's life is only ever `put`…`put`…`delete`, never `delete`→`put`, so the two
 clocks never have to order a put against a delete on the same path, and nothing
-can be resurrected by skew.)
+can be resurrected by skew. The one exception is deliberate: local-wins reconcile
+re-`put`s a path whose `delete` another device already committed — keeping the
+unsynced edit is the point — and that re-put's commit `HEAD` is stamped after the
+delete in real time, so it orders after it up to Worker↔R2 clock skew.)
 
 ### the ops/list endpoint
 
@@ -410,7 +418,10 @@ saw.
      the accepted outcome today is that one side's edit is dropped silently, and
      the deferred conditional-write upgrade turns this into a detected `412` +
      re-pull. _Which_ side wins — local (upload) vs server (download) — is an open
-     product call (see _deferred_).
+     product call (see _deferred_); **the shipped engine resolves local-wins**, so
+     today every pending op lands in the upload set (which collapses the two
+     "both" rows — the base comparison earns its keep when conditional writes
+     land and `stale` needs the fast-forward/conflict distinction).
      The output is two **disjoint** sets: paths to upload, paths to download.
 3. **Push** the upload set (flow 3 — meta-last; commit returns each new server
    `updatedAt`).
@@ -462,20 +473,25 @@ recover a _commit-died edit_ (`object-without-op`, case B): the new bytes carry 
 fresh `LastModified` in R2 even though no op was ever recorded, so the comparison
 below still sees the server copy as newer and re-downloads it.
 
-The fallback is **download-authoritative**: the server list is treated as truth,
-so a server-side deletion is never resurrected. The **pending-ops queue** is what
-distinguishes a genuine local-origin change from a stale leftover:
+The fallback is **download-authoritative**: the server list is treated as truth
+for every path **without** a pending local op, so a server-side deletion is never
+resurrected and a stale leftover is dropped. A path **with** a pending op is a
+genuine unsynced local intent, and it resolves exactly as the incremental cycle
+resolves it — **local-wins** — so a fallback (an infra event: log wiped,
+compacted, reset) never silently flips a conflict to server-wins, clobbers a
+queued edit, or resurrects a bookmark whose delete is still queued:
 
-| local vs. server                                 | action                                          |
-| ------------------------------------------------ | ----------------------------------------------- |
-| on server, newer `updatedAt` than local (or new) | **download**                                    |
-| local only, **in** pending-ops queue             | **push** (real edit)                            |
-| local only, **not** in pending-ops queue         | **delete locally** — it was deleted server-side |
-| equal `updatedAt`                                | skip                                            |
+| local vs. server                                       | action                                            |
+| ------------------------------------------------------ | ------------------------------------------------- |
+| on server, no pending op, newer `updatedAt` (or new)   | **download**                                      |
+| pending op for the path (`put` or `delete`)            | **push** — local-wins, same policy as incremental |
+| pending `delete`, object already gone server-side      | **drop the op** — nothing left to delete          |
+| local only, **not** in pending-ops queue               | **delete locally** — it was deleted server-side   |
+| on server, no pending op, equal `updatedAt`            | skip                                              |
 
-That third row is what kills the deleted-bookmark-resurrection bug, and it needs
-no user prompt. The comparison uses the **stored server `updatedAt`**, never
-Dexie's local write time.
+The local-only row is what kills the deleted-bookmark-resurrection bug, and it
+needs no user prompt. The comparison uses the **stored server `updatedAt`**,
+never Dexie's local write time.
 
 After reconciling, set `syncCursor` to the **newest `updatedAt` among the listed
 files — taken across _all_ pages**, not just the last one (R2 returns key order,
@@ -596,8 +612,9 @@ In short: **component server calls → TanStack Query; background sync engine + 
 - **True-conflict winner: local-wins vs server-wins** (see _a sync cycle_) — when
   reconcile finds both sides changed a path since the base, local-wins (upload)
   clobbers the other device's committed edit; server-wins (download) discards the
-  user's unsynced edit. Open product call; conditional writes make it a prompt
-  rather than a silent choice.
+  user's unsynced edit. Open product call (the shipped engine picks local-wins —
+  never silently discard the user's unsynced work); conditional writes make it a
+  prompt rather than a silent choice.
 - **Client-side orphan GC** (see _multi-file consistency_) — quota bounds growth
   until then.
 - **Offline content pinning / prefetch** (see _data model — metadata vs.
