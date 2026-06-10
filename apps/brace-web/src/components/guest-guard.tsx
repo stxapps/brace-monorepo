@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { redirect, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../contexts/auth-provider';
@@ -26,7 +26,11 @@ function safeNext(next: string | null): string {
 // 'loading' (AuthProvider still hydrating) renders nothing, so we don't flash the
 // sign-in form at someone who's about to be bounced. Render-phase redirect()
 // throws to unmount before commit (defaults to replace outside Server Actions).
-export function GuestGuard({ children }: { children: ReactNode }) {
+//
+// useSearchParams() opts this subtree out of static prerendering, so it must sit
+// under a Suspense boundary (see AuthGuard); the null fallback matches the
+// 'loading' render so the sign-in form never flashes before params resolve.
+function InnerGuestGuard({ children }: { children: ReactNode }) {
   const { status } = useAuth();
   const next = useSearchParams().get('next');
 
@@ -34,4 +38,12 @@ export function GuestGuard({ children }: { children: ReactNode }) {
   if (status === 'authenticated') redirect(safeNext(next));
 
   return children;
+}
+
+export function GuestGuard({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <InnerGuestGuard>{children}</InnerGuestGuard>
+    </Suspense>
+  );
 }

@@ -92,7 +92,9 @@ export class UserDataDO extends DurableObject<Bindings> {
     if (op === 'put') {
       const object = await this.env.USER_FILES.head(path);
       if (!object) {
-        throw new Error(`appendOp: no R2 object at "${path}" — refusing to log a put without an object`);
+        throw new Error(
+          `appendOp: no R2 object at "${path}" — refusing to log a put without an object`,
+        );
       }
       updatedAt = object.uploaded.getTime();
     } else {

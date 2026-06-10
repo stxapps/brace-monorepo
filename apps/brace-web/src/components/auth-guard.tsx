@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { redirect, usePathname, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../contexts/auth-provider';
@@ -24,7 +24,12 @@ import { useAuth } from '../contexts/auth-provider';
 // direct visit (reason null) — bounces to /sign-in with the full intended path
 // (including any query string) stashed in `?next=`, so sign-in can return them there
 // instead of dumping everyone on /links (GuestGuard reads the param).
-export function AuthGuard({ children }: { children: ReactNode }) {
+//
+// useSearchParams() opts this subtree out of static prerendering, so Next requires
+// it under a Suspense boundary; the inner component holds the hook and AuthGuard
+// supplies the boundary. The null fallback matches the 'loading' render below, so
+// the gate shows nothing (never a signed-out flash) until the params resolve.
+function InnerAuthGuard({ children }: { children: ReactNode }) {
   const { status, reason } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -38,4 +43,12 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   return children;
+}
+
+export function AuthGuard({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <InnerAuthGuard>{children}</InnerAuthGuard>
+    </Suspense>
+  );
 }
