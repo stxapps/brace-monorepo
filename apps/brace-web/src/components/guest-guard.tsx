@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, type ReactNode } from 'react';
+import { type ReactNode, Suspense } from 'react';
 import { redirect, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../contexts/auth-provider';
