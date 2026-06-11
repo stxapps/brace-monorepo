@@ -92,19 +92,13 @@ export async function resetCursor(
   await db.syncMeta.update(username, { syncCursor, syncCursorPath });
 }
 
-// Tear down synced data on sign-out. The local store holds DECRYPTED bookmarks,
-// so a second user on the same device must not read the first's plaintext —
-// clear both the data and the bookkeeping. Pass a username to scope it, or omit
-// to wipe everything (full sign-out). Called from auth-provider's signOut (and so
-// the onSessionInvalid path) alongside clearSession.
-export async function clearSyncData(username?: string): Promise<void> {
-  if (username) {
-    await Promise.all([
-      db.syncMeta.delete(username),
-      db.pendingOps.where('username').equals(username).delete(),
-      // TODO: also delete this account's items once item rows carry an owner.
-    ]);
-    return;
-  }
+// Tear down synced data on sign-out: wipe ALL tables — data and bookkeeping.
+// The local store holds DECRYPTED bookmarks, so a second user on the same device
+// must not read the first's plaintext. Deliberately not account-scoped: `items`
+// carries no owner column (see PendingOpRecord in db.ts), so a scoped clear
+// would leave the previous account's plaintext behind. Called from
+// auth-provider's signOut (and so the onSessionInvalid path) alongside
+// clearSession.
+export async function clearSyncData(): Promise<void> {
   await Promise.all([db.items.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);
 }

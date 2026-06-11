@@ -284,7 +284,7 @@ first-sync push is a handful of round trips, not one per file:
    `commitOps`, which also stores R2's reported object size in the per-user quota
    map). The per-put HEADs fan out in parallel; one DO RPC then writes the whole
    batch. The Worker returns `{ results: [{ path, updatedAt }, …], failed: [{ path,
-   reason }, …] }` — `results` for the committed ops, `failed` for the refused ones.
+reason }, …] }` — `results` for the committed ops, `failed` for the refused ones.
    The `HEAD` does double duty: existence check _and_ the single clock that
    incremental and fallback both compare against.
 
@@ -501,13 +501,13 @@ resolves it — **local-wins** — so a fallback (an infra event: log wiped,
 compacted, reset) never silently flips a conflict to server-wins, clobbers a
 queued edit, or resurrects a bookmark whose delete is still queued:
 
-| local vs. server                                       | action                                            |
-| ------------------------------------------------------ | ------------------------------------------------- |
-| on server, no pending op, newer `updatedAt` (or new)   | **download**                                      |
-| pending op for the path (`put` or `delete`)            | **push** — local-wins, same policy as incremental |
-| pending `delete`, object already gone server-side      | **push anyway** — idempotent; see below           |
-| local only, **not** in pending-ops queue               | **delete locally** — it was deleted server-side   |
-| on server, no pending op, equal `updatedAt`            | skip                                              |
+| local vs. server                                     | action                                            |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| on server, no pending op, newer `updatedAt` (or new) | **download**                                      |
+| pending op for the path (`put` or `delete`)          | **push** — local-wins, same policy as incremental |
+| pending `delete`, object already gone server-side    | **push anyway** — idempotent; see below           |
+| local only, **not** in pending-ops queue             | **delete locally** — it was deleted server-side   |
+| on server, no pending op, equal `updatedAt`          | skip                                              |
 
 The local-only row is what kills the deleted-bookmark-resurrection bug, and it
 needs no user prompt. The comparison uses the **stored server `updatedAt`**,

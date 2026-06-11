@@ -24,7 +24,7 @@ import {
 } from '@stxapps/shared';
 
 import { db } from '../data/db';
-import { clearPendingPaths, listPendingOps, type PendingOp } from '../data/pending-store';
+import { clearPendingPaths, listPendingOps, type PendingOpRecord } from '../data/pending-store';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
 import { api } from '../lib/api';
 import { decryptEntity, encryptEntity } from './crypto';
@@ -171,7 +171,7 @@ async function incrementalCycle(
   since: number,
   sincePath: string,
   first: OpsListResponse,
-  pending: PendingOp[],
+  pending: PendingOpRecord[],
 ): Promise<void> {
   // 1. Pull: page the op log via keyset, coalescing to the latest op per path.
   const serverOps = new Map<string, OpEntry>();
@@ -236,7 +236,7 @@ async function incrementalCycle(
 // fallback (an infra event: log wiped/compacted/reset) never silently flips a
 // conflict to server-wins: a pending edit is pushed over the server copy, and a
 // pending delete is pushed rather than resurrected by the listing.
-async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<void> {
+async function fallbackCycle(ctx: SyncContext, pending: PendingOpRecord[]): Promise<void> {
   const files = await listAllFiles();
   const serverMap = new Map(files.map((f) => [f.path, f.updatedAt]));
   const pendingPaths = new Set(pending.map((p) => p.path));
@@ -301,7 +301,7 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<vo
 // queue; a `no_object` failure is left queued to re-PUT next drain.
 async function pushPending(
   ctx: SyncContext,
-  ops: PendingOp[],
+  ops: PendingOpRecord[],
 ): Promise<{ path: string; updatedAt: number }[]> {
   if (ops.length === 0) return [];
 
@@ -316,14 +316,22 @@ async function pushPending(
       'put',
       puts.map((o) => o.path),
     );
-    await uploadBlobs(ctx, puts.filter((o) => isContentPath(o.path)), urls);
-    await uploadBlobs(ctx, puts.filter((o) => !isContentPath(o.path)), urls);
+    await uploadBlobs(
+      ctx,
+      puts.filter((o) => isContentPath(o.path)),
+      urls,
+    );
+    await uploadBlobs(
+      ctx,
+      puts.filter((o) => !isContentPath(o.path)),
+      urls,
+    );
   }
 
   // 3. Commit. Order the ops so deletes land metadata-first and puts land
   // metadata-last (the mirror of the upload order), matching the on-R2 ordering the
   // multi-file-consistency rules want.
-  const ordered: PendingOp[] = [
+  const ordered: PendingOpRecord[] = [
     ...deletes.filter((o) => !isContentPath(o.path)),
     ...deletes.filter((o) => isContentPath(o.path)),
     ...puts.filter((o) => isContentPath(o.path)),
@@ -356,7 +364,7 @@ async function pushPending(
 // `no_object` and the op stays queued.
 async function uploadBlobs(
   ctx: SyncContext,
-  ops: PendingOp[],
+  ops: PendingOpRecord[],
   urls: Map<string, string>,
 ): Promise<void> {
   await mapLimit(ops, BLOB_CONCURRENCY, async (op) => {

@@ -1,13 +1,13 @@
 'use client';
 
-// Read/write helpers over the pending-ops queue (see db.ts `PendingOp`). The UI
+// Read/write helpers over the pending-ops queue (see db.ts `PendingOpRecord`). The UI
 // enqueues here right after writing the local store; the sync engine drains here.
 // Kept tiny and side-effect-light — no network, no React — so the queue has one
 // owner, mirroring sync-store's ownership of the bookkeeping row.
 
-import { db, type PendingOp } from './db';
+import { db, type PendingOpRecord } from './db';
 
-export type { PendingOp } from './db';
+export type { PendingOpRecord } from './db';
 
 // Queue a create/edit for `path`. `baseUpdatedAt` is the path's stored server
 // timestamp at edit time (0 for a brand-new file) — the base reconcile compares
@@ -34,7 +34,7 @@ export function enqueueDelete(
 
 // The full queue for an account, in no particular order — the engine imposes its
 // own meta-last ordering at push time, so insertion order doesn't matter here.
-export function listPendingOps(username: string): Promise<PendingOp[]> {
+export function listPendingOps(username: string): Promise<PendingOpRecord[]> {
   return db.pendingOps.where('username').equals(username).toArray();
 }
 

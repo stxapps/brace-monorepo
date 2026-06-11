@@ -90,9 +90,15 @@ export interface ItemRecord {
 //
 // One row per (account, path): re-editing a path before the queue drains
 // overwrites the prior entry (local last-writer-wins), so the queue never holds
-// two ops for the same file. `username` scopes it for multi-account devices.
-export interface PendingOp {
-  // Whose queue — one device can hold several accounts' data.
+// two ops for the same file.
+export interface PendingOpRecord {
+  // Whose queue. NOT live multi-account support: sign-out wipes ALL tables
+  // (sync-store's clearSyncData — decrypted data doesn't outlive the session), and
+  // `items` isn't account-scoped at all, so only one account's data is ever
+  // resident. The scoping is (a) schema future-proofing — adding a key column
+  // later means a copy-everything IDB migration on users' devices — and (b)
+  // race-safety: a stale sync run for a prior account can't drain its queue into
+  // the next account's session.
   username: string;
   // The targeted entity's full relative path (matches an ItemRecord `id`).
   path: string;
@@ -108,7 +114,7 @@ export interface PendingOp {
 class BraceDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
   items!: EntityTable<ItemRecord, 'id'>;
-  pendingOps!: Table<PendingOp, [string, string]>;
+  pendingOps!: Table<PendingOpRecord, [string, string]>;
 
   constructor() {
     super('brace-data');
@@ -117,11 +123,9 @@ class BraceDb extends Dexie {
       syncMeta: 'username',
       // `id` primary key + `updatedAt` index for ordered/recent reads.
       items: 'id, updatedAt',
-    });
-    // v2 adds the pending-ops queue. Compound `[username+path]` primary key gives
-    // the one-row-per-(account,path) upsert above; the `username` index scopes a
-    // drain to the active account. Unlisted stores (syncMeta, items) carry forward.
-    this.version(2).stores({
+      // pending-ops queue. Compound `[username+path]` primary key gives
+      // the one-row-per-(account,path) upsert above; the `username` index scopes a
+      // drain to the active account. Unlisted stores (syncMeta, items) carry forward.
       pendingOps: '[username+path], username',
     });
   }
