@@ -485,13 +485,24 @@ queued edit, or resurrects a bookmark whose delete is still queued:
 | ------------------------------------------------------ | ------------------------------------------------- |
 | on server, no pending op, newer `updatedAt` (or new)   | **download**                                      |
 | pending op for the path (`put` or `delete`)            | **push** — local-wins, same policy as incremental |
-| pending `delete`, object already gone server-side      | **drop the op** — nothing left to delete          |
+| pending `delete`, object already gone server-side      | **push anyway** — idempotent; see below           |
 | local only, **not** in pending-ops queue               | **delete locally** — it was deleted server-side   |
 | on server, no pending op, equal `updatedAt`            | skip                                              |
 
 The local-only row is what kills the deleted-bookmark-resurrection bug, and it
 needs no user prompt. The comparison uses the **stored server `updatedAt`**,
 never Dexie's local write time.
+
+The already-gone `delete` is still pushed because the absence is ambiguous:
+usually another device committed the delete (so the re-commit costs one
+redundant op row), but it can also be **this device's own commit that crashed**
+between the R2 object delete and the DO write — and then the retried commit is
+the only thing that ever logs the op (so incremental pullers learn of the
+deletion) and frees the path's recorded size from the quota map. Commit is
+idempotent on both stores (deleting an absent key is a no-op; freeing an
+unrecorded path frees 0), so pushing unconditionally is always safe — dropping
+the op instead would leak the `file_sizes` entry forever (paths are never
+reused, so no later commit would ever touch it).
 
 After reconciling, set `syncCursor` to the **newest `updatedAt` among the listed
 files — taken across _all_ pages**, not just the last one (R2 returns key order,

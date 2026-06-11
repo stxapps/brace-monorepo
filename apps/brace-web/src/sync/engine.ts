@@ -259,14 +259,15 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<vo
     localDeletes.push(path);
   }
 
-  // Push every pending op except a delete whose object is already gone
-  // server-side — nothing left to delete, so clear it instead of committing a
-  // redundant op.
-  const isStaleDelete = (p: PendingOp) => p.op === 'delete' && !serverMap.has(p.path);
-  await clearPendingPaths(ctx.username, pending.filter(isStaleDelete).map((p) => p.path));
-  const toPush = pending.filter((p) => !isStaleDelete(p));
-
-  const committed = await pushPending(ctx, toPush);
+  // Push every pending op — including a delete whose object is already gone
+  // server-side. The absence is ambiguous: usually another device committed the
+  // delete (the re-commit costs one redundant op row), but it can also be OUR OWN
+  // commit that crashed between the R2 delete and the DO write — and then this
+  // retry is the only thing that ever logs the op (so incremental pullers learn of
+  // the deletion) and frees the path's file_sizes quota entry. Commit is idempotent
+  // on both stores, so pushing unconditionally is always safe; dropping the op
+  // would leak the quota entry forever.
+  const committed = await pushPending(ctx, pending);
   await storeDownloads(ctx, downloads);
   await applyDeletes(localDeletes);
 
