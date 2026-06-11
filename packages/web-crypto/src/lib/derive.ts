@@ -43,6 +43,13 @@ export interface NewAccount extends Account {
   passwordDoor: Door;
 }
 
+// The credential miss from unlockAccount: the GCM tag failed, meaning a wrong
+// password — or a tampered/swapped blob, deliberately indistinguishable. Typed so
+// callers can map exactly this to "incorrect username or password" while letting
+// every other failure (Argon2 worker OOM, worker chunk load) surface as the
+// infrastructure error it is, not a phantom credential error.
+export class WrongPasswordError extends Error {}
+
 // HKDF needs a salt; the DEK is already uniformly random, so an empty salt is the
 // standard choice (RFC 5869 treats it as a string of zeros).
 const HKDF_SALT = new Uint8Array(0);
@@ -153,8 +160,9 @@ export async function unlockAccount(
     );
   } catch {
     // Wrong password (or a tampered/swapped blob) — the GCM tag failed. Don't
-    // distinguish the cases to the caller.
-    throw new Error('Incorrect username or password');
+    // distinguish the cases to the caller. Only THIS throw is the credential
+    // miss; a derivePasswordKek failure above (worker error) propagates raw.
+    throw new WrongPasswordError('Incorrect username or password');
   }
 
   return deriveFromDek(new Uint8Array(dek));

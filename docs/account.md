@@ -305,6 +305,26 @@ Ed25519 private key at create-account / sign-in.
 >   that comparison is replaced by the `username` UNIQUE check, the presented
 >   `publicKey` is stored, and the door blobs are stored alongside it.
 
+> **Replay window — accepted.** The proof is bound to its `action` and a fresh
+> `timestamp` (±5 minutes, `TIMESTAMP_WINDOW_MS` in `lib/auth-proof.ts`), but
+> there is **no server-issued nonce**: within that window, anyone holding a
+> captured signed payload can replay it to mint additional sessions. TLS makes
+> capture the hard part — which also means a sign-in **request body is as good
+> as a bearer token** to whoever can read it, so request bodies must never be
+> logged on the auth paths. A replayed create-account proof is harmless (the
+> directory claim 409s); a replayed sign-in proof mints a session for the
+> attacker, the same prize as a stolen session token, with the same 30-day TTL.
+> We accept this: the exposure window is minutes, the capture vector (TLS
+> interception, body logging) already yields live bearer tokens anyway, and a
+> nonce costs an extra round trip on every sign-in. **Upgrade path, if replay
+> ever needs to be closed completely:** (a) a server-issued **single-use
+> challenge** — client fetches it (e.g. alongside the password-door blob),
+> echoes it in the signed payload, server consumes it on verify; or (b) cheaper,
+> a **single-use signature cache** — reject any signature already seen within
+> the timestamp window (a small TTL'd KV/DO set; the window bounds its size).
+> Both are payload/endpoint changes only — the frozen derivation contract
+> (`crypto/params.ts`) and the DEK/door model are untouched.
+
 > **STATUS — built:** create-account and sign-in are both wired end-to-end. The
 > DEK indirection, wrapped-blob storage, and the `users.public_key` column exist
 > (`services/account.ts`); the client derives `publicKey` and signs at both
@@ -683,8 +703,15 @@ the data is gone."**
   (`services/account.ts`, `routes/auth.ts`). Still open: the **orphan-claim
   sweeper** (reclaim claims with no backing `users` row, alongside
   `sessions.deleteExpired`).
-- **Recovery code (Phase 1) / passkey PRF (Phase 2)** — additional doors, added
-  by wrapping the DEK; no derivation-contract change.
+- **CSP on brace-web** — the bearer token and the (non-extractable) encryption
+  key live in IndexedDB, readable by any JS on the origin (see the SECURITY note
+  in `data/session-store.ts`); a strong CSP is the real mitigation — chiefly
+  `connect-src` pinned to self + the api origin, so injected script can't
+  exfiltrate what it reads. brace-web is a static export, so the header is
+  attached by the per-tier **CloudFront response headers policy**, not
+  `next.config` — see [deployment.md](./deployment.md) for the policy details
+  and CSP gotchas (`'wasm-unsafe-eval'` for Argon2, no nonces on static export,
+  `worker-src`). Not yet built; ship it with the first deploy.
 - **OPAQUE password door (future, optional)** — the documented upgrade path if
   online-only (or KMS-isolated breach-resistant) password protection becomes a
   requirement; swap the password door's KEK for OPAQUE's `export_key` in isolation

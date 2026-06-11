@@ -6,6 +6,7 @@ import { usernameAvailableQueryOptions } from '@stxapps/react';
 import {
   ApiError,
   bytesToHex,
+  canonicalizeUsername,
   createAccountEndpoint,
   type CreateAccountPayload,
   type CreateAccountValues,
@@ -36,14 +37,21 @@ export function useCreateAccount() {
 
   return useMutation({
     mutationFn: async (values: CreateAccountValues) => {
+      // Canonicalize ONCE at the boundary (trim→NFKC→lowercase) and use that form
+      // for everything downstream — the KDF salt, the signed payload, and the
+      // client-side stores (session record, syncMeta key). The server and
+      // deriveUserSalt each canonicalize defensively anyway; doing it here keeps
+      // every client-side key for one account identical regardless of typed case.
+      const username = canonicalizeUsername(values.username);
+
       // Step 1: authoritative availability re-check on the exact submitted
-      // value. fetchQuery reuses the live query's cache, so a paused-on name
-      // resolves instantly; the server still re-checks at creation to close
-      // the type→submit race.
+      // value. fetchQuery reuses the live query's cache (also canonical-keyed),
+      // so a paused-on name resolves instantly; the server still re-checks at
+      // creation to close the type→submit race.
       let available: boolean;
       try {
         ({ available } = await queryClient.fetchQuery(
-          usernameAvailableQueryOptions(api, values.username),
+          usernameAvailableQueryOptions(api, username),
         ));
       } catch {
         throw new UsernameCheckError();
@@ -59,7 +67,7 @@ export function useCreateAccount() {
       // data, a `sign` closure over the private key (which never leaves
       // @stxapps/web-crypto), and `passwordDoor` — the wrapped DEK to persist
       // server-side.
-      const account = await createAccount(values.username, values.password);
+      const account = await createAccount(username, values.password);
 
       // Step 3: prove key ownership by signing a timestamped payload — which also
       // carries the wrapped password door, so the signature covers exactly what
@@ -68,7 +76,7 @@ export function useCreateAccount() {
       // once and both sign and send that string (see createAccountRequestSchema).
       const payload = JSON.stringify({
         action: 'create-account',
-        username: values.username,
+        username,
         publicKey: account.publicKey,
         passwordDoor: {
           wrappedDek: bytesToHex(account.passwordDoor.wrappedDek),
@@ -82,8 +90,6 @@ export function useCreateAccount() {
       // uniqueness here (the directory claim) to close the step-1→step-3 race; a
       // 409 routes back to the form's setError as UsernameTakenError. This is a
       // write, so it isn't cancelled on unmount.
-      // TODO: send a client-generated idempotency key so a retry after a dropped
-      // client (e.g. browser back mid-flight) can't create a duplicate account.
       let session;
       try {
         session = await api.call(createAccountEndpoint, { payload, signature });
@@ -94,8 +100,10 @@ export function useCreateAccount() {
 
       // The encryptionKey is the non-extractable AES key for the user's data; it
       // can't be serialized, so it rides back with the session for onSuccess to
-      // stash in client-only state alongside the session token.
-      return { session, encryptionKey: account.encryptionKey };
+      // stash in client-only state alongside the session token. The CANONICAL
+      // username rides along too (not the raw mutate() input), so the stores are
+      // keyed by the one form every later sign-in resolves to.
+      return { session, encryptionKey: account.encryptionKey, username };
     },
     // Persist via the auth context in onSuccess (not the component's mutateAsync
     // continuation) because it's hook-level and survives the form unmounting (e.g.
@@ -103,16 +111,16 @@ export function useCreateAccount() {
     // setSession both writes the session store and flips app auth state to
     // authenticated, so the UI reacts to the new login. The component keeps only
     // the failure→setError mapping, which is UI feedback and fine to drop when
-    // gone. `values` is the original mutate() input, so the username is here.
-    onSuccess: async ({ session, encryptionKey }, values) => {
+    // gone.
+    onSuccess: async ({ session, encryptionKey, username }) => {
       // A brand-new account has no server data, so mark its first sync done up
       // front (empty cursor). This lets InitialSyncGate render the app immediately with
       // no pull — the sign-in path, which has no such flag, blocks on a full
       // sync instead. Seed before setSession so the flag is in place by the time
       // the auth flip navigates into the (app) layout. See sync-store.
-      await seedNewAccount(values.username);
+      await seedNewAccount(username);
       await setSession({
-        username: values.username,
+        username,
         token: session.token,
         expiresAt: session.expiresAt,
         encryptionKey,

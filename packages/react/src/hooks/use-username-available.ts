@@ -2,7 +2,12 @@
 
 import { queryOptions, useQuery } from '@tanstack/react-query';
 
-import { type ApiClient, checkUsernameEndpoint, usernameSchema } from '@stxapps/shared';
+import {
+  type ApiClient,
+  canonicalizeUsername,
+  checkUsernameEndpoint,
+  usernameSchema,
+} from '@stxapps/shared';
 
 import { useApiClient } from '../contexts/api-client';
 import { useDebouncedValue } from './use-debounced-value';
@@ -11,7 +16,13 @@ import { useDebouncedValue } from './use-debounced-value';
 // share a cache key — when the user pauses on a name, submit gets a cache hit
 // instead of a second round trip. Export-and-reuse is the TanStack-recommended
 // shape over inlining queryKey/queryFn at each call site.
+//
+// Canonicalized (trim→NFKC→lowercase) before keying and sending: availability is
+// a fact about the CANONICAL handle (the server's UNIQUE key), so `Alice` and
+// `alice` are the same question — one cache entry, and the live hook's key always
+// matches the submit-time fetchQuery's regardless of typed case.
 export function usernameAvailableQueryOptions(client: ApiClient, username: string) {
+  username = canonicalizeUsername(username);
   return queryOptions({
     queryKey: ['username-available', username] as const,
     // `signal` flows into fetch, so a superseded request (older keystrokes) is

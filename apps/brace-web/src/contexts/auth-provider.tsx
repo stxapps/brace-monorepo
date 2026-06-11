@@ -73,8 +73,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           // A stored-but-expired session is an 'expired' reason (the user had a
           // session that lapsed); no session at all stays null (a direct visit).
+          // Same wipe as signOut: the local store holds DECRYPTED bookmarks, so
+          // an expired session must drop them too — otherwise the next account
+          // on this device could read the previous user's plaintext.
           if (s) {
-            void clearSession();
+            void Promise.allSettled([clearSession(), clearSyncData()]);
             setReason('expired');
           }
           setUsername(null);

@@ -41,8 +41,25 @@ files behind CloudFront.
 - **CloudFront** — one distribution per tier; origin is the S3 bucket. Alternate
   domain name + ACM cert for the custom domain.
 - **CloudFront Functions** — viewer-request function for clean-URL / `index.html`
-  rewrites and security headers. **Both distributions must use the same
-  function** so staging genuinely mirrors production.
+  rewrites. **Both distributions must use the same function** so staging
+  genuinely mirrors production. (A viewer-request function runs before the
+  response exists and cannot add response headers — those belong to the
+  response headers policy below.)
+- **Response headers policy** — one **custom response headers policy per tier**
+  attaching the security headers, chiefly the **CSP** that
+  [account.md](./account.md) names as the XSS mitigation for the bearer token +
+  encryption key in IndexedDB. With `output: 'export'` there is no Next server,
+  so `next.config` `headers()` never runs — CloudFront is the only place these
+  headers can be set. Per tier (not shared) because `connect-src` must name
+  that tier's api origin; keep the two policies otherwise identical. Roll out
+  as `Content-Security-Policy-Report-Only` first, then enforce. Known
+  constraints to bake in: `script-src` needs `'wasm-unsafe-eval'` (hash-wasm
+  Argon2); a static export can't mint per-request nonces, so Next's inline
+  bootstrap scripts need either a build-time hash union (regenerated each
+  deploy) or `'unsafe-inline'` with `connect-src` as the load-bearing
+  exfiltration block; `worker-src 'self'` covers the Argon2 worker and the
+  serwist service worker; `frame-ancestors` only works from a real header
+  (ignored in `<meta>`), another reason this lives at CloudFront.
 
 Deploy (per tier):
 
