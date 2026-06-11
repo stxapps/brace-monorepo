@@ -14,8 +14,12 @@
 // `(updatedAt, path)` — never the op log's internal `seq`.
 
 import {
+  DEFAULT_OPS_LIMIT,
   filesListEndpoint,
   filesSignEndpoint,
+  MAX_COMMIT_OPS,
+  MAX_LIST_LIMIT,
+  MAX_SIGN_PATHS,
   type OpEntry,
   opsCommitEndpoint,
   opsListEndpoint,
@@ -40,14 +44,14 @@ export interface SyncContext {
   encryptionKey: CryptoKey;
 }
 
-// Batch/page caps. The two writes batch under the contract's `.max(1000)`; the two
-// reads page under a `limit`. Blob fetches/uploads are fanned out at a bounded
-// concurrency so a first sync of thousands of files doesn't open thousands of
-// sockets at once.
-const SIGN_BATCH = 1000;
-const COMMIT_BATCH = 1000;
-const OPS_PAGE = 500;
-const FILES_PAGE = 1000;
+// Batch/page sizes — this client's policy is to use the contract caps in full
+// (anything ≤ the cap is valid; fewer round trips wins). Blob fetches/uploads are
+// fanned out at a bounded concurrency so a first sync of thousands of files
+// doesn't open thousands of sockets at once — a client-only knob, not contract.
+const SIGN_BATCH = MAX_SIGN_PATHS;
+const COMMIT_BATCH = MAX_COMMIT_OPS;
+const OPS_PAGE = DEFAULT_OPS_LIMIT;
+const FILES_PAGE = MAX_LIST_LIMIT;
 const BLOB_CONCURRENCY = 8;
 
 // A path under `files/` is heavy content (archived page, screenshot). Per the doc,

@@ -35,6 +35,16 @@ export const syncPathSchema = z
     'expected a sync path like meta/<id>.enc',
   );
 
+// Contract caps, defined once so the server's validation and the client's
+// batching/paging stay pinned to the same numbers (the sync engine batches its
+// writes and pages its reads against these). The 1000s all trace to R2: one
+// `list()` call returns at most 1000 keys, and the write caps match so one
+// request never implies more than ~1000 R2 subrequests.
+export const MAX_COMMIT_OPS = 1000;
+export const MAX_SIGN_PATHS = 1000;
+export const MAX_LIST_LIMIT = 1000;
+export const DEFAULT_OPS_LIMIT = 500;
+
 // --- GET /v1/ops/list — incremental pull ------------------------------------
 
 // The cursor is the compound key (updatedAt, path) — R2's `LastModified`, not a
@@ -48,7 +58,7 @@ export const syncPathSchema = z
 export const opsListRequestSchema = z.object({
   since: z.coerce.number().int().optional(),
   sincePath: syncPathSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(1000).default(500),
+  limit: z.coerce.number().int().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_OPS_LIMIT),
 });
 export type OpsListRequest = z.infer<typeof opsListRequestSchema>;
 
@@ -99,7 +109,7 @@ export const commitOpSchema = z.object({
 export type CommitOp = z.infer<typeof commitOpSchema>;
 
 export const opsCommitRequestSchema = z.object({
-  ops: z.array(commitOpSchema).min(1).max(1000),
+  ops: z.array(commitOpSchema).min(1).max(MAX_COMMIT_OPS),
 });
 export type OpsCommitRequest = z.infer<typeof opsCommitRequestSchema>;
 
@@ -155,7 +165,7 @@ export const opsCommitEndpoint = defineEndpoint({
 // on the first page. `limit` caps the page at R2's 1000-key ceiling.
 export const filesListRequestSchema = z.object({
   pageToken: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(1000).default(1000),
+  limit: z.coerce.number().int().min(1).max(MAX_LIST_LIMIT).default(MAX_LIST_LIMIT),
 });
 export type FilesListRequest = z.infer<typeof filesListRequestSchema>;
 
@@ -201,7 +211,7 @@ export type SignOp = z.infer<typeof signOpSchema>;
 
 export const filesSignRequestSchema = z.object({
   op: signOpSchema,
-  paths: z.array(syncPathSchema).min(1).max(1000),
+  paths: z.array(syncPathSchema).min(1).max(MAX_SIGN_PATHS),
 });
 export type FilesSignRequest = z.infer<typeof filesSignRequestSchema>;
 
