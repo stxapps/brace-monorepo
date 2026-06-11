@@ -7,7 +7,7 @@
 // the network layer never sees plaintext.
 //
 // Kept in a SEPARATE database ('brace-data') from the raw-IDB session store
-// (DB 'brace' in session-store.ts). The session DB holds auth/key material and
+// ('brace-session' in session-store.ts). The session DB holds auth/key material and
 // is hand-rolled; Dexie wants to own its own schema/versioning, so the two don't
 // share a database. Mirrors the auth≠sync split: auth state lives in one place,
 // synced user data in another.
