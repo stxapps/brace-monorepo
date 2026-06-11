@@ -102,9 +102,9 @@ export async function clearSyncData(username?: string): Promise<void> {
     await Promise.all([
       db.syncMeta.delete(username),
       db.pendingOps.where('username').equals(username).delete(),
-      // TODO: also delete this account's links once link rows carry an owner.
+      // TODO: also delete this account's items once item rows carry an owner.
     ]);
     return;
   }
-  await Promise.all([db.links.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);
+  await Promise.all([db.items.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);
 }

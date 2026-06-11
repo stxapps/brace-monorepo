@@ -226,6 +226,26 @@ tag/list names.
   Each fetched blob is decrypted once and **cached in Dexie**, so re-views are
   instant and offline. The one tradeoff: a never-opened archive isn't available
   offline (see _deferred_ — offline pinning).
+- **Plaintext typing: the namespace says what's inside, never the blob.** On the
+  wire every object is the same opaque encrypted frame (see _crypto boundary —
+  blob wire format_); nothing about an R2 object distinguishes JSON from an
+  image. The decrypted bytes are typed by **convention baked into the client**:
+  the index namespaces — `meta/`, `tags/`, `lists/`, `settings/` — are UTF-8
+  JSON (decode, then `JSON.parse`), while `files/` is raw content whose meaning
+  comes from the **metadata field that references it** — `pageArchive` means an
+  HTML archive, a `screenshot`/`thumbnail` field means an image. The client only
+  ever reaches a content blob _through_ such a field, so it knows what it is
+  about to decrypt before it even signs the GET. Where one field may hold
+  several formats (PNG vs. WebP, raw HTML vs. a single-file bundle), store the
+  type beside the id **inside the metadata's ciphertext** — e.g.
+  `"screenshot": { "id": "{id}.enc", "type": "image/webp" }` — a per-field
+  metadata-schema decision that touches nothing in the sync engine, the blob
+  frame, or the server. These plaintext JSON shapes are a **cross-platform
+  contract** like the blob frame itself (every platform must read/write the
+  same JSON), so their types/schemas belong in `@stxapps/shared`. The local
+  store mirrors the agnosticism: the Dexie record holds path + `updatedAt` +
+  raw decrypted bytes, and parsing into typed bookmark/tag/list entities is a
+  read layer **above** sync.
 
 ### the three flows
 

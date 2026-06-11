@@ -12,8 +12,8 @@
 // share a database. Mirrors the auth≠sync split: auth state lives in one place,
 // synced user data in another.
 //
-// Within THIS database, `syncMeta` and `links` share one Dexie instance on
-// purpose: the gate invariant ties the cursor (syncMeta) to the links snapshot,
+// Within THIS database, `syncMeta` and `items` share one Dexie instance on
+// purpose: the gate invariant ties the cursor (syncMeta) to the items snapshot,
 // so they must stay consistent — one database keeps a cross-store atomic
 // transaction possible (IndexedDB transactions can't span databases).
 
@@ -23,7 +23,7 @@ import type { OpKind } from '@stxapps/shared';
 
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
-// pull, and it's the ONLY way to tell "synced, zero links" apart from "never
+// pull, and it's the ONLY way to tell "synced, zero items" apart from "never
 // synced" — without it, an empty local store is ambiguous.
 //
 // The cursor is a TIMESTAMP, not a seq. Per docs/local-first-sync.md the wire
@@ -59,6 +59,10 @@ export interface SyncMetaRecord {
 // (the always-resident bookmark index), `tags/{id}.enc`, `lists/{id}.enc`,
 // `settings/<concern>.enc`, and lazily-fetched `files/{id}.enc` content.
 //
+// "Item" (not "entity" — that reads like a server-side D1 row — and not "file"
+// — that's the `files/` namespace specifically) is the established name for this
+// one-table-of-every-type store in E2E sync systems (Standard Notes, Joplin).
+//
 // - `id` is the FULL relative path (`meta/m_abc.enc`), the same key the op log,
 //   pending queue, and R2 use — so reconcile can compare a server op to a local
 //   record without any id↔path mapping.
@@ -71,7 +75,7 @@ export interface SyncMetaRecord {
 //   lazily downloaded — only its `updatedAt` is known. Parsing these bytes into a
 //   typed bookmark/tag/list is layered on top later; the sync path stays
 //   payload-agnostic.
-export interface LinkRecord {
+export interface ItemRecord {
   id: string;
   updatedAt: number;
   data?: Uint8Array;
@@ -90,7 +94,7 @@ export interface LinkRecord {
 export interface PendingOp {
   // Whose queue — one device can hold several accounts' data.
   username: string;
-  // The targeted entity's full relative path (matches a LinkRecord `id`).
+  // The targeted entity's full relative path (matches an ItemRecord `id`).
   path: string;
   // `put` (created/edited) or `delete`. A re-edit can flip put→delete in place.
   op: OpKind;
@@ -103,7 +107,7 @@ export interface PendingOp {
 
 class BraceDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
-  links!: EntityTable<LinkRecord, 'id'>;
+  items!: EntityTable<ItemRecord, 'id'>;
   pendingOps!: Table<PendingOp, [string, string]>;
 
   constructor() {
@@ -112,11 +116,11 @@ class BraceDb extends Dexie {
       // `username` primary key — one bookkeeping row per account.
       syncMeta: 'username',
       // `id` primary key + `updatedAt` index for ordered/recent reads.
-      links: 'id, updatedAt',
+      items: 'id, updatedAt',
     });
     // v2 adds the pending-ops queue. Compound `[username+path]` primary key gives
     // the one-row-per-(account,path) upsert above; the `username` index scopes a
-    // drain to the active account. Unlisted stores (syncMeta, links) carry forward.
+    // drain to the active account. Unlisted stores (syncMeta, items) carry forward.
     this.version(2).stores({
       pendingOps: '[username+path], username',
     });

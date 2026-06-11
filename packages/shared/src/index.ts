@@ -7,4 +7,5 @@ export * from './crypto/encoding';
 export * from './crypto/params';
 export * from './crypto/salt';
 export * from './sync/endpoints';
+export * from './sync/entities';
 export * from './theme/theme';

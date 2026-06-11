@@ -149,7 +149,7 @@ export async function loadEntityContent(
   ctx: SyncContext,
   path: string,
 ): Promise<Uint8Array | undefined> {
-  const rec = await db.links.get(path);
+  const rec = await db.items.get(path);
   if (!rec) return undefined;
   if (rec.data) return rec.data;
   const url = (await signPaths('get', [path])).get(path);
@@ -160,7 +160,7 @@ export async function loadEntityContent(
   });
   if (!blob) return undefined;
   const data = await decryptEntity(ctx.encryptionKey, blob);
-  await db.links.update(path, { data });
+  await db.items.update(path, { data });
   return data;
 }
 
@@ -243,7 +243,7 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<vo
 
   // Server side: download anything new or newer than the stored local `updatedAt`
   // — except paths with a pending op, which local-wins reserves for the push.
-  const locals = await db.links.bulkGet(files.map((f) => f.path));
+  const locals = await db.items.bulkGet(files.map((f) => f.path));
   const downloads = files.filter((f, i) => {
     if (pendingPaths.has(f.path)) return false;
     const local = locals[i];
@@ -253,7 +253,7 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOp[]): Promise<vo
   // Local side: a local-only path with no pending op was deleted on the server —
   // drop it. (A local-only path with a pending put is an unpushed create.)
   const localDeletes: string[] = [];
-  for (const key of await db.links.toCollection().primaryKeys()) {
+  for (const key of await db.items.toCollection().primaryKeys()) {
     const path = key as string;
     if (serverMap.has(path) || pendingPaths.has(path)) continue;
     localDeletes.push(path);
@@ -341,7 +341,7 @@ async function pushPending(
     // to stamp — update is a no-op).
     for (const r of results) {
       committed.push(r);
-      await db.links.update(r.path, { updatedAt: r.updatedAt });
+      await db.items.update(r.path, { updatedAt: r.updatedAt });
     }
     await clearPendingPaths(
       ctx.username,
@@ -362,7 +362,7 @@ async function uploadBlobs(
   await mapLimit(ops, BLOB_CONCURRENCY, async (op) => {
     const url = urls.get(op.path);
     if (!url) return;
-    const rec = await db.links.get(op.path);
+    const rec = await db.items.get(op.path);
     if (!rec?.data) return;
     await putBlob(url, await encryptEntity(ctx.encryptionKey, rec.data));
   });
@@ -382,7 +382,7 @@ async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void>
   // interrupted first sync RESUME instead of re-downloading everything, makes a
   // re-pulled echo of our own commit free, and keeps a current content record's
   // lazily-cached blob.
-  const locals = await db.links.bulkGet(entries.map((e) => e.path));
+  const locals = await db.items.bulkGet(entries.map((e) => e.path));
   const stale = entries.filter((e, i) => {
     const local = locals[i];
     if (!local || local.updatedAt < e.updatedAt) return true;
@@ -392,7 +392,7 @@ async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void>
   const content = stale.filter((e) => isContentPath(e.path));
   const index = stale.filter((e) => !isContentPath(e.path));
 
-  await db.links.bulkPut(content.map((e) => ({ id: e.path, updatedAt: e.updatedAt })));
+  await db.items.bulkPut(content.map((e) => ({ id: e.path, updatedAt: e.updatedAt })));
   if (index.length === 0) return;
 
   const urls = await signPaths(
@@ -410,12 +410,12 @@ async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void>
     });
     if (!blob) return;
     const data = await decryptEntity(ctx.encryptionKey, blob);
-    await db.links.put({ id: e.path, updatedAt: e.updatedAt, data });
+    await db.items.put({ id: e.path, updatedAt: e.updatedAt, data });
   });
 }
 
 async function applyDeletes(paths: string[]): Promise<void> {
-  if (paths.length > 0) await db.links.bulkDelete(paths);
+  if (paths.length > 0) await db.items.bulkDelete(paths);
 }
 
 // --- control-plane helpers --------------------------------------------------
