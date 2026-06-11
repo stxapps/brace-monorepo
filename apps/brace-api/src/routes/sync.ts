@@ -32,10 +32,35 @@ import { commitOps, listUserFiles, signUserFileUrls } from '../services/sync';
 // across IPs. ops/commit and files/sign are the write/hot paths, so they stack the
 // 'tight' tier on top.
 export const syncRoutes = new Hono<AppEnv>()
-  .use(opsListEndpoint.path, requireAuth)
-  .use(opsCommitEndpoint.path, requireAuth)
   .use(filesListEndpoint.path, requireAuth)
   .use(filesSignEndpoint.path, requireAuth)
+  .use(opsListEndpoint.path, requireAuth)
+  .use(opsCommitEndpoint.path, requireAuth)
+  // --- files/list — fallback R2 listing (paginated) ------------------------
+  .get(filesListEndpoint.path, zValidator('query', filesListEndpoint.request), async (c) => {
+    const { pageToken, limit } = c.req.valid('query');
+    const { userId } = c.get('session');
+    // One R2 page per call; the client pages via nextPageToken (R2's opaque list
+    // cursor) until it's null. See docs/local-first-sync.md "fallback full sync".
+    const body: FilesListResponse = await listUserFiles(c.env, userId, pageToken, limit);
+    return c.json(body);
+  })
+  // --- files/sign — mint presigned R2 URL(s) -------------------------------
+  .post(
+    filesSignEndpoint.path,
+    rateLimit('tight', userRateLimitKey),
+    zValidator('json', filesSignEndpoint.request),
+    async (c) => {
+      const { op, paths } = c.req.valid('json');
+      const { userId } = c.get('session');
+      // put: quota-checked at issuance, then short-lived PUT URLs. get: no quota,
+      // longer-lived GET URLs minted in batch. signUserFileUrls namespaces every
+      // path under the caller's prefix, so cross-user signing is structurally impossible.
+      const urls = await signUserFileUrls(c.env, userId, op, paths);
+      const body: FilesSignResponse = { urls };
+      return c.json(body);
+    },
+  )
   // --- ops/list — incremental pull -----------------------------------------
   .get(opsListEndpoint.path, zValidator('query', opsListEndpoint.request), async (c) => {
     const { since, sincePath, limit } = c.req.valid('query');
@@ -65,31 +90,6 @@ export const syncRoutes = new Hono<AppEnv>()
       // every puller), so `results` omits it and the client retries. The contract
       // caps `ops` at 1000; over the cap zValidator 400s before any work runs.
       const body: OpsCommitResponse = await commitOps(c.env, userId, ops);
-      return c.json(body);
-    },
-  )
-  // --- files/list — fallback R2 listing (paginated) ------------------------
-  .get(filesListEndpoint.path, zValidator('query', filesListEndpoint.request), async (c) => {
-    const { pageToken, limit } = c.req.valid('query');
-    const { userId } = c.get('session');
-    // One R2 page per call; the client pages via nextPageToken (R2's opaque list
-    // cursor) until it's null. See docs/local-first-sync.md "fallback full sync".
-    const body: FilesListResponse = await listUserFiles(c.env, userId, pageToken, limit);
-    return c.json(body);
-  })
-  // --- files/sign — mint presigned R2 URL(s) -------------------------------
-  .post(
-    filesSignEndpoint.path,
-    rateLimit('tight', userRateLimitKey),
-    zValidator('json', filesSignEndpoint.request),
-    async (c) => {
-      const { op, paths } = c.req.valid('json');
-      const { userId } = c.get('session');
-      // put: quota-checked at issuance, then short-lived PUT URLs. get: no quota,
-      // longer-lived GET URLs minted in batch. signUserFileUrls namespaces every
-      // path under the caller's prefix, so cross-user signing is structurally impossible.
-      const urls = await signUserFileUrls(c.env, userId, op, paths);
-      const body: FilesSignResponse = { urls };
       return c.json(body);
     },
   );

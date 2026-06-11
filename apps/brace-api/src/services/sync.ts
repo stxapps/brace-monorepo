@@ -40,6 +40,37 @@ export async function listUserFiles(
   return userFilesRepo(env).listPage(userId, pageToken, limit);
 }
 
+// Mint presigned R2 URLs (POST /v1/files/sign). Paths arrive already shape-
+// validated by the contract (syncPathSchema); the gateway namespaces each under
+// the caller's prefix, so cross-user access is structurally impossible. `put`
+// additionally clears the per-user quota at issuance (the only place abuse is
+// boundable when content is opaque); `get` needs no quota (reading your own
+// data), so download URLs batch freely.
+export async function signUserFileUrls(
+  env: Bindings,
+  userId: string,
+  op: SignOp,
+  paths: string[],
+): Promise<SignedUrl[]> {
+  if (op === 'put') {
+    const { fileCount, totalBytes } = await userDataStub(env, userId).usage();
+    // Conservative gate: we can't know each new object's size until it's uploaded,
+    // so bound on current usage plus the requested file count. A re-PUT of an
+    // existing path is counted as new here (harmless over-count near the ceiling).
+    if (fileCount + paths.length > MAX_FILES) {
+      throw new ApiError(403, 'quota_exceeded', 'File-count quota exceeded');
+    }
+    if (totalBytes >= MAX_BYTES) {
+      throw new ApiError(403, 'quota_exceeded', 'Storage quota exceeded');
+    }
+  }
+
+  const method = op === 'put' ? 'PUT' : 'GET';
+  const expiresIn = op === 'put' ? PUT_URL_TTL_SECONDS : GET_URL_TTL_SECONDS;
+
+  return userFilesRepo(env).presignUrls(userId, paths, method, expiresIn);
+}
+
 // Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last
 // handshake, batched. For each `put` we HEAD R2: that doubles as the existence
 // check upholding the op-without-object invariant and reads R2's authoritative
@@ -90,35 +121,4 @@ export async function commitOps(
   if (entries.length === 0) return { results: [], failed };
   const { results } = await userDataStub(env, userId).commitOps(entries);
   return { results, failed };
-}
-
-// Mint presigned R2 URLs (POST /v1/files/sign). Paths arrive already shape-
-// validated by the contract (syncPathSchema); the gateway namespaces each under
-// the caller's prefix, so cross-user access is structurally impossible. `put`
-// additionally clears the per-user quota at issuance (the only place abuse is
-// boundable when content is opaque); `get` needs no quota (reading your own
-// data), so download URLs batch freely.
-export async function signUserFileUrls(
-  env: Bindings,
-  userId: string,
-  op: SignOp,
-  paths: string[],
-): Promise<SignedUrl[]> {
-  if (op === 'put') {
-    const { fileCount, totalBytes } = await userDataStub(env, userId).usage();
-    // Conservative gate: we can't know each new object's size until it's uploaded,
-    // so bound on current usage plus the requested file count. A re-PUT of an
-    // existing path is counted as new here (harmless over-count near the ceiling).
-    if (fileCount + paths.length > MAX_FILES) {
-      throw new ApiError(403, 'quota_exceeded', 'File-count quota exceeded');
-    }
-    if (totalBytes >= MAX_BYTES) {
-      throw new ApiError(403, 'quota_exceeded', 'Storage quota exceeded');
-    }
-  }
-
-  const method = op === 'put' ? 'PUT' : 'GET';
-  const expiresIn = op === 'put' ? PUT_URL_TTL_SECONDS : GET_URL_TTL_SECONDS;
-
-  return userFilesRepo(env).presignUrls(userId, paths, method, expiresIn);
 }
