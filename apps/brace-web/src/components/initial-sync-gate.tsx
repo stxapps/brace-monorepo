@@ -18,7 +18,7 @@ import { useSync } from '../contexts/sync-provider';
 // subsequent incremental/background syncs never gate the UI — they report on the
 // separate bgSync dimension instead (see sync-provider).
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { storeStatus, retry } = useSync();
+  const { storeStatus, retryInitialSync } = useSync();
 
   if (storeStatus === 'ready') return children;
 
@@ -28,7 +28,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <p>Couldn’t sync your links.</p>
-        <button onClick={retry} className="underline">
+        <button onClick={retryInitialSync} className="underline">
           Try again
         </button>
       </div>

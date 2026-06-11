@@ -38,7 +38,7 @@ import { BlobRequestError, getBlob, putBlob } from './r2';
 // rather than read from session-store — so this module stays free of session/auth
 // imports. Both fields duplicate values the session already holds; that's
 // deliberate decoupling, not redundancy.
-export interface SyncContext {
+export interface SyncDeps {
   username: string;
   // Non-extractable AES key from the session store; used to decrypt/encrypt R2 blobs.
   encryptionKey: CryptoKey;
@@ -74,16 +74,16 @@ interface Entry {
 // manifest, download + decrypt the index, build the local store — content is NOT
 // pulled here. BLOCKING from the UI's point of view (InitialSyncGate shows the
 // decrypting screen until this resolves).
-export async function runInitialSync(ctx: SyncContext): Promise<void> {
+export async function runInitialSync(deps: SyncDeps): Promise<void> {
   const files = await listAllFiles();
-  await storeDownloads(ctx, files);
+  await storeDownloads(deps, files);
   // Cursor is the newest `updatedAt` among ALL listed files (content included, even
   // though its blob is deferred) — a bare timestamp with no path tiebreak yet, so
   // markFirstSyncDone records an empty `syncCursorPath` (the server treats a
   // missing `sincePath` as the low sentinel on the next pull).
   let newest = 0;
   for (const f of files) if (f.updatedAt > newest) newest = f.updatedAt;
-  await markFirstSyncDone(ctx.username, newest);
+  await markFirstSyncDone(deps.username, newest);
 }
 
 // Single-flight per account. Overlapping calls (the post-ready background pull, an
@@ -99,8 +99,8 @@ const rerunRequests = new Set<string>();
 // then pull. Non-blocking — failures surface a quiet retry, they don't gate the
 // UI. Routes itself to the download-authoritative fallback when the op log can't
 // answer (wiped, compacted past the cursor, or behind it).
-export function runIncrementalSync(ctx: SyncContext): Promise<void> {
-  const key = ctx.username;
+export function runIncrementalSync(deps: SyncDeps): Promise<void> {
+  const key = deps.username;
   const inflight = inflightSyncs.get(key);
   if (inflight) {
     rerunRequests.add(key);
@@ -108,8 +108,8 @@ export function runIncrementalSync(ctx: SyncContext): Promise<void> {
   }
   const run = (async () => {
     try {
-      await incrementalSyncOnce(ctx);
-      while (rerunRequests.delete(key)) await incrementalSyncOnce(ctx);
+      await incrementalSyncOnce(deps);
+      while (rerunRequests.delete(key)) await incrementalSyncOnce(deps);
     } finally {
       inflightSyncs.delete(key);
       rerunRequests.delete(key);
@@ -119,15 +119,15 @@ export function runIncrementalSync(ctx: SyncContext): Promise<void> {
   return run;
 }
 
-async function incrementalSyncOnce(ctx: SyncContext): Promise<void> {
-  const meta = await getSyncMeta(ctx.username);
+async function incrementalSyncOnce(deps: SyncDeps): Promise<void> {
+  const meta = await getSyncMeta(deps.username);
   // The cursor is the compound key (updatedAt, path); both halves go over the wire
   // as opsListEndpoint's `since` + `sincePath`. `since` is always sent (even 0, for
   // a seeded-but-empty new account) so the server's bounds can route us; an empty
   // `sincePath` is omitted (server reads it as the low sentinel).
   const since = meta?.syncCursor ?? 0;
   const sincePath = meta?.syncCursorPath ?? '';
-  const pending = await listPendingOps(ctx.username);
+  const pending = await listPendingOps(deps.username);
 
   // Peek the first page: its retained-range bounds decide incremental vs. fallback
   // before we commit to paging the op log.
@@ -138,9 +138,9 @@ async function incrementalSyncOnce(ctx: SyncContext): Promise<void> {
   });
 
   if (needsFallback(since, first)) {
-    await fallbackCycle(ctx, pending);
+    await fallbackCycle(deps, pending);
   } else {
-    await incrementalCycle(ctx, since, sincePath, first, pending);
+    await incrementalCycle(deps, since, sincePath, first, pending);
   }
 }
 
@@ -150,7 +150,7 @@ async function incrementalSyncOnce(ctx: SyncContext): Promise<void> {
 // the path isn't known locally — or no longer exists server-side (deleted on
 // another device, the delete op not yet pulled; the next sync removes the record).
 export async function loadEntityContent(
-  ctx: SyncContext,
+  deps: SyncDeps,
   path: string,
 ): Promise<Uint8Array | undefined> {
   const rec = await db.items.get(path);
@@ -163,7 +163,7 @@ export async function loadEntityContent(
     throw err;
   });
   if (!blob) return undefined;
-  const data = await decryptEntity(ctx.encryptionKey, blob);
+  const data = await decryptEntity(deps.encryptionKey, blob);
   await db.items.update(path, { data });
   return data;
 }
@@ -171,7 +171,7 @@ export async function loadEntityContent(
 // --- the cycle: incremental -------------------------------------------------
 
 async function incrementalCycle(
-  ctx: SyncContext,
+  deps: SyncDeps,
   since: number,
   sincePath: string,
   first: OpsListResponse,
@@ -214,8 +214,8 @@ async function incrementalCycle(
 
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
-  const committed = await pushPending(ctx, pending);
-  await storeDownloads(ctx, downloads);
+  const committed = await pushPending(deps, pending);
+  await storeDownloads(deps, downloads);
   await applyDeletes(localDeletes);
 
   // 5. Advance the cursor to the newest (updatedAt, path) seen across the whole
@@ -227,7 +227,7 @@ async function incrementalCycle(
       cursorPath = c.path;
     }
   }
-  await advanceCursor(ctx.username, cursorTs, cursorPath);
+  await advanceCursor(deps.username, cursorTs, cursorPath);
 }
 
 // --- the cycle: fallback (download-authoritative) ---------------------------
@@ -240,7 +240,7 @@ async function incrementalCycle(
 // fallback (an infra event: log wiped/compacted/reset) never silently flips a
 // conflict to server-wins: a pending edit is pushed over the server copy, and a
 // pending delete is pushed rather than resurrected by the listing.
-async function fallbackCycle(ctx: SyncContext, pending: PendingOpRecord[]): Promise<void> {
+async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promise<void> {
   const files = await listAllFiles();
   const serverMap = new Map(files.map((f) => [f.path, f.updatedAt]));
   const pendingPaths = new Set(pending.map((p) => p.path));
@@ -271,8 +271,8 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOpRecord[]): Prom
   // the deletion) and frees the path's file_sizes quota entry. Commit is idempotent
   // on both stores, so pushing unconditionally is always safe; dropping the op
   // would leak the quota entry forever.
-  const committed = await pushPending(ctx, pending);
-  await storeDownloads(ctx, downloads);
+  const committed = await pushPending(deps, pending);
+  await storeDownloads(deps, downloads);
   await applyDeletes(localDeletes);
 
   // Cursor = newest (updatedAt, path) across ALL pages (R2 lists in key order, not
@@ -294,7 +294,7 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOpRecord[]): Prom
       cursorPath = c.path;
     }
   }
-  await resetCursor(ctx.username, cursorTs, cursorPath);
+  await resetCursor(deps.username, cursorTs, cursorPath);
 }
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
@@ -304,7 +304,7 @@ async function fallbackCycle(ctx: SyncContext, pending: PendingOpRecord[]): Prom
 // can advance its cursor over its own writes. Removes each committed path from the
 // queue; a `no_object` failure is left queued to re-PUT next drain.
 async function pushPending(
-  ctx: SyncContext,
+  deps: SyncDeps,
   ops: PendingOpRecord[],
 ): Promise<{ path: string; updatedAt: number }[]> {
   if (ops.length === 0) return [];
@@ -321,12 +321,12 @@ async function pushPending(
       puts.map((o) => o.path),
     );
     await uploadBlobs(
-      ctx,
+      deps,
       puts.filter((o) => isContentPath(o.path)),
       urls,
     );
     await uploadBlobs(
-      ctx,
+      deps,
       puts.filter((o) => !isContentPath(o.path)),
       urls,
     );
@@ -356,7 +356,7 @@ async function pushPending(
       await db.items.update(r.path, { updatedAt: r.updatedAt });
     }
     await clearPendingPaths(
-      ctx.username,
+      deps.username,
       results.map((r) => r.path),
     );
   }
@@ -367,7 +367,7 @@ async function pushPending(
 // `data` (shouldn't happen, but be safe) is skipped — the commit will then report
 // `no_object` and the op stays queued.
 async function uploadBlobs(
-  ctx: SyncContext,
+  deps: SyncDeps,
   ops: PendingOpRecord[],
   urls: Map<string, string>,
 ): Promise<void> {
@@ -376,7 +376,7 @@ async function uploadBlobs(
     if (!url) return;
     const rec = await db.items.get(op.path);
     if (!rec?.data) return;
-    await putBlob(url, await encryptEntity(ctx.encryptionKey, rec.data));
+    await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
   });
 }
 
@@ -386,7 +386,7 @@ async function uploadBlobs(
 // their `updatedAt` — the blob stays lazy (and a CHANGED record drops any
 // previously-cached `data` so a stale copy isn't served after an update). The
 // index is sign-get'd in batch, then GET + decrypt + store at bounded concurrency.
-async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void> {
+async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   if (entries.length === 0) return;
 
   // Skip paths whose local record is already current (same-or-newer server stamp,
@@ -421,7 +421,7 @@ async function storeDownloads(ctx: SyncContext, entries: Entry[]): Promise<void>
       throw err;
     });
     if (!blob) return;
-    const data = await decryptEntity(ctx.encryptionKey, blob);
+    const data = await decryptEntity(deps.encryptionKey, blob);
     await db.items.put({ id: e.path, updatedAt: e.updatedAt, data });
   });
 }

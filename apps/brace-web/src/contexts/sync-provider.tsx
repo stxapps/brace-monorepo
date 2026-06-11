@@ -13,7 +13,7 @@ import {
 
 import { getSession } from '../data/session-store';
 import { isFirstSyncDone } from '../data/sync-store';
-import { runIncrementalSync, runInitialSync, type SyncContext } from '../sync/engine';
+import { runIncrementalSync, runInitialSync, type SyncDeps } from '../sync/engine';
 import { useAuth } from './auth-provider';
 
 // Sync state for the signed-in app — deliberately SEPARATE from auth state (see
@@ -55,21 +55,23 @@ interface SyncContextValue {
   storeStatus: StoreStatus;
   bgSync: BgSyncState;
   // Re-attempt a failed initial sync (the gate's retry).
-  retry: () => void;
+  retryInitialSync: () => void;
   // Kick a background incremental cycle now — e.g. right after a local edit
-  // enqueues a pending op. Doubles as the indicator's retry. Safe to call
-  // eagerly: the engine single-flights per account (overlapping calls coalesce
-  // into one trailing rerun). No-op until a session is usable.
+  // enqueues a pending op. Doubles as the retry when a background cycle fails
+  // (bgSync 'error'): retrying a failed cycle and running a fresh one are the
+  // same operation, so there's no separate retryBgSync. Safe to call eagerly:
+  // the engine single-flights per account (overlapping calls coalesce into one
+  // trailing rerun). No-op until a session is usable.
   requestSync: () => void;
 }
 
-const SyncStateContext = createContext<SyncContextValue | null>(null);
+const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const { username, status: authStatus } = useAuth();
   const [storeStatus, setStoreStatus] = useState<StoreStatus>('checking');
   const [bgSync, setBgSync] = useState<BgSyncState>('idle');
-  // Bumped by retry() to re-run the effect.
+  // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
 
   // Guards against a stale async resolution writing state after the account
@@ -82,7 +84,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const backgroundSyncRef = useRef<() => void>(() => undefined);
   const requestSync = useCallback(() => backgroundSyncRef.current(), []);
 
-  const retry = useCallback(() => {
+  const retryInitialSync = useCallback(() => {
     setStoreStatus('checking');
     setAttempt((n) => n + 1);
   }, []);
@@ -96,7 +98,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     const session = getSession();
     if (!session) return; // mirror not hydrated yet; the next render will retry
-    const ctx: SyncContext = { username, encryptionKey: session.encryptionKey };
+    const deps: SyncDeps = { username, encryptionKey: session.encryptionKey };
 
     // Fresh slate for the indicator — a stale 'error' from a previous account
     // (or a pre-retry run) must not bleed into this one.
@@ -107,7 +109,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // background cycle coexists with a usable store, so storeStatus stays put.
     const backgroundSync = () => {
       setBgSync('syncing');
-      void runIncrementalSync(ctx).then(
+      void runIncrementalSync(deps).then(
         () => {
           if (activeRef.current) setBgSync('idle');
         },
@@ -126,12 +128,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           backgroundSync();
           return;
         }
+        if (!activeRef.current) return;
+
         // First sign-in on this device: block on the full pull.
-        if (!activeRef.current) return;
         setStoreStatus('syncing-initial');
-        await runInitialSync(ctx);
+        await runInitialSync(deps);
         if (!activeRef.current) return;
+
         setStoreStatus('ready');
+        // Not a second download: a cycle right after the initial pull is usually
+        // one empty opsList call (storeDownloads skips current records). It closes
+        // the freshness window of the non-snapshot R2 listing and drains any
+        // pending ops — the initial sync never pushes — and nothing else would
+        // sync until the next local edit. Invariant: reaching 'ready' always
+        // kicks a cycle, on both branches.
         backgroundSync();
       } catch {
         if (activeRef.current) setStoreStatus('error');
@@ -145,15 +155,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [username, authStatus, attempt]);
 
   const value = useMemo<SyncContextValue>(
-    () => ({ storeStatus, bgSync, retry, requestSync }),
-    [storeStatus, bgSync, retry, requestSync],
+    () => ({ storeStatus, bgSync, retryInitialSync, requestSync }),
+    [storeStatus, bgSync, retryInitialSync, requestSync],
   );
 
-  return <SyncStateContext.Provider value={value}>{children}</SyncStateContext.Provider>;
+  return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
 export function useSync(): SyncContextValue {
-  const ctx = useContext(SyncStateContext);
+  const ctx = useContext(SyncContext);
   if (!ctx) throw new Error('useSync must be used within <SyncProvider>');
   return ctx;
 }
