@@ -1,8 +1,9 @@
-// Cross-platform key-derivation parameters. EVERY platform — web, extension,
-// and the future Expo/native client — MUST derive with these exact values:
-// they are the contract that makes one password produce the same keys
-// everywhere. Changing any of them re-derives every user's keys and locks them
-// out of existing data, so they are frozen at launch.
+// Cross-platform crypto parameters: key derivation and the encrypted-blob wire
+// format. EVERY platform — web, extension, and the future Expo/native client —
+// MUST use these exact values: they are the contract that makes one password
+// produce the same keys everywhere and one platform's blobs readable on every
+// other. Changing a derivation value re-derives every user's keys and locks
+// them out of existing data, so they are frozen at launch.
 //
 // These live in `shared` (platform-agnostic) on purpose — the implementation
 // is per-platform (web uses @stxapps/web-crypto), but the numbers must be one
@@ -36,6 +37,25 @@ export const ARGON2_PARAMS = {
 // purposes, or the two keys collapse into one.
 export const HKDF_INFO_AUTH_SEED = 'brace-auth-seed';
 export const HKDF_INFO_ENCRYPTION_KEY = 'brace-encryption-key';
+
+// --- encrypted-blob wire format ---------------------------------------------
+//
+// Every synced R2 blob is framed `[version(1) || iv(AES_GCM_IV_BYTES) ||
+// ciphertext+tag]` (see docs/local-first-sync.md "crypto boundary"). Like the
+// derivation parameters above, this is a cross-platform contract: a blob packed
+// on one platform must unpack on every other, forever — so the numbers live
+// here, not in any platform package. A format change (new cipher, different IV
+// size, compression) mints a NEW version constant and a new decoder branch;
+// never repurpose an existing value.
+
+// 96-bit IV — the recommended AES-GCM size (other lengths are legal but take a
+// weaker GHASH path). web-crypto's encrypt() mints exactly this many random
+// bytes per call; the blob frame slices exactly this many back off on read.
+export const AES_GCM_IV_BYTES = 12;
+
+// First byte of every packed blob. Readers reject unknown versions loudly
+// (a wrong slice would otherwise feed garbage to GCM and fail as "tampered").
+export const BLOB_FORMAT_V1 = 0x01;
 
 // Canonical form of a username, used BOTH as the per-user Argon2 salt input
 // (see APP_SALT above) and for the server's case-insensitive UNIQUE handle.

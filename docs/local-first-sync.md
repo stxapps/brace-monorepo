@@ -559,6 +559,25 @@ Every blob is AES-256-GCM under the single data key derived from the account DEK
 changes / password changes re-wrap only the 32-byte DEK and **never re-encrypt
 data**, so the sync layer is entirely oblivious to them.
 
+**Blob wire format.** Every R2 object is the binary frame
+`[version(1) || iv(12) || ciphertext+tag]` — packed/unpacked by the sync
+engine's crypto boundary (`sync/crypto.ts` in brace-web). The constants
+(`BLOB_FORMAT_V1`, `AES_GCM_IV_BYTES`) live in `@stxapps/shared`
+(`crypto/params.ts`) because they are a **cross-platform contract** like the
+key-derivation parameters: a blob packed on web must unpack on the extension
+and the future Expo client, forever. Raw bytes, deliberately not a JSON
+envelope — base64 would inflate every blob ~33% (worst on the heavy content
+files that count against the quota), and any plaintext field beside the
+ciphertext (a content type, say) would leak to the server. What a blob
+_contains_ (text vs. image, archive vs. thumbnail) is described **inside the
+ciphertext** of the metadata that references it, never in the frame. The
+version byte is format-change insurance: a future layout (new cipher, different
+IV size, compression) mints a new version constant and a new decode branch, so
+old blobs keep decoding side by side instead of forcing a download-and-re-encrypt
+migration; readers reject an unknown version loudly. The IV is 12 bytes because
+96 bits is the recommended GCM size (other lengths take a weaker GHASH path) —
+it would only ever change as part of a new versioned format.
+
 Even with E2E, the server still learns the **number of files, each file's size,
 its timestamps, and access patterns** (which blobs are fetched when). It does
 **not** learn titles, URLs, tag/list names, or the metadata→content reference
