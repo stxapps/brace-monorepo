@@ -53,9 +53,9 @@ Dexie holds:
 
 - decrypted bookmark metadata, tags, lists, settings (the always-resident index);
 - decrypted content/archive blobs (fetched lazily, on demand);
-- `syncCursor` — the newest R2 `LastModified` the client has reconciled (a
-  timestamp, the high-water mark for the next incremental pull — see _the sync
-  endpoint_);
+- the **sync cursor** — the compound `(updatedAt, path)` of the newest op/file
+  the client has reconciled, stored as `syncCursorUpdatedAt` + `syncCursorPath`
+  (the high-water mark for the next incremental pull — see _the sync endpoint_);
 - the **pending-ops queue** — local mutations not yet committed to the server
   (this is what makes offline writes durable and drives crash recovery); each
   entry carries the **base `updatedAt`** the edit started from (the path's stored
@@ -81,7 +81,7 @@ const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await callEndpoint(
   { baseUrl: API_URL },
   opsListEndpoint,
   // the cursor is the compound (updatedAt, path), not a seq — see *the ops/list endpoint*
-  { since: syncCursor, sincePath: syncCursorPath, limit: 500 },
+  { since: syncCursorUpdatedAt, sincePath: syncCursorPath, limit: 500 },
 );
 ```
 
@@ -252,12 +252,13 @@ tag/list names.
 **1. First sync (after sign-in).** Pull the full set of metadata/tag/list paths,
 download + decrypt each, build the local index. Content/archives are _not_
 downloaded here — they come on demand. For 5 000 bookmarks at ~500 bytes of
-metadata each that's ~2.5 MB — manageable. Set `syncCursor` to the **newest
-`updatedAt` among the files listed**.
+metadata each that's ~2.5 MB — manageable. Set the cursor to the **newest
+`(updatedAt, path)` among the files listed** — the same reconstruction the
+fallback full sync does from its listing.
 
-**2. Incremental sync (next visit).** Call `GET /v1/ops/list` with `syncCursor`,
+**2. Incremental sync (next visit).** Call `GET /v1/ops/list` with the cursor,
 get the ops whose `updatedAt` is newer than the cursor, apply them (download +
-decrypt + store for `put`, remove for `delete`), and advance `syncCursor` to the
+decrypt + store for `put`, remove for `delete`), and advance the cursor to the
 **newest `updatedAt` in the response** (not the server's current newest — anything
 that lands mid-sync simply carries a later `updatedAt` and is caught next time;
 this is why the race in older drafts is a non-issue).
@@ -316,7 +317,7 @@ coalescing (see _deferred_) trims the extra rows later. Never fail a commit on a
 duplicate path.
 
 The store records the **R2 `LastModified` returned by commit** as the file's
-`updatedAt` and advances `syncCursor` to it — never the local clock. Every `put`
+`updatedAt` and advances the sync cursor to it — never the local clock. Every `put`
 is therefore stamped on R2's clock — the same value the client stores locally and
 the fallback listing reads back — so there is no cross-device skew to reconcile
 for any write that has a surviving object. (A `delete` op has no surviving object
@@ -402,10 +403,9 @@ holding more than `limit` ops could never be paged past, and the
 `since == newestUpdatedAt` boundary couldn't distinguish "consumed every op at
 that ms" from "more remain with a higher path." A long-offline client pages
 forward by advancing **both** params to the last op's `(updatedAt, path)` while
-`hasMore` is true. (`sincePath` is omitted only right after first sync, whose
-cursor is a bare newest-`updatedAt` with no tiebreak yet; the server treats a
-missing `sincePath` as the low sentinel, so the scan includes every op at that
-millisecond.) This keyset query and the `oldestUpdatedAt` / `newestUpdatedAt`
+`hasMore` is true. (`sincePath` is omitted only while the cursor is still the
+seeded-new-account `(0, '')`; the server treats a missing `sincePath` as the low
+sentinel, so the scan includes every op at that millisecond.) This keyset query and the `oldestUpdatedAt` / `newestUpdatedAt`
 bounds live in `op-logs.ts` (`listSince` keysets on `(updated_at, path)`;
 `bounds()` returns `MIN`/`MAX(updated_at)`), surfaced to the route by the DO's
 `listOps` RPC in `user-data.ts`. `seq` stays internal — it orders ties and drives
@@ -446,7 +446,7 @@ saw.
 3. **Push** the upload set (flow 3 — meta-last; commit returns each new server
    `updatedAt`).
 4. **Pull** the download set's blobs (decrypt, store; content stays lazy).
-5. Advance `syncCursor` to the newest `updatedAt` seen across the whole cycle —
+5. Advance the cursor to the newest `(updatedAt, path)` seen across the whole cycle —
    **including your own just-committed uploads**, so the next cycle doesn't
    re-fetch them.
 
@@ -524,8 +524,8 @@ unrecorded path frees 0), so pushing unconditionally is always safe — dropping
 the op instead would leak the `file_sizes` entry forever (paths are never
 reused, so no later commit would ever touch it).
 
-After reconciling, set `syncCursor` to the **newest `updatedAt` among the listed
-files — taken across _all_ pages**, not just the last one (R2 returns key order,
+After reconciling, set the cursor to the **newest `(updatedAt, path)` among the
+listed files — taken across _all_ pages**, not just the last one (R2 returns key order,
 not time order, so the newest timestamp can land on any page) — reconstructed
 straight from R2, with no dependence on the op log, so the next visit resumes
 normal incremental sync. In the `since > newestUpdatedAt`

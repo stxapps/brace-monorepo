@@ -39,13 +39,13 @@ export interface SyncMetaRecord {
   // High-water mark: the newest R2 `LastModified` (epoch ms) reconciled into the
   // local store. The incremental pull asks the server for ops AFTER this; 0 until
   // the first sync completes.
-  syncCursor: number;
+  syncCursorUpdatedAt: number;
   // Path tiebreak for the compound `(updatedAt, path)` cursor — the path of the
-  // last op consumed at `syncCursor`. Several files can share a millisecond, so
-  // without it a single ms holding more ops than one page could never be paged
-  // past. Empty right after first sync: that cursor is a bare newest-`updatedAt`
-  // with no tiebreak yet, and the server treats a missing `sincePath` as the low
-  // sentinel (so the next pull includes every op at that ms).
+  // last op consumed at `syncCursorUpdatedAt`. Several files can share a
+  // millisecond, so without it a single ms holding more ops than one page could
+  // never be paged past. Empty only for a seeded new account (nothing pulled
+  // yet); the server treats a missing `sincePath` as the low sentinel (so the
+  // next pull includes every op at that ms).
   syncCursorPath: string;
   // Epoch ms the first full sync COMPLETED, or 0 while it hasn't. The invariant:
   // > 0 means "the local store is a complete, consistent snapshot up to the

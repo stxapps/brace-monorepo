@@ -50,11 +50,10 @@ export const DEFAULT_OPS_LIMIT = 500;
 // The cursor is the compound key (updatedAt, path) — R2's `LastModified`, not a
 // seq (see docs/local-first-sync.md "the ops/list endpoint"). Both halves go over
 // the wire as query params: a single millisecond can hold more ops than `limit`,
-// so the `path` tiebreak is what lets the client page past it. `since` is absent
-// only on the very first incremental call after first sync (its cursor is a bare
-// newest-`updatedAt` with no tiebreak yet); the server treats a missing
-// `sincePath` as the low sentinel. `z.coerce` because query params arrive as
-// strings on the server.
+// so the `path` tiebreak is what lets the client page past it. `sincePath` is
+// absent only while the cursor is the seeded-new-account `(0, '')`; the server
+// treats a missing `sincePath` as the low sentinel. `z.coerce` because query
+// params arrive as strings on the server.
 export const opsListRequestSchema = z.object({
   since: z.coerce.number().int().optional(),
   sincePath: syncPathSchema.optional(),
@@ -116,7 +115,7 @@ export type OpsCommitRequest = z.infer<typeof opsCommitRequestSchema>;
 // One COMMITTED op: the path and the `updatedAt` the server stamped — R2's
 // `LastModified` for a put (read via the commit HEAD), the deletion commit time
 // for a delete. The client stores this as the path's `updatedAt`, advances its
-// `syncCursor` to it (never the local clock), and clears the path from its
+// sync cursor to it (never the local clock), and clears the path from its
 // pending-ops queue.
 export const commitResultSchema = z.object({
   path: z.string(),
@@ -181,7 +180,7 @@ export type FileEntry = z.infer<typeof fileEntrySchema>;
 
 // One page of the download-authoritative listing. `nextPageToken` is R2's cursor
 // when the listing is truncated, else null. The client pages until it's null and
-// sets `syncCursor` to the newest `updatedAt` across ALL pages — R2 lists in key
+// sets the cursor to the newest `(updatedAt, path)` across ALL pages — R2 lists in key
 // order, not time order, so the newest timestamp can sit on any page. The listing
 // is NOT a snapshot (pages span concurrent writes), which is safe here because
 // fallback is download-authoritative and `updatedAt`-compared — anything that

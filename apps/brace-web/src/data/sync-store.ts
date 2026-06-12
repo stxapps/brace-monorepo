@@ -33,7 +33,7 @@ export async function isFirstSyncDone(username: string): Promise<boolean> {
 export function seedNewAccount(username: string): Promise<string> {
   return db.syncMeta.put({
     username,
-    syncCursor: 0,
+    syncCursorUpdatedAt: 0,
     syncCursorPath: '',
     firstSyncDoneAt: Date.now(),
   });
@@ -44,15 +44,18 @@ export function seedNewAccount(username: string): Promise<string> {
 // the snapshot is complete, so an interrupted first sync stays "not done" and
 // re-blocks on the next load rather than leaving a partial store looking
 // finished (the re-run resumes rather than restarts: the engine skips records
-// already stored at the listed `updatedAt`). The first cursor is the newest `updatedAt`
-// among the listed files — a bare timestamp with no path tiebreak yet, so
-// `syncCursorPath` stays empty (the server treats a missing `sincePath` as the
-// low sentinel on the next incremental pull).
-export function markFirstSyncDone(username: string, syncCursor: number): Promise<string> {
+// already stored at the listed `updatedAt`). The first cursor is the newest
+// compound `(updatedAt, path)` among the listed files — the same reconstruction
+// the fallback cycle does from a full listing.
+export function markFirstSyncDone(
+  username: string,
+  syncCursorUpdatedAt: number,
+  syncCursorPath: string,
+): Promise<string> {
   return db.syncMeta.put({
     username,
-    syncCursor,
-    syncCursorPath: '',
+    syncCursorUpdatedAt,
+    syncCursorPath,
     firstSyncDoneAt: Date.now(),
   });
 }
@@ -66,17 +69,18 @@ export function markFirstSyncDone(username: string, syncCursor: number): Promise
 // Leaves firstSyncDoneAt untouched.
 export async function advanceCursor(
   username: string,
-  syncCursor: number,
+  syncCursorUpdatedAt: number,
   syncCursorPath: string,
 ): Promise<void> {
   await db.transaction('rw', db.syncMeta, async () => {
     const meta = await db.syncMeta.get(username);
     if (!meta) return; // signed out mid-cycle — nothing to advance
     const ahead =
-      syncCursor > meta.syncCursor ||
-      (syncCursor === meta.syncCursor && syncCursorPath > meta.syncCursorPath);
+      syncCursorUpdatedAt > meta.syncCursorUpdatedAt ||
+      (syncCursorUpdatedAt === meta.syncCursorUpdatedAt &&
+        syncCursorPath > meta.syncCursorPath);
     if (!ahead) return;
-    await db.syncMeta.update(username, { syncCursor, syncCursorPath });
+    await db.syncMeta.update(username, { syncCursorUpdatedAt, syncCursorPath });
   });
 }
 
@@ -86,10 +90,10 @@ export async function advanceCursor(
 // what R2 actually holds.
 export async function resetCursor(
   username: string,
-  syncCursor: number,
+  syncCursorUpdatedAt: number,
   syncCursorPath: string,
 ): Promise<void> {
-  await db.syncMeta.update(username, { syncCursor, syncCursorPath });
+  await db.syncMeta.update(username, { syncCursorUpdatedAt, syncCursorPath });
 }
 
 // Tear down synced data on sign-out: wipe ALL tables — data and bookkeeping.

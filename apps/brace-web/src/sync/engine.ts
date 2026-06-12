@@ -77,13 +77,11 @@ interface Entry {
 export async function runInitialSync(deps: SyncDeps): Promise<void> {
   const files = await listAllFiles();
   await storeDownloads(deps, files);
-  // Cursor is the newest `updatedAt` among ALL listed files (content included, even
-  // though its blob is deferred) — a bare timestamp with no path tiebreak yet, so
-  // markFirstSyncDone records an empty `syncCursorPath` (the server treats a
-  // missing `sincePath` as the low sentinel on the next pull).
-  let newest = 0;
-  for (const f of files) if (f.updatedAt > newest) newest = f.updatedAt;
-  await markFirstSyncDone(deps.username, newest);
+  // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
+  // (content included, even though its blob is deferred) — the same
+  // reconstruction the fallback cycle does from its full listing.
+  const newest = newestCursor(files);
+  await markFirstSyncDone(deps.username, newest.updatedAt, newest.path);
 }
 
 // Single-flight per account. Overlapping calls (the post-ready background pull, an
@@ -125,7 +123,7 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<void> {
   // as opsListEndpoint's `since` + `sincePath`. `since` is always sent (even 0, for
   // a seeded-but-empty new account) so the server's bounds can route us; an empty
   // `sincePath` is omitted (server reads it as the low sentinel).
-  const since = meta?.syncCursor ?? 0;
+  const since = meta?.syncCursorUpdatedAt ?? 0;
   const sincePath = meta?.syncCursorPath ?? '';
   const pending = await listPendingOps(deps.username);
 
@@ -179,18 +177,18 @@ async function incrementalCycle(
 ): Promise<void> {
   // 1. Pull: page the op log via keyset, coalescing to the latest op per path.
   const serverOps = new Map<string, OpEntry>();
-  let cursorTs = since;
+  let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
   for (;;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
-      cursorTs = op.updatedAt;
+      cursorUpdatedAt = op.updatedAt;
       cursorPath = op.path;
     }
     if (!page.hasMore) break;
     page = await api.call(opsListEndpoint, {
-      since: cursorTs,
+      since: cursorUpdatedAt,
       sincePath: cursorPath || undefined,
       limit: OPS_PAGE,
     });
@@ -222,12 +220,12 @@ async function incrementalCycle(
   // cycle — including our own just-committed uploads, so the next cycle doesn't
   // re-fetch them.
   for (const c of committed) {
-    if (isNewer(c.updatedAt, c.path, cursorTs, cursorPath)) {
-      cursorTs = c.updatedAt;
+    if (isNewer(c.updatedAt, c.path, cursorUpdatedAt, cursorPath)) {
+      cursorUpdatedAt = c.updatedAt;
       cursorPath = c.path;
     }
   }
-  await advanceCursor(deps.username, cursorTs, cursorPath);
+  await advanceCursor(deps.username, cursorUpdatedAt, cursorPath);
 }
 
 // --- the cycle: fallback (download-authoritative) ---------------------------
@@ -275,26 +273,12 @@ async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promis
   await storeDownloads(deps, downloads);
   await applyDeletes(localDeletes);
 
-  // Cursor = newest (updatedAt, path) across ALL pages (R2 lists in key order, not
-  // time order, so the newest can sit on any page) plus our commits. This is
+  // Cursor = newest (updatedAt, path) across ALL pages plus our commits. This is
   // reconstructed straight from R2 with no op-log dependence — resetCursor, not
   // advanceCursor, because the cursor-ahead case intentionally LOWERS the cursor
   // back to reality.
-  let cursorTs = 0;
-  let cursorPath = '';
-  for (const f of files) {
-    if (isNewer(f.updatedAt, f.path, cursorTs, cursorPath)) {
-      cursorTs = f.updatedAt;
-      cursorPath = f.path;
-    }
-  }
-  for (const c of committed) {
-    if (isNewer(c.updatedAt, c.path, cursorTs, cursorPath)) {
-      cursorTs = c.updatedAt;
-      cursorPath = c.path;
-    }
-  }
-  await resetCursor(deps.username, cursorTs, cursorPath);
+  const newest = newestCursor(files, committed);
+  await resetCursor(deps.username, newest.updatedAt, newest.path);
 }
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
@@ -473,6 +457,24 @@ function needsFallback(since: number, page: OpsListResponse): boolean {
 // Keyset ordering on the compound cursor (updatedAt, path).
 function isNewer(ts: number, path: string, curTs: number, curPath: string): boolean {
   return ts > curTs || (ts === curTs && path > curPath);
+}
+
+// Newest compound (updatedAt, path) across full-listing results — the cursor a
+// download-authoritative flow (first sync, fallback) reconstructs. Taken over ALL
+// entries, never just the last page: R2 lists in key order, not time order, so
+// the newest can sit on any page. `(0, '')` for an empty account.
+function newestCursor(...lists: Entry[][]): Entry {
+  let updatedAt = 0;
+  let path = '';
+  for (const list of lists) {
+    for (const e of list) {
+      if (isNewer(e.updatedAt, e.path, updatedAt, path)) {
+        updatedAt = e.updatedAt;
+        path = e.path;
+      }
+    }
+  }
+  return { path, updatedAt };
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {

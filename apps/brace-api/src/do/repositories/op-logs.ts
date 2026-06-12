@@ -48,8 +48,8 @@ export function opLogsRepo(sql: SqlStorage) {
     // Incremental pull: a KEYSET scan over the compound cursor (updated_at, path),
     // ordered the same way, capped at `limit`. `since`/`sincePath` are the client's
     // last-seen cursor; a null/absent half is the low sentinel (0 / '') so the scan
-    // starts from the very beginning — the case right after first sync, whose cursor
-    // is a bare newest-`updatedAt` with no path tiebreak yet. The `(=, path >)` arm
+    // starts from the very beginning — the case while a seeded new account's cursor
+    // is still the empty `(0, '')`. The `(=, path >)` arm
     // is what lets a single millisecond holding more than `limit` ops be paged past.
     // See docs/local-first-sync.md "Cursor precision & pagination".
     listSince(since: number | null, sincePath: string | null, limit: number): OpLogEntity[] {
