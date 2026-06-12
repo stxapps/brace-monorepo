@@ -199,7 +199,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (; ;) {
+  for (;;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;
@@ -335,7 +335,13 @@ async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Comm
 
   // Phase 1+2: deletes carry no blob to upload — the commit itself drives the R2
   // delete (the client can't; files/sign mints only PUT/GET URLs). Metadata first,
-  // then content.
+  // then content. Unlike the puts below this is ONE call, not two: commitBatched
+  // commits its input in array order across sequential chunks, so the concatenation
+  // already IS the phase order — every entity's metadata-delete commits no later than
+  // its content-delete. The one chunk that can straddle the meta/content boundary
+  // commits both in a single atomic log write (the safe direction, never
+  // content-before-metadata), so splitting it would only cost a redundant partial
+  // commit when the metadata count isn't a multiple of COMMIT_BATCH.
   committed.push(
     ...(await commitBatched(deps, [
       ...deletes.filter((o) => !isContentPath(o.path)),
@@ -345,8 +351,18 @@ async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Comm
 
   // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata put, so
   // the content-before-metadata invariant holds across chunk boundaries too.
-  committed.push(...(await pushPuts(deps, puts.filter((o) => isContentPath(o.path)))));
-  committed.push(...(await pushPuts(deps, puts.filter((o) => !isContentPath(o.path)))));
+  committed.push(
+    ...(await pushPuts(
+      deps,
+      puts.filter((o) => isContentPath(o.path)),
+    )),
+  );
+  committed.push(
+    ...(await pushPuts(
+      deps,
+      puts.filter((o) => !isContentPath(o.path)),
+    )),
+  );
 
   return committed;
 }
@@ -456,7 +472,7 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
       const blob = await getBlob(url).catch((err: unknown) => {
         // Deleted between the op pull / listing and this GET: the delete op sits
         // past our window and reconciles next sync — skip it, don't fail the cycle.
-        if (err instanceof BlobRequestError && err.status === 404) return undefined;
+        if (err instanceof BlobRequestError && err.status === 404) return;
         throw err;
       });
       if (!blob) return;
