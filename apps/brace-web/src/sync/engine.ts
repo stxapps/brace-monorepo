@@ -14,6 +14,7 @@
 // `(updatedAt, path)` — never the op log's internal `seq`.
 
 import {
+  type CommitResult,
   DEFAULT_OPS_LIMIT,
   filesListEndpoint,
   filesSignEndpoint,
@@ -45,14 +46,29 @@ export interface SyncDeps {
 }
 
 // Batch/page sizes — this client's policy is to use the contract caps in full
-// (anything ≤ the cap is valid; fewer round trips wins). Blob fetches/uploads are
-// fanned out at a bounded concurrency so a first sync of thousands of files
-// doesn't open thousands of sockets at once — a client-only knob, not contract.
+// (anything ≤ the cap is valid; fewer round trips wins). A client-only knob, not
+// contract.
 const SIGN_BATCH = MAX_SIGN_PATHS;
 const COMMIT_BATCH = MAX_COMMIT_OPS;
 const OPS_PAGE = DEFAULT_OPS_LIMIT;
 const FILES_PAGE = MAX_LIST_LIMIT;
-const BLOB_CONCURRENCY = 8;
+
+// Blob fan-out, split by direction because the two workloads bind on opposite
+// resources (a bounded cap also keeps a first sync of thousands of files from
+// opening thousands of sockets at once). Downloads are small index blobs (KB) over
+// HTTP/2 and RTT-bound, so a wide fan-out cuts first-sync time and drains the
+// presigned GET URLs sooner. Uploads can be MB-sized `files/` content, bound by
+// uplink bandwidth + memory (peak ≈ concurrency × blob size), so they stay modest.
+// Starting points — tune against a measured large first sync.
+const DOWNLOAD_CONCURRENCY = 24;
+const UPLOAD_CONCURRENCY = 8;
+
+// One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
+// the chunk must fit BOTH the sign cap and the commit cap in one call each. Both are
+// 1000 today; min() stays correct if they ever diverge. Bounding the chunk this way
+// is what keeps each presigned PUT URL's mint-to-PUT latency inside its own upload
+// window, well under the 5-min TTL, on a push of any size.
+const PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
 
 // A path under `files/` is heavy content (archived page, screenshot). Per the doc,
 // content is fetched LAZILY (on open/scroll), never eagerly on sync — so sync only
@@ -154,13 +170,16 @@ export async function loadEntityContent(
   const rec = await db.items.get(path);
   if (!rec) return undefined;
   if (rec.data) return rec.data;
+
   const url = (await signPaths('get', [path])).get(path);
   if (!url) return undefined;
+
   const blob = await getBlob(url).catch((err: unknown) => {
     if (err instanceof BlobRequestError && err.status === 404) return undefined;
     throw err;
   });
   if (!blob) return undefined;
+
   const data = await decryptEntity(deps.encryptionKey, blob);
   await db.items.update(path, { data });
   return data;
@@ -180,7 +199,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (;;) {
+  for (; ;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;
@@ -240,24 +259,33 @@ async function incrementalCycle(
 // pending delete is pushed rather than resurrected by the listing.
 async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promise<void> {
   const files = await listAllFiles();
-  const serverMap = new Map(files.map((f) => [f.path, f.updatedAt]));
+  const serverPaths = new Set(files.map((f) => f.path));
   const pendingPaths = new Set(pending.map((p) => p.path));
+
+  // One key-only cursor over the local table projects path -> updatedAt WITHOUT
+  // deserializing any `data` blob: eachKey runs an IndexedDB key cursor on the
+  // `updatedAt` index, so the heavy index-record bytes never load (the index key is
+  // updatedAt, cursor.primaryKey is the path). It feeds BOTH reconcile directions
+  // below — replacing a full-record bulkGet of every file plus a second primary-key
+  // scan with this single pass.
+  const localUpdatedAt = new Map<string, number>();
+  await db.items.orderBy('updatedAt').eachKey((updatedAt, cursor) => {
+    localUpdatedAt.set(cursor.primaryKey as string, updatedAt as number);
+  });
 
   // Server side: download anything new or newer than the stored local `updatedAt`
   // — except paths with a pending op, which local-wins reserves for the push.
-  const locals = await db.items.bulkGet(files.map((f) => f.path));
-  const downloads = files.filter((f, i) => {
+  const downloads = files.filter((f) => {
     if (pendingPaths.has(f.path)) return false;
-    const local = locals[i];
-    return !local || f.updatedAt > local.updatedAt;
+    const local = localUpdatedAt.get(f.path);
+    return local === undefined || f.updatedAt > local;
   });
 
   // Local side: a local-only path with no pending op was deleted on the server —
   // drop it. (A local-only path with a pending put is an unpushed create.)
   const localDeletes: string[] = [];
-  for (const key of await db.items.toCollection().primaryKeys()) {
-    const path = key as string;
-    if (serverMap.has(path) || pendingPaths.has(path)) continue;
+  for (const path of localUpdatedAt.keys()) {
+    if (serverPaths.has(path) || pendingPaths.has(path)) continue;
     localDeletes.push(path);
   }
 
@@ -284,57 +312,75 @@ async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promis
 // --- push (the 3-round-trip commit protocol) --------------------------------
 
 // Drain a set of pending ops: sign → PUT → commit (docs flow #3). Returns the
-// committed `{ path, updatedAt }` results (R2's authoritative clock) so the caller
-// can advance its cursor over its own writes. Removes each committed path from the
-// queue; a `no_object` failure is left queued to re-PUT next drain.
-async function pushPending(
-  deps: SyncDeps,
-  ops: PendingOpRecord[],
-): Promise<{ path: string; updatedAt: number }[]> {
+// committed results (R2's authoritative clock) so the caller can advance its cursor
+// over its own writes. Removes each committed path from the queue; a `no_object`
+// failure is left queued to re-PUT next drain.
+//
+// Runs in the global phase order [delete-metadata, delete-content, put-content,
+// put-metadata] — the mirror pair of the multi-file-consistency rules (docs
+// "multi-file consistency"): a create writes content before the metadata that
+// references it; a delete removes that metadata before the content it referenced.
+// So no crash or partial push ever leaves metadata pointing at a missing content
+// file. Crucially each PHASE commits durably before the next, and each CHUNK within
+// the put phases signs + uploads + commits as one unit (pushPuts) — so a presigned
+// PUT URL never outlives its own chunk's upload window, and a push too large to
+// finish inside one 5-min TTL still makes monotonic progress instead of livelocking
+// on an all-up-front sign whose tail expires before it can be uploaded.
+async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<CommitResult[]> {
   if (ops.length === 0) return [];
 
   const puts = ops.filter((o) => o.op === 'put');
   const deletes = ops.filter((o) => o.op === 'delete');
+  const committed: CommitResult[] = [];
 
-  // 1. + 2. Mint upload URLs for the puts, then encrypt + PUT the blobs. CONTENT
-  // FIRST, METADATA LAST so a half-finished create never leaves metadata pointing
-  // at a missing content file (docs "multi-file consistency").
-  if (puts.length > 0) {
+  // Phase 1+2: deletes carry no blob to upload — the commit itself drives the R2
+  // delete (the client can't; files/sign mints only PUT/GET URLs). Metadata first,
+  // then content.
+  committed.push(
+    ...(await commitBatched(deps, [
+      ...deletes.filter((o) => !isContentPath(o.path)),
+      ...deletes.filter((o) => isContentPath(o.path)),
+    ])),
+  );
+
+  // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata put, so
+  // the content-before-metadata invariant holds across chunk boundaries too.
+  committed.push(...(await pushPuts(deps, puts.filter((o) => isContentPath(o.path)))));
+  committed.push(...(await pushPuts(deps, puts.filter((o) => !isContentPath(o.path)))));
+
+  return committed;
+}
+
+// Drive a homogeneous put set (all content OR all metadata — the caller splits and
+// orders them) through the sign → PUT → commit pipeline one chunk at a time, so each
+// chunk's PUT URLs are minted immediately before that chunk's upload and the chunk
+// commits before the next is signed. PUT_BATCH fits one sign and one commit call, so
+// each stays a single round trip.
+async function pushPuts(deps: SyncDeps, puts: PendingOpRecord[]): Promise<CommitResult[]> {
+  const committed: CommitResult[] = [];
+  for (const batch of chunk(puts, PUT_BATCH)) {
     const urls = await signPaths(
       'put',
-      puts.map((o) => o.path),
+      batch.map((o) => o.path),
     );
-    await uploadBlobs(
-      deps,
-      puts.filter((o) => isContentPath(o.path)),
-      urls,
-    );
-    await uploadBlobs(
-      deps,
-      puts.filter((o) => !isContentPath(o.path)),
-      urls,
-    );
+    await uploadBlobs(deps, batch, urls);
+    committed.push(...(await commitBatched(deps, batch)));
   }
+  return committed;
+}
 
-  // 3. Commit. Order the ops so deletes land metadata-first and puts land
-  // metadata-last (the mirror of the upload order), matching the on-R2 ordering the
-  // multi-file-consistency rules want.
-  const ordered: PendingOpRecord[] = [
-    ...deletes.filter((o) => !isContentPath(o.path)),
-    ...deletes.filter((o) => isContentPath(o.path)),
-    ...puts.filter((o) => isContentPath(o.path)),
-    ...puts.filter((o) => !isContentPath(o.path)),
-  ];
-
-  const committed: { path: string; updatedAt: number }[] = [];
-  for (const batch of chunk(ordered, COMMIT_BATCH)) {
+// Commit a sequence of ops in input order, chunked under the commit cap — batches go
+// out sequentially, so the caller's phase ordering is preserved across chunks. For
+// each committed put, stamp R2's authoritative `updatedAt` onto the local record (a
+// delete has no record left to stamp — update is a no-op), then clear the path from
+// the queue. `failed` (only `no_object` today) is intentionally ignored: leaving the
+// path queued is exactly the retry.
+async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<CommitResult[]> {
+  const committed: CommitResult[] = [];
+  for (const batch of chunk(ops, COMMIT_BATCH)) {
     const { results } = await api.call(opsCommitEndpoint, {
       ops: batch.map((o) => ({ op: o.op, path: o.path })),
     });
-    // `failed` (only `no_object` today) is intentionally ignored: leaving the path
-    // in the queue is exactly the retry. For each committed put, stamp R2's
-    // authoritative `updatedAt` onto the local record (a delete has no record left
-    // to stamp — update is a no-op).
     for (const r of results) {
       committed.push(r);
       await db.items.update(r.path, { updatedAt: r.updatedAt });
@@ -355,11 +401,13 @@ async function uploadBlobs(
   ops: PendingOpRecord[],
   urls: Map<string, string>,
 ): Promise<void> {
-  await mapLimit(ops, BLOB_CONCURRENCY, async (op) => {
+  await mapLimit(ops, UPLOAD_CONCURRENCY, async (op) => {
     const url = urls.get(op.path);
     if (!url) return;
+
     const rec = await db.items.get(op.path);
     if (!rec?.data) return;
+
     await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
   });
 }
@@ -368,8 +416,9 @@ async function uploadBlobs(
 
 // Fetch, decrypt, and store a set of entries. Content (`files/`) records keep only
 // their `updatedAt` — the blob stays lazy (and a CHANGED record drops any
-// previously-cached `data` so a stale copy isn't served after an update). The
-// index is sign-get'd in batch, then GET + decrypt + store at bounded concurrency.
+// previously-cached `data` so a stale copy isn't served after an update). The index
+// is pulled in chunks — each chunk signs its own GET URLs, then GETs + decrypts +
+// stores at bounded concurrency — so the URL set never outgrows one batch.
 async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   if (entries.length === 0) return;
 
@@ -389,25 +438,33 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   const index = stale.filter((e) => !isContentPath(e.path));
 
   await db.items.bulkPut(content.map((e) => ({ id: e.path, updatedAt: e.updatedAt })));
-  if (index.length === 0) return;
+  // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
+  // map never grows past a single batch (a large first sync holds ~1k URLs, not all
+  // of them) and each URL's mint-to-GET latency stays well inside its 1-hour TTL.
+  // Each record is stored the moment it's decrypted, so an interrupted run resumes
+  // via the staleness skip above (fresh URLs for the shrinking remainder) rather
+  // than restarting.
+  for (const batch of chunk(index, SIGN_BATCH)) {
+    const urls = await signPaths(
+      'get',
+      batch.map((e) => e.path),
+    );
+    await mapLimit(batch, DOWNLOAD_CONCURRENCY, async (e) => {
+      const url = urls.get(e.path);
+      if (!url) return;
 
-  const urls = await signPaths(
-    'get',
-    index.map((e) => e.path),
-  );
-  await mapLimit(index, BLOB_CONCURRENCY, async (e) => {
-    const url = urls.get(e.path);
-    if (!url) return;
-    const blob = await getBlob(url).catch((err: unknown) => {
-      // Deleted between the op pull / listing and this GET: the delete op sits
-      // past our window and reconciles next sync — skip it, don't fail the cycle.
-      if (err instanceof BlobRequestError && err.status === 404) return undefined;
-      throw err;
+      const blob = await getBlob(url).catch((err: unknown) => {
+        // Deleted between the op pull / listing and this GET: the delete op sits
+        // past our window and reconciles next sync — skip it, don't fail the cycle.
+        if (err instanceof BlobRequestError && err.status === 404) return undefined;
+        throw err;
+      });
+      if (!blob) return;
+
+      const data = await decryptEntity(deps.encryptionKey, blob);
+      await db.items.put({ id: e.path, updatedAt: e.updatedAt, data });
     });
-    if (!blob) return;
-    const data = await decryptEntity(deps.encryptionKey, blob);
-    await db.items.put({ id: e.path, updatedAt: e.updatedAt, data });
-  });
+  }
 }
 
 async function applyDeletes(paths: string[]): Promise<void> {

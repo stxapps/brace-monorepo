@@ -77,8 +77,7 @@ export async function advanceCursor(
     if (!meta) return; // signed out mid-cycle — nothing to advance
     const ahead =
       syncCursorUpdatedAt > meta.syncCursorUpdatedAt ||
-      (syncCursorUpdatedAt === meta.syncCursorUpdatedAt &&
-        syncCursorPath > meta.syncCursorPath);
+      (syncCursorUpdatedAt === meta.syncCursorUpdatedAt && syncCursorPath > meta.syncCursorPath);
     if (!ahead) return;
     await db.syncMeta.update(username, { syncCursorUpdatedAt, syncCursorPath });
   });
