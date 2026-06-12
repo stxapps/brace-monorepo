@@ -558,6 +558,57 @@ ciphertext to know what's referenced. The only place GC is possible is the
 referenced set, and delete the rest. We don't do this yet; the per-user quota
 bounds the growth, and orphans are produced only by rare mid-flight failures.
 
+### who enforces ordering: server per-commit, client cross-commit
+
+Two **independent** ordering constraints keep the system consistent, and they
+live in two different places **because of what each side can observe and
+control** — the split is forced, not stylistic.
+
+- **A — R2 ↔ op-log, _within_ one commit.** The R2 mutation must land before the
+  DO log write: a `put` is `HEAD`-verified to exist before its op is logged, a
+  `delete` removes the R2 object before logging the delete. This is the
+  `op-without-object` invariant (see _source of truth_), and **only the server
+  can own it** — the client can't write the op-log at all, and can't DELETE R2
+  directly (`files/sign` mints only PUT/GET). Both halves happen inside
+  `commitOps` (`services/sync.ts`): `deleteMany` R2 → `HEAD` puts → one DO
+  `commitOps` last. The DO write is the atomic point, so a puller sees an op only
+  once its object is real.
+
+- **B — metadata ↔ content, _across_ commits.** The global phase order
+  `[delete-metadata, delete-content, put-content, put-metadata]` (the meta-last /
+  meta-first rules above, generalized across chunk and commit boundaries), so a
+  metadata object never references a missing content object across any crash
+  boundary. This is a property of the **sequence** of commits, and **only the
+  client can own it**, for three reasons the server can't get around:
+  1. **No referential knowledge.** Content is opaque (E2E). The server sees
+     `meta/{id}` and `files/{id}` as unrelated paths; it can confirm _an object_
+     exists (that's A), never that _the content this metadata points at_ exists —
+     it can't read the reference graph, and a note may reference zero or many
+     content files.
+  2. **It sees one batch, not the order.** Each commit is handled in isolation
+     with no memory of phase; the phase order lives in the client's pending queue.
+  3. **It isn't in the upload path.** Content is PUT client→R2 over a presigned
+     URL out of band; the server only learns of it at commit-time `HEAD`.
+
+A is the **primitive B is built on**: because every commit is R2-first/log-last
+and the DO write is atomic, each phase is durable as a unit before the next
+begins. That durability is exactly what lets the engine sequence the four phases
+and trust each is real before opening the next. The engine realizes B in
+`pushPending` (`brace-web/src/sync/engine.ts`), and two things there are
+**load-bearing for correctness**, not just tidiness:
+
+- **sequential `await` between phases** — the durability-before-next-phase
+  guarantee _is_ this ordering; and
+- **single-flight per account** (`inflightSyncs`) — two concurrent drains would
+  interleave phases and break the global order.
+
+Neither constraint can be moved to the other side. Pushing B server-side would
+require exposing the reference graph to the server (weakening E2E opacity) and
+**still** wouldn't buy atomicity — R2 has no multi-object transaction and the
+uploads are out of band — so the crash windows would remain. The current
+placement (A = server/per-commit, B = client/cross-commit) is the minimal correct
+arrangement.
+
 ### conflict policy
 
 File-level **last-writer-wins**, which is cheap because granularity is one entity
