@@ -16,6 +16,7 @@
 import {
   type CommitResult,
   DEFAULT_OPS_LIMIT,
+  FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
   MAX_COMMIT_OPS,
@@ -75,7 +76,7 @@ const PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
 // tracks its `updatedAt` and downloads the always-resident index (meta/tags/lists/
 // settings). loadEntityContent() pulls a content blob on demand.
 function isContentPath(path: string): boolean {
-  return path.startsWith('files/');
+  return path.startsWith(FILES_PREFIX);
 }
 
 // One path with the server `updatedAt` to store against it.

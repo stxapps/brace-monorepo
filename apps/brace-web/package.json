@@ -44,12 +44,15 @@
     "@stxapps/web-crypto": "*",
     "@stxapps/web-ui": "*",
     "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-virtual": "^3.14.2",
     "dexie": "^4.4.3",
     "dexie-react-hooks": "^4.4.0",
+    "lucide-react": "^1.17.0",
     "next": "~16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "serwist": "9.5.11"
+    "serwist": "9.5.11",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@serwist/cli": "^9.5.11",

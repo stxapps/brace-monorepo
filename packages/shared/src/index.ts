@@ -8,4 +8,6 @@ export * from './crypto/params';
 export * from './crypto/salt';
 export * from './sync/endpoints';
 export * from './sync/entities';
+export * from './sync/paths';
+export * from './sync/system-lists';
 export * from './theme/theme';
