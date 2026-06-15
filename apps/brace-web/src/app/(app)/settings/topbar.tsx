@@ -1,5 +1,3 @@
-'use client';
-
 // The bar above the main pane. Left: the static "Settings" title. Right: a close
 // button that returns to the app (the links page) — the counterpart to the
 // sidebar's back button, so either corner gets you out.
