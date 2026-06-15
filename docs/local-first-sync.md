@@ -242,10 +242,22 @@ tag/list names.
   metadata-schema decision that touches nothing in the sync engine, the blob
   frame, or the server. These plaintext JSON shapes are a **cross-platform
   contract** like the blob frame itself (every platform must read/write the
-  same JSON), so their types/schemas belong in `@stxapps/shared`. The local
-  store mirrors the agnosticism: the Dexie record holds path + `updatedAt` +
-  raw decrypted bytes, and parsing into typed bookmark/tag/list entities is a
-  read layer **above** sync.
+  same JSON), so their types/schemas belong in `@stxapps/shared`. The **sync and
+  crypto path** stays fully agnostic: it moves opaque ciphertext, the engine
+  never imports a schema, and the Dexie record's authoritative payload is still
+  just path + `updatedAt` + raw decrypted bytes. The **local store** goes one
+  step further than the wire, though — to query an in-blob field (filter links by
+  list, order by edit time) without reading and `JSON.parse`-ing the whole
+  library on every reactive tick, it indexes a few list-view fields. Those
+  index columns are **derived, not authoritative**: a single projector
+  (`brace-web` `data/projection.ts` `toItemRecord`) decodes the bytes and lifts
+  out the queryable fields, and **every** write into the store funnels through
+  it, so the columns are written in the same record `put` as the bytes and can
+  never drift from them (no second table, no cross-table transaction). The
+  result: the wire is payload-blind, schema knowledge lives in exactly two
+  places (the write-edge projector and the read layer, sharing one `parseBlob`),
+  and turning a record into a typed bookmark/tag/list entity is still a read
+  layer **above** sync.
 
 ### the three flows
 

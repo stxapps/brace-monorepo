@@ -5,7 +5,7 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { readTags, type TagItem } from '../data';
+import { readTags, type TagItem } from '@/data/user-data';
 
 export function useTags(): TagItem[] {
   const tags = useLiveQuery(() => readTags(), []);

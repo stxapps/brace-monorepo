@@ -27,21 +27,25 @@ import { z } from 'zod';
 // Small by design (< ~2 KB budget): list-view fields only, so the whole library
 // is browsable offline after first sync. Heavy content (archives, screenshots,
 // long notes) lives in separate `files/{id}.enc` blobs referenced by id — never
-// inlined here. `tags`/`list` hold ids of `tags/{id}.enc` / `lists/{id}.enc`
+// inlined here. `tagIds`/`listId` hold ids of `tags/{id}.enc` / `lists/{id}.enc`
 // files; a dangling id (tag deleted on another device) is NORMAL and the UI
 // skips it, never errors.
+//
+// Reference fields end in `Id`/`Ids` and store the BARE entity id, never a full
+// path: the `{namespace}` prefix + `.enc` suffix is applied at the read edge
+// (paths.ts), the same convention the link's own `meta/{id}.enc` path follows.
 export const linkSchema = z.looseObject({
   title: z.string(),
   url: z.string(),
   // Tag ids (the `{id}` of `tags/{id}.enc`). Order is the user's tag order.
-  tags: z.array(z.string()),
+  tagIds: z.array(z.string()),
   // List id (the `{id}` of `lists/{id}.enc`).
-  list: z.string(),
-  // Reference to the archived page's content file (`files/{id}.enc`), absent
-  // until one is saved. A field name types its blob (see the doc's "plaintext
-  // typing"); if a field ever needs to hold several formats, make it an object
-  // with an explicit `type` beside the id — a per-field schema decision.
-  pageArchive: z.string().optional(),
+  listId: z.string(),
+  // Id of the archived page's content file (the `{id}` of `files/{id}.enc`),
+  // absent until one is saved. A field name types its blob (see the doc's
+  // "plaintext typing"); if a field ever needs to hold several formats, make it
+  // an object with an explicit `type` beside the id — a per-field schema decision.
+  pageArchiveId: z.string().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
@@ -53,6 +57,7 @@ export type Link = z.infer<typeof linkSchema>;
 export const tagSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
+  createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
 export type Tag = z.infer<typeof tagSchema>;
@@ -60,6 +65,7 @@ export type Tag = z.infer<typeof tagSchema>;
 export const listSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
+  createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
 export type List = z.infer<typeof listSchema>;
@@ -69,6 +75,7 @@ export type List = z.infer<typeof listSchema>;
 // field here for a general setting, or a NEW `settings/<concern>.enc` schema
 // when a group of settings should stop clobbering the rest under LWW.
 export const settingsGeneralSchema = z.looseObject({
+  createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
 export type SettingsGeneral = z.infer<typeof settingsGeneralSchema>;

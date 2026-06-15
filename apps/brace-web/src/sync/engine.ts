@@ -31,6 +31,7 @@ import {
 
 import { db } from '../data/db';
 import { clearPendingPaths, listPendingOps, type PendingOpRecord } from '../data/pending-store';
+import { toItemRecord } from '../data/projection';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
 import { api } from '../lib/api';
 import { decryptEntity, encryptEntity } from './crypto';
@@ -454,7 +455,12 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   const content = stale.filter((e) => isContentPath(e.path));
   const index = stale.filter((e) => !isContentPath(e.path));
 
-  await db.items.bulkPut(content.map((e) => ({ id: e.path, updatedAt: e.updatedAt })));
+  // toItemRecord is the single projector that derives the queryable `item*`
+  // columns from the decrypted bytes (data/projection.ts) — the engine stays
+  // schema-blind, it just routes every write through it so the indexes can't
+  // drift from `data`. A content record carries no bytes here, so it projects
+  // none (only its `itemType`/`updatedAt`).
+  await db.items.bulkPut(content.map((e) => toItemRecord(e.path, e.updatedAt)));
   // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
   // map never grows past a single batch (a large first sync holds ~1k URLs, not all
   // of them) and each URL's mint-to-GET latency stays well inside its 1-hour TTL.
@@ -479,7 +485,7 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
       if (!blob) return;
 
       const data = await decryptEntity(deps.encryptionKey, blob);
-      await db.items.put({ id: e.path, updatedAt: e.updatedAt, data });
+      await db.items.put(toItemRecord(e.path, e.updatedAt, data));
     });
   }
 }

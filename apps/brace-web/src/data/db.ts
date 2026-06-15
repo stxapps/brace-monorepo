@@ -63,22 +63,56 @@ export interface SyncMetaRecord {
 // — that's the `files/` namespace specifically) is the established name for this
 // one-table-of-every-type store in E2E sync systems (Standard Notes, Joplin).
 //
-// - `id` is the FULL relative path (`meta/m_abc.enc`), the same key the op log,
-//   pending queue, and R2 use — so reconcile can compare a server op to a local
-//   record without any id↔path mapping.
+// - `path` is the FULL relative path (`meta/m_abc.enc`) AND the primary key — the
+//   same key the op log, pending queue, and R2 use, so reconcile can compare a
+//   server op to a local record directly (there is no separate id; the path IS
+//   the id). Named `path`, not `id`, to match every other layer and to avoid
+//   colliding with the entities' own logical `id` field (lists/tags carry one
+//   inside the blob — see entities.ts).
 // - `updatedAt` is the per-path R2 `LastModified` (epoch ms) the server stamped;
 //   it drives last-writer-wins and is the value compared in both incremental
 //   apply and the fallback listing — never Dexie's local write time.
 // - `data` is the decrypted blob bytes (the sync engine decrypts with
 //   @stxapps/web-crypto before it lands here; plaintext never crosses the
 //   network). Absent for a `files/` content record that's been seen but not yet
-//   lazily downloaded — only its `updatedAt` is known. Parsing these bytes into a
-//   typed bookmark/tag/list is layered on top later; the sync path stays
-//   payload-agnostic.
+//   lazily downloaded — only its `updatedAt` is known.
+//
+// The `item*` columns are the QUERY PROJECTION: the few list-view fields lifted
+// out of the decrypted `data` blob so IndexedDB can index them. Without them a
+// view like "newest 30 links in this list" would have to read+JSON.parse every
+// `meta/` blob into memory and sort there — O(library) on every reactive tick. A
+// compound index over these columns turns it into a keyset walk that materializes
+// only the page shown. They're DERIVED, not authoritative: `data` is the source
+// of truth, and every column here is computed FROM it by the single projector
+// (data/projection.ts `toItemRecord`) that every write site must funnel through —
+// so the index can never drift from the bytes it indexes (no second table, no
+// cross-table transaction; the column is written in the same `put` as `data`).
+// All are sparse: a record gets a key only where the field applies (a `files/`
+// content record has none; only `meta/` links carry `itemListId`/`itemTagIds`),
+// and IndexedDB simply omits keyless records from that index — exactly the
+// per-type filtering we want.
+export type ItemType = 'meta' | 'list' | 'tag' | 'settings' | 'files';
+
 export interface ItemRecord {
-  id: string;
+  path: string;
   updatedAt: number;
   data?: Uint8Array;
+  // Namespace of `id`'s prefix — the discriminator a single-type ordered query
+  // ranges on (`[itemType+itemUpdatedAt]`); a path prefix can't feed a compound
+  // index, so it's stored as its own column.
+  itemType?: ItemType;
+  // The USER-MEANINGFUL timestamps from inside the blob (entities.ts) — distinct
+  // from the R2-`LastModified` `updatedAt` above that drives sync. These are the
+  // display sort keys.
+  itemCreatedAt?: number;
+  itemUpdatedAt?: number;
+  // Links only: the ids the link references — `link.listId` and `link.tagIds` (the
+  // `{id}` of `lists/{id}.enc` / `tags/{id}.enc`, or a system-list constant).
+  // Indexed so a list view filters+orders in one index range, and a tag view
+  // finds membership via the multiEntry index. Ids, never names: a list/tag can
+  // be renamed, but its id is stable, and that's what a link stores.
+  itemListId?: string;
+  itemTagIds?: string[];
 }
 
 // One local mutation not yet committed to the server — the durable pending-ops
@@ -113,7 +147,7 @@ export interface PendingOpRecord {
 
 class BraceDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
-  items!: EntityTable<ItemRecord, 'id'>;
+  items!: EntityTable<ItemRecord, 'path'>;
   pendingOps!: Table<PendingOpRecord, [string, string]>;
 
   constructor() {
@@ -121,8 +155,21 @@ class BraceDb extends Dexie {
     this.version(1).stores({
       // `username` primary key — one bookkeeping row per account.
       syncMeta: 'username',
-      // `id` primary key + `updatedAt` index for ordered/recent reads.
-      items: 'id, updatedAt',
+      // `path` primary key + `updatedAt` index (the engine's R2-clock reconcile
+      // scan). The rest serve the read layer's link views, all sparse (only
+      // records with the keyed field appear). The two ordering fields
+      // (itemUpdatedAt = date modified, itemCreatedAt = date added) each pair with
+      // the same two compound indexes, so a view can sort either way:
+      //   [itemType+item{Updated,Created}At]   — one type, ordered (the "all links"
+      //                                          view): range the type, reverse.
+      //   [itemListId+item{Updated,Created}At] — one list, ordered: range the list id.
+      //   *itemTagIds (multiEntry)             — links carrying a given tag id
+      //                                          (membership; multiEntry can't
+      //                                          compound, so the tag view sorts its
+      //                                          matched subset in JS).
+      items:
+        'path, updatedAt, [itemType+itemUpdatedAt], [itemType+itemCreatedAt], ' +
+        '[itemListId+itemUpdatedAt], [itemListId+itemCreatedAt], *itemTagIds',
       // pending-ops queue. Compound `[username+path]` primary key gives
       // the one-row-per-(account,path) upsert above; the `username` index scopes a
       // drain to the active account. Unlisted stores (syncMeta, items) carry forward.

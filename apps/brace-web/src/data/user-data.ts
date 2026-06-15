@@ -1,0 +1,288 @@
+'use client';
+
+// The typed read layer over the `items` store (db.ts): turns the sync engine's
+// payload-agnostic blobs into typed entities for the UI, and runs the link
+// library's queries. Shares `parseBlob` with the write-edge projector
+// (projection.ts), so a record decodes by identical rules wherever it's read.
+//
+// Lives in `src/data/` (not the links route) because it's not links-specific —
+// settings reads lists/tags here too. It depends on NOTHING in `app/`: a query
+// is described by the plain `LinkQuery` below, and the links route maps its URL
+// onto that (links-page-provider `parseLinkQuery`), so the dependency points
+// route → data, never the reverse.
+
+import Dexie from 'dexie';
+import type { z } from 'zod';
+
+import type { Link, List, Tag } from '@stxapps/shared';
+import { linkSchema, LISTS_PREFIX, listSchema, TAGS_PREFIX, tagSchema } from '@stxapps/shared';
+
+import { db, type ItemRecord } from '@/data/db';
+import { parseBlob } from '@/data/projection';
+
+// A parsed entity always carries its source `items` path — the stable id every
+// other layer (op log, pending queue, R2) keys by, and what the UI needs to
+// select/edit/delete a row without a second lookup.
+export type WithPath<T> = T & { path: string };
+export type LinkItem = WithPath<Link>;
+export type ListItem = WithPath<List>;
+export type TagItem = WithPath<Tag>;
+
+// --- the query grammar -------------------------------------------------------
+
+// One filter clause over a multi-valued or text field. Three relations, ANDed
+// together, each ignored when empty:
+//   any  — match if the field has/contains ANY of these (OR / include-any)
+//   all  — match if it has/contains ALL of these (AND / include-all)
+//   none — match if it has/contains NONE of these (NOT / exclude)
+// For tags `any/all/none` apply to the link's tag-id set; for `url`/`title` they
+// apply to lowercased substring word matches.
+export interface Clause {
+  any: string[];
+  all: string[];
+  none: string[];
+}
+
+// A link belongs to exactly ONE list, so `all` (in two lists at once) is always
+// empty — lists support only `any` (in one of these) and `none` (in none).
+export interface ListClause {
+  any: string[];
+  none: string[];
+}
+
+// How results are ordered, descending (newest first): `updatedAt` = date
+// modified, `createdAt` = date added. Each is backed by its own compound index
+// (db.ts), so either sort is index-served, not sorted in memory.
+export type LinkSort = 'updatedAt' | 'createdAt';
+
+// A fully-described link query. Clauses AND across fields (a link must satisfy
+// every non-empty one). Cross-field OR is intentionally not expressible — that's
+// a structured-AST concern, out of scope.
+export interface LinkQuery {
+  lists: ListClause;
+  tags: Clause;
+  url: Clause;
+  title: Clause;
+  sort: LinkSort;
+}
+
+// One page of results. `total` is the exact match count ONLY when it's a cheap
+// index `.count()` (a plain browse view); it's `undefined` once any predicate
+// runs in JS (text words — they can't be counted without decoding the whole
+// match set), so the UI shows a non-exact count under search. `hasMore` is always
+// known (the query fetches one past the page to detect it).
+export interface LinksResult {
+  links: LinkItem[];
+  total?: number;
+  hasMore: boolean;
+}
+
+// --- decode ------------------------------------------------------------------
+
+// Decode one `items` record into a typed entity (with its path), or `undefined`
+// if its bytes are absent/unparseable — dropped from the view rather than
+// crashing it. See `parseBlob` for the two skip reasons.
+function decode<T extends z.ZodTypeAny>(
+  record: ItemRecord,
+  schema: T,
+): WithPath<z.infer<T>> | undefined {
+  const parsed = parseBlob(record.data, schema);
+  if (parsed === undefined) return undefined;
+  // The entity schemas are all `looseObject`, so `parsed` is an object; TS only
+  // sees the open `z.infer<T>`, hence the spread widening.
+  return { ...(parsed as object), path: record.path } as WithPath<z.infer<T>>;
+}
+
+function decodeLinks(records: ItemRecord[]): LinkItem[] {
+  return records
+    .map((record) => decode(record, linkSchema))
+    .filter((link): link is LinkItem => link !== undefined);
+}
+
+// --- namespace reads (small collections) -------------------------------------
+
+// All records under one namespace prefix, decoded and parse-filtered. The
+// `startsWith` runs against the `items` primary key, so it's an index range scan,
+// not a full-table walk. Lists/tags are small by design, so reading the whole
+// namespace and decoding it is cheap — no index needed.
+async function readNamespace<T extends z.ZodTypeAny>(
+  prefix: string,
+  schema: T,
+): Promise<WithPath<z.infer<T>>[]> {
+  const records = await db.items.where('path').startsWith(prefix).toArray();
+  return records
+    .map((record) => decode(record, schema))
+    .filter((entity): entity is WithPath<z.infer<T>> => entity !== undefined);
+}
+
+export function readLists(): Promise<ListItem[]> {
+  return readNamespace(LISTS_PREFIX, listSchema);
+}
+
+export function readTags(): Promise<TagItem[]> {
+  return readNamespace(TAGS_PREFIX, tagSchema);
+}
+
+// --- link query --------------------------------------------------------------
+
+function clauseEmpty(c: Clause): boolean {
+  return c.any.length === 0 && c.all.length === 0 && c.none.length === 0;
+}
+
+function hasTextClause(q: LinkQuery): boolean {
+  return !clauseEmpty(q.url) || !clauseEmpty(q.title);
+}
+
+// Predicates the indexed COLUMNS can answer without decoding the blob — list id
+// and tag ids (db.ts). The driver index pre-narrows for one positive clause;
+// this re-checks every clause so it's correct no matter which (or no) driver ran.
+function columnMatches(record: ItemRecord, q: LinkQuery): boolean {
+  const listId = record.itemListId;
+  if (q.lists.any.length > 0 && (listId === undefined || !q.lists.any.includes(listId))) {
+    return false;
+  }
+  if (q.lists.none.length > 0 && listId !== undefined && q.lists.none.includes(listId)) {
+    return false;
+  }
+  const tagIds = record.itemTagIds ?? [];
+  if (q.tags.any.length > 0 && !q.tags.any.some((t) => tagIds.includes(t))) return false;
+  if (q.tags.all.length > 0 && !q.tags.all.every((t) => tagIds.includes(t))) return false;
+  if (q.tags.none.length > 0 && q.tags.none.some((t) => tagIds.includes(t))) return false;
+  return true;
+}
+
+// Substring word match over one field. Words are pre-lowercased by the parser;
+// the haystack is lowercased here.
+function wordsMatch(haystack: string, c: Clause): boolean {
+  const h = haystack.toLowerCase();
+  if (c.all.length > 0 && !c.all.every((w) => h.includes(w))) return false;
+  if (c.any.length > 0 && !c.any.some((w) => h.includes(w))) return false;
+  if (c.none.length > 0 && c.none.some((w) => h.includes(w))) return false;
+  return true;
+}
+
+// The text predicates need the decoded link (url/title live inside the blob), so
+// these can never be index-served — always a JS post-filter (the "scan for now"
+// choice; the scalable upgrade is a write-time `*itemSearchWords` token index).
+function textMatches(link: LinkItem, q: LinkQuery): boolean {
+  return wordsMatch(link.url, q.url) && wordsMatch(link.title, q.title);
+}
+
+// The compound index + record column backing each sort dimension. Both
+// timestamps are projected on every type (projection.ts), so each sort reuses the
+// same two link indexes; only the ordering component differs.
+const SORT_INDEXES: Record<
+  LinkSort,
+  { type: string; list: string; column: 'itemUpdatedAt' | 'itemCreatedAt' }
+> = {
+  updatedAt: {
+    type: '[itemType+itemUpdatedAt]',
+    list: '[itemListId+itemUpdatedAt]',
+    column: 'itemUpdatedAt',
+  },
+  createdAt: {
+    type: '[itemType+itemCreatedAt]',
+    list: '[itemListId+itemCreatedAt]',
+    column: 'itemCreatedAt',
+  },
+};
+
+// A browse view with a single positive list/all clause and nothing else: walk one
+// compound index in order, materialize only the page, and count via the index —
+// no decode of the whole library, exact total.
+async function rangeFastPath(index: string, key: string, limit: number): Promise<LinksResult> {
+  const range = db.items
+    .where(index)
+    .between([key, Dexie.minKey], [key, Dexie.maxKey], true, true);
+  const [records, total] = await Promise.all([
+    range.clone().reverse().limit(limit).toArray(),
+    range.count(),
+  ]);
+  return { links: decodeLinks(records), total, hasMore: total > limit };
+}
+
+// Finish a query from an already-loaded candidate subset (the tag-driven path):
+// drop non-matches on the columns (no decode), sort by the chosen sort column
+// (still no decode — it's an indexed column), then decode only as far as the page
+// needs. Exact total when there's no text clause (the column survivors ARE the
+// match set); undefined once text filtering applies.
+function finishFromCandidates(
+  candidates: ItemRecord[],
+  q: LinkQuery,
+  limit: number,
+): LinksResult {
+  const { column } = SORT_INDEXES[q.sort];
+  const survivors = candidates.filter((r) => columnMatches(r, q));
+  survivors.sort((a, b) => (b[column] ?? 0) - (a[column] ?? 0));
+
+  if (!hasTextClause(q)) {
+    return {
+      links: decodeLinks(survivors.slice(0, limit)),
+      total: survivors.length,
+      hasMore: survivors.length > limit,
+    };
+  }
+
+  const links: LinkItem[] = [];
+  for (const record of survivors) {
+    const link = decode(record, linkSchema);
+    if (link && textMatches(link, q)) {
+      links.push(link);
+      if (links.length > limit) break; // one past the page → hasMore
+    }
+  }
+  return { links: links.slice(0, limit), total: undefined, hasMore: links.length > limit };
+}
+
+// One page of the link library for `query`, ordered by `query.sort` (descending —
+// newest first). Picks the cheapest driver for the clauses present:
+//   - single list / no filters → index-ordered fast path (exact count).
+//   - positive tag clause → drive the selective `*itemTagIds` index, finish over
+//     that subset (a tag's links, never the whole library), sorted in JS.
+//   - anything else (multi-list, `none`, text) → walk the all-links ordered index
+//     applying every clause and decoding lazily, stopping at the page; total is
+//     non-exact.
+export async function readLinks(query: LinkQuery, limit: number): Promise<LinksResult> {
+  const index = SORT_INDEXES[query.sort];
+  const onlyLists =
+    clauseEmpty(query.tags) && clauseEmpty(query.url) && clauseEmpty(query.title);
+
+  if (onlyLists && query.lists.none.length === 0) {
+    if (query.lists.any.length === 1) {
+      return rangeFastPath(index.list, query.lists.any[0], limit);
+    }
+    if (query.lists.any.length === 0) {
+      return rangeFastPath(index.type, 'meta', limit);
+    }
+  }
+
+  // Most selective positive clause is a tag: drive the tag index. `any` is an OR
+  // membership (`anyOf`, deduped); for an `all`-only query we drive on the first
+  // tag and let `columnMatches` enforce the rest.
+  const tagDriver = query.tags.any.length > 0 ? query.tags.any : query.tags.all.slice(0, 1);
+  if (tagDriver.length > 0) {
+    const candidates = await db.items.where('itemTagIds').anyOf(tagDriver).distinct().toArray();
+    return finishFromCandidates(candidates, query, limit);
+  }
+
+  // No positive tag clause: walk all links newest-first, filtering as we go. The
+  // `filter` decodes to test text words and stops once `limit + 1` pass (one past
+  // the page detects `hasMore`), so it touches a bounded slice, not the library.
+  const records = await db.items
+    .where(index.type)
+    .between(['meta', Dexie.minKey], ['meta', Dexie.maxKey], true, true)
+    .reverse()
+    .filter((record) => {
+      if (!columnMatches(record, query)) return false;
+      const link = decode(record, linkSchema);
+      return link !== undefined && textMatches(link, query);
+    })
+    .limit(limit + 1)
+    .toArray();
+
+  return {
+    links: decodeLinks(records).slice(0, limit),
+    total: undefined,
+    hasMore: records.length > limit,
+  };
+}

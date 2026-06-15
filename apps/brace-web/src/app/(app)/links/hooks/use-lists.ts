@@ -6,7 +6,7 @@
 import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { type ListItem,readLists } from '../data';
+import { type ListItem, readLists } from '@/data/user-data';
 
 export function useLists(): ListItem[] {
   const lists = useLiveQuery(() => readLists(), []);
