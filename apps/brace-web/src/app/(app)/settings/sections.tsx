@@ -4,13 +4,7 @@
 
 import { CreditCard, Hash, Info, List, SlidersHorizontal, User } from 'lucide-react';
 
-export type SettingsSectionId =
-  | 'account'
-  | 'subscription'
-  | 'lists'
-  | 'tags'
-  | 'miscs'
-  | 'about';
+export type SettingsSectionId = 'account' | 'subscription' | 'lists' | 'tags' | 'miscs' | 'about';
 
 export interface SettingsSection {
   id: SettingsSectionId;
@@ -28,3 +22,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 ];
 
 export const DEFAULT_SECTION_ID: SettingsSectionId = 'account';
+
+// The section ids as a flat list, plus a guard for validating the `[section]`
+// route param (the path is user-supplied — anything not in here 404s).
+export const SETTINGS_SECTION_IDS: SettingsSectionId[] = SETTINGS_SECTIONS.map((s) => s.id);
+
+export function isSettingsSectionId(value: string): value is SettingsSectionId {
+  return (SETTINGS_SECTION_IDS as string[]).includes(value);
+}

@@ -5,7 +5,8 @@
 // tags as selectable filters. Clicking an entry sets the shared selection (see
 // links-page-provider); the main pane reacts. "Show All" is the unfiltered reset.
 
-import { Archive, Folder, Hash, Inbox, Layers, Trash2 } from 'lucide-react';
+import { Archive, Folder, Hash, Inbox, Layers, Settings2, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 
 import { ARCHIVE_ID, MY_LIST_ID, TRASH_ID } from '@stxapps/shared';
 import { BraceIcon } from '@stxapps/web-ui/components/icons/brace-icon';
@@ -107,6 +108,23 @@ export function Sidebar() {
             label="Trash"
             selection={{ kind: 'list', id: TRASH_ID }}
           />
+
+          {/* Not a filter selection — a link out to the settings section that
+              creates/renames/deletes lists. Styled like the items above but it's
+              an <a>, so it navigates (and Back returns here to keep organizing)
+              rather than calling setSelection. */}
+          <Link
+            href="/settings/lists"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+              'text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              <Settings2 className="size-4" />
+            </span>
+            <span className="truncate">Manage lists</span>
+          </Link>
         </Section>
 
         {/* Tags are all user-created — no system tag — so this section is empty

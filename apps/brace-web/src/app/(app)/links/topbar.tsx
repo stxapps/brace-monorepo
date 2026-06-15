@@ -36,6 +36,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { useLists } from '../_hooks/use-lists';
 import { useSignOut } from '../_hooks/use-sign-out';
 import { useTags } from '../_hooks/use-tags';
+import { DEFAULT_SECTION_ID } from '../settings/sections';
 import { type LayoutMode, useLinksPage } from './links-page-provider';
 
 import { useSync } from '@/contexts/sync-provider';
@@ -104,7 +105,7 @@ function MoreOptionsMenu() {
           Sync
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/settings">
+          <Link href={`/settings/${DEFAULT_SECTION_ID}`}>
             <Settings className="size-4" />
             Settings
           </Link>
