@@ -13,12 +13,12 @@ import { api } from '@/lib/api';
 // "dispatch" (mutate), with isPending/error for free.
 
 export function useSignOut() {
-  const { signOut } = useAuth();
+  const { endSession } = useAuth();
 
   return useMutation({
     mutationFn: async () => {
       // Step 1: ask the server to revoke this session, while the bearer token is
-      // still live (authFetch attaches it — once signOut clears the local
+      // still live (authFetch attaches it — once endSession clears the local
       // session, the token is gone). Best-effort: a network/server failure here
       // must NOT trap the user signed-in. The orphaned row ages out via its TTL,
       // so we swallow the error and still drop the local session below.
@@ -33,7 +33,7 @@ export function useSignOut() {
       // 'signed-out' — AuthGuard sees a deliberate sign-out and sends the user home
       // to '/', not /sign-in?next=. This is the step that actually signs the user
       // out client-side.
-      await signOut();
+      await endSession();
     },
   });
 }

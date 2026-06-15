@@ -70,7 +70,7 @@ export function onSessionInvalid(listener: SessionInvalidListener): () => void {
 }
 
 // Notify subscribers — a pure fan-out. Deduping any reaction (e.g. collapsing a
-// double signOut from concurrent failing requests) is the subscriber's concern,
+// double sign-out from concurrent failing requests) is the subscriber's concern,
 // not this passive store's; it owns the lifecycle being guarded.
 export function notifySessionInvalid(): void {
   for (const listener of invalidListeners) listener();

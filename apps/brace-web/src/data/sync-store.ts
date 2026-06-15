@@ -100,7 +100,7 @@ export async function resetCursor(
 // must not read the first's plaintext. Deliberately not account-scoped: `items`
 // carries no owner column (see PendingOpRecord in db.ts), so a scoped clear
 // would leave the previous account's plaintext behind. Called from
-// auth-provider's signOut (and so the onSessionInvalid path) alongside
+// auth-provider's endSession (and so the onSessionInvalid path) alongside
 // clearSession.
 export async function clearSyncData(): Promise<void> {
   await Promise.all([db.items.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);

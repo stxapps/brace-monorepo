@@ -42,12 +42,13 @@ interface AuthContextValue {
   reason: EndReason | null;
   // Adopt a freshly created / signed-in session: persist it and flip to authed.
   setSession: (record: SessionRecord) => Promise<void>;
-  // Drop the LOCAL session only. Server-side revocation lives in the user-driven
-  // useSignOut hook (which POSTs sign-out, then calls this); this stays local so
-  // it can also serve the onSessionInvalid path, where the token is already dead.
-  // The reason it records steers AuthGuard's post-sign-out redirect: defaults to a
-  // deliberate 'signed-out' (→ '/'); the invalid-session path passes 'expired'.
-  signOut: (reason?: EndReason) => Promise<void>;
+  // Drop the LOCAL session only — the sign-out PRIMITIVE. Server-side revocation
+  // lives in the user-driven useSignOut hook (which POSTs sign-out, then calls
+  // this); this stays local so it can also serve the onSessionInvalid path, where
+  // the token is already dead. The reason it records steers AuthGuard's post-
+  // sign-out redirect: defaults to a deliberate 'signed-out' (→ '/'); the
+  // invalid-session path passes 'expired'.
+  endSession: (reason?: EndReason) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           // A stored-but-expired session is an 'expired' reason (the user had a
           // session that lapsed); no session at all stays null (a direct visit).
-          // Same wipe as signOut: the local store holds DECRYPTED bookmarks, so
+          // Same wipe as endSession: the local store holds DECRYPTED bookmarks, so
           // an expired session must drop them too — otherwise the next account
           // on this device could read the previous user's plaintext.
           if (s) {
@@ -99,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated');
   }, []);
 
-  const signOut = useCallback(async (reason: EndReason = 'signed-out') => {
+  const endSession = useCallback(async (reason: EndReason = 'signed-out') => {
     // Drop the session AND the synced local data together. The local store holds
     // DECRYPTED bookmarks, so leaving them behind would let the next user on this
     // device read the previous user's plaintext. One active session per device
@@ -114,20 +115,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // React to the api client detecting an invalid session (server 401, or a
   // mid-session token expiry) by dropping to signed-out. AuthGuard then bounces
   // protected routes to /sign-in. The ref collapses a burst of concurrent failing
-  // requests into a single signOut — set synchronously before the async call, so
-  // it doesn't lean on clearSession's internal timing — and resets after so a
+  // requests into a single endSession — set synchronously before the async call,
+  // so it doesn't lean on clearSession's internal timing — and resets after so a
   // later re-login can be invalidated again.
-  const signingOut = useRef(false);
+  const invalidating = useRef(false);
+
   useEffect(
     () =>
       onSessionInvalid(() => {
-        if (signingOut.current) return;
-        signingOut.current = true;
-        void signOut('expired').finally(() => {
-          signingOut.current = false;
+        if (invalidating.current) return;
+
+        invalidating.current = true;
+        void endSession('expired').finally(() => {
+          invalidating.current = false;
         });
       }),
-    [signOut],
+    [endSession],
   );
 
   const value = useMemo<AuthContextValue>(
@@ -137,9 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       username,
       reason,
       setSession,
-      signOut,
+      endSession,
     }),
-    [status, username, reason, setSession, signOut],
+    [status, username, reason, setSession, endSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

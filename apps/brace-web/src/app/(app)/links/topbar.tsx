@@ -4,18 +4,41 @@
 // the main pane is showing). Right: the primary actions — add, search, bulk
 // edit, overflow — plus the list/card/table layout switch.
 //
-// Actions are wired to `onClick` stubs for now; this scaffold owns layout and
-// state plumbing, not the add/search/bulk flows.
+// The overflow menu (More options) is wired up; add/search/bulk-edit are still
+// `onClick` stubs — this scaffold owns layout and state plumbing, not those flows.
 
-import { LayoutGrid, List, MoreHorizontal, Plus, Search, SquarePen, Table } from 'lucide-react';
+import {
+  LayoutGrid,
+  LifeBuoy,
+  List,
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  SquarePen,
+  Table,
+} from 'lucide-react';
+import Link from 'next/link';
 
 import { ALL_ID, SYSTEM_LIST_NAMES } from '@stxapps/shared';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { useSignOut } from '../use-sign-out';
 import { useLists } from './hooks/use-lists';
 import { useTags } from './hooks/use-tags';
 import { type LayoutMode, useLinksPage } from './links-page-provider';
+
+import { useSync } from '@/contexts/sync-provider';
 
 const LAYOUT_OPTIONS: { mode: LayoutMode; label: string; icon: React.ReactNode }[] = [
   { mode: 'list', label: 'List layout', icon: <List className="size-4" /> },
@@ -60,6 +83,52 @@ function LayoutSwitch() {
   );
 }
 
+// The overflow menu behind the "More options" button: account- and session-level
+// actions that don't warrant their own toolbar slot. Sign out goes through the
+// useSignOut mutation (server revocation, then local wipe) rather than the bare
+// auth-provider endSession primitive, which only drops the local session.
+function MoreOptionsMenu() {
+  const { requestSync } = useSync();
+  const signOut = useSignOut();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="More options">
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onSelect={() => requestSync()}>
+          <RefreshCw className="size-4" />
+          Sync
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/settings">
+            <Settings className="size-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href="/support" target="_blank" rel="noopener noreferrer">
+            <LifeBuoy className="size-4" />
+            Support
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          disabled={signOut.isPending}
+          onSelect={() => signOut.mutate()}
+        >
+          <LogOut className="size-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function Topbar() {
   const label = useSelectionLabel();
 
@@ -69,9 +138,6 @@ export function Topbar() {
 
       <div className="flex items-center gap-2">
         <LayoutSwitch />
-
-        {/* Action handlers are intentionally unwired — this scaffold owns layout
-            and state plumbing, not the add/search/bulk/overflow flows. */}
         <Button variant="default" size="sm">
           <Plus className="size-4" />
           Add
@@ -82,9 +148,7 @@ export function Topbar() {
         <Button variant="ghost" size="icon-sm" aria-label="Bulk edit">
           <SquarePen className="size-4" />
         </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="More options">
-          <MoreHorizontal className="size-4" />
-        </Button>
+        <MoreOptionsMenu />
       </div>
     </header>
   );
