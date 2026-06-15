@@ -33,9 +33,9 @@ import {
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { useSignOut } from '../use-sign-out';
-import { useLists } from './hooks/use-lists';
-import { useTags } from './hooks/use-tags';
+import { useLists } from '../_hooks/use-lists';
+import { useSignOut } from '../_hooks/use-sign-out';
+import { useTags } from '../_hooks/use-tags';
 import { type LayoutMode, useLinksPage } from './links-page-provider';
 
 import { useSync } from '@/contexts/sync-provider';
