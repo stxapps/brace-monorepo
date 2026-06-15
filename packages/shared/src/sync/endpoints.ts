@@ -43,7 +43,6 @@ export const syncPathSchema = z
 export const MAX_COMMIT_OPS = 1000;
 export const MAX_SIGN_PATHS = 1000;
 export const MAX_LIST_LIMIT = 1000;
-export const DEFAULT_OPS_LIMIT = 500;
 
 // --- GET /v1/ops/list — incremental pull ------------------------------------
 
@@ -57,7 +56,7 @@ export const DEFAULT_OPS_LIMIT = 500;
 export const opsListRequestSchema = z.object({
   since: z.coerce.number().int().optional(),
   sincePath: syncPathSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_OPS_LIMIT),
+  limit: z.coerce.number().int().min(1).max(MAX_LIST_LIMIT).default(MAX_LIST_LIMIT),
 });
 export type OpsListRequest = z.infer<typeof opsListRequestSchema>;
 

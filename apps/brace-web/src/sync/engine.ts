@@ -15,7 +15,6 @@
 
 import {
   type CommitResult,
-  DEFAULT_OPS_LIMIT,
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
@@ -52,7 +51,7 @@ export interface SyncDeps {
 // contract.
 const SIGN_BATCH = MAX_SIGN_PATHS;
 const COMMIT_BATCH = MAX_COMMIT_OPS;
-const OPS_PAGE = DEFAULT_OPS_LIMIT;
+const OPS_PAGE = MAX_LIST_LIMIT;
 const FILES_PAGE = MAX_LIST_LIMIT;
 
 // Blob fan-out, split by direction because the two workloads bind on opposite

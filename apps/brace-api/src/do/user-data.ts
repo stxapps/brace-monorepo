@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 
 import {
   type CommitResult,
-  DEFAULT_OPS_LIMIT,
+  MAX_LIST_LIMIT,
   type OpEntry,
   type OpsListResponse,
 } from '@stxapps/shared';
@@ -101,11 +101,7 @@ export class UserDataDO extends DurableObject<Bindings> {
   // (updatedAt, path) plus the retained-range bounds the client routes on. Asks for
   // limit+1 to detect `hasMore` without a second COUNT, then trims to `limit`. The
   // wire shape drops the internal `seq` (op-logs.ts keeps it for ordering only).
-  listOps(
-    since: number | null,
-    sincePath: string | null,
-    limit = DEFAULT_OPS_LIMIT,
-  ): OpsListResponse {
+  listOps(since: number | null, sincePath: string | null, limit = MAX_LIST_LIMIT): OpsListResponse {
     const repo = opLogsRepo(this.sql);
     const rows = repo.listSince(since, sincePath, limit + 1);
     const hasMore = rows.length > limit;
