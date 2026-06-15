@@ -8,7 +8,7 @@
 import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { EmptyState, faviconUrl, hostname, type LinkLayoutProps,ShowMore } from './shared';
+import { EmptyState, faviconUrl, hostname, type LinkLayoutProps, ShowMore } from './shared';
 
 const ROW_HEIGHT = 64;
 
@@ -37,7 +37,9 @@ export function ListLayout({ links, hasMore, showMore, isLoading }: LinkLayoutPr
               rel="noreferrer"
               className="absolute inset-x-0 flex items-center gap-3 border-b border-border px-4 hover:bg-muted/50"
               style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
-            >              <img
+            >
+              {' '}
+              <img
                 src={faviconUrl(link.url)}
                 alt=""
                 className="size-6 shrink-0 rounded"

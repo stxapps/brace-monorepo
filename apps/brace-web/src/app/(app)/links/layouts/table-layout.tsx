@@ -7,7 +7,7 @@
 import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { EmptyState, faviconUrl, hostname, type LinkLayoutProps,ShowMore } from './shared';
+import { EmptyState, faviconUrl, hostname, type LinkLayoutProps, ShowMore } from './shared';
 
 const ROW_HEIGHT = 44;
 const COLUMNS = 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px]';
@@ -51,7 +51,9 @@ export function TableLayout({ links, hasMore, showMore, isLoading }: LinkLayoutP
                 className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border px-4 text-sm hover:bg-muted/50`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
               >
-                <span className="flex min-w-0 items-center gap-2">                  <img
+                <span className="flex min-w-0 items-center gap-2">
+                  {' '}
+                  <img
                     src={faviconUrl(link.url)}
                     alt=""
                     className="size-4 shrink-0 rounded"

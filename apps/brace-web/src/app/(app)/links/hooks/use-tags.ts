@@ -9,8 +9,5 @@ import { readTags, type TagItem } from '@/data/user-data';
 
 export function useTags(): TagItem[] {
   const tags = useLiveQuery(() => readTags(), []);
-  return useMemo(
-    () => (tags ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
-    [tags],
-  );
+  return useMemo(() => (tags ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [tags]);
 }

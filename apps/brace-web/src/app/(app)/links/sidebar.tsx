@@ -13,7 +13,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLists } from './hooks/use-lists';
 import { useTags } from './hooks/use-tags';
-import { type Selection,useLinksPage } from './links-page-provider';
+import { type Selection, useLinksPage } from './links-page-provider';
 
 function isActive(current: Selection, candidate: Selection): boolean {
   if (current.kind !== candidate.kind) return false;
@@ -73,7 +73,11 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-4">
-        <NavItem icon={<Layers className="size-4" />} label="Show All" selection={{ kind: 'all' }} />
+        <NavItem
+          icon={<Layers className="size-4" />}
+          label="Show All"
+          selection={{ kind: 'all' }}
+        />
 
         {/* Lists: My List (the default inbox) on top, the user's own lists in the
             middle, then Archive and Trash pinned at the bottom — the familiar

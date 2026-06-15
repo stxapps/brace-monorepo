@@ -10,8 +10,5 @@ import { type ListItem, readLists } from '@/data/user-data';
 
 export function useLists(): ListItem[] {
   const lists = useLiveQuery(() => readLists(), []);
-  return useMemo(
-    () => (lists ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
-    [lists],
-  );
+  return useMemo(() => (lists ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)), [lists]);
 }

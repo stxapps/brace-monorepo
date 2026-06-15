@@ -15,7 +15,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLists } from './hooks/use-lists';
 import { useTags } from './hooks/use-tags';
-import { type LayoutMode,useLinksPage } from './links-page-provider';
+import { type LayoutMode, useLinksPage } from './links-page-provider';
 
 const LAYOUT_OPTIONS: { mode: LayoutMode; label: string; icon: React.ReactNode }[] = [
   { mode: 'list', label: 'List layout', icon: <List className="size-4" /> },
@@ -31,7 +31,9 @@ function useSelectionLabel(): string {
   if (selection.kind === 'all') return SYSTEM_LIST_NAMES[ALL_ID];
   if (selection.kind === 'list') {
     // System lists name themselves from the constants; user lists from the store.
-    return SYSTEM_LIST_NAMES[selection.id] ?? lists.find((l) => l.id === selection.id)?.name ?? 'Unknown';
+    return (
+      SYSTEM_LIST_NAMES[selection.id] ?? lists.find((l) => l.id === selection.id)?.name ?? 'Unknown'
+    );
   }
   return tags.find((t) => t.id === selection.id)?.name ?? 'Unknown';
 }

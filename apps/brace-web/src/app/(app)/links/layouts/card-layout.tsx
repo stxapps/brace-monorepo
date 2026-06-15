@@ -8,7 +8,7 @@
 import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { EmptyState, faviconUrl, hostname, type LinkLayoutProps,ShowMore } from './shared';
+import { EmptyState, faviconUrl, hostname, type LinkLayoutProps, ShowMore } from './shared';
 
 const COLUMNS = 3;
 const ROW_HEIGHT = 180;
@@ -50,7 +50,9 @@ export function CardLayout({ links, hasMore, showMore, isLoading }: LinkLayoutPr
                   rel="noreferrer"
                   className="flex flex-col gap-2 rounded-lg border border-border p-3 hover:bg-muted/50"
                 >
-                  <div className="flex items-center gap-2">                    <img
+                  <div className="flex items-center gap-2">
+                    {' '}
+                    <img
                       src={faviconUrl(link.url)}
                       alt=""
                       className="size-5 shrink-0 rounded"

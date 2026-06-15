@@ -22,7 +22,15 @@
 // site — means consumers just render <LinksPageProvider> and the constraint
 // travels with it (the self-wrapping AuthGuard/GuestGuard pattern).
 
-import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/navigation';
 
 import { ALL_ID, DEFAULT_LIST_ID } from '@stxapps/shared';
@@ -72,10 +80,21 @@ function hrefForSelection(selection: Selection): string {
 // comma (breaks on ids containing one). Today's UI only ever emits the bare
 // forms; the suffixed forms make hand-built advanced deep links work already.
 const FILTER_KEYS = [
-  'list', 'list-any', 'list-none',
-  'tag', 'tag-any', 'tag-all', 'tag-none',
-  'url', 'url-all', 'url-any', 'url-none',
-  'title', 'title-all', 'title-any', 'title-none',
+  'list',
+  'list-any',
+  'list-none',
+  'tag',
+  'tag-any',
+  'tag-all',
+  'tag-none',
+  'url',
+  'url-all',
+  'url-any',
+  'url-none',
+  'title',
+  'title-all',
+  'title-any',
+  'title-none',
 ];
 
 // Words are matched case-insensitively and trimmed; lowercase them here so the

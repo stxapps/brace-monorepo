@@ -191,9 +191,7 @@ const SORT_INDEXES: Record<
 // compound index in order, materialize only the page, and count via the index —
 // no decode of the whole library, exact total.
 async function rangeFastPath(index: string, key: string, limit: number): Promise<LinksResult> {
-  const range = db.items
-    .where(index)
-    .between([key, Dexie.minKey], [key, Dexie.maxKey], true, true);
+  const range = db.items.where(index).between([key, Dexie.minKey], [key, Dexie.maxKey], true, true);
   const [records, total] = await Promise.all([
     range.clone().reverse().limit(limit).toArray(),
     range.count(),
@@ -206,11 +204,7 @@ async function rangeFastPath(index: string, key: string, limit: number): Promise
 // (still no decode — it's an indexed column), then decode only as far as the page
 // needs. Exact total when there's no text clause (the column survivors ARE the
 // match set); undefined once text filtering applies.
-function finishFromCandidates(
-  candidates: ItemRecord[],
-  q: LinkQuery,
-  limit: number,
-): LinksResult {
+function finishFromCandidates(candidates: ItemRecord[], q: LinkQuery, limit: number): LinksResult {
   const { column } = SORT_INDEXES[q.sort];
   const survivors = candidates.filter((r) => columnMatches(r, q));
   survivors.sort((a, b) => (b[column] ?? 0) - (a[column] ?? 0));
@@ -244,8 +238,7 @@ function finishFromCandidates(
 //     non-exact.
 export async function readLinks(query: LinkQuery, limit: number): Promise<LinksResult> {
   const index = SORT_INDEXES[query.sort];
-  const onlyLists =
-    clauseEmpty(query.tags) && clauseEmpty(query.url) && clauseEmpty(query.title);
+  const onlyLists = clauseEmpty(query.tags) && clauseEmpty(query.url) && clauseEmpty(query.title);
 
   if (onlyLists && query.lists.none.length === 0) {
     if (query.lists.any.length === 1) {
