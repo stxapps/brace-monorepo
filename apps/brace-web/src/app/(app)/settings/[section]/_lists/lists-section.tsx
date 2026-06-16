@@ -13,7 +13,25 @@
 // mutations. Secondary actions live behind a per-row kebab menu rather than a
 // width-measured overflow, so rows stay stable at any container width.
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Archive,
   ArrowDownAZ,
@@ -25,6 +43,7 @@ import {
   ChevronUp,
   CornerUpRight,
   Folder,
+  GripVertical,
   Inbox,
   MoreHorizontal,
   Plus,
@@ -48,6 +67,13 @@ import { Input } from '@stxapps/web-ui/components/ui/input';
 
 import { useListMutations } from '../../../_hooks/use-list-mutations';
 import { useLists } from '../../../_hooks/use-lists';
+import {
+  excludeActiveDescendants,
+  getMovePlan,
+  getProjection,
+  INDENT_WIDTH,
+  type Projection,
+} from './dnd-helpers';
 import { childrenOf, flattenTree, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 import type { ListItem } from '@/data/queries';
@@ -248,6 +274,101 @@ function CreateRow({ onCreate }: { onCreate: (name: string) => Promise<void> }) 
   );
 }
 
+// One sortable row. The drag handle is the grip on the left (after the indent);
+// listeners live only on it, so the rename input and kebab stay clickable. While
+// this row is the one being dragged, `renderDepth` is the projected depth, so the
+// row visibly slides to the indent it would land at. The buttons are the same
+// keyboard/mouse fallback that worked before drag existed.
+function SortableRow({
+  row,
+  renderDepth,
+  collapsed,
+  candidates,
+  onToggle,
+  onRename,
+  onMoveUp,
+  onMoveDown,
+  onMoveTo,
+  onSortChildren,
+  onDelete,
+}: {
+  row: ListRow;
+  renderDepth: number;
+  collapsed: ReadonlySet<string>;
+  candidates: ListRow[];
+  onToggle: () => void;
+  onRename: (name: string) => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onMoveTo: (parentId: string | null) => void;
+  onSortChildren: (dir: SortDir) => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: row.item.id,
+  });
+
+  return (
+    <li
+      ref={setNodeRef}
+      className={`flex items-center gap-1 px-1 py-1 not-last:border-b not-last:border-border/60 ${isDragging ? 'opacity-50' : ''}`}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        // Indent step in px (not rem) so it matches the px the drag projection
+        // works in — render and projection can't drift. Base stays a rem token.
+        paddingLeft: `calc(0.25rem + ${renderDepth * INDENT_WIDTH}px)`,
+      }}
+    >
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Drag to reorder"
+        className="cursor-grab touch-none text-muted-foreground"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-4" />
+      </Button>
+
+      {row.hasChildren ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={collapsed.has(row.item.id) ? 'Expand' : 'Collapse'}
+          onClick={onToggle}
+        >
+          {collapsed.has(row.item.id) ? (
+            <ChevronRight className="size-4" />
+          ) : (
+            <ChevronDown className="size-4" />
+          )}
+        </Button>
+      ) : (
+        <span className="size-8 shrink-0" />
+      )}
+
+      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+        {listIcon(row.item.id)}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <RenameField key={`${row.item.id}:${row.item.name}`} list={row.item} onRename={onRename} />
+      </div>
+
+      <RowActions
+        row={row}
+        candidates={candidates}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+        onMoveTo={onMoveTo}
+        onSortChildren={onSortChildren}
+        onDelete={onDelete}
+      />
+    </li>
+  );
+}
+
 export function ListsSection() {
   const lists = useLists();
   const { create, rename, move, remove, reorder } = useListMutations();
@@ -255,10 +376,63 @@ export function ListsSection() {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSE);
   const [error, setError] = useState<string | null>(null);
 
+  // Drag state: the row being dragged, the row it's over, and the horizontal
+  // pointer offset that drives the projected depth. All null/0 when idle.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const [offsetLeft, setOffsetLeft] = useState(0);
+
+  // A small activation distance so a click on the grip (to focus, or open nothing)
+  // doesn't count as a drag; keyboard dragging gets the sortable coordinate getter.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   const rows = flattenTree(lists, collapsed);
+  // While dragging, the active row's subtree travels with it, so drop it out of
+  // the flat list the sortable + projection see (and that we render).
+  const displayRows = excludeActiveDescendants(rows, activeId);
   // The move-to candidate list ignores collapse — every list is a valid target
   // whether or not its row is shown.
   const allRows = flattenTree(lists, NO_COLLAPSE);
+
+  // The depth the dragged row would land at, recomputed as it moves. Drives both
+  // the live indent of the dragged row and the final drop.
+  const projection: Projection | null = useMemo(
+    () =>
+      activeId && overId
+        ? getProjection(displayRows, activeId, overId, offsetLeft, INDENT_WIDTH)
+        : null,
+    [activeId, overId, offsetLeft, displayRows],
+  );
+
+  const resetDnd = () => {
+    setActiveId(null);
+    setOverId(null);
+    setOffsetLeft(0);
+  };
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    setActiveId(String(active.id));
+    setOverId(String(active.id));
+  };
+
+  const handleDragMove = ({ delta, over }: DragMoveEvent) => {
+    setOffsetLeft(delta.x);
+    if (over) setOverId(String(over.id));
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    resetDnd();
+    if (!over) return;
+    const plan = getMovePlan(lists, displayRows, String(active.id), String(over.id), offsetLeft);
+    if (!plan) return;
+    const current = rows.find((r) => r.item.id === plan.item.id);
+    // Skip a true no-op: dropped back where it started (same parent, same slot).
+    if (current && current.parentId === plan.parentId && current.index === plan.index) return;
+    run(move(plan.item, plan.parentId, plan.siblings, plan.index));
+  };
 
   const run = (op: Promise<unknown>) => {
     setError(null);
@@ -322,65 +496,53 @@ export function ListsSection() {
           }}
         />
 
-        <ul>
-          {rows.map((row) => {
-            const forbidden = forbiddenParentIds(lists, row.item.id);
-            const candidates = allRows.filter((c) => !forbidden.has(c.item.id));
-            return (
-              <li
-                key={row.item.id}
-                className="flex items-center gap-1 px-1 py-1 not-last:border-b not-last:border-border/60"
-                style={{ paddingLeft: `${0.25 + row.depth * 1.25}rem` }}
-              >
-                {row.hasChildren ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={collapsed.has(row.item.id) ? 'Expand' : 'Collapse'}
-                    onClick={() => toggle(row.item.id)}
-                  >
-                    {collapsed.has(row.item.id) ? (
-                      <ChevronRight className="size-4" />
-                    ) : (
-                      <ChevronDown className="size-4" />
-                    )}
-                  </Button>
-                ) : (
-                  <span className="size-8 shrink-0" />
-                )}
-
-                <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-                  {listIcon(row.item.id)}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <RenameField
-                    key={`${row.item.id}:${row.item.name}`}
-                    list={row.item}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onDragCancel={resetDnd}
+        >
+          <SortableContext
+            items={displayRows.map((row) => row.item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ul>
+              {displayRows.map((row) => {
+                const forbidden = forbiddenParentIds(lists, row.item.id);
+                const candidates = allRows.filter((c) => !forbidden.has(c.item.id));
+                // The dragged row renders at its projected (would-be) depth so the
+                // indent tracks the pointer; every other row keeps its real depth.
+                const renderDepth =
+                  row.item.id === activeId && projection ? projection.depth : row.depth;
+                return (
+                  <SortableRow
+                    key={row.item.id}
+                    row={row}
+                    renderDepth={renderDepth}
+                    collapsed={collapsed}
+                    candidates={candidates}
+                    onToggle={() => toggle(row.item.id)}
                     onRename={(name) => run(rename(row.item, name))}
+                    onMoveUp={() =>
+                      run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))
+                    }
+                    onMoveDown={() =>
+                      run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
+                    }
+                    onMoveTo={(parentId) => {
+                      const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
+                      run(move(row.item, parentId, dest, dest.length));
+                    }}
+                    onSortChildren={(dir) => sortGroup(row.item.id, dir)}
+                    onDelete={() => run(remove(row.item))}
                   />
-                </div>
-
-                <RowActions
-                  row={row}
-                  candidates={candidates}
-                  onMoveUp={() =>
-                    run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))
-                  }
-                  onMoveDown={() =>
-                    run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
-                  }
-                  onMoveTo={(parentId) => {
-                    const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
-                    run(move(row.item, parentId, dest, dest.length));
-                  }}
-                  onSortChildren={(dir) => sortGroup(row.item.id, dir)}
-                  onDelete={() => run(remove(row.item))}
-                />
-              </li>
-            );
-          })}
-        </ul>
+                );
+              })}
+            </ul>
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
