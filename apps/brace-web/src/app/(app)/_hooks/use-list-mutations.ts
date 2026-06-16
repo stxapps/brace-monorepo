@@ -15,7 +15,14 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { ENC_SUFFIX, isSystemListId, LISTS_PREFIX, rankForIndex, TRASH_ID } from '@stxapps/shared';
+import {
+  ENC_SUFFIX,
+  isSystemListId,
+  LISTS_PREFIX,
+  rankForIndex,
+  rerankToOrder,
+  TRASH_ID,
+} from '@stxapps/shared';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
@@ -49,6 +56,12 @@ export interface ListMutations {
   // sub-lists or links — deleting it would orphan them, so the UI must empty it
   // first. The thrown message is meant to surface to the user.
   remove: (list: ListItem) => Promise<void>;
+  // Re-rank a sibling group into a new order in one batch (e.g. sort A→Z).
+  // `ordered` is the group as it should end up; only the lists whose rank
+  // actually changes are written, each the same one-field `{ rank }` write
+  // `move` makes — so an already-ordered group is a no-op and a partial sort
+  // touches the fewest files.
+  reorder: (ordered: ListItem[]) => Promise<void>;
 }
 
 export function useListMutations(): ListMutations {
@@ -122,8 +135,27 @@ export function useListMutations(): ListMutations {
     [username, requestSync],
   );
 
+  const reorder = useCallback(
+    async (ordered: ListItem[]) => {
+      if (!username) throw new Error('useListMutations: no active account');
+      const ranks = rerankToOrder(ordered);
+      // Sequential, not Promise.all: each writeList opens its own rw transaction,
+      // and concurrent transactions on the same stores would just serialize
+      // anyway. A handful of siblings makes this cheap.
+      let wrote = false;
+      for (let i = 0; i < ordered.length; i++) {
+        const rank = ranks[i];
+        if (rank === null) continue;
+        await writeList(username, ordered[i], { rank });
+        wrote = true;
+      }
+      if (wrote) requestSync();
+    },
+    [username, requestSync],
+  );
+
   return useMemo<ListMutations>(
-    () => ({ create, rename, move, remove }),
-    [create, rename, move, remove],
+    () => ({ create, rename, move, remove, reorder }),
+    [create, rename, move, remove, reorder],
   );
 }

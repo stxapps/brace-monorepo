@@ -16,6 +16,9 @@
 import { useState } from 'react';
 import {
   Archive,
+  ArrowDownAZ,
+  ArrowDownZA,
+  ArrowUpDown,
   Check,
   ChevronDown,
   ChevronRight,
@@ -50,6 +53,19 @@ import { childrenOf, flattenTree, forbiddenParentIds, type ListRow } from './tre
 import type { ListItem } from '@/data/queries';
 
 const NO_COLLAPSE: ReadonlySet<string> = new Set();
+
+type SortDir = 'asc' | 'desc';
+
+// Alphabetical by name (case-insensitive via localeCompare), tie-broken by id so
+// the order is deterministic and stable across re-sorts. `desc` flips the name
+// comparison only.
+function sortedByName<T extends { name: string; id: string }>(items: T[], dir: SortDir): T[] {
+  return [...items].sort((a, b) => {
+    const byName = a.name.localeCompare(b.name);
+    if (byName !== 0) return dir === 'asc' ? byName : -byName;
+    return a.id.localeCompare(b.id);
+  });
+}
 
 function listIcon(id: string): React.ReactNode {
   if (id === MY_LIST_ID) return <Inbox className="size-4" />;
@@ -88,6 +104,7 @@ function RowActions({
   onMoveUp,
   onMoveDown,
   onMoveTo,
+  onSortChildren,
   onDelete,
 }: {
   row: ListRow;
@@ -95,6 +112,7 @@ function RowActions({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
+  onSortChildren: (dir: SortDir) => void;
   onDelete: () => void;
 }) {
   const isFirst = row.index === 0;
@@ -137,6 +155,21 @@ function RowActions({
             ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        {row.hasChildren && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <ArrowUpDown className="size-4" /> Sort sub-lists
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onSelect={() => onSortChildren('asc')}>
+                <ArrowDownAZ className="size-4" /> A → Z
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onSortChildren('desc')}>
+                <ArrowDownZA className="size-4" /> Z → A
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         {deletable && (
           <>
             <DropdownMenuSeparator />
@@ -217,7 +250,7 @@ function CreateRow({ onCreate }: { onCreate: (name: string) => Promise<void> }) 
 
 export function ListsSection() {
   const lists = useLists();
-  const { create, rename, move, remove } = useListMutations();
+  const { create, rename, move, remove, reorder } = useListMutations();
 
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSE);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +277,12 @@ export function ListsSection() {
   const siblingsWithout = (row: ListRow) =>
     row.siblings.filter((sibling) => sibling.id !== row.item.id);
 
+  // Sort one sibling group (root when parentId is null) alphabetically. reorder
+  // writes only the rows whose rank changes, so re-sorting an ordered group is a
+  // no-op.
+  const sortGroup = (parentId: string | null, dir: SortDir) =>
+    run(reorder(sortedByName(childrenOf(lists, parentId), dir)));
+
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
       <h2 className="text-xl font-semibold">Lists</h2>
@@ -257,6 +296,24 @@ export function ListsSection() {
           {error}
         </p>
       )}
+
+      <div className="mb-2 flex justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <ArrowUpDown className="size-4" /> Sort
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => sortGroup(null, 'asc')}>
+              <ArrowDownAZ className="size-4" /> A → Z
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => sortGroup(null, 'desc')}>
+              <ArrowDownZA className="size-4" /> Z → A
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <div className="rounded-lg border border-border">
         <CreateRow
@@ -317,6 +374,7 @@ export function ListsSection() {
                     const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
                     run(move(row.item, parentId, dest, dest.length));
                   }}
+                  onSortChildren={(dir) => sortGroup(row.item.id, dir)}
                   onDelete={() => run(remove(row.item))}
                 />
               </li>

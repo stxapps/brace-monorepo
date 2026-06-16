@@ -42,3 +42,47 @@ export function rankForIndex(siblings: { rank: string }[], index: number): strin
   const after = i < siblings.length ? siblings[i].rank : null;
   return rankBetween(before, after);
 }
+
+// Re-rank a sibling group into a NEW desired order (`ordered`), minting fresh
+// keys for only the entities that must move. A bulk reorder (e.g. "sort A→Z")
+// expressed as the same one-field `{ rank }` writes a single move makes, so it
+// stays LWW-safe and an already-ordered group costs zero writes.
+//
+// Returns one entry per `ordered` item, positionally: a new rank string for an
+// entity that must be re-ranked, or `null` to keep its current key. Items whose
+// existing ranks are already ascending in the desired order are kept as anchors;
+// each run of out-of-order items between two anchors gets evenly-spaced keys
+// minted strictly between them (open-ended at the head/tail), so the whole group
+// ends strictly ascending while the fewest files change.
+export function rerankToOrder(ordered: { rank: string }[]): (string | null)[] {
+  const result: (string | null)[] = new Array<string | null>(ordered.length).fill(null);
+
+  // Anchors: the greedy run of items already in ascending-rank order. Each kept
+  // item must out-rank the previous kept one; the rest fall between anchors.
+  const kept: boolean[] = ordered.map(() => false);
+  let lastKept: string | null = null;
+  for (let i = 0; i < ordered.length; i++) {
+    if (lastKept === null || ordered[i].rank > lastKept) {
+      kept[i] = true;
+      lastKept = ordered[i].rank;
+    }
+  }
+
+  // Fill each maximal run of non-anchors with keys between its bounding anchors.
+  let i = 0;
+  while (i < ordered.length) {
+    if (kept[i]) {
+      i++;
+      continue;
+    }
+    const before = i > 0 ? ordered[i - 1].rank : null;
+    let j = i;
+    while (j < ordered.length && !kept[j]) j++;
+    const after = j < ordered.length ? ordered[j].rank : null;
+    const keys = ranksBetween(before, after, j - i);
+    for (let k = i; k < j; k++) result[k] = keys[k - i];
+    i = j;
+  }
+
+  return result;
+}
