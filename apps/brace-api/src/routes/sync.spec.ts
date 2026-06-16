@@ -339,7 +339,11 @@ describe('sync control plane', () => {
 
     it('returns 404 for a missing blob through the dev proxy', async () => {
       const { userId } = await authFor('sync-sign-404');
-      const get = await app.request(`/v1/files/blob/${userFileKey(userId, 'meta/nope.enc')}`, {}, env);
+      const get = await app.request(
+        `/v1/files/blob/${userFileKey(userId, 'meta/nope.enc')}`,
+        {},
+        env,
+      );
       expect(get.status).toBe(404);
     });
 
