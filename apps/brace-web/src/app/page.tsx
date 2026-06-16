@@ -10,10 +10,12 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import saveLinksToVisitLater from '../assets/images/save-links-to-visit-later.svg';
+import { AuthedHomeRedirect } from '../components/authed-home-redirect';
 
 export default function Page() {
   return (
     <div>
+      <AuthedHomeRedirect />
       <div className={cn(`mx-auto max-w-6xl bg-white px-4 md:px-6 lg:px-8`)}>
         <div className={cn('relative')}>
           <div className={cn('flex h-14 items-center justify-between')}>
