@@ -5,6 +5,7 @@ import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
+import { localR2Routes } from './routes/local-r2';
 import { syncRoutes } from './routes/sync';
 
 // Comma-separated allow-list from the Workers binding. `env` is only undefined
@@ -54,3 +55,9 @@ app.route('/', authRoutes);
 // All four are protected and namespace every path under the authed user; see
 // routes/sync.ts and docs/local-first-sync.md.
 app.route('/', syncRoutes);
+
+// DEV-ONLY blob proxy (routes/local-r2.ts). Always mounted but self-gates to 404
+// off the local miniflare env, so it's inert in staging/prod (which presign R2
+// directly). It stands in for direct browser↔R2 transfer under `wrangler dev`,
+// where the emulated bucket has no presignable S3 endpoint.
+app.route('/', localR2Routes);

@@ -13,11 +13,14 @@ import { userFileKey } from '../r2/keys';
 import { issueSession } from '../services/session';
 
 // End-to-end coverage of the four-endpoint sync control plane through the real
-// Hono app + the real (miniflare) bindings: a per-user Durable Object op log, R2,
-// and the SigV4 presigner reading R2_* vars from the development env. The app is
-// driven exactly as a client would via app.request(path, init, env) with a real
-// bearer token (issueSession), so requireAuth, the contract validation, and the
-// per-user path namespacing are all exercised. See docs/local-first-sync.md.
+// Hono app + the real (miniflare) bindings: a per-user Durable Object op log and
+// R2. The app is driven exactly as a client would via app.request(path, init,
+// env) with a real bearer token (issueSession), so requireAuth, the contract
+// validation, and the per-user path namespacing are all exercised. Because the
+// test env IS the local `development` env (placeholder R2_ACCOUNT_ID), files/sign
+// returns dev blob-proxy URLs, not SigV4 presigns — the proxy round-trip is
+// covered below; the SigV4 presigner has its own unit test (r2/presign.spec.ts).
+// See docs/local-first-sync.md, r2/local.ts, and routes/local-r2.ts.
 describe('sync control plane', () => {
   // Mint a real session and return the userId + the Authorization header a client
   // would send. The session's userId IS the per-user DO / R2-prefix key.
@@ -274,7 +277,7 @@ describe('sync control plane', () => {
   });
 
   describe(`POST ${filesSignEndpoint.path}`, () => {
-    it('mints presigned PUT URLs scoped to the user’s prefix', async () => {
+    it('mints PUT URLs scoped to the user’s prefix', async () => {
       const { userId, auth } = await authFor('sync-sign-1');
       const res = await app.request(
         filesSignEndpoint.path,
@@ -285,16 +288,14 @@ describe('sync control plane', () => {
       const { urls } = (await res.json()) as { urls: { path: string; url: string }[] };
       expect(urls.map((u) => u.path)).toEqual(['meta/a.enc', 'files/b.enc']);
       for (const { path, url } of urls) {
-        // SigV4 presigned URL against R2's S3 endpoint, keyed under users/{uid}/.
-        expect(url).toContain('.r2.cloudflarestorage.com/');
+        // Dev env: the blob-proxy URL, keyed under users/{uid}/ (see routes/local-r2.ts).
+        expect(url).toContain('/v1/files/blob/');
         expect(url).toContain(userFileKey(userId, path));
-        expect(url).toContain('X-Amz-Algorithm=AWS4-HMAC-SHA256');
-        expect(url).toContain('X-Amz-Signature=');
       }
     });
 
-    it('mints presigned GET URLs in batch', async () => {
-      const { auth } = await authFor('sync-sign-2');
+    it('mints GET URLs in batch', async () => {
+      const { userId, auth } = await authFor('sync-sign-2');
       const res = await app.request(
         filesSignEndpoint.path,
         json(auth, { op: 'get', paths: ['meta/a.enc'] }),
@@ -303,7 +304,43 @@ describe('sync control plane', () => {
       expect(res.status).toBe(200);
       const { urls } = (await res.json()) as { urls: { path: string; url: string }[] };
       expect(urls).toHaveLength(1);
-      expect(urls[0].url).toContain('X-Amz-Signature=');
+      expect(urls[0].url).toContain(`/v1/files/blob/${userFileKey(userId, 'meta/a.enc')}`);
+    });
+
+    it('round-trips a blob through the dev proxy (PUT then GET)', async () => {
+      const { userId, auth } = await authFor('sync-sign-rt');
+      // Sign a PUT, upload bytes to that URL, then sign+GET them back — exactly
+      // the local stand-in for direct browser↔R2 transfer (routes/local-r2.ts).
+      const signPut = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['meta/rt.enc'] }),
+        env,
+      );
+      const putUrl = ((await signPut.json()) as { urls: { url: string }[] }).urls[0].url;
+      const put = await app.request(
+        new URL(putUrl).pathname,
+        { method: 'PUT', body: 'ciphertext' },
+        env,
+      );
+      expect(put.status).toBe(200);
+      // The proxy wrote through the binding to the user-namespaced key.
+      expect(await env.USER_FILES.head(userFileKey(userId, 'meta/rt.enc'))).not.toBeNull();
+
+      const signGet = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'get', paths: ['meta/rt.enc'] }),
+        env,
+      );
+      const getUrl = ((await signGet.json()) as { urls: { url: string }[] }).urls[0].url;
+      const get = await app.request(new URL(getUrl).pathname, {}, env);
+      expect(get.status).toBe(200);
+      expect(await get.text()).toBe('ciphertext');
+    });
+
+    it('returns 404 for a missing blob through the dev proxy', async () => {
+      const { userId } = await authFor('sync-sign-404');
+      const get = await app.request(`/v1/files/blob/${userFileKey(userId, 'meta/nope.enc')}`, {}, env);
+      expect(get.status).toBe(404);
     });
 
     it('rejects a malformed path at the contract boundary (400)', async () => {

@@ -3,6 +3,7 @@ import type { FilesListResponse, SignedUrl } from '@stxapps/shared';
 import type { Bindings } from '../lib/env';
 import { ApiError } from '../lib/errors';
 import { stripUserPrefix, userFileKey, userPrefix } from './keys';
+import { isLocalR2, localBlobUrl } from './local';
 import { presignR2Url, type R2Credentials } from './presign';
 
 // The access layer for the USER_FILES R2 bucket — the R2 analogue of db/'s
@@ -89,6 +90,14 @@ export function userFilesRepo(env: Bindings) {
       method: 'PUT' | 'GET',
       expiresIn: number,
     ): Promise<SignedUrl[]> {
+      // Local dev: miniflare's emulated R2 has no presignable S3 endpoint, so
+      // mint URLs to the in-Worker blob proxy instead (r2/local.ts +
+      // routes/local-r2.ts). No real R2 credentials needed — and `expiresIn` is
+      // moot, the proxy doesn't enforce a TTL.
+      if (isLocalR2(env)) {
+        return paths.map((path) => ({ path, url: localBlobUrl(userFileKey(userId, path)) }));
+      }
+
       const creds = r2Credentials(env);
       return Promise.all(
         paths.map(async (path) => ({
