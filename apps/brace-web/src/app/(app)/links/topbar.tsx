@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { ALL_ID, SYSTEM_LIST_NAMES } from '@stxapps/shared';
+import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -52,14 +52,14 @@ function useSelectionLabel(): string {
   const lists = useLists();
   const tags = useTags();
 
-  if (selection.kind === 'all') return SYSTEM_LIST_NAMES[ALL_ID];
+  if (selection.kind === 'all') return ALL_LABEL;
   if (selection.kind === 'list') {
-    // System lists name themselves from the constants; user lists from the store.
-    return (
-      SYSTEM_LIST_NAMES[selection.id] ?? lists.find((l) => l.id === selection.id)?.name ?? 'Unknown'
-    );
+    // Look the name up in the merged list tree — so a renamed system list shows
+    // its override name, not the code default. Flatten since the match may be at
+    // any depth.
+    return flattenTree(lists).find((n) => n.item.id === selection.id)?.item.name ?? 'Unknown';
   }
-  return tags.find((t) => t.id === selection.id)?.name ?? 'Unknown';
+  return flattenTree(tags).find((n) => n.item.id === selection.id)?.item.name ?? 'Unknown';
 }
 
 function LayoutSwitch() {

@@ -9,5 +9,7 @@ export * from './crypto/salt';
 export * from './sync/endpoints';
 export * from './sync/entities';
 export * from './sync/paths';
+export * from './sync/rank';
 export * from './sync/system-lists';
+export * from './sync/tree';
 export * from './theme/theme';

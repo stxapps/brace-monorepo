@@ -18,7 +18,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 
 import { useLinksPage } from '../links-page-provider';
 
-import { type LinkItem, readLinks } from '@/data/user-data';
+import { type LinkItem, readLinks } from '@/data/queries';
 
 const PAGE_SIZE = 50;
 

@@ -7,7 +7,7 @@
 
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
-import type { LinkItem } from '@/data/user-data';
+import type { LinkItem } from '@/data/queries';
 
 export interface LinkLayoutProps {
   links: LinkItem[];

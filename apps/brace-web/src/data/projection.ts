@@ -90,7 +90,7 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
       // itemListId / itemTagIds are set HERE ONLY (links). That exclusivity is
       // load-bearing: the `[itemListId+…]` and `*itemTagIds` indexes (db.ts) are
       // link-scoped for FREE precisely because no other type fills these columns,
-      // so user-data.ts's readLinks treats those indexes as "links only". If a
+      // so queries.ts's readLinks treats those indexes as "links only". If a
       // future itemType ever projects itemListId/itemTagIds too, those indexes
       // start mixing types — you must then add an `itemType` discriminator to them
       // (e.g. `[itemType+itemListId+…]`) and update readLinks, or it returns
@@ -103,7 +103,7 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
   }
 
   // lists, tags, and EVERY settings concern: only the edit time is worth indexing
-  // (their views are small, prefix-scanned/exact-path reads — see user-data.ts —
+  // (their views are small, prefix-scanned/exact-path reads — see queries.ts —
   // but the column keeps the projector uniform and leaves them orderable for
   // free). Decoded concern-agnostically, so this never assumes a settings file is
   // `general`.

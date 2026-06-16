@@ -35,7 +35,7 @@ import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/n
 
 import { ALL_ID, DEFAULT_LIST_ID } from '@stxapps/shared';
 
-import type { LinkQuery } from '@/data/user-data';
+import type { LinkQuery } from '@/data/queries';
 
 // How the main pane lays out the link list. `list` is the dense default; `card`
 // is a grid of previews; `table` is columnar with a header row. This is the

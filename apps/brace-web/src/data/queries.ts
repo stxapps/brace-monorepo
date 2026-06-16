@@ -15,7 +15,16 @@ import Dexie from 'dexie';
 import type { z } from 'zod';
 
 import type { Link, List, Tag } from '@stxapps/shared';
-import { linkSchema, LISTS_PREFIX, listSchema, TAGS_PREFIX, tagSchema } from '@stxapps/shared';
+import {
+  ENC_SUFFIX,
+  linkSchema,
+  LISTS_PREFIX,
+  listSchema,
+  SYSTEM_LIST_DEFAULTS,
+  SYSTEM_LIST_IDS,
+  TAGS_PREFIX,
+  tagSchema,
+} from '@stxapps/shared';
 
 import { db, type ItemRecord } from '@/data/db';
 import { parseBlob } from '@/data/projection';
@@ -115,8 +124,33 @@ async function readNamespace<T extends z.ZodTypeAny>(
     .filter((entity): entity is WithPath<z.infer<T>> => entity !== undefined);
 }
 
-export function readLists(): Promise<ListItem[]> {
-  return readNamespace(LISTS_PREFIX, listSchema);
+// Overlay the synced lists onto the system-list defaults: a system list shows its
+// stored override blob if one exists (the user renamed/moved it), else the code
+// default. Custom lists pass through. Defaults carry a SYNTHESIZED path so the UI
+// can target a not-yet-overridden system list — `lists/{id}.enc` is exactly where
+// the first edit will write, so there's nothing to special-case downstream. The
+// merge is by id, so an override never duplicates its default; ordering is left
+// to buildTree (it sorts every sibling group by rank), so this just unions the
+// two sources.
+function mergeSystemLists(stored: ListItem[]): ListItem[] {
+  const storedById = new Map(stored.map((list) => [list.id, list]));
+  const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(
+    (def) =>
+      storedById.get(def.id) ?? { ...def, path: `${LISTS_PREFIX}${def.id}${ENC_SUFFIX}` },
+  );
+  for (const list of stored) {
+    if (!SYSTEM_LIST_IDS.has(list.id)) resolved.push(list);
+  }
+  return resolved;
+}
+
+// The full logical list set: the user's synced lists merged with the system-list
+// defaults (My List / Archive / Trash). Flat — the tree is assembled by the
+// caller via `buildTree` (see use-lists), so non-sidebar readers (settings) can
+// take the flat set. Tags have no system entries, so `readTags` is a plain read.
+export async function readLists(): Promise<ListItem[]> {
+  const stored = await readNamespace(LISTS_PREFIX, listSchema);
+  return mergeSystemLists(stored);
 }
 
 export function readTags(): Promise<TagItem[]> {

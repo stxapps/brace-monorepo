@@ -54,9 +54,24 @@ export type Link = z.infer<typeof linkSchema>;
 // The plaintext of `tags/{id}.enc` / `lists/{id}.enc`. One small file per
 // tag/list is what lets two devices rename two DIFFERENT tags concurrently under
 // file-level LWW. `id` repeats the path's id so the plaintext is self-contained.
+// `parentId`/`rank` give tags and lists a tree: `parentId` is the BARE id of the
+// parent entity (its `{id}` in `tags/`|`lists/`), or `null` at the root — never
+// `undefined`, so "top-level" is an explicit value a concurrent edit can't be
+// confused about. A dangling/cyclic/forbidden parent is reconciled at read time
+// (buildTree promotes it to root), exactly like a dangling reference elsewhere.
+//
+// `rank` is a fractional-index key (see sync/rank.ts) ordering an entity among
+// its siblings. It's a STRING, not an index, on purpose: under file-level LWW
+// moving one entity must write only that one file — `rank = keyBetween(a, b)`
+// inserts between two neighbours without touching them, so concurrent reorders of
+// different entities never collide. Required (no legacy entities to back-fill);
+// the system-list defaults seed real keys (system-lists.ts) so user entities can
+// rank against them.
 export const tagSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
+  parentId: z.string().nullable(),
+  rank: z.string(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
@@ -65,6 +80,8 @@ export type Tag = z.infer<typeof tagSchema>;
 export const listSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
+  parentId: z.string().nullable(),
+  rank: z.string(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
