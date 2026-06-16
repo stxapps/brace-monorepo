@@ -125,6 +125,8 @@ export function runIncrementalSync(deps: SyncDeps): Promise<void> {
     try {
       await incrementalSyncOnce(deps);
       while (rerunRequests.delete(key)) await incrementalSyncOnce(deps);
+    } catch (error) {
+      console.error('[sync] incremental sync failed', error);
     } finally {
       inflightSyncs.delete(key);
       rerunRequests.delete(key);
@@ -200,7 +202,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (;;) {
+  for (; ;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;

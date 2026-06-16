@@ -21,9 +21,12 @@ export async function encrypt(
   aad?: Uint8Array<ArrayBuffer>,
 ): Promise<EncryptedBlob> {
   const iv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTES));
-  const ciphertext = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, plaintext),
-  );
+  // Chrome rejects `additionalData: undefined` ("Not a BufferSource") — unlike
+  // the WebIDL spec / Node, Blink coerces the member whenever the key is
+  // present. Omit the key entirely when there's no AAD.
+  const params: AesGcmParams = { name: 'AES-GCM', iv };
+  if (aad !== undefined) params.additionalData = aad;
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(params, key, plaintext));
   return { iv, ciphertext };
 }
 
@@ -32,7 +35,7 @@ export async function decrypt(
   { iv, ciphertext }: EncryptedBlob,
   aad?: Uint8Array<ArrayBuffer>,
 ): Promise<Uint8Array> {
-  return new Uint8Array(
-    await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, ciphertext),
-  );
+  const params: AesGcmParams = { name: 'AES-GCM', iv };
+  if (aad !== undefined) params.additionalData = aad;
+  return new Uint8Array(await crypto.subtle.decrypt(params, key, ciphertext));
 }
