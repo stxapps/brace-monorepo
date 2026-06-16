@@ -13,6 +13,9 @@ module.exports = {
   transform: {
     '^.+\\.[tj]s$': ['@swc/jest', swcJestConfig],
   },
+  // ESM-only node_modules are transpiled via `transformIgnorePatterns` in the
+  // shared jest.preset.js (don't override it here — that would replace, not
+  // merge, the preset's value).
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: 'test-output/jest/coverage',
 };

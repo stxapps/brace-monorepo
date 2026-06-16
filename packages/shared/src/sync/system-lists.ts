@@ -43,11 +43,7 @@ export const TRASH_ID = 'trash';
 export const DEFAULT_LIST_ID = MY_LIST_ID;
 
 // The system list ids, for `isSystemListId` and the reserved-id invariant.
-export const SYSTEM_LIST_IDS: ReadonlySet<string> = new Set([
-  MY_LIST_ID,
-  ARCHIVE_ID,
-  TRASH_ID,
-]);
+export const SYSTEM_LIST_IDS: ReadonlySet<string> = new Set([MY_LIST_ID, ARCHIVE_ID, TRASH_ID]);
 
 export function isSystemListId(id: string): boolean {
   return SYSTEM_LIST_IDS.has(id);
@@ -83,7 +79,28 @@ const [MY_LIST_RANK, ARCHIVE_RANK, TRASH_RANK] = ranksBetween(null, null, 3);
 // stamps real timestamps when written. The merge in the read layer overlays a
 // stored override by id; these are the fallbacks.
 export const SYSTEM_LIST_DEFAULTS: readonly List[] = [
-  { id: MY_LIST_ID, name: SYSTEM_LIST_NAMES[MY_LIST_ID], parentId: null, rank: MY_LIST_RANK, createdAt: 0, updatedAt: 0 },
-  { id: ARCHIVE_ID, name: SYSTEM_LIST_NAMES[ARCHIVE_ID], parentId: null, rank: ARCHIVE_RANK, createdAt: 0, updatedAt: 0 },
-  { id: TRASH_ID, name: SYSTEM_LIST_NAMES[TRASH_ID], parentId: null, rank: TRASH_RANK, createdAt: 0, updatedAt: 0 },
+  {
+    id: MY_LIST_ID,
+    name: SYSTEM_LIST_NAMES[MY_LIST_ID],
+    parentId: null,
+    rank: MY_LIST_RANK,
+    createdAt: 0,
+    updatedAt: 0,
+  },
+  {
+    id: ARCHIVE_ID,
+    name: SYSTEM_LIST_NAMES[ARCHIVE_ID],
+    parentId: null,
+    rank: ARCHIVE_RANK,
+    createdAt: 0,
+    updatedAt: 0,
+  },
+  {
+    id: TRASH_ID,
+    name: SYSTEM_LIST_NAMES[TRASH_ID],
+    parentId: null,
+    rank: TRASH_RANK,
+    createdAt: 0,
+    updatedAt: 0,
+  },
 ];

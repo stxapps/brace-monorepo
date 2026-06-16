@@ -32,10 +32,7 @@ const encoder = new TextEncoder();
 // the base reconcile diffs the next pulled stamp against to tell our own echo
 // from a real conflict. The local `items.updatedAt` is left at that base until
 // the commit restamps it.
-async function writeEntity<T extends WithPath<object>>(
-  username: string,
-  item: T,
-): Promise<void> {
+async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
   const { path, ...entity } = item;
   const bytes = encoder.encode(JSON.stringify(entity));
   const op: OpKind = 'put';

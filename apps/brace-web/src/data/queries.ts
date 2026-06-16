@@ -135,8 +135,7 @@ async function readNamespace<T extends z.ZodTypeAny>(
 function mergeSystemLists(stored: ListItem[]): ListItem[] {
   const storedById = new Map(stored.map((list) => [list.id, list]));
   const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(
-    (def) =>
-      storedById.get(def.id) ?? { ...def, path: `${LISTS_PREFIX}${def.id}${ENC_SUFFIX}` },
+    (def) => storedById.get(def.id) ?? { ...def, path: `${LISTS_PREFIX}${def.id}${ENC_SUFFIX}` },
   );
   for (const list of stored) {
     if (!SYSTEM_LIST_IDS.has(list.id)) resolved.push(list);

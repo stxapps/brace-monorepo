@@ -15,8 +15,5 @@ import { type ListItem, readLists } from '@/data/queries';
 
 export function useLists(): TreeNode<ListItem>[] {
   const lists = useLiveQuery(() => readLists(), []);
-  return useMemo(
-    () => buildTree(lists ?? [], { noChildrenIds: LIST_NO_CHILDREN_IDS }),
-    [lists],
-  );
+  return useMemo(() => buildTree(lists ?? [], { noChildrenIds: LIST_NO_CHILDREN_IDS }), [lists]);
 }
