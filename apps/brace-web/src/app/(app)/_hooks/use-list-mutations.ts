@@ -1,9 +1,10 @@
 'use client';
 
-// Edit operations for lists — rename, reorder, reparent — bound to the active
-// account and wired to a sync kick. Each op writes exactly ONE list file
-// (writeList), which is the whole point of the rank/parentId model: moving a list
-// never rewrites its siblings, so concurrent moves on two devices don't collide.
+// Edit operations for lists — create, rename, reorder, reparent, delete — bound
+// to the active account and wired to a sync kick. Each op writes exactly ONE list
+// file (writeList) or deletes one (deleteList), which is the whole point of the
+// rank/parentId model: moving a list never rewrites its siblings, so concurrent
+// moves on two devices don't collide.
 //
 // Reorder and move are the same write (a new `rank`, optionally a new `parentId`);
 // "reorder" is just "move within the same parent". The caller supplies the
@@ -14,14 +15,25 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { rankForIndex, TRASH_ID } from '@stxapps/shared';
+import { ENC_SUFFIX, isSystemListId, LISTS_PREFIX, rankForIndex, TRASH_ID } from '@stxapps/shared';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
-import { writeList } from '@/data/mutations';
-import type { ListItem } from '@/data/queries';
+import { deleteList, writeList } from '@/data/mutations';
+import { countLinksInList, type ListItem, readLists } from '@/data/queries';
 
 export interface ListMutations {
+  // Create a list and place it at `index` within `parentId`'s children. Mirrors
+  // `move`'s positioning contract: `siblings` is the destination group as
+  // currently ordered (the new list isn't in it yet, so nothing to exclude).
+  // Returns the created list so the UI can focus/scroll to its new row. A blank
+  // name is a no-op (returns null).
+  create: (
+    name: string,
+    parentId: string | null,
+    siblings: ListItem[],
+    index: number,
+  ) => Promise<ListItem | null>;
   rename: (list: ListItem, name: string) => Promise<void>;
   // Place `list` at `index` within `parentId`'s children. `siblings` is that
   // destination group as currently ordered, EXCLUDING `list` itself (so an
@@ -33,11 +45,40 @@ export interface ListMutations {
     siblings: ListItem[],
     index: number,
   ) => Promise<void>;
+  // Delete a list. Rejected for system lists, and for any list that still has
+  // sub-lists or links — deleting it would orphan them, so the UI must empty it
+  // first. The thrown message is meant to surface to the user.
+  remove: (list: ListItem) => Promise<void>;
 }
 
 export function useListMutations(): ListMutations {
   const { username } = useAuth();
   const { requestSync } = useSync();
+
+  const create = useCallback(
+    async (name: string, parentId: string | null, siblings: ListItem[], index: number) => {
+      if (!username) throw new Error('useListMutations: no active account');
+      if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
+      const trimmed = name.trim();
+      if (trimmed === '') return null;
+      const id = crypto.randomUUID();
+      // createdAt: 0 → writeList stamps it now, exactly like the first edit of a
+      // system-list default; path is the well-known store key its blob will live at.
+      const list: ListItem = {
+        id,
+        name: trimmed,
+        parentId,
+        rank: rankForIndex(siblings, index),
+        createdAt: 0,
+        updatedAt: 0,
+        path: `${LISTS_PREFIX}${id}${ENC_SUFFIX}`,
+      };
+      await writeList(username, list, {});
+      requestSync();
+      return list;
+    },
+    [username, requestSync],
+  );
 
   const rename = useCallback(
     async (list: ListItem, name: string) => {
@@ -61,5 +102,28 @@ export function useListMutations(): ListMutations {
     [username, requestSync],
   );
 
-  return useMemo<ListMutations>(() => ({ rename, move }), [rename, move]);
+  const remove = useCallback(
+    async (list: ListItem) => {
+      if (!username) throw new Error('useListMutations: no active account');
+      if (isSystemListId(list.id)) throw new Error('System lists cannot be deleted');
+      // Re-derive emptiness from the store rather than trusting the caller's view:
+      // a sub-list could have been created on another device since the tree
+      // rendered. Children first (a cheap namespace read), then the link count.
+      const lists = await readLists();
+      if (lists.some((other) => other.parentId === list.id)) {
+        throw new Error('Move or delete its sub-lists first');
+      }
+      if ((await countLinksInList(list.id)) > 0) {
+        throw new Error('Move or remove its links first');
+      }
+      await deleteList(username, list);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  return useMemo<ListMutations>(
+    () => ({ create, rename, move, remove }),
+    [create, rename, move, remove],
+  );
 }

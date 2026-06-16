@@ -17,6 +17,7 @@
 import { type List, listSchema, type OpKind } from '@stxapps/shared';
 
 import { db } from '@/data/db';
+import { enqueueDelete } from '@/data/pending-store';
 import { toItemRecord } from '@/data/projection';
 import type { WithPath } from '@/data/queries';
 
@@ -69,4 +70,22 @@ export async function writeList(
     throw new Error(`writeList: invalid list ${list.id}`);
   }
   await writeEntity(username, next);
+}
+
+// Delete one list: drop the local record and queue the server delete in the SAME
+// transaction, mirroring writeEntity's atomicity (the store and the durable queue
+// can never disagree about whether the delete happened). `baseUpdatedAt` is the
+// path's current server stamp — the base the next reconcile diffs our own echo
+// against, exactly as on the put path. Callers gate the higher-level rules
+// (system lists aren't deletable, a non-empty list keeps its links) before
+// reaching here; this is the raw write. A never-stored system-list default has no
+// record, so the delete is a no-op locally and a harmless tombstone upstream.
+export async function deleteList(username: string, list: WithPath<List>): Promise<void> {
+  const { path } = list;
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const existing = await db.items.get(path);
+    const baseUpdatedAt = existing?.updatedAt ?? 0;
+    await db.items.delete(path);
+    await enqueueDelete(username, path, baseUpdatedAt);
+  });
 }

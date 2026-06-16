@@ -156,6 +156,18 @@ export function readTags(): Promise<TagItem[]> {
   return readNamespace(TAGS_PREFIX, tagSchema);
 }
 
+// How many links currently belong to `listId`, counted straight off the
+// `[itemListId+itemUpdatedAt]` index — an index range count, no blob decode (the
+// same column the list views range over). The "is this list empty?" gate for
+// deleting a list: a list with links can't be removed (see useListMutations),
+// since deleting it would orphan them.
+export function countLinksInList(listId: string): Promise<number> {
+  return db.items
+    .where('[itemListId+itemUpdatedAt]')
+    .between([listId, Dexie.minKey], [listId, Dexie.maxKey], true, true)
+    .count();
+}
+
 // --- link query --------------------------------------------------------------
 
 function clauseEmpty(c: Clause): boolean {
