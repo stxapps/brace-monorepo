@@ -46,6 +46,23 @@ async function writeEntity<T extends WithPath<object>>(username: string, item: T
   });
 }
 
+// Delete one entity by path: drop the local record and queue the server delete in
+// the SAME transaction, mirroring writeEntity's atomicity (the store and the
+// durable queue can never disagree about whether the delete happened).
+// `baseUpdatedAt` is the path's current server stamp — the base the next reconcile
+// diffs our own echo against, exactly as on the put path. A path with no local
+// record (a never-stored system-list default, an already-gone pin) makes the
+// delete a no-op locally and a harmless tombstone upstream. Entity-agnostic so
+// every namespace deletes by one definition; callers gate the higher-level rules.
+export async function deleteEntity(username: string, path: string): Promise<void> {
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const existing = await db.items.get(path);
+    const baseUpdatedAt = existing?.updatedAt ?? 0;
+    await db.items.delete(path);
+    await enqueueDelete(username, path, baseUpdatedAt);
+  });
+}
+
 // Apply a patch to a list and write it. Stamps `updatedAt` now; if this is the
 // FIRST edit of an untouched system-list default (`createdAt === 0`, never
 // stored), stamps `createdAt` now too so the override blob looks like any other
@@ -70,23 +87,6 @@ export async function writeList(
     throw new Error(`writeList: invalid list ${list.id}`);
   }
   await writeEntity(username, next);
-}
-
-// Delete one entity by path: drop the local record and queue the server delete in
-// the SAME transaction, mirroring writeEntity's atomicity (the store and the
-// durable queue can never disagree about whether the delete happened).
-// `baseUpdatedAt` is the path's current server stamp — the base the next reconcile
-// diffs our own echo against, exactly as on the put path. A path with no local
-// record (a never-stored system-list default, an already-gone pin) makes the
-// delete a no-op locally and a harmless tombstone upstream. Entity-agnostic so
-// every namespace deletes by one definition; callers gate the higher-level rules.
-export async function deleteEntity(username: string, path: string): Promise<void> {
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
-    const existing = await db.items.get(path);
-    const baseUpdatedAt = existing?.updatedAt ?? 0;
-    await db.items.delete(path);
-    await enqueueDelete(username, path, baseUpdatedAt);
-  });
 }
 
 // Delete one list. Callers gate the higher-level rules (system lists aren't

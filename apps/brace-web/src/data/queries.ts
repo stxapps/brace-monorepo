@@ -394,11 +394,11 @@ async function readPinnedOverlay(
   );
   const links: LinkItem[] = [];
   const paths = new Set<string>();
-  const text = hasTextClause(query);
+  const hasText = hasTextClause(query);
   for (const record of records) {
     if (!record || !columnMatches(record, query)) continue;
     const link = decode(record, linkSchema);
-    if (!link || (text && !textMatches(link, query))) continue;
+    if (!link || (hasText && !textMatches(link, query))) continue;
     links.push(link);
     paths.add(record.path);
   }

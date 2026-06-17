@@ -121,7 +121,12 @@ export function PinnedBadge() {
   return <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />;
 }
 
-export function ShowMore({ hasMore, showMore }: { hasMore: boolean; showMore: () => void }) {
+interface ShowMoreProps {
+  hasMore: boolean;
+  showMore: () => void;
+}
+
+export function ShowMore({ hasMore, showMore }: ShowMoreProps) {
   if (!hasMore) return null;
   return (
     <div className="flex justify-center py-4">
