@@ -14,7 +14,7 @@
 // local value here is provisional — we keep the pre-edit server stamp as the
 // base, which is exactly what reconcile compares against.
 
-import { type List, listSchema, type OpKind } from '@stxapps/shared';
+import { type List, listSchema, type OpKind, type Pin, pinSchema } from '@stxapps/shared';
 
 import { db } from '@/data/db';
 import { enqueueDelete } from '@/data/pending-store';
@@ -72,20 +72,55 @@ export async function writeList(
   await writeEntity(username, next);
 }
 
-// Delete one list: drop the local record and queue the server delete in the SAME
-// transaction, mirroring writeEntity's atomicity (the store and the durable queue
-// can never disagree about whether the delete happened). `baseUpdatedAt` is the
-// path's current server stamp — the base the next reconcile diffs our own echo
-// against, exactly as on the put path. Callers gate the higher-level rules
-// (system lists aren't deletable, a non-empty list keeps its links) before
-// reaching here; this is the raw write. A never-stored system-list default has no
-// record, so the delete is a no-op locally and a harmless tombstone upstream.
-export async function deleteList(username: string, list: WithPath<List>): Promise<void> {
-  const { path } = list;
+// Delete one entity by path: drop the local record and queue the server delete in
+// the SAME transaction, mirroring writeEntity's atomicity (the store and the
+// durable queue can never disagree about whether the delete happened).
+// `baseUpdatedAt` is the path's current server stamp — the base the next reconcile
+// diffs our own echo against, exactly as on the put path. A path with no local
+// record (a never-stored system-list default, an already-gone pin) makes the
+// delete a no-op locally and a harmless tombstone upstream. Entity-agnostic so
+// every namespace deletes by one definition; callers gate the higher-level rules.
+export async function deleteEntity(username: string, path: string): Promise<void> {
   await db.transaction('rw', db.items, db.pendingOps, async () => {
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     await db.items.delete(path);
     await enqueueDelete(username, path, baseUpdatedAt);
   });
+}
+
+// Delete one list. Callers gate the higher-level rules (system lists aren't
+// deletable, a non-empty list keeps its links) before reaching here.
+export function deleteList(username: string, list: WithPath<List>): Promise<void> {
+  return deleteEntity(username, list.path);
+}
+
+// Apply a patch to a pin and write it — the put side of pin/reorder. Stamps
+// `updatedAt` now and, on first write (`createdAt === 0`), `createdAt` too, so a
+// freshly-pinned link's blob looks like any other created entity. Validated
+// against `pinSchema` before the write (TS-narrows the spread back to a Pin), the
+// same defensive parity writeList has. Only `rank` is ever patched today.
+export async function writePin(
+  username: string,
+  pin: WithPath<Pin>,
+  patch: Partial<Pick<Pin, 'rank'>>,
+): Promise<void> {
+  const now = Date.now();
+  const next: WithPath<Pin> = {
+    ...pin,
+    ...patch,
+    createdAt: pin.createdAt === 0 ? now : pin.createdAt,
+    updatedAt: now,
+  };
+  const { path: _path, ...blob } = next;
+  if (!pinSchema.safeParse(blob).success) {
+    throw new Error(`writePin: invalid pin ${pin.id}`);
+  }
+  await writeEntity(username, next);
+}
+
+// Unpin: delete the pin file at `path`. Unpinning is just removing the marker; the
+// link itself is untouched (separate file).
+export function deletePin(username: string, path: string): Promise<void> {
+  return deleteEntity(username, path);
 }

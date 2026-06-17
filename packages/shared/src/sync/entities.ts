@@ -87,6 +87,28 @@ export const listSchema = z.looseObject({
 });
 export type List = z.infer<typeof listSchema>;
 
+// The plaintext of `pins/{id}.enc` — marks a link as pinned ("pin to the top").
+// One file per pinned link, with `id` repeating the link's id (the `{id}` of its
+// `meta/{id}.enc`), so a pin is self-contained AND its own last-writer-wins point:
+// pinning, unpinning, or reordering writes ONLY this file, so it never clobbers a
+// concurrent edit to the link's `meta` blob (title/tags/list) — the same isolation
+// reasoning that gives lists/tags one file each. A flag inside `linkSchema` would
+// instead make every pin/reorder rewrite the link and collide under LWW.
+//
+// `rank` is the fractional-index key (sync/rank.ts) ordering the pinned links
+// among THEMSELVES — the user's manual pin order, independent of any view's sort.
+// Deliberately NO `listId`: the link already records its list, so a pin needs no
+// list scoping and survives the link moving lists untouched. A pin whose link is
+// gone (deleted on another device) is a dangling reference the read layer skips,
+// exactly like a dangling `tagId`/`listId`.
+export const pinSchema = z.looseObject({
+  id: z.string(),
+  rank: z.string(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type Pin = z.infer<typeof pinSchema>;
+
 // The plaintext of the well-known path `settings/general.enc`. Concern-scoped
 // settings files (the LWW-isolation move — see the doc's "data model"): add a
 // field here for a general setting, or a NEW `settings/<concern>.enc` schema

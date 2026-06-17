@@ -19,13 +19,19 @@ const LAYOUTS: Record<string, (props: LinkLayoutProps) => React.ReactNode> = {
 
 export function Main() {
   const { layoutMode } = useLinksPage();
-  const { links, hasMore, showMore, isLoading } = useLinks();
+  const { links, pinnedCount, hasMore, showMore, isLoading } = useLinks();
 
   const Layout = LAYOUTS[layoutMode];
 
   return (
     <main className="min-h-0 flex-1">
-      <Layout links={links} hasMore={hasMore} showMore={showMore} isLoading={isLoading} />
+      <Layout
+        links={links}
+        pinnedCount={pinnedCount}
+        hasMore={hasMore}
+        showMore={showMore}
+        isLoading={isLoading}
+      />
     </main>
   );
 }

@@ -24,6 +24,9 @@ const PAGE_SIZE = 50;
 
 export interface UseLinksResult {
   links: LinkItem[];
+  // How many leading entries of `links` are pinned (LinksResult). The layouts use
+  // it to mark pinned rows and enable their move-up/down menu items.
+  pinnedCount: number;
   // Exact match count, or `undefined` when it isn't known: an active text search
   // (not cheaply countable — LinksResult) or the first query still in flight.
   // Distinct from `0`, which is a real empty result.
@@ -42,6 +45,7 @@ export function useLinks(): UseLinksResult {
 
   return {
     links: page?.links ?? [],
+    pinnedCount: page?.pinnedCount ?? 0,
     total: page?.total,
     hasMore: page?.hasMore ?? false,
     showMore: () => setLimit((value) => value + PAGE_SIZE),

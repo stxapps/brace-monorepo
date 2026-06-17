@@ -14,12 +14,15 @@
 import Dexie from 'dexie';
 import type { z } from 'zod';
 
-import type { Link, List, Tag } from '@stxapps/shared';
+import type { Link, List, Pin, Tag } from '@stxapps/shared';
 import {
   ENC_SUFFIX,
   linkSchema,
   LISTS_PREFIX,
   listSchema,
+  META_PREFIX,
+  PINS_PREFIX,
+  pinSchema,
   SYSTEM_LIST_DEFAULTS,
   SYSTEM_LIST_IDS,
   TAGS_PREFIX,
@@ -36,6 +39,7 @@ export type WithPath<T> = T & { path: string };
 export type LinkItem = WithPath<Link>;
 export type ListItem = WithPath<List>;
 export type TagItem = WithPath<Tag>;
+export type PinItem = WithPath<Pin>;
 
 // --- the query grammar -------------------------------------------------------
 
@@ -81,7 +85,12 @@ export interface LinkQuery {
 // match set), so the UI shows a non-exact count under search. `hasMore` is always
 // known (the query fetches one past the page to detect it).
 export interface LinksResult {
+  // Pinned matching links FIRST (in pin-rank order), then the page of the rest.
   links: LinkItem[];
+  // How many leading entries of `links` are pinned — the boundary the UI draws its
+  // pinned section / "move up·down" affordances at. The pinned segment is always
+  // returned whole (pins are few); `limit`/"show more" pages only the rest.
+  pinnedCount: number;
   total?: number;
   hasMore: boolean;
 }
@@ -154,6 +163,21 @@ export async function readLists(): Promise<ListItem[]> {
 
 export function readTags(): Promise<TagItem[]> {
   return readNamespace(TAGS_PREFIX, tagSchema);
+}
+
+// Every pin (one per pinned link). Small by design — a user pins a handful — so
+// the whole namespace is read and decoded, no index, like lists/tags.
+export function readPins(): Promise<PinItem[]> {
+  return readNamespace(PINS_PREFIX, pinSchema);
+}
+
+// Pin order: ascending `rank`, ties broken by `id` — the same deterministic,
+// cross-device comparison buildTree uses for ranked siblings, so every device
+// renders the pinned section in the same order.
+export function comparePinRank(a: PinItem, b: PinItem): number {
+  if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
+  if (a.id !== b.id) return a.id < b.id ? -1 : 1;
+  return 0;
 }
 
 // How many links currently belong to `listId`, counted straight off the
@@ -234,14 +258,27 @@ const SORT_INDEXES: Record<
 
 // A browse view with a single positive list/all clause and nothing else: walk one
 // compound index in order, materialize only the page, and count via the index —
-// no decode of the whole library, exact total.
-async function rangeFastPath(index: string, key: string, limit: number): Promise<LinksResult> {
+// no decode of the whole library, exact total. `exclude` drops the pinned links
+// already surfaced by the overlay; every one of them falls in THIS range (it
+// matched the same query), so the rest-count is exactly `total - exclude.size`.
+async function rangeFastPath(
+  index: string,
+  key: string,
+  limit: number,
+  exclude: Set<string>,
+): Promise<RestResult> {
   const range = db.items.where(index).between([key, Dexie.minKey], [key, Dexie.maxKey], true, true);
   const [records, total] = await Promise.all([
-    range.clone().reverse().limit(limit).toArray(),
+    range
+      .clone()
+      .reverse()
+      .filter((record) => !exclude.has(record.path))
+      .limit(limit)
+      .toArray(),
     range.count(),
   ]);
-  return { links: decodeLinks(records), total, hasMore: total > limit };
+  const restTotal = total - exclude.size;
+  return { links: decodeLinks(records), total: restTotal, hasMore: restTotal > limit };
 }
 
 // Finish a query from an already-loaded candidate subset (the tag-driven path):
@@ -249,9 +286,14 @@ async function rangeFastPath(index: string, key: string, limit: number): Promise
 // (still no decode — it's an indexed column), then decode only as far as the page
 // needs. Exact total when there's no text clause (the column survivors ARE the
 // match set); undefined once text filtering applies.
-function finishFromCandidates(candidates: ItemRecord[], q: LinkQuery, limit: number): LinksResult {
+function finishFromCandidates(
+  candidates: ItemRecord[],
+  q: LinkQuery,
+  limit: number,
+  exclude: Set<string>,
+): RestResult {
   const { column } = SORT_INDEXES[q.sort];
-  const survivors = candidates.filter((r) => columnMatches(r, q));
+  const survivors = candidates.filter((r) => !exclude.has(r.path) && columnMatches(r, q));
   survivors.sort((a, b) => (b[column] ?? 0) - (a[column] ?? 0));
 
   if (!hasTextClause(q)) {
@@ -273,24 +315,33 @@ function finishFromCandidates(candidates: ItemRecord[], q: LinkQuery, limit: num
   return { links: links.slice(0, limit), total: undefined, hasMore: links.length > limit };
 }
 
-// One page of the link library for `query`, ordered by `query.sort` (descending —
-// newest first). Picks the cheapest driver for the clauses present:
+// The page of NON-pinned links — the driver result before the pinned overlay is
+// prepended (so no `pinnedCount` yet). Pinned links are excluded via `exclude`.
+type RestResult = Omit<LinksResult, 'pinnedCount'>;
+
+// One page of the link library for `query` MINUS `exclude`, ordered by
+// `query.sort` (descending — newest first). Picks the cheapest driver for the
+// clauses present:
 //   - single list / no filters → index-ordered fast path (exact count).
 //   - positive tag clause → drive the selective `*itemTagIds` index, finish over
 //     that subset (a tag's links, never the whole library), sorted in JS.
 //   - anything else (multi-list, `none`, text) → walk the all-links ordered index
 //     applying every clause and decoding lazily, stopping at the page; total is
 //     non-exact.
-export async function readLinks(query: LinkQuery, limit: number): Promise<LinksResult> {
+async function readRest(
+  query: LinkQuery,
+  limit: number,
+  exclude: Set<string>,
+): Promise<RestResult> {
   const index = SORT_INDEXES[query.sort];
   const onlyLists = clauseEmpty(query.tags) && clauseEmpty(query.url) && clauseEmpty(query.title);
 
   if (onlyLists && query.lists.none.length === 0) {
     if (query.lists.any.length === 1) {
-      return rangeFastPath(index.list, query.lists.any[0], limit);
+      return rangeFastPath(index.list, query.lists.any[0], limit, exclude);
     }
     if (query.lists.any.length === 0) {
-      return rangeFastPath(index.type, 'meta', limit);
+      return rangeFastPath(index.type, 'meta', limit, exclude);
     }
   }
 
@@ -300,7 +351,7 @@ export async function readLinks(query: LinkQuery, limit: number): Promise<LinksR
   const tagDriver = query.tags.any.length > 0 ? query.tags.any : query.tags.all.slice(0, 1);
   if (tagDriver.length > 0) {
     const candidates = await db.items.where('itemTagIds').anyOf(tagDriver).distinct().toArray();
-    return finishFromCandidates(candidates, query, limit);
+    return finishFromCandidates(candidates, query, limit, exclude);
   }
 
   // No positive tag clause: walk all links newest-first, filtering as we go. The
@@ -311,7 +362,7 @@ export async function readLinks(query: LinkQuery, limit: number): Promise<LinksR
     .between(['meta', Dexie.minKey], ['meta', Dexie.maxKey], true, true)
     .reverse()
     .filter((record) => {
-      if (!columnMatches(record, query)) return false;
+      if (exclude.has(record.path) || !columnMatches(record, query)) return false;
       const link = decode(record, linkSchema);
       return link !== undefined && textMatches(link, query);
     })
@@ -322,5 +373,49 @@ export async function readLinks(query: LinkQuery, limit: number): Promise<LinksR
     links: decodeLinks(records).slice(0, limit),
     total: undefined,
     hasMore: records.length > limit,
+  };
+}
+
+// The pinned links that MATCH `query`, in pin-rank order — the overlay floated to
+// the top of every view a pinned link appears in. Reads the small `pins/`
+// namespace, looks up each pin's `meta/{id}.enc` record (bulkGet preserves the
+// rank order of the keys), and keeps only those that exist and pass the same
+// column + text predicates the rest of the query uses. A pin whose link is gone
+// or doesn't match the active view is simply skipped. Returns the decoded links
+// and the set of their paths, so `readRest` can exclude them and not double-show.
+async function readPinnedOverlay(
+  query: LinkQuery,
+): Promise<{ links: LinkItem[]; paths: Set<string> }> {
+  const pins = (await readPins()).sort(comparePinRank);
+  if (pins.length === 0) return { links: [], paths: new Set() };
+
+  const records = await db.items.bulkGet(
+    pins.map((pin) => `${META_PREFIX}${pin.id}${ENC_SUFFIX}`),
+  );
+  const links: LinkItem[] = [];
+  const paths = new Set<string>();
+  const text = hasTextClause(query);
+  for (const record of records) {
+    if (!record || !columnMatches(record, query)) continue;
+    const link = decode(record, linkSchema);
+    if (!link || (text && !textMatches(link, query))) continue;
+    links.push(link);
+    paths.add(record.path);
+  }
+  return { links, paths };
+}
+
+// One page for `query`: the pinned matching links first (rank order, always whole),
+// then the page of the rest. `limit`/"show more" pages only the rest — pins are
+// few and never paginated. The pinned set is excluded from the rest so a link
+// never appears twice, and folded into `total` when the rest's total is exact.
+export async function readLinks(query: LinkQuery, limit: number): Promise<LinksResult> {
+  const overlay = await readPinnedOverlay(query);
+  const rest = await readRest(query, limit, overlay.paths);
+  return {
+    links: [...overlay.links, ...rest.links],
+    pinnedCount: overlay.links.length,
+    total: rest.total === undefined ? undefined : overlay.links.length + rest.total,
+    hasMore: rest.hasMore,
   };
 }

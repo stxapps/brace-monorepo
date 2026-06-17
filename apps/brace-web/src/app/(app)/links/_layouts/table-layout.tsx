@@ -7,16 +7,24 @@
 import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { EmptyState, faviconUrl, hostname, type LinkLayoutProps, ShowMore } from './shared';
+import {
+  EmptyState,
+  faviconUrl,
+  hostname,
+  type LinkLayoutProps,
+  LinkRowMenu,
+  PinnedBadge,
+  ShowMore,
+} from './shared';
 
 const ROW_HEIGHT = 44;
-const COLUMNS = 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px]';
+const COLUMNS = 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px_40px]';
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString();
 }
 
-export function TableLayout({ links, hasMore, showMore, isLoading }: LinkLayoutProps) {
+export function TableLayout({ links, pinnedCount, hasMore, showMore, isLoading }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
@@ -36,23 +44,27 @@ export function TableLayout({ links, hasMore, showMore, isLoading }: LinkLayoutP
         <span>Title</span>
         <span>Site</span>
         <span>Updated</span>
+        <span className="sr-only">Options</span>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((row) => {
             const link = links[row.index];
+            const pinned = row.index < pinnedCount;
             return (
-              <a
+              <div
                 key={link.path}
-                href={link.url}
-                target="_blank"
-                rel="noreferrer"
-                className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border px-4 text-sm hover:bg-muted/50`}
+                className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border pl-4 pr-2 text-sm hover:bg-muted/50`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
               >
-                <span className="flex min-w-0 items-center gap-2">
-                  {' '}
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 items-center gap-2"
+                >
+                  {pinned && <PinnedBadge />}
                   <img
                     src={faviconUrl(link.url)}
                     alt=""
@@ -60,10 +72,16 @@ export function TableLayout({ links, hasMore, showMore, isLoading }: LinkLayoutP
                     loading="lazy"
                   />
                   <span className="truncate">{link.title || hostname(link.url)}</span>
-                </span>
+                </a>
                 <span className="truncate text-muted-foreground">{hostname(link.url)}</span>
                 <span className="text-xs text-muted-foreground">{formatDate(link.updatedAt)}</span>
-              </a>
+                <LinkRowMenu
+                  link={link}
+                  pinned={pinned}
+                  isFirst={row.index === 0}
+                  isLast={row.index === pinnedCount - 1}
+                />
+              </div>
             );
           })}
         </div>

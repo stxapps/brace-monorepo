@@ -128,6 +128,7 @@ encrypted file. Random ids — never content-derived — so filenames leak nothi
 /users/{uid}/files/{id}.enc       ← encrypted content / archived page / screenshot
 /users/{uid}/tags/{id}.enc        ← encrypted { id, name, updatedAt }
 /users/{uid}/lists/{id}.enc       ← encrypted { id, name, updatedAt }
+/users/{uid}/pins/{id}.enc        ← encrypted { id, rank, … }; {id} = a pinned link's id
 /users/{uid}/settings/general.enc ← encrypted general user settings
 ```
 
@@ -201,6 +202,16 @@ tag/list names.
   touches no bookmarks. Rename = `put`; delete = `delete`. This is what lets two
   devices rename two _different_ tags concurrently without clobbering each other
   — a single shared `tags.enc` file under LWW could not.
+- **Pins** ("pin a link to the top") are stored one per file (`pins/{id}.enc`,
+  where `{id}` is the pinned link's id), each holding `{ id, rank, … }`. A pin is
+  the same LWW-isolation move applied to a per-link flag: keeping pin state in its
+  own file means pinning/unpinning/reordering writes only the pin and never
+  clobbers a concurrent edit to the link's `meta/{id}.enc` blob (and vice-versa) —
+  a `pinned` field _inside_ metadata could not. `rank` is a fractional index (the
+  same scheme as tag/list order) so reordering a pin rewrites only that one pin.
+  Pin = `put`; unpin = `delete`. No `listId` in the pin: the link already records
+  its list, so a pin floats the link to the top of every view it appears in, and a
+  pin whose link is gone is just another dangling id the read layer skips.
 - **Settings use a fixed `settings/` namespace** (`settings/general.enc` today).
   Unlike every other file — a random id (see _storage layout_) — these are
   **well-known paths** baked into client code, the one non-random-id family.
@@ -230,8 +241,8 @@ tag/list names.
   wire every object is the same opaque encrypted frame (see _crypto boundary —
   blob wire format_); nothing about an R2 object distinguishes JSON from an
   image. The decrypted bytes are typed by **convention baked into the client**:
-  the index namespaces — `meta/`, `tags/`, `lists/`, `settings/` — are UTF-8
-  JSON (decode, then `JSON.parse`), while `files/` is raw content whose meaning
+  the index namespaces — `meta/`, `tags/`, `lists/`, `pins/`, `settings/` — are
+  UTF-8 JSON (decode, then `JSON.parse`), while `files/` is raw content whose meaning
   comes from the **metadata field that references it** — `pageArchive` means an
   HTML archive, a `screenshot`/`thumbnail` field means an image. The client only
   ever reaches a content blob _through_ such a field, so it knows what it is

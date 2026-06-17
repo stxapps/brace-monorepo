@@ -20,6 +20,9 @@ export const LISTS_PREFIX = 'lists/';
 export const TAGS_PREFIX = 'tags/';
 // Heavy content (archived page, screenshot) fetched LAZILY — `files/{id}.enc`.
 export const FILES_PREFIX = 'files/';
+// Pinned-link markers — `pins/{id}.enc`, where `{id}` is the pinned link's id (so
+// `pins/{id}.enc` shadows `meta/{id}.enc`). One small file per pinned link.
+export const PINS_PREFIX = 'pins/';
 // Concern-scoped settings — `settings/<concern>.enc`.
 export const SETTINGS_PREFIX = 'settings/';
 

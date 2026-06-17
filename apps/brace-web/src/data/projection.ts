@@ -22,6 +22,7 @@ import {
   linkSchema,
   LISTS_PREFIX,
   META_PREFIX,
+  PINS_PREFIX,
   SETTINGS_PREFIX,
   TAGS_PREFIX,
 } from '@stxapps/shared';
@@ -65,6 +66,7 @@ export function itemTypeForPath(path: string): ItemType | undefined {
   if (path.startsWith(META_PREFIX)) return 'meta';
   if (path.startsWith(LISTS_PREFIX)) return 'list';
   if (path.startsWith(TAGS_PREFIX)) return 'tag';
+  if (path.startsWith(PINS_PREFIX)) return 'pin';
   if (path.startsWith(SETTINGS_PREFIX)) return 'settings';
   if (path.startsWith(FILES_PREFIX)) return 'files';
   return undefined;
@@ -102,8 +104,8 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
     return record;
   }
 
-  // lists, tags, and EVERY settings concern: only the edit time is worth indexing
-  // (their views are small, prefix-scanned/exact-path reads — see queries.ts —
+  // lists, tags, pins, and EVERY settings concern: only the edit time is worth
+  // indexing (their views are small, prefix-scanned/exact-path reads — see queries.ts —
   // but the column keeps the projector uniform and leaves them orderable for
   // free). Decoded concern-agnostically, so this never assumes a settings file is
   // `general`.
