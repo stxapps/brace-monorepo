@@ -99,6 +99,59 @@ N of whatever the driver produced." Nothing about it special-cases the hard
 queries. At a few thousand links the residual cost (re-*reading* — not
 re-decoding — the prefix bytes from IndexedDB each tick) is comfortably fast.
 
+### the pinned overlay (pin-to-top)
+
+Pinned links float to the top of **every view they appear in**. They live in
+their own small `pins/` namespace (one pin per link, LWW-isolated — see the
+[pin-to-top design](./local-first-sync.md) note), not as a flag on the link, so
+`readLinks` composes them as an **overlay** on top of whatever the driver
+produced rather than threading a pin column through every index path:
+
+```ts
+const overlay = await readPinnedOverlay(query);          // pinned matches, rank order
+const rest    = await readRest(query, limit, overlay.paths); // page, pins excluded
+return {
+  links: [...overlay.links, ...rest.links],
+  pinnedCount: overlay.links.length,
+  total: rest.total === undefined ? undefined : overlay.links.length + rest.total,
+  hasMore: rest.hasMore,
+};
+```
+
+Four properties hold, and they're worth stating because they're what keep the
+overlay from quietly corrupting counts or duplicating rows:
+
+- **No limit, no pagination on pins.** `readPinnedOverlay` returns the *whole*
+  set of matching pins every time; `limit`/"show more" grows only the rest. This
+  is safe precisely because pins are few by design (a user pins a handful), so
+  there's no page to bound — reading them all is cheap and they always render
+  even before the first "show more". The overlay still applies the *same* column
+  + text predicates as the active query (`columnMatches` / `textMatches`), so a
+  pinned link that doesn't match the current list/tag/search filter is skipped,
+  not force-shown.
+- **Excluded from the rest.** The overlay hands `readRest` the set of pinned
+  `paths`, and every driver drops them (`exclude`), so a pinned link that would
+  *also* fall in the normal page never shows twice — it appears once, at the top.
+- **Total stays the same.** Because the pinned links are *moved*, not added,
+  `total` must be unchanged by pinning. The rest's total already excludes them,
+  so the overlay folds its own count back in: `overlay.links.length +
+  rest.total`. (When the rest's total is `undefined` — text search can't count
+  without decoding the whole match set — the combined total stays `undefined`;
+  pinning doesn't rescue an inexact total.)
+- **`pinnedCount` is the boundary, not a separate list.** Rather than return two
+  arrays, `readLinks` concatenates pinned-then-rest into one `links` array and
+  reports how many leading entries are pinned. That single number is what the UI
+  draws its pinned section divider and its menu-based "move up · move down"
+  reorder affordances at (there's no drag-and-drop — see the design note). One
+  array keeps the virtualizer and the decode cache working uniformly across the
+  whole result; `pinnedCount` is just where the view splits it.
+
+The overlay reuses the existing read primitives — `decodeCachedLink` for the
+same memoized decode, `columnMatches`/`textMatches` for the same filters — so it
+adds no new query path and no special-casing in the drivers. It's the same "read
+the top of whatever matched" model as the rest, with the pinned matches simply
+read in full and stitched on first.
+
 ### why the re-read cost rarely materializes
 
 The one cost the decode cache doesn't address is the **re-read**: every `items`
