@@ -8,7 +8,7 @@
 // Lives in `src/data/` (not the links route) because it's not links-specific —
 // settings reads lists/tags here too. It depends on NOTHING in `app/`: a query
 // is described by the plain `LinkQuery` below, and the links route maps its URL
-// onto that (links-page-provider `parseLinkQuery`), so the dependency points
+// onto that (page-provider `parseLinkQuery`), so the dependency points
 // route → data, never the reverse.
 
 import Dexie from 'dexie';

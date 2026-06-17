@@ -5,7 +5,8 @@
 // own scroll container + virtualizer (row geometry differs per layout), so this
 // is deliberately just the shared chrome, not a base component.
 
-import { ArrowDown, ArrowUp, MoreHorizontal, Pin, PinOff } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { ArrowDown, ArrowUp, MoreHorizontal, Pin, PinOff, RefreshCw } from 'lucide-react';
 
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -17,6 +18,7 @@ import {
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
 import { usePinMutations } from '../../_hooks/use-pin-mutations';
+import { useLinksViewState } from '../_contexts/view-state-provider';
 
 import type { LinkItem } from '@/data/queries';
 
@@ -29,6 +31,10 @@ export interface LinkLayoutProps {
   hasMore: boolean;
   showMore: () => void;
   isLoading: boolean;
+  // A background sync has newer results being held back; render the RefreshPill.
+  hasPending: boolean;
+  // Swap the held results in (the pill's click also scrolls the layout to top).
+  applyPending: () => void;
 }
 
 // Best-effort hostname for the secondary line / favicon. URLs come from user
@@ -76,8 +82,19 @@ export function LinkRowMenu({
   isLast: boolean;
 }) {
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
+  // Report open/close so a background sync won't repaint the row (moving or
+  // unmounting this trigger) while the menu is open — see view-state-provider. Track
+  // our own open state so an unmount-while-open (e.g. a layout switch) releases
+  // the count instead of leaking it and pinning `engaged` true forever.
+  const { setMenuOpen } = useLinksViewState();
+  const openRef = useRef(false);
+  useEffect(() => () => { if (openRef.current) setMenuOpen(false); }, [setMenuOpen]);
+  const handleOpenChange = (open: boolean) => {
+    openRef.current = open;
+    setMenuOpen(open);
+  };
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -132,6 +149,28 @@ export function ShowMore({ hasMore, showMore }: ShowMoreProps) {
     <div className="flex justify-center py-4">
       <Button variant="outline" size="sm" onClick={showMore}>
         Show more
+      </Button>
+    </div>
+  );
+}
+
+// The "new updates" affordance: a floating pill shown when a background sync has
+// results held back (useLinks `hasPending`). It must be placed inside a
+// `relative` wrapper that does NOT scroll (a sibling of the scroll container), so
+// it stays pinned to the top of the pane instead of riding the scrolled content.
+// Clicking applies the held results AND scrolls the layout to top, so the
+// reorder lands where the user can see it rather than shifting them mid-list.
+export function RefreshPill({ show, onClick }: { show: boolean; onClick: () => void }) {
+  if (!show) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
+      <Button
+        size="sm"
+        onClick={onClick}
+        className="pointer-events-auto rounded-full shadow-md"
+      >
+        <RefreshCw className="size-4" />
+        New updates
       </Button>
     </div>
   );

@@ -54,6 +54,12 @@ type BgSyncState =
 interface SyncContextValue {
   storeStatus: StoreStatus;
   bgSync: BgSyncState;
+  // Bumped each time requestSync() runs — i.e. on every local edit on THIS
+  // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
+  // read edge (useLinks) keys on it to apply the user's own change immediately
+  // instead of staging it behind the refresh pill: an edit you just made must
+  // never hide behind "new updates".
+  localWriteNonce: number;
   // Re-attempt a failed initial sync (the gate's retry).
   retryInitialSync: () => void;
   // Kick a background incremental cycle now — e.g. right after a local edit
@@ -73,6 +79,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [bgSync, setBgSync] = useState<BgSyncState>('idle');
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
+  // Bumped by requestSync() — the local-edit signal the read edge keys on.
+  const [localWriteNonce, setLocalWriteNonce] = useState(0);
 
   // Guards against a stale async resolution writing state after the account
   // changed or the provider unmounted.
@@ -82,7 +90,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   // identity stays stable while the account/session underneath changes. Reset to
   // a no-op on cleanup so a late caller can't sync a signed-out account.
   const backgroundSyncRef = useRef<() => void>(() => undefined);
-  const requestSync = useCallback(() => backgroundSyncRef.current(), []);
+  const requestSync = useCallback(() => {
+    // Mark a local edit before kicking the cycle, so the read edge applies this
+    // device's own change without waiting on (or staging behind) the sync.
+    setLocalWriteNonce((n) => n + 1);
+    backgroundSyncRef.current();
+  }, []);
 
   const retryInitialSync = useCallback(() => {
     setStoreStatus('checking');
@@ -155,8 +168,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [username, authStatus, attempt]);
 
   const value = useMemo<SyncContextValue>(
-    () => ({ storeStatus, bgSync, retryInitialSync, requestSync }),
-    [storeStatus, bgSync, retryInitialSync, requestSync],
+    () => ({ storeStatus, bgSync, localWriteNonce, retryInitialSync, requestSync }),
+    [storeStatus, bgSync, localWriteNonce, retryInitialSync, requestSync],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

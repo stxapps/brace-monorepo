@@ -1,4 +1,5 @@
-import { LinksPageProvider } from './links-page-provider';
+import { LinksPageProvider } from './_contexts/page-provider';
+import { LinksViewStateProvider } from './_contexts/view-state-provider';
 import { Main } from './main';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -21,7 +22,9 @@ export default function LinksPage() {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
-          <Main />
+          <LinksViewStateProvider>
+            <Main />
+          </LinksViewStateProvider>
         </div>
       </div>
     </LinksPageProvider>

@@ -3,7 +3,7 @@
 // Full-height left rail: brace mark at the top, then Show All, the lists (the
 // My List / Archive / Trash system lists plus the user's own), and the user's
 // tags as selectable filters. Clicking an entry sets the shared selection (see
-// links-page-provider); the main pane reacts. "Show All" is the unfiltered reset.
+// page-provider); the main pane reacts. "Show All" is the unfiltered reset.
 
 import { Archive, Folder, Hash, Inbox, Layers, Settings2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
@@ -14,7 +14,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLists } from '../_hooks/use-lists';
 import { useTags } from '../_hooks/use-tags';
-import { type Selection, useLinksPage } from './links-page-provider';
+import { type Selection, useLinksPage } from './_contexts/page-provider';
 
 import { type ListItem, type TagItem } from '@/data/queries';
 

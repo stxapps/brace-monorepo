@@ -4,9 +4,10 @@
 // the header sits outside the scrolled/measured area so it stays pinned. Columns
 // are a CSS grid template shared by the header and every row so they align.
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   faviconUrl,
@@ -14,18 +15,39 @@ import {
   type LinkLayoutProps,
   LinkRowMenu,
   PinnedBadge,
+  RefreshPill,
   ShowMore,
 } from './shared';
 
 const ROW_HEIGHT = 44;
 const COLUMNS = 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)_120px_40px]';
+const SCROLL_TOP_THRESHOLD = 8;
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString();
 }
 
-export function TableLayout({ links, pinnedCount, hasMore, showMore, isLoading }: LinkLayoutProps) {
+export function TableLayout({
+  links,
+  pinnedCount,
+  hasMore,
+  showMore,
+  isLoading,
+  hasPending,
+  applyPending,
+}: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { setScrolled } = useLinksViewState();
+
+  useEffect(() => {
+    setScrolled(false);
+    return () => setScrolled(false);
+  }, [setScrolled]);
+
+  const applyAndScrollTop = () => {
+    applyPending();
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
 
   const virtualizer = useVirtualizer({
     count: links.length,
@@ -47,8 +69,14 @@ export function TableLayout({ links, pinnedCount, hasMore, showMore, isLoading }
         <span className="sr-only">Options</span>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+      <div className="relative flex-1">
+        <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
+        <div
+          ref={scrollRef}
+          className="h-full overflow-y-auto"
+          onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
+        >
+          <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((row) => {
             const link = links[row.index];
             const pinned = row.index < pinnedCount;
@@ -84,8 +112,9 @@ export function TableLayout({ links, pinnedCount, hasMore, showMore, isLoading }
               </div>
             );
           })}
+          </div>
+          <ShowMore hasMore={hasMore} showMore={showMore} />
         </div>
-        <ShowMore hasMore={hasMore} showMore={showMore} />
       </div>
     </div>
   );

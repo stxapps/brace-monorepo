@@ -5,9 +5,10 @@
 // link list into chunks and lay each chunk out with a flex/grid row. Card height
 // is fixed so the row estimate stays exact.
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   faviconUrl,
@@ -15,15 +16,36 @@ import {
   type LinkLayoutProps,
   LinkRowMenu,
   PinnedBadge,
+  RefreshPill,
   ShowMore,
 } from './shared';
 
 const COLUMNS = 3;
 const ROW_HEIGHT = 180;
+const SCROLL_TOP_THRESHOLD = 8;
 
-export function CardLayout({ links, pinnedCount, hasMore, showMore, isLoading }: LinkLayoutProps) {
+export function CardLayout({
+  links,
+  pinnedCount,
+  hasMore,
+  showMore,
+  isLoading,
+  hasPending,
+  applyPending,
+}: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { setScrolled } = useLinksViewState();
   const rowCount = Math.ceil(links.length / COLUMNS);
+
+  useEffect(() => {
+    setScrolled(false);
+    return () => setScrolled(false);
+  }, [setScrolled]);
+
+  const applyAndScrollTop = () => {
+    applyPending();
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -35,8 +57,14 @@ export function CardLayout({ links, pinnedCount, hasMore, showMore, isLoading }:
   if (links.length === 0) return <EmptyState isLoading={isLoading} />;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto p-4">
-      <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+    <div className="relative h-full">
+      <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto p-4"
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
+      >
+        <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const start = virtualRow.index * COLUMNS;
           const rowLinks = links.slice(start, start + COLUMNS);
@@ -94,8 +122,9 @@ export function CardLayout({ links, pinnedCount, hasMore, showMore, isLoading }:
             </div>
           );
         })}
+        </div>
+        <ShowMore hasMore={hasMore} showMore={showMore} />
       </div>
-      <ShowMore hasMore={hasMore} showMore={showMore} />
     </div>
   );
 }

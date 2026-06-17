@@ -5,9 +5,10 @@
 // scrolls cheaply. `ShowMore` lives outside the virtual measurement, below the
 // rows, growing the page on click.
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   faviconUrl,
@@ -15,13 +16,38 @@ import {
   type LinkLayoutProps,
   LinkRowMenu,
   PinnedBadge,
+  RefreshPill,
   ShowMore,
 } from './shared';
 
 const ROW_HEIGHT = 64;
+// Past this many pixels we treat the pane as "scrolled away from the top", so a
+// background sync is staged behind the refresh pill (see view-state-provider).
+const SCROLL_TOP_THRESHOLD = 8;
 
-export function ListLayout({ links, pinnedCount, hasMore, showMore, isLoading }: LinkLayoutProps) {
+export function ListLayout({
+  links,
+  pinnedCount,
+  hasMore,
+  showMore,
+  isLoading,
+  hasPending,
+  applyPending,
+}: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { setScrolled } = useLinksViewState();
+
+  // This layout owns the scroll position; reset the shared flag on mount (fresh
+  // at top) and unmount (so a layout switch doesn't leave it stuck true).
+  useEffect(() => {
+    setScrolled(false);
+    return () => setScrolled(false);
+  }, [setScrolled]);
+
+  const applyAndScrollTop = () => {
+    applyPending();
+    scrollRef.current?.scrollTo({ top: 0 });
+  };
 
   const virtualizer = useVirtualizer({
     count: links.length,
@@ -33,8 +59,14 @@ export function ListLayout({ links, pinnedCount, hasMore, showMore, isLoading }:
   if (links.length === 0) return <EmptyState isLoading={isLoading} />;
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto">
-      <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+    <div className="relative h-full">
+      <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto"
+        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
+      >
+        <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((row) => {
           const link = links[row.index];
           const pinned = row.index < pinnedCount;
@@ -77,8 +109,9 @@ export function ListLayout({ links, pinnedCount, hasMore, showMore, isLoading }:
             </div>
           );
         })}
+        </div>
+        <ShowMore hasMore={hasMore} showMore={showMore} />
       </div>
-      <ShowMore hasMore={hasMore} showMore={showMore} />
     </div>
   );
 }
