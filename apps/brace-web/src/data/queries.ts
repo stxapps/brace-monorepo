@@ -30,6 +30,7 @@ import {
 } from '@stxapps/shared';
 
 import { db, type ItemRecord } from '@/data/db';
+import { dropCachedLink, getCachedLink, setCachedLink } from '@/data/decode-cache';
 import { parseBlob } from '@/data/projection';
 
 // A parsed entity always carries its source `items` path — the stable id every
@@ -111,9 +112,26 @@ function decode<T extends z.ZodTypeAny>(
   return { ...(parsed as object), path: record.path } as WithPath<z.infer<T>>;
 }
 
+// Decode a link THROUGH the memoized cache (decode-cache.ts), so the live views'
+// repeated re-reads of the loaded prefix don't re-run parseBlob+zod on every
+// `items` write — only records whose bytes (their `updatedAt`) changed re-decode.
+// See decode-cache.ts for the version-key rationale and the sign-out clear.
+function decodeCachedLink(record: ItemRecord): LinkItem | undefined {
+  const cached = getCachedLink(record.path, record.updatedAt);
+  if (cached !== undefined) return cached;
+
+  const link = decode(record, linkSchema);
+  if (link === undefined) {
+    dropCachedLink(record.path); // bytes now absent/unparseable — drop any stale entry
+    return undefined;
+  }
+  setCachedLink(record.path, record.updatedAt, link);
+  return link;
+}
+
 function decodeLinks(records: ItemRecord[]): LinkItem[] {
   return records
-    .map((record) => decode(record, linkSchema))
+    .map((record) => decodeCachedLink(record))
     .filter((link): link is LinkItem => link !== undefined);
 }
 
@@ -306,7 +324,7 @@ function finishFromCandidates(
 
   const links: LinkItem[] = [];
   for (const record of survivors) {
-    const link = decode(record, linkSchema);
+    const link = decodeCachedLink(record);
     if (link && textMatches(link, q)) {
       links.push(link);
       if (links.length > limit) break; // one past the page → hasMore
@@ -363,7 +381,7 @@ async function readRest(
     .reverse()
     .filter((record) => {
       if (exclude.has(record.path) || !columnMatches(record, query)) return false;
-      const link = decode(record, linkSchema);
+      const link = decodeCachedLink(record);
       return link !== undefined && textMatches(link, query);
     })
     .limit(limit + 1)
@@ -397,7 +415,7 @@ async function readPinnedOverlay(
   const hasText = hasTextClause(query);
   for (const record of records) {
     if (!record || !columnMatches(record, query)) continue;
-    const link = decode(record, linkSchema);
+    const link = decodeCachedLink(record);
     if (!link || (hasText && !textMatches(link, query))) continue;
     links.push(link);
     paths.add(record.path);

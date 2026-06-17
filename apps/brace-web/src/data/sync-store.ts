@@ -6,6 +6,7 @@
 // has one owner. Deliberately tiny and side-effect-light — no network, no React.
 
 import { db, type SyncMetaRecord } from './db';
+import { clearDecodeCache } from './decode-cache';
 
 export type { SyncMetaRecord } from './db';
 
@@ -104,4 +105,5 @@ export async function resetCursor(
 // clearSession.
 export async function clearSyncData(): Promise<void> {
   await Promise.all([db.items.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);
+  clearDecodeCache(); // drop decoded-link plaintext too — mirrors this items wipe (decode-cache.ts)
 }
