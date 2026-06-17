@@ -5,6 +5,9 @@ Living reference for how the workspace is organized. See
 [safe-area.md](./safe-area.md) for safe-area insets, viewport sizing, and popup
 positioning, [local-first-sync.md](./local-first-sync.md) for the
 local-first data path (local store + encrypted file sync),
+[queries.md](./queries.md) for the read edge (IndexedDB indexes,
+liveQuery + virtual scrolling, and why pagination is growing-`limit` +
+a decode cache),
 [api-contracts.md](./api-contracts.md) for the contract-first endpoint pattern
 (typed once in `@stxapps/shared`, shared by server and clients),
 [account.md](./account.md) for the password-derived account model (key

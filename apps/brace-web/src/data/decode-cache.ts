@@ -18,26 +18,36 @@
 
 import type { LinkItem } from '@/data/queries';
 
-// Bounded LRU so the cache can't outgrow the library. Map preserves insertion
-// order, so the oldest key is the LRU victim, and re-inserting on a hit moves an
-// entry to the newest position (refreshing its recency).
-const MAX = 10000;
+// Bounded so the cache can't grow without limit, but MAX sits WELL ABOVE the
+// largest plausible loaded working set (a fully-scrolled large library), so for
+// normal libraries eviction never fires — the cache effectively holds the whole
+// resident set, and only an outlier library past MAX distinct links ever evicts.
+// Sizing it under the working set would be self-defeating: a fully-expanded 10k
+// list re-reads all 10k each reactive tick (useLiveQuery), and a too-small cache
+// would evict on-screen entries and re-decode them on the very next tick (thrash).
+//
+// Eviction is INSERTION (FIFO) order, not true LRU. Recency tracking would cost a
+// Map delete+set on every cache HIT — and a hit happens for ~every resident link
+// on every tick, i.e. tens of thousands of Map ops per refresh on a big list. The
+// hot path here is all-hits, so that bookkeeping is pure overhead; and since MAX
+// is above the working set, eviction almost never runs, so FIFO behaves the same
+// as LRU in practice while costing nothing on reads.
+const MAX = 50000;
 const cache = new Map<string, { version: number; link: LinkItem }>();
 
 // A live entry for `path` whose bytes haven't changed since it was cached, or
-// `undefined` (miss / stale) — the caller then decodes and `setCachedLink`s.
+// `undefined` (miss / stale) — the caller then decodes and `setCachedLink`s. No
+// recency bookkeeping (see the FIFO note above): a hit is a single Map lookup.
 export function getCachedLink(path: string, version: number): LinkItem | undefined {
   const hit = cache.get(path);
   if (!hit || hit.version !== version) return undefined;
-  cache.delete(path);
-  cache.set(path, hit); // refresh recency
   return hit.link;
 }
 
 export function setCachedLink(path: string, version: number, link: LinkItem): void {
   cache.set(path, { version, link });
   if (cache.size > MAX) {
-    cache.delete(cache.keys().next().value as string); // evict LRU (oldest key)
+    cache.delete(cache.keys().next().value as string); // evict oldest-inserted (FIFO)
   }
 }
 
