@@ -97,19 +97,26 @@ export function useLinks(): UseLinksResult {
   }, [localWriteNonce]);
 
   // A query/limit change is the user's own action (navigation or "show more"), so
-  // the next result replaces the snapshot rather than staging behind it.
-  const prevQueryRef = useRef(query);
-  const prevLimitRef = useRef(limit);
-
+  // the new page replaces the snapshot rather than staging behind it. We read page
+  // identity off the result itself — `readLinks` echoes the `query`/`limit` it ran
+  // for — rather than diffing against a prev-render ref. This matters because on the
+  // render right after a query/limit change, useLiveQuery still returns the PREVIOUS
+  // result, which echoes the old page: `liveReflectsCurrentPage` is false until the fresh
+  // page lands, so we neither promote the stale value as the new page nor retire the
+  // signal early. (`live.query === query` is a reference check — the result stores
+  // the exact object the querier was given, and page-provider keeps that reference
+  // stable, the same contract the `[query, limit]` deps above already rely on.)
   useEffect(() => {
     if (live === undefined) return;
-    const pageChanged = prevQueryRef.current !== query || prevLimitRef.current !== limit;
-    prevQueryRef.current = query;
-    prevLimitRef.current = limit;
+    const liveReflectsCurrentPage = live.query === query && live.limit === limit;
+    const pageChanged =
+      displayed === undefined ||
+      displayed.query !== live.query ||
+      displayed.limit !== live.limit;
 
     const promoteNow =
       displayed === undefined || // first paint
-      pageChanged || // navigation / show more
+      (liveReflectsCurrentPage && pageChanged) || // navigation / show more — once the new page arrives
       Date.now() < graceUntilRef.current || // this device just edited
       !engaged; // idle: nothing to disturb
 

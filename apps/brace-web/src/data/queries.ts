@@ -94,6 +94,13 @@ export interface LinksResult {
   pinnedCount: number;
   total?: number;
   hasMore: boolean;
+  // The page identity this result was computed for — the exact `query`/`limit`
+  // passed to `readLinks`, echoed back so a reader can tell whether a result
+  // reflects the page it currently wants vs. a stale one from before a query/limit
+  // change (useLiveQuery returns the previous result for one render after its deps
+  // change). See use-links.ts.
+  query: LinkQuery;
+  limit: number;
 }
 
 // --- decode ------------------------------------------------------------------
@@ -339,8 +346,9 @@ function finishFromCandidates(
 }
 
 // The page of NON-pinned links — the driver result before the pinned overlay is
-// prepended (so no `pinnedCount` yet). Pinned links are excluded via `exclude`.
-type RestResult = Omit<LinksResult, 'pinnedCount'>;
+// prepended (so no `pinnedCount` yet) and before `readLinks` stamps the page
+// identity (`query`/`limit`). Pinned links are excluded via `exclude`.
+type RestResult = Omit<LinksResult, 'pinnedCount' | 'query' | 'limit'>;
 
 // One page of the link library for `query` MINUS `exclude`, ordered by
 // `query.sort` (descending — newest first). Picks the cheapest driver for the
@@ -438,5 +446,7 @@ export async function readLinks(query: LinkQuery, limit: number): Promise<LinksR
     pinnedCount: overlay.links.length,
     total: rest.total === undefined ? undefined : overlay.links.length + rest.total,
     hasMore: rest.hasMore,
+    query,
+    limit,
   };
 }
