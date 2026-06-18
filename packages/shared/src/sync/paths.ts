@@ -28,3 +28,20 @@ export const SETTINGS_PREFIX = 'settings/';
 
 // The encrypted-blob suffix every path ends with.
 export const ENC_SUFFIX = '.enc';
+
+// The id-keyed namespaces — every prefix whose path is `{prefix}{randomId}.enc`.
+// `settings/` is excluded on purpose: its segment is a fixed lowercase concern
+// name, not a random id, so it's validated as its own shape.
+//
+// `syncPathSchema` (sync/endpoints.ts) BUILDS its wire-validation regex from this
+// list instead of re-listing the namespaces as literals — so adding a namespace is
+// just: add the `*_PREFIX` const above, add it here, add its entity schema. The
+// server gate can't silently drift from the path contract, and `paths.spec.ts`
+// fails if a new `*_PREFIX` isn't reachable through validation at all.
+export const ID_KEYED_PREFIXES = [
+  META_PREFIX,
+  LISTS_PREFIX,
+  TAGS_PREFIX,
+  FILES_PREFIX,
+  PINS_PREFIX,
+] as const;
