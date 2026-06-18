@@ -7,11 +7,11 @@
 // exactly one list file per op (rank/parentId model), so this page never has to
 // reason about the sync layer; it just renders the live tree and fires intents.
 //
-// Drag-and-drop is intentionally NOT here yet: every reorder/reparent is a
-// button (up/down + a "move to" submenu), so the page is fully usable and
-// keyboard-accessible. Drag is a later enhancement layered over the same
-// mutations. Secondary actions live behind a per-row kebab menu rather than a
-// width-measured overflow, so rows stay stable at any container width.
+// Reorder/reparent works two ways over the same mutations: drag-and-drop (a
+// grip handle with live depth projection) and buttons (up/down + a "move to"
+// submenu) as the keyboard/mouse fallback, so the page stays fully usable and
+// keyboard-accessible. Secondary actions live behind a per-row kebab menu rather
+// than a width-measured overflow, so rows stay stable at any container width.
 
 import { useMemo, useState } from 'react';
 import {
@@ -78,7 +78,7 @@ import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './t
 
 import type { ListItem } from '@/data/queries';
 
-const NO_COLLAPSE: ReadonlySet<string> = new Set();
+const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
 
 type SortDir = 'asc' | 'desc';
 
@@ -282,7 +282,7 @@ function CreateRow({ onCreate }: { onCreate: (name: string) => Promise<void> }) 
 function SortableRow({
   row,
   renderDepth,
-  collapsed,
+  collapsedIds,
   candidates,
   onToggle,
   onRename,
@@ -294,7 +294,7 @@ function SortableRow({
 }: {
   row: ListRow;
   renderDepth: number;
-  collapsed: ReadonlySet<string>;
+  collapsedIds: ReadonlySet<string>;
   candidates: ListRow[];
   onToggle: () => void;
   onRename: (name: string) => void;
@@ -335,10 +335,10 @@ function SortableRow({
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={collapsed.has(row.item.id) ? 'Expand' : 'Collapse'}
+          aria-label={collapsedIds.has(row.item.id) ? 'Expand' : 'Collapse'}
           onClick={onToggle}
         >
-          {collapsed.has(row.item.id) ? (
+          {collapsedIds.has(row.item.id) ? (
             <ChevronRight className="size-4" />
           ) : (
             <ChevronDown className="size-4" />
@@ -373,7 +373,7 @@ export function ListsSection() {
   const lists = useLists();
   const { create, rename, move, remove, reorder } = useListMutations();
 
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSE);
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
   const [error, setError] = useState<string | null>(null);
 
   // Drag state: the row being dragged, the row it's over, and the horizontal
@@ -389,13 +389,13 @@ export function ListsSection() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const rows = flattenToRows(lists, collapsed);
+  const rows = flattenToRows(lists, collapsedIds);
   // While dragging, the active row's subtree travels with it, so drop it out of
   // the flat list the sortable + projection see (and that we render).
   const displayRows = excludeActiveDescendants(rows, activeId);
   // The move-to candidate list ignores collapse — every list is a valid target
   // whether or not its row is shown.
-  const allRows = flattenToRows(lists, NO_COLLAPSE);
+  const allRows = flattenToRows(lists, NO_COLLAPSED_IDS);
 
   // The depth the dragged row would land at, recomputed as it moves. Drives both
   // the live indent of the dragged row and the final drop.
@@ -440,7 +440,7 @@ export function ListsSection() {
   };
 
   const toggle = (id: string) => {
-    setCollapsed((prev) => {
+    setCollapsedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -521,7 +521,7 @@ export function ListsSection() {
                     key={row.item.id}
                     row={row}
                     renderDepth={renderDepth}
-                    collapsed={collapsed}
+                    collapsedIds={collapsedIds}
                     candidates={candidates}
                     onToggle={() => toggle(row.item.id)}
                     onRename={(name) => run(rename(row.item, name))}

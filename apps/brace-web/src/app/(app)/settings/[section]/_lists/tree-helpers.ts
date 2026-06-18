@@ -25,12 +25,12 @@ export interface ListRow {
 }
 
 // Flatten the forest depth-first (parent before children), skipping the subtree
-// under any id in `collapsed`. Order matches the sidebar exactly. Named to
+// under any id in `collapsedIds`. Order matches the sidebar exactly. Named to
 // distinguish it from `shared`'s `flattenTree` (forest → flat `TreeNode[]`): this
 // is the richer forest → `ListRow[]` variant the settings table renders.
 export function flattenToRows(
   nodes: TreeNode<ListItem>[],
-  collapsed: ReadonlySet<string>,
+  collapsedIds: ReadonlySet<string>,
 ): ListRow[] {
   const rows: ListRow[] = [];
   const walk = (group: TreeNode<ListItem>[], parentId: string | null) => {
@@ -38,7 +38,7 @@ export function flattenToRows(
     group.forEach((node, index) => {
       const hasChildren = node.children.length > 0;
       rows.push({ item: node.item, depth: node.depth, parentId, hasChildren, siblings, index });
-      if (hasChildren && !collapsed.has(node.item.id)) walk(node.children, node.item.id);
+      if (hasChildren && !collapsedIds.has(node.item.id)) walk(node.children, node.item.id);
     });
   };
   walk(nodes, null);
