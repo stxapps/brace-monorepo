@@ -122,9 +122,7 @@ export function useLinks(): UseLinksResult {
     if (live === undefined) return;
     const liveReflectsCurrentPage = live.query === query && live.limit === limit;
     const pageChanged =
-      displayed === undefined ||
-      displayed.query !== live.query ||
-      displayed.limit !== live.limit;
+      displayed === undefined || displayed.query !== live.query || displayed.limit !== live.limit;
 
     const promoteNow =
       displayed === undefined || // first paint
