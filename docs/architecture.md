@@ -5,7 +5,7 @@ Living reference for how the workspace is organized. See
 [safe-area.md](./safe-area.md) for safe-area insets, viewport sizing, and popup
 positioning, [local-first-sync.md](./local-first-sync.md) for the
 local-first data path (local store + encrypted file sync),
-[queries.md](./queries.md) for the read edge (IndexedDB indexes,
+[client-queries.md](./client-queries.md) for the read edge (IndexedDB indexes,
 liveQuery + virtual scrolling, and why pagination is growing-`limit` +
 a decode cache),
 [api-contracts.md](./api-contracts.md) for the contract-first endpoint pattern
