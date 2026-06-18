@@ -78,6 +78,18 @@ export function useLinks(): UseLinksResult {
   const { engaged } = useLinksViewState();
   const [limit, setLimit] = useState(PAGE_SIZE);
 
+  // Reset pagination when the view changes: a new query is a fresh page and should
+  // start at PAGE_SIZE, not inherit a grown "show more" limit from the previous
+  // view. We adjust state DURING render (React's recommended pattern for deriving
+  // state from a changed input) so `limit` is corrected before `useLiveQuery` below
+  // reads it — an effect would instead let the query run once with the stale larger
+  // limit, then re-run. Relies on the same stable `query` reference the deps do.
+  const [queryForLimit, setQueryForLimit] = useState(query);
+  if (query !== queryForLimit) {
+    setQueryForLimit(query);
+    setLimit(PAGE_SIZE);
+  }
+
   // The always-current result. Kept flowing; we choose WHEN to show it.
   const live = useLiveQuery(() => readLinks(query, limit), [query, limit]);
   const liveRef = useRef(live);
