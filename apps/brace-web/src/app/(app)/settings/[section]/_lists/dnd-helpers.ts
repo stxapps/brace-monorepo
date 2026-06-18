@@ -41,7 +41,7 @@ export interface MovePlan {
 
 // Drop the active row's whole subtree out of the flat list while it's being
 // dragged: a node's descendants are the contiguous run of following rows with a
-// greater depth (flattenTree is depth-first), so the row's children travel with
+// greater depth (flattenToRows is depth-first), so the row's children travel with
 // it and can never become its own drop target. Returns the rows unchanged when
 // nothing is being dragged.
 export function excludeActiveDescendants(rows: ListRow[], activeId: string | null): ListRow[] {

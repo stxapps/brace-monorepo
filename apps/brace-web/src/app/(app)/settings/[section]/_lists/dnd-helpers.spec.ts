@@ -2,7 +2,7 @@ import { buildTree, LIST_NO_CHILDREN_IDS, TRASH_ID, type TreeNode } from '@stxap
 
 import type { ListItem } from '../../../../../data/queries';
 import { excludeActiveDescendants, getMovePlan, getProjection, INDENT_WIDTH } from './dnd-helpers';
-import { flattenTree, type ListRow } from './tree-helpers';
+import { flattenToRows, type ListRow } from './tree-helpers';
 
 // Minimal ListItem; only id/parentId/rank/name matter to the tree + projection.
 function item(id: string, parentId: string | null, rank: string): ListItem {
@@ -18,7 +18,7 @@ function fixture(): { lists: TreeNode<ListItem>[]; rows: ListRow[] } {
     item('C', null, 'c'),
   ];
   const lists = buildTree(items, { noChildrenIds: LIST_NO_CHILDREN_IDS });
-  return { lists, rows: flattenTree(lists, new Set()) };
+  return { lists, rows: flattenToRows(lists, new Set()) };
 }
 
 const NONE: ReadonlySet<string> = new Set();
@@ -62,7 +62,7 @@ describe('getProjection', () => {
   it('never nests under a no-children container (Trash)', () => {
     const items = [item('A', null, 'a'), item(TRASH_ID, null, 'z')];
     const lists = buildTree(items, { noChildrenIds: LIST_NO_CHILDREN_IDS });
-    const rows = flattenTree(lists, NONE);
+    const rows = flattenToRows(lists, NONE);
     // Drag A under Trash, pushed hard right: max depth stays at Trash's depth.
     expect(getProjection(rows, 'A', TRASH_ID, INDENT_WIDTH * 5)).toEqual({
       depth: 0,

@@ -25,8 +25,10 @@ export interface ListRow {
 }
 
 // Flatten the forest depth-first (parent before children), skipping the subtree
-// under any id in `collapsed`. Order matches the sidebar exactly.
-export function flattenTree(
+// under any id in `collapsed`. Order matches the sidebar exactly. Named to
+// distinguish it from `shared`'s `flattenTree` (forest → flat `TreeNode[]`): this
+// is the richer forest → `ListRow[]` variant the settings table renders.
+export function flattenToRows(
   nodes: TreeNode<ListItem>[],
   collapsed: ReadonlySet<string>,
 ): ListRow[] {

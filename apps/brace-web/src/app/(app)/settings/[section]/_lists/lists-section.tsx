@@ -74,7 +74,7 @@ import {
   INDENT_WIDTH,
   type Projection,
 } from './dnd-helpers';
-import { childrenOf, flattenTree, forbiddenParentIds, type ListRow } from './tree-helpers';
+import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 import type { ListItem } from '@/data/queries';
 
@@ -389,13 +389,13 @@ export function ListsSection() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const rows = flattenTree(lists, collapsed);
+  const rows = flattenToRows(lists, collapsed);
   // While dragging, the active row's subtree travels with it, so drop it out of
   // the flat list the sortable + projection see (and that we render).
   const displayRows = excludeActiveDescendants(rows, activeId);
   // The move-to candidate list ignores collapse — every list is a valid target
   // whether or not its row is shown.
-  const allRows = flattenTree(lists, NO_COLLAPSE);
+  const allRows = flattenToRows(lists, NO_COLLAPSE);
 
   // The depth the dragged row would land at, recomputed as it moves. Drives both
   // the live indent of the dragged row and the final drop.
