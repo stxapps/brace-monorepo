@@ -1,9 +1,8 @@
 import { buildTree, LIST_NO_CHILDREN_IDS, TRASH_ID, type TreeNode } from '@stxapps/shared';
 
+import type { ListItem } from '../../../../../data/queries';
 import { excludeActiveDescendants, getMovePlan, getProjection, INDENT_WIDTH } from './dnd-helpers';
 import { flattenTree, type ListRow } from './tree-helpers';
-
-import type { ListItem } from '@/data/queries';
 
 // Minimal ListItem; only id/parentId/rank/name matter to the tree + projection.
 function item(id: string, parentId: string | null, rank: string): ListItem {

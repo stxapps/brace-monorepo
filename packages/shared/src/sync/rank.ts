@@ -60,6 +60,7 @@ export function rerankToOrder(ordered: { rank: string }[]): (string | null)[] {
   // Anchors: the greedy run of items already in ascending-rank order. Each kept
   // item must out-rank the previous kept one; the rest fall between anchors.
   const kept: boolean[] = ordered.map(() => false);
+
   let lastKept: string | null = null;
   for (let i = 0; i < ordered.length; i++) {
     if (lastKept === null || ordered[i].rank > lastKept) {
@@ -76,8 +77,10 @@ export function rerankToOrder(ordered: { rank: string }[]): (string | null)[] {
       continue;
     }
     const before = i > 0 ? ordered[i - 1].rank : null;
+
     let j = i;
     while (j < ordered.length && !kept[j]) j++;
+
     const after = j < ordered.length ? ordered[j].rank : null;
     const keys = ranksBetween(before, after, j - i);
     for (let k = i; k < j; k++) result[k] = keys[k - i];

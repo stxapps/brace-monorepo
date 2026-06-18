@@ -19,19 +19,20 @@ export const opKindSchema = z.enum(['put', 'delete']);
 export type OpKind = z.infer<typeof opKindSchema>;
 
 // A path RELATIVE to the user's storage root — `meta/{id}.enc`, `files/{id}.enc`,
-// `tags/{id}.enc`, `lists/{id}.enc`, or the fixed-name `settings/<concern>.enc`.
+// `tags/{id}.enc`, `lists/{id}.enc`, `pins/{id}.enc`, or the fixed-name
+// `settings/<concern>.enc`.
 // The `/users/{uid}/` prefix that namespaces the R2 object is NEVER on the wire:
 // the server derives it from the authenticated session and prepends it, so one
 // user can't name another's path (the authorization check in docs/local-first-
 // sync.md "authorization & quota" reduces to "validate the shape, then prefix").
-// The id segment is the random-id family (meta/files/tags/lists) or a fixed
+// The id segment is the random-id family (meta/files/tags/lists/pins) or a fixed
 // lowercase concern name (settings) — both end in `.enc`. Anchored + a closed
 // charset, so there is no path-separator or traversal sequence to smuggle a key
 // outside the namespace.
 export const syncPathSchema = z
   .string()
   .regex(
-    /^(?:(?:meta|files|tags|lists)\/[A-Za-z0-9_-]+|settings\/[a-z0-9-]+)\.enc$/,
+    /^(?:(?:meta|files|tags|lists|pins)\/[A-Za-z0-9_-]+|settings\/[a-z0-9-]+)\.enc$/,
     'expected a sync path like meta/<id>.enc',
   );
 

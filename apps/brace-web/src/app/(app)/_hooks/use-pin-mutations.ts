@@ -49,6 +49,7 @@ export function usePinMutations(): PinMutations {
   const pin = useCallback(
     async (link: LinkItem) => {
       if (!username) throw new Error('usePinMutations: no active account');
+
       const id = linkIdOf(link);
       // Top of the section = index 0 among the current pins, ascending by rank.
       const ordered = (await readPins()).sort(comparePinRank);
@@ -59,6 +60,7 @@ export function usePinMutations(): PinMutations {
         updatedAt: 0,
         path: pinPathOf(id),
       };
+
       await writePin(username, pinItem, {});
       requestSync();
     },
@@ -68,6 +70,7 @@ export function usePinMutations(): PinMutations {
   const unpin = useCallback(
     async (link: LinkItem) => {
       if (!username) throw new Error('usePinMutations: no active account');
+
       await deletePin(username, pinPathOf(linkIdOf(link)));
       requestSync();
     },
@@ -80,12 +83,15 @@ export function usePinMutations(): PinMutations {
   const moveBy = useCallback(
     async (link: LinkItem, delta: number) => {
       if (!username) throw new Error('usePinMutations: no active account');
+
       const id = linkIdOf(link);
       const ordered = (await readPins()).sort(comparePinRank);
       const i = ordered.findIndex((p) => p.id === id);
       if (i < 0) return; // not pinned
+
       const target = i + delta;
       if (target < 0 || target >= ordered.length) return; // already at the end
+
       const siblings = ordered.filter((_, idx) => idx !== i);
       await writePin(username, ordered[i], { rank: rankForIndex(siblings, target) });
       requestSync();

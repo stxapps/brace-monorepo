@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
 import { deleteList, writeList } from '@/data/mutations';
 import { countLinksInList, type ListItem, readLists } from '@/data/queries';
+import { newId } from '@/lib/ids';
 
 export interface ListMutations {
   // Create a list and place it at `index` within `parentId`'s children. Mirrors
@@ -72,9 +73,11 @@ export function useListMutations(): ListMutations {
     async (name: string, parentId: string | null, siblings: ListItem[], index: number) => {
       if (!username) throw new Error('useListMutations: no active account');
       if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
+
       const trimmed = name.trim();
       if (trimmed === '') return null;
-      const id = crypto.randomUUID();
+
+      const id = newId();
       // createdAt: 0 → writeList stamps it now, exactly like the first edit of a
       // system-list default; path is the well-known store key its blob will live at.
       const list: ListItem = {
@@ -86,6 +89,7 @@ export function useListMutations(): ListMutations {
         updatedAt: 0,
         path: `${LISTS_PREFIX}${id}${ENC_SUFFIX}`,
       };
+
       await writeList(username, list, {});
       requestSync();
       return list;
@@ -96,8 +100,10 @@ export function useListMutations(): ListMutations {
   const rename = useCallback(
     async (list: ListItem, name: string) => {
       if (!username) throw new Error('useListMutations: no active account');
+
       const trimmed = name.trim();
       if (trimmed === '' || trimmed === list.name) return;
+
       await writeList(username, list, { name: trimmed });
       requestSync();
     },
@@ -109,6 +115,7 @@ export function useListMutations(): ListMutations {
       if (!username) throw new Error('useListMutations: no active account');
       if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
       if (parentId === list.id) throw new Error('A list cannot be its own parent');
+
       await writeList(username, list, { parentId, rank: rankForIndex(siblings, index) });
       requestSync();
     },
@@ -119,6 +126,7 @@ export function useListMutations(): ListMutations {
     async (list: ListItem) => {
       if (!username) throw new Error('useListMutations: no active account');
       if (isSystemListId(list.id)) throw new Error('System lists cannot be deleted');
+
       // Re-derive emptiness from the store rather than trusting the caller's view:
       // a sub-list could have been created on another device since the tree
       // rendered. Children first (a cheap namespace read), then the link count.
@@ -129,6 +137,7 @@ export function useListMutations(): ListMutations {
       if ((await countLinksInList(list.id)) > 0) {
         throw new Error('Move or remove its links first');
       }
+
       await deleteList(username, list);
       requestSync();
     },
@@ -138,7 +147,9 @@ export function useListMutations(): ListMutations {
   const reorder = useCallback(
     async (ordered: ListItem[]) => {
       if (!username) throw new Error('useListMutations: no active account');
+
       const ranks = rerankToOrder(ordered);
+
       // Sequential, not Promise.all: each writeList opens its own rw transaction,
       // and concurrent transactions on the same stores would just serialize
       // anyway. A handful of siblings makes this cheap.
