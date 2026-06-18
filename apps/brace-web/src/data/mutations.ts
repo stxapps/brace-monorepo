@@ -14,7 +14,15 @@
 // local value here is provisional — we keep the pre-edit server stamp as the
 // base, which is exactly what reconcile compares against.
 
-import { type List, listSchema, type OpKind, type Pin, pinSchema } from '@stxapps/shared';
+import {
+  type Link,
+  linkSchema,
+  type List,
+  listSchema,
+  type OpKind,
+  type Pin,
+  pinSchema,
+} from '@stxapps/shared';
 
 import { db } from '@/data/db';
 import { enqueueDelete } from '@/data/pending-store';
@@ -61,6 +69,39 @@ export async function deleteEntity(username: string, path: string): Promise<void
     await db.items.delete(path);
     await enqueueDelete(username, path, baseUpdatedAt);
   });
+}
+
+// Apply a patch to a link and write it — create (new `meta/{id}.enc`) or edit.
+// Stamps `updatedAt` now so the in-blob "date modified" advances on EVERY edit;
+// that's what keeps the `[itemType+itemUpdatedAt]` sort indexes (db.ts) and the
+// decode cache's version (decode-cache.ts) correct — both ride on `itemUpdatedAt`,
+// which the projector derives from this field. On first write (`createdAt === 0`)
+// stamps `createdAt` too, so a fresh link looks like any other created entity.
+// Validated against `linkSchema` before the write (TS-narrows the spread back to a
+// Link), the same defensive parity writeList/writePin have.
+export async function writeLink(
+  username: string,
+  link: WithPath<Link>,
+  patch: Partial<Pick<Link, 'title' | 'url' | 'tagIds' | 'listId' | 'pageArchiveId'>>,
+): Promise<void> {
+  const now = Date.now();
+  const next: WithPath<Link> = {
+    ...link,
+    ...patch,
+    createdAt: link.createdAt === 0 ? now : link.createdAt,
+    updatedAt: now,
+  };
+  const { path: _path, ...blob } = next;
+  if (!linkSchema.safeParse(blob).success) {
+    throw new Error(`writeLink: invalid link ${link.path}`);
+  }
+  await writeEntity(username, next);
+}
+
+// Delete one link: drop its `meta/{id}.enc`. Thin like deleteList/deletePin —
+// higher-level cleanup (its pin, its `files/` content) is the caller's concern.
+export function deleteLink(username: string, link: WithPath<Link>): Promise<void> {
+  return deleteEntity(username, link.path);
 }
 
 // Apply a patch to a list and write it. Stamps `updatedAt` now; if this is the

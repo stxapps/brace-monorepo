@@ -10,10 +10,24 @@
 // whole loaded prefix on every `items` write. Memoizing turns that O(loaded) zod
 // work per tick into O(changed) — a record is re-decoded only when its bytes change.
 //
-// Version = the record's `updatedAt` (blob write / R2-LastModified time, db.ts),
-// bumped on EVERY write. NOT `itemUpdatedAt` (the display sort key): a re-encrypt,
-// conflict merge, or schema migration can rewrite the bytes while leaving that
-// untouched, and two records can share it — either would serve a stale decode.
+// Version = the PAIR (`updatedAt`, `itemUpdatedAt`). Neither alone tracks every
+// byte change, but the two axes cover each other's blind spot:
+//   - `updatedAt` (server R2-LastModified, db.ts) is restamped by sync — download,
+//     commit, conflict merge, migration — but the local write edge FREEZES it at
+//     the pre-edit base (mutations.ts keeps it for reconcile), so a local edit
+//     before sync leaves it unchanged. `updatedAt` alone would serve a stale
+//     decode across that whole window.
+//   - `itemUpdatedAt` (the in-blob "date modified", projection.ts) is bumped by
+//     every local edit, catching exactly that window. It can't drift from the
+//     bytes — the projector recomputes it in the SAME `put` that writes `data` —
+//     and the read path ALREADY depends on it being current: it backs the
+//     `[itemType+itemUpdatedAt]` / `[itemListId+itemUpdatedAt]` sort indexes
+//     (db.ts), so a stale value would mis-order the views, not just the cache.
+//     But a server-side rewrite can change the bytes while leaving it untouched
+//     (a merge/migration that keeps the modified time), so it's insufficient solo.
+// Together they're airtight: a local edit moves `itemUpdatedAt`; any server rewrite
+// moves `updatedAt`. (A content hash would also work but costs an O(bytes) pass per
+// resident link per reactive tick — pure overhead on the all-hits hot path.)
 // Links only; the tiny lists/tags/pins namespaces read whole and skip the cache.
 
 import type { LinkItem } from '@/data/queries';
@@ -33,19 +47,29 @@ import type { LinkItem } from '@/data/queries';
 // is above the working set, eviction almost never runs, so FIFO behaves the same
 // as LRU in practice while costing nothing on reads.
 const MAX = 50000;
-const cache = new Map<string, { version: number; link: LinkItem }>();
+const cache = new Map<string, { updatedAt: number; itemUpdatedAt: number; link: LinkItem }>();
 
 // A live entry for `path` whose bytes haven't changed since it was cached, or
-// `undefined` (miss / stale) — the caller then decodes and `setCachedLink`s. No
-// recency bookkeeping (see the FIFO note above): a hit is a single Map lookup.
-export function getCachedLink(path: string, version: number): LinkItem | undefined {
+// `undefined` (miss / stale) — the caller then decodes and `setCachedLink`s. Stale
+// iff EITHER version axis moved (see the header). No recency bookkeeping (see the
+// FIFO note above): a hit is a single Map lookup and two integer compares.
+export function getCachedLink(
+  path: string,
+  updatedAt: number,
+  itemUpdatedAt: number,
+): LinkItem | undefined {
   const hit = cache.get(path);
-  if (!hit || hit.version !== version) return undefined;
+  if (!hit || hit.updatedAt !== updatedAt || hit.itemUpdatedAt !== itemUpdatedAt) return undefined;
   return hit.link;
 }
 
-export function setCachedLink(path: string, version: number, link: LinkItem): void {
-  cache.set(path, { version, link });
+export function setCachedLink(
+  path: string,
+  updatedAt: number,
+  itemUpdatedAt: number,
+  link: LinkItem,
+): void {
+  cache.set(path, { updatedAt, itemUpdatedAt, link });
   if (cache.size > MAX) {
     cache.delete(cache.keys().next().value as string); // evict oldest-inserted (FIFO)
   }

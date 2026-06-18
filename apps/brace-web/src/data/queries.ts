@@ -114,10 +114,15 @@ function decode<T extends z.ZodTypeAny>(
 
 // Decode a link THROUGH the memoized cache (decode-cache.ts), so the live views'
 // repeated re-reads of the loaded prefix don't re-run parseBlob+zod on every
-// `items` write — only records whose bytes (their `updatedAt`) changed re-decode.
-// See decode-cache.ts for the version-key rationale and the sign-out clear.
+// `items` write — only records whose bytes changed re-decode. The version is the
+// pair (`updatedAt`, `itemUpdatedAt`): a server rewrite moves the former, a local
+// edit (which freezes `updatedAt` at its sync base) moves the latter. See
+// decode-cache.ts for the full version-key rationale and the sign-out clear.
+// `itemUpdatedAt` is set by the projector whenever the link parses (projection.ts);
+// `?? 0` is defensive for a record that won't decode anyway.
 function decodeCachedLink(record: ItemRecord): LinkItem | undefined {
-  const cached = getCachedLink(record.path, record.updatedAt);
+  const itemUpdatedAt = record.itemUpdatedAt ?? 0;
+  const cached = getCachedLink(record.path, record.updatedAt, itemUpdatedAt);
   if (cached !== undefined) return cached;
 
   const link = decode(record, linkSchema);
@@ -125,7 +130,7 @@ function decodeCachedLink(record: ItemRecord): LinkItem | undefined {
     dropCachedLink(record.path); // bytes now absent/unparseable — drop any stale entry
     return undefined;
   }
-  setCachedLink(record.path, record.updatedAt, link);
+  setCachedLink(record.path, record.updatedAt, itemUpdatedAt, link);
   return link;
 }
 
