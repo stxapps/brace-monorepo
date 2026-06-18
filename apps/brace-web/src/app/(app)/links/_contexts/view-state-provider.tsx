@@ -45,9 +45,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     [scrolled, openMenus, setMenuOpen],
   );
 
-  return (
-    <LinksViewStateContext.Provider value={value}>{children}</LinksViewStateContext.Provider>
-  );
+  return <LinksViewStateContext.Provider value={value}>{children}</LinksViewStateContext.Provider>;
 }
 
 export function useLinksViewState(): LinksViewStateValue {

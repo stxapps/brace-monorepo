@@ -412,9 +412,7 @@ async function readPinnedOverlay(
   const pins = (await readPins()).sort(comparePinRank);
   if (pins.length === 0) return { links: [], paths: new Set() };
 
-  const records = await db.items.bulkGet(
-    pins.map((pin) => `${META_PREFIX}${pin.id}${ENC_SUFFIX}`),
-  );
+  const records = await db.items.bulkGet(pins.map((pin) => `${META_PREFIX}${pin.id}${ENC_SUFFIX}`));
   const links: LinkItem[] = [];
   const paths = new Set<string>();
   const hasText = hasTextClause(query);

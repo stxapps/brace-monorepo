@@ -118,10 +118,7 @@ export function useLinks(): UseLinksResult {
   }, [live, query, limit, engaged, displayed]);
 
   const liveSig = useMemo(() => (live ? signatureOf(live) : undefined), [live]);
-  const displayedSig = useMemo(
-    () => (displayed ? signatureOf(displayed) : undefined),
-    [displayed],
-  );
+  const displayedSig = useMemo(() => (displayed ? signatureOf(displayed) : undefined), [displayed]);
   const hasPending =
     liveSig !== undefined && displayedSig !== undefined && liveSig !== displayedSig;
 

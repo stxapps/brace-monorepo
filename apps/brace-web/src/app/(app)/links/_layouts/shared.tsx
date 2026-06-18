@@ -88,7 +88,12 @@ export function LinkRowMenu({
   // the count instead of leaking it and pinning `engaged` true forever.
   const { setMenuOpen } = useLinksViewState();
   const openRef = useRef(false);
-  useEffect(() => () => { if (openRef.current) setMenuOpen(false); }, [setMenuOpen]);
+  useEffect(
+    () => () => {
+      if (openRef.current) setMenuOpen(false);
+    },
+    [setMenuOpen],
+  );
   const handleOpenChange = (open: boolean) => {
     openRef.current = open;
     setMenuOpen(open);
@@ -164,11 +169,7 @@ export function RefreshPill({ show, onClick }: { show: boolean; onClick: () => v
   if (!show) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
-      <Button
-        size="sm"
-        onClick={onClick}
-        className="pointer-events-auto rounded-full shadow-md"
-      >
+      <Button size="sm" onClick={onClick} className="pointer-events-auto rounded-full shadow-md">
         <RefreshCw className="size-4" />
         New updates
       </Button>

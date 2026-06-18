@@ -83,7 +83,7 @@ Because `useLiveQuery` re-reads the whole loaded prefix on every write, and
 decoding a link (`parseBlob` → `JSON.parse` + zod) is the costliest step of a
 read, re-decoding that prefix on every tick is O(loaded) zod work per keystroke
 or sync. The cache memoizes decoded links keyed by `path` and **versioned by
-`record.updatedAt`** (the blob-write timestamp — bumped on every write; *not*
+`record.updatedAt`** (the blob-write timestamp — bumped on every write; _not_
 `itemUpdatedAt`, which a re-encrypt/merge/migration can leave untouched while the
 bytes change). That turns re-decode into O(changed): only records whose bytes
 actually changed re-parse. It's bounded (FIFO-evicted, with the cap set well
@@ -96,7 +96,7 @@ user on the device can't read the first's decoded plaintext.
 works **identically for every query** — single-list browse, tag filters, text
 word search, multi-clause combinations — because pagination is just "read the top
 N of whatever the driver produced." Nothing about it special-cases the hard
-queries. At a few thousand links the residual cost (re-*reading* — not
+queries. At a few thousand links the residual cost (re-_reading_ — not
 re-decoding — the prefix bytes from IndexedDB each tick) is comfortably fast.
 
 ### the pinned overlay (pin-to-top)
@@ -108,8 +108,8 @@ their own small `pins/` namespace (one pin per link, LWW-isolated — see the
 produced rather than threading a pin column through every index path:
 
 ```ts
-const overlay = await readPinnedOverlay(query);          // pinned matches, rank order
-const rest    = await readRest(query, limit, overlay.paths); // page, pins excluded
+const overlay = await readPinnedOverlay(query); // pinned matches, rank order
+const rest = await readRest(query, limit, overlay.paths); // page, pins excluded
 return {
   links: [...overlay.links, ...rest.links],
   pinnedCount: overlay.links.length,
@@ -121,21 +121,21 @@ return {
 Four properties hold, and they're worth stating because they're what keep the
 overlay from quietly corrupting counts or duplicating rows:
 
-- **No limit, no pagination on pins.** `readPinnedOverlay` returns the *whole*
+- **No limit, no pagination on pins.** `readPinnedOverlay` returns the _whole_
   set of matching pins every time; `limit`/"show more" grows only the rest. This
   is safe precisely because pins are few by design (a user pins a handful), so
   there's no page to bound — reading them all is cheap and they always render
-  even before the first "show more". The overlay still applies the *same* column
-  + text predicates as the active query (`columnMatches` / `textMatches`), so a
-  pinned link that doesn't match the current list/tag/search filter is skipped,
-  not force-shown.
+  even before the first "show more". The overlay still applies the _same_ column
+  - text predicates as the active query (`columnMatches` / `textMatches`), so a
+    pinned link that doesn't match the current list/tag/search filter is skipped,
+    not force-shown.
 - **Excluded from the rest.** The overlay hands `readRest` the set of pinned
   `paths`, and every driver drops them (`exclude`), so a pinned link that would
-  *also* fall in the normal page never shows twice — it appears once, at the top.
-- **Total stays the same.** Because the pinned links are *moved*, not added,
+  _also_ fall in the normal page never shows twice — it appears once, at the top.
+- **Total stays the same.** Because the pinned links are _moved_, not added,
   `total` must be unchanged by pinning. The rest's total already excludes them,
   so the overlay folds its own count back in: `overlay.links.length +
-  rest.total`. (When the rest's total is `undefined` — text search can't count
+rest.total`. (When the rest's total is `undefined` — text search can't count
   without decoding the whole match set — the combined total stays `undefined`;
   pinning doesn't rescue an inexact total.)
 - **`pinnedCount` is the boundary, not a separate list.** Rather than return two
@@ -175,7 +175,7 @@ practice three things keep you off that path:
   fires few re-runs.
 
 The residual cost therefore only surfaces in a specific corner: the user has
-**manually expanded near the full library** *and* a **burst of writes** arrives
+**manually expanded near the full library** _and_ a **burst of writes** arrives
 (a chatty background sync, or heavy local editing at that depth) — each re-run
 then re-reads the whole expanded prefix. That combination is rare enough that
 windowing (below) isn't worth its complexity yet; if profiling on real libraries
@@ -189,9 +189,9 @@ pays off at the current scale. Documented here so the trade-offs don't have to b
 re-derived.
 
 **Key-bound (value-anchored) reads** — page by growing the index key bound
-instead of the count. *Pro:* the loaded window is anchored to a stable key, so an
+instead of the count. _Pro:_ the loaded window is anchored to a stable key, so an
 insert/delete above the scroll position doesn't make the bottom boundary
-flicker/drift the way a position-anchored `limit` window can. *Con:* under
+flicker/drift the way a position-anchored `limit` window can. _Con:_ under
 `useLiveQuery` it re-reads and re-decodes the same prefix as growing-`limit` — so
 it's **no cheaper**, only marginally more stable, and adds cursor-tracking and
 tie-break handling (the compound indexes have no `path` tiebreaker). Not worth the
@@ -199,8 +199,8 @@ complexity for a stability nicety.
 
 **Windowed `liveQuery`** — size the virtualizer to the exact total and fetch only
 the visible slice (`offset(start).limit(window)`), re-querying as the user
-scrolls. *Pro:* flat memory and flat decode at any depth, plus a true full-range
-scrollbar (random access / jump to middle). *Con:* `.offset(n)` is O(n) in Dexie
+scrolls. _Pro:_ flat memory and flat decode at any depth, plus a true full-range
+scrollbar (random access / jump to middle). _Con:_ `.offset(n)` is O(n) in Dexie
 (deep jumps walk and discard n entries); the window re-subscribes on nearly every
 scroll tick, causing "Loading…" flicker on fast scroll; and it **only works on
 the index-served browse path** — tag/text queries must materialize their match
@@ -209,9 +209,9 @@ set anyway, and text has no exact total to size the scrollbar with. It would for
 random-access-scrollbar requirement.
 
 **Pagination on the URL path** (numbered `?page=N` pages, e.g. for the table
-layout) — chunk-by-chunk `offset+limit` queries with a numbered pager. *Pro:*
+layout) — chunk-by-chunk `offset+limit` queries with a numbered pager. _Pro:_
 structurally bounded memory/decode (one chunk, never accumulating) and shareable
-page URLs. *Con:* a numbered pager needs an **exact total**, which only the
+page URLs. _Con:_ a numbered pager needs an **exact total**, which only the
 index-served fast path provides — under text search the total is `undefined`, so
 the pager degrades to next/prev; pins would need page-1-only handling; offset
 drifts under concurrent writes; and it forks the read path + UI for the table

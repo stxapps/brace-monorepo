@@ -65,63 +65,63 @@ export function CardLayout({
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const start = virtualRow.index * COLUMNS;
-          const rowLinks = links.slice(start, start + COLUMNS);
-          return (
-            <div
-              key={virtualRow.key}
-              className="absolute inset-x-0 grid gap-4 pb-4"
-              style={{
-                height: ROW_HEIGHT,
-                gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))`,
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              {rowLinks.map((link, cardIndex) => {
-                const index = start + cardIndex;
-                const pinned = index < pinnedCount;
-                return (
-                  <div
-                    key={link.path}
-                    className="relative flex rounded-lg border border-border hover:bg-muted/50"
-                  >
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex min-w-0 flex-1 flex-col gap-2 p-3"
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const start = virtualRow.index * COLUMNS;
+            const rowLinks = links.slice(start, start + COLUMNS);
+            return (
+              <div
+                key={virtualRow.key}
+                className="absolute inset-x-0 grid gap-4 pb-4"
+                style={{
+                  height: ROW_HEIGHT,
+                  gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {rowLinks.map((link, cardIndex) => {
+                  const index = start + cardIndex;
+                  const pinned = index < pinnedCount;
+                  return (
+                    <div
+                      key={link.path}
+                      className="relative flex rounded-lg border border-border hover:bg-muted/50"
                     >
-                      <div className="flex items-center gap-2 pr-8">
-                        {pinned && <PinnedBadge />}
-                        <img
-                          src={faviconUrl(link.url)}
-                          alt=""
-                          className="size-5 shrink-0 rounded"
-                          loading="lazy"
-                        />
-                        <span className="truncate text-xs text-muted-foreground">
-                          {hostname(link.url)}
+                      <a
+                        href={link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex min-w-0 flex-1 flex-col gap-2 p-3"
+                      >
+                        <div className="flex items-center gap-2 pr-8">
+                          {pinned && <PinnedBadge />}
+                          <img
+                            src={faviconUrl(link.url)}
+                            alt=""
+                            className="size-5 shrink-0 rounded"
+                            loading="lazy"
+                          />
+                          <span className="truncate text-xs text-muted-foreground">
+                            {hostname(link.url)}
+                          </span>
+                        </div>
+                        <span className="line-clamp-3 text-sm font-medium">
+                          {link.title || hostname(link.url)}
                         </span>
+                      </a>
+                      <div className="absolute top-1 right-1">
+                        <LinkRowMenu
+                          link={link}
+                          pinned={pinned}
+                          isFirst={index === 0}
+                          isLast={index === pinnedCount - 1}
+                        />
                       </div>
-                      <span className="line-clamp-3 text-sm font-medium">
-                        {link.title || hostname(link.url)}
-                      </span>
-                    </a>
-                    <div className="absolute right-1 top-1">
-                      <LinkRowMenu
-                        link={link}
-                        pinned={pinned}
-                        isFirst={index === 0}
-                        isLast={index === pinnedCount - 1}
-                      />
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
         <ShowMore hasMore={hasMore} showMore={showMore} />
       </div>

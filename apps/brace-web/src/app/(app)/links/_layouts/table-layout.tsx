@@ -77,41 +77,43 @@ export function TableLayout({
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
         >
           <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
-          {virtualizer.getVirtualItems().map((row) => {
-            const link = links[row.index];
-            const pinned = row.index < pinnedCount;
-            return (
-              <div
-                key={link.path}
-                className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border pl-4 pr-2 text-sm hover:bg-muted/50`}
-                style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
-              >
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex min-w-0 items-center gap-2"
+            {virtualizer.getVirtualItems().map((row) => {
+              const link = links[row.index];
+              const pinned = row.index < pinnedCount;
+              return (
+                <div
+                  key={link.path}
+                  className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border pr-2 pl-4 text-sm hover:bg-muted/50`}
+                  style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
                 >
-                  {pinned && <PinnedBadge />}
-                  <img
-                    src={faviconUrl(link.url)}
-                    alt=""
-                    className="size-4 shrink-0 rounded"
-                    loading="lazy"
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex min-w-0 items-center gap-2"
+                  >
+                    {pinned && <PinnedBadge />}
+                    <img
+                      src={faviconUrl(link.url)}
+                      alt=""
+                      className="size-4 shrink-0 rounded"
+                      loading="lazy"
+                    />
+                    <span className="truncate">{link.title || hostname(link.url)}</span>
+                  </a>
+                  <span className="truncate text-muted-foreground">{hostname(link.url)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDate(link.updatedAt)}
+                  </span>
+                  <LinkRowMenu
+                    link={link}
+                    pinned={pinned}
+                    isFirst={row.index === 0}
+                    isLast={row.index === pinnedCount - 1}
                   />
-                  <span className="truncate">{link.title || hostname(link.url)}</span>
-                </a>
-                <span className="truncate text-muted-foreground">{hostname(link.url)}</span>
-                <span className="text-xs text-muted-foreground">{formatDate(link.updatedAt)}</span>
-                <LinkRowMenu
-                  link={link}
-                  pinned={pinned}
-                  isFirst={row.index === 0}
-                  isLast={row.index === pinnedCount - 1}
-                />
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
           </div>
           <ShowMore hasMore={hasMore} showMore={showMore} />
         </div>
