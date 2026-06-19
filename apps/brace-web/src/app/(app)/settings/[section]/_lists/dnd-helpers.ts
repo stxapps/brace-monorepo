@@ -46,8 +46,10 @@ export interface MovePlan {
 // nothing is being dragged.
 export function excludeActiveDescendants(rows: ListRow[], activeId: string | null): ListRow[] {
   if (activeId === null) return rows;
+
   const activeIndex = rows.findIndex((row) => row.item.id === activeId);
   if (activeIndex === -1) return rows;
+
   const activeDepth = rows[activeIndex].depth;
   let end = activeIndex + 1;
   while (end < rows.length && rows[end].depth > activeDepth) end++;

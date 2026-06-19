@@ -223,8 +223,12 @@ function CreateRow({ onCreate }: { onCreate: (name: string) => Promise<void> }) 
   };
   const confirm = async () => {
     if (value.trim() === '') return reset();
-    await onCreate(value);
-    setValue('');
+    try {
+      await onCreate(value);
+      setValue('');
+    } catch {
+      // Keep the typed value for a retry; onCreate already surfaced the error.
+    }
   };
 
   return (
@@ -492,7 +496,16 @@ export function ListsSection() {
       <div className="rounded-lg border border-border">
         <CreateRow
           onCreate={async (name) => {
-            await create(name, null, childrenOf(lists, null), 0);
+            // Not run() like the other ops: CreateRow awaits this to clear its
+            // field only on success, so we surface the error here and re-throw
+            // to keep the typed value.
+            setError(null);
+            try {
+              await create(name, null, childrenOf(lists, null), 0);
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+              throw e;
+            }
           }}
         />
 
