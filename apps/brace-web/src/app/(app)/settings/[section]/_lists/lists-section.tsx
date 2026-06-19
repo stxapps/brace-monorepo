@@ -402,10 +402,7 @@ export function ListsSection() {
   const rows = useMemo(() => flattenToRows(lists, collapsedIds), [lists, collapsedIds]);
   // While dragging, the active row's subtree travels with it, so drop it out of
   // the flat list the sortable + projection see (and that we render).
-  const displayRows = useMemo(
-    () => excludeActiveDescendants(rows, activeId),
-    [rows, activeId],
-  );
+  const displayRows = useMemo(() => excludeActiveDescendants(rows, activeId), [rows, activeId]);
   // The move-to candidate list ignores collapse — every list is a valid target
   // whether or not its row is shown.
   const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);

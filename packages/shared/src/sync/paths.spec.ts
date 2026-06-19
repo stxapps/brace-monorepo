@@ -15,20 +15,14 @@ describe('syncPathSchema covers the whole path contract', () => {
     .map(([, v]) => v as string);
 
   it.each(allPrefixes)('accepts a path under the %s namespace', (prefix) => {
-    expect(syncPathSchema.safeParse(`${prefix}general${ENC_SUFFIX}`).success).toBe(
-      true,
-    );
+    expect(syncPathSchema.safeParse(`${prefix}general${ENC_SUFFIX}`).success).toBe(true);
   });
 
   it('accepts the id-keyed and settings shapes explicitly', () => {
     for (const prefix of ID_KEYED_PREFIXES) {
-      expect(
-        syncPathSchema.safeParse(`${prefix}aZ09_-${ENC_SUFFIX}`).success,
-      ).toBe(true);
+      expect(syncPathSchema.safeParse(`${prefix}aZ09_-${ENC_SUFFIX}`).success).toBe(true);
     }
-    expect(
-      syncPathSchema.safeParse(`${SETTINGS_PREFIX}general${ENC_SUFFIX}`).success,
-    ).toBe(true);
+    expect(syncPathSchema.safeParse(`${SETTINGS_PREFIX}general${ENC_SUFFIX}`).success).toBe(true);
   });
 
   it('rejects traversal, unknown namespaces, and wrong suffixes', () => {
