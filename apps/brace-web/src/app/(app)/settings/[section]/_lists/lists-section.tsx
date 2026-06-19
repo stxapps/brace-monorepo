@@ -317,7 +317,11 @@ function SortableRow({
       ref={setNodeRef}
       className={`flex items-center gap-1 px-1 py-1 not-last:border-b not-last:border-border/60 ${isDragging ? 'opacity-50' : ''}`}
       style={{
-        transform: CSS.Translate.toString(transform),
+        // Follow the pointer vertically only — zero out x. Horizontal position is
+        // the snapped indent (paddingLeft below), driven by the projected depth.
+        // Letting transform.x through too would double-count the horizontal drag
+        // (once here, once in the indent) and the row would smear past its level.
+        transform: CSS.Translate.toString(transform ? { ...transform, x: 0 } : transform),
         transition,
         // Indent step in px (not rem) so it matches the px the drag projection
         // works in — render and projection can't drift. Base stays a rem token.
@@ -393,13 +397,18 @@ export function ListsSection() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const rows = flattenToRows(lists, collapsedIds);
+  // Memoized so drag-move re-renders (which fire per frame) don't re-flatten the
+  // whole tree each time — they only depend on the tree and collapse, not drag.
+  const rows = useMemo(() => flattenToRows(lists, collapsedIds), [lists, collapsedIds]);
   // While dragging, the active row's subtree travels with it, so drop it out of
   // the flat list the sortable + projection see (and that we render).
-  const displayRows = excludeActiveDescendants(rows, activeId);
+  const displayRows = useMemo(
+    () => excludeActiveDescendants(rows, activeId),
+    [rows, activeId],
+  );
   // The move-to candidate list ignores collapse — every list is a valid target
   // whether or not its row is shown.
-  const allRows = flattenToRows(lists, NO_COLLAPSED_IDS);
+  const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
 
   // The depth the dragged row would land at, recomputed as it moves. Drives both
   // the live indent of the dragged row and the final drop.
@@ -430,11 +439,14 @@ export function ListsSection() {
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     resetDnd();
     if (!over) return;
+
     const plan = getMovePlan(lists, displayRows, String(active.id), String(over.id), offsetLeft);
     if (!plan) return;
+
     const current = rows.find((r) => r.item.id === plan.item.id);
     // Skip a true no-op: dropped back where it started (same parent, same slot).
     if (current && current.parentId === plan.parentId && current.index === plan.index) return;
+
     run(move(plan.item, plan.parentId, plan.siblings, plan.index));
   };
 
