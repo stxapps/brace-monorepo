@@ -6,7 +6,7 @@
 // split the topbar couldn't express.
 //
 // Two tabs select WHERE the choice lives, and the selected tab IS the active
-// source (use-settings.ts resolves `layoutMode` from it):
+// source (use-settings.ts resolves `layout` from it):
 //   - Sync   → settings/general.enc, shared across the user's devices;
 //   - Device → the off-sync localSettings store, this device only (wiped on sign-out).
 // Each tab shows the same three layout radios bound to that source's value, so
@@ -15,15 +15,15 @@
 import { useState } from 'react';
 import { LayoutGrid, List, Table } from 'lucide-react';
 
-import { LINK_LAYOUTS, type LinkLayout } from '@stxapps/shared';
+import { LINKS_LAYOUTS, type LinksLayout } from '@stxapps/shared';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 
 import { useSettingMutations } from '../../../_hooks/use-setting-mutations';
-import { type LayoutSource, useSettings } from '../../../_hooks/use-settings';
+import { type LinksLayoutSource, useSettings } from '../../../_hooks/use-settings';
 
-const LAYOUT_OPTIONS: Record<LinkLayout, { label: string; hint: string; icon: React.ReactNode }> = {
+const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> = {
   list: { label: 'List', hint: 'A dense, single-column list.', icon: <List className="size-4" /> },
   card: {
     label: 'Card',
@@ -43,12 +43,12 @@ function LayoutRadioGroup({
   value,
   onChange,
 }: {
-  value: LinkLayout;
-  onChange: (layout: LinkLayout) => void;
+  value: LinksLayout;
+  onChange: (layout: LinksLayout) => void;
 }) {
   return (
-    <RadioGroup value={value} onValueChange={(v) => onChange(v as LinkLayout)} className="mt-4">
-      {LINK_LAYOUTS.map((layout) => {
+    <RadioGroup value={value} onValueChange={(v) => onChange(v as LinksLayout)} className="mt-4">
+      {LINKS_LAYOUTS.map((layout) => {
         const { label, hint, icon } = LAYOUT_OPTIONS[layout];
         return (
           <Label
@@ -72,8 +72,9 @@ function LayoutRadioGroup({
 }
 
 export function MiscSection() {
-  const { layoutSource, syncLayout, deviceLayout } = useSettings();
-  const { setLayoutSource, setSyncLayout, setDeviceLayout } = useSettingMutations();
+  const { linksLayoutSource, syncLinksLayout, localLinksLayout } = useSettings();
+  const { setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout } =
+    useSettingMutations();
   const [error, setError] = useState<string | null>(null);
 
   // Surface a failed write (e.g. the synced write with no active account) rather
@@ -105,23 +106,27 @@ export function MiscSection() {
         )}
 
         <Tabs
-          value={layoutSource}
-          onValueChange={(v) => run(setLayoutSource(v as LayoutSource))}
+          value={linksLayoutSource}
+          onValueChange={(v) => run(setLinksLayoutSource(v as LinksLayoutSource))}
           className="mt-4"
         >
           <TabsList>
             <TabsTrigger value="sync">Sync</TabsTrigger>
-            <TabsTrigger value="device">Device</TabsTrigger>
+            {/* The `'local'` source is labeled "Device" for users. */}
+            <TabsTrigger value="local">Device</TabsTrigger>
           </TabsList>
 
           {/* One radio group per tab, each bound to that source's value. The active
               tab is the active source (use-settings.ts), so the shown radios always
               reflect the layout the app is rendering. */}
           <TabsContent value="sync">
-            <LayoutRadioGroup value={syncLayout} onChange={(l) => run(setSyncLayout(l))} />
+            <LayoutRadioGroup value={syncLinksLayout} onChange={(l) => run(setSyncLinksLayout(l))} />
           </TabsContent>
-          <TabsContent value="device">
-            <LayoutRadioGroup value={deviceLayout} onChange={(l) => run(setDeviceLayout(l))} />
+          <TabsContent value="local">
+            <LayoutRadioGroup
+              value={localLinksLayout}
+              onChange={(l) => run(setLocalLinksLayout(l))}
+            />
           </TabsContent>
         </Tabs>
       </section>

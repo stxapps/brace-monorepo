@@ -19,7 +19,7 @@
 
 import Dexie, { type EntityTable, type Table } from 'dexie';
 
-import type { LinkLayout, OpKind } from '@stxapps/shared';
+import type { LinksLayout, OpKind } from '@stxapps/shared';
 
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
@@ -152,17 +152,18 @@ export interface PendingOpRecord {
 // a second user on the device can't inherit the first's preferences.
 //
 // A single row (constant `id`) holds the Settings → Misc "Device" tab choices:
-//   - `layoutSource` — which source the links page actually renders, `'sync'` (the
-//     synced `settings/general.enc` value) or `'device'` (this row's own
-//     `linkLayout`). It's device-local on purpose: "use this device's own layout"
-//     is a per-device decision that must NOT propagate to other devices.
-//   - `linkLayout` — this device's own layout, applied only while `layoutSource`
-//     is `'device'`.
+//   - `linksLayoutSource` — which source the links page actually renders, `'sync'`
+//     (the synced `settings/general.enc` value) or `'local'` (this row's own
+//     `linksLayout`). It's device-local on purpose: "use this device's own layout"
+//     is a per-device decision that must NOT propagate to other devices. (The Misc
+//     UI labels the `'local'` choice "Device".)
+//   - `linksLayout` — this device's own layout, applied only while
+//     `linksLayoutSource` is `'local'`.
 export interface LocalSettingsRecord {
   // Single-row table — one settings blob per device, keyed by a constant.
   id: 'singleton';
-  layoutSource: 'sync' | 'device';
-  linkLayout: LinkLayout;
+  linksLayoutSource: 'sync' | 'local';
+  linksLayout: LinksLayout;
 }
 
 class BraceDb extends Dexie {

@@ -1,7 +1,7 @@
 'use client';
 
 // The main pane: reads the paginated link query once and hands it to whichever
-// layout the user picked in Settings → Misc (useSettings.layoutMode). Each layout
+// layout the user picked in Settings → Misc (useSettings.linksLayout). Each layout
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
 // place the data hook meets the layouts.
 
@@ -19,10 +19,10 @@ const LAYOUTS: Record<string, (props: LinkLayoutProps) => React.ReactNode> = {
 };
 
 export function Main() {
-  const { layoutMode } = useSettings();
+  const { linksLayout } = useSettings();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
 
-  const Layout = LAYOUTS[layoutMode];
+  const Layout = LAYOUTS[linksLayout];
 
   return (
     <main className="min-h-0 flex-1">

@@ -113,22 +113,22 @@ export type Pin = z.infer<typeof pinSchema>;
 // of previews), `table` (columnar). A cross-platform contract — not a web-only
 // union — because the user's choice can be SYNCED (see `settingsGeneralSchema`
 // below), so every client must read/write the same string values. The web UI's
-// `LayoutMode` aliases this.
-export const LINK_LAYOUTS = ['list', 'card', 'table'] as const;
-export type LinkLayout = (typeof LINK_LAYOUTS)[number];
+// resolved `layout` (see `useSettings`) is one of these.
+export const LINKS_LAYOUTS = ['list', 'card', 'table'] as const;
+export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 
 // The plaintext of the well-known path `settings/general.enc`. Concern-scoped
 // settings files (the LWW-isolation move — see the doc's "data model"): add a
 // field here for a general setting, or a NEW `settings/<concern>.enc` schema
 // when a group of settings should stop clobbering the rest under LWW.
 //
-// `linkLayout` is OPTIONAL: it's the SYNCED link layout (the Settings → Misc
+// `linksLayout` is OPTIONAL: it's the SYNCED links layout (the Settings → Misc
 // "Sync" tab). Absent until the user picks one, and an older client that never
 // wrote it still parses — `looseObject` round-trips it for clients that don't
 // model it yet. The device-local alternative ("Device" tab) lives off-sync in the
 // brace-web `localSettings` store, never here.
 export const settingsGeneralSchema = z.looseObject({
-  linkLayout: z.enum(LINK_LAYOUTS).optional(),
+  linksLayout: z.enum(LINKS_LAYOUTS).optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

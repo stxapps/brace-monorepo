@@ -31,8 +31,8 @@ export async function setLocalSettings(
     const existing = await db.localSettings.get(LOCAL_SETTINGS_ID);
     await db.localSettings.put({
       id: LOCAL_SETTINGS_ID,
-      layoutSource: existing?.layoutSource ?? 'sync',
-      linkLayout: existing?.linkLayout ?? 'list',
+      linksLayoutSource: existing?.linksLayoutSource ?? 'sync',
+      linksLayout: existing?.linksLayout ?? 'list',
       ...patch,
     });
   });
