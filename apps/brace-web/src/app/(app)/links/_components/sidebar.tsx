@@ -12,9 +12,9 @@ import { ALL_LABEL, ARCHIVE_ID, MY_LIST_ID, TRASH_ID, type TreeNode } from '@stx
 import { BraceIcon } from '@stxapps/web-ui/components/icons/brace-icon';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { useLists } from '../_hooks/use-lists';
-import { useTags } from '../_hooks/use-tags';
-import { type Selection, useLinksPage } from './_contexts/page-provider';
+import { useLists } from '../../_hooks/use-lists';
+import { useTags } from '../../_hooks/use-tags';
+import { type Selection, useLinksPage } from '../_contexts/page-provider';
 
 import { type ListItem, type TagItem } from '@/data/queries';
 

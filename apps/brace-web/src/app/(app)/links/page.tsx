@@ -1,8 +1,8 @@
+import { Main } from './_components/main';
+import { Sidebar } from './_components/sidebar';
+import { Topbar } from './_components/topbar';
 import { LinksPageProvider } from './_contexts/page-provider';
 import { LinksViewStateProvider } from './_contexts/view-state-provider';
-import { Main } from './main';
-import { Sidebar } from './sidebar';
-import { Topbar } from './topbar';
 
 // The links page. A server component that just composes the client pieces: the
 // two-pane frame (full-height sidebar on the left; a topbar above the scrolling
