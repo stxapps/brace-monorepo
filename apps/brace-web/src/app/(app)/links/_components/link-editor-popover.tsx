@@ -12,19 +12,21 @@
 // list picker + tag editor, and Save/Cancel. Saving writes one `meta/{id}.enc`
 // via useLinkMutations and kicks a sync; the title is back-filled later by a
 // metadata fetch, so the form only collects a URL (+ optional list/tags).
+//
+// Validation is two-tier: an EMPTY URL is a hard, blocking error; a non-empty
+// but MALFORMED URL only warns and relabels Save → Confirm, so the user can save
+// it as typed on a second click (we never block on a debatable-but-deliberate
+// URL). Bare domains are fine — they're normalized to https:// on save. The tag
+// field stays simple: its "Add tag" button is just disabled while empty.
 
 import { useState } from 'react';
 import { ChevronDown, Plus, X } from 'lucide-react';
 
-import { DEFAULT_LIST_ID, flattenTree } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, flattenTree, normalizeUrl, TRASH_ID } from '@stxapps/shared';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@stxapps/web-ui/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -42,27 +44,33 @@ import { useLinksPage } from '../_contexts/page-provider';
 
 // The list to pre-select: the one the user is currently viewing (so "add" lands
 // where they're looking), falling back to My List — the inbox — for the All view
-// or a tag view, neither of which names a single destination list.
+// or a tag view, neither of which names a single destination list. Trash falls
+// back too: it's the deletion staging area, never a place to add new links.
 function useDefaultListId(): string {
   const { selection } = useLinksPage();
-  return selection.kind === 'list' ? selection.id : DEFAULT_LIST_ID;
+  return selection.kind === 'list' && selection.id !== TRASH_ID ? selection.id : DEFAULT_LIST_ID;
 }
 
 export function LinkEditorPopover() {
   const { create } = useLinkMutations();
-  const { findOrCreate } = useTagMutations();
+  const { findOrCreate: findOrCreateTag } = useTagMutations();
   const lists = useLists();
   const tags = useTags();
   const defaultListId = useDefaultListId();
 
   const [open, setOpen] = useState(false);
-  const [advanced, setAdvanced] = useState(false);
+  const [openAdvanced, setOpenAdvanced] = useState(false);
   const [url, setUrl] = useState('');
   const [listId, setListId] = useState(defaultListId);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [addingTag, setAddingTag] = useState(false);
   const [saving, setSaving] = useState(false);
+  // urlError is a HARD, blocking error (empty URL); urlWarning is the SOFT
+  // malformed-URL state that relabels Save → Confirm and lets a second submit
+  // through.
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [urlWarning, setUrlWarning] = useState(false);
 
   // Flat, depth-carrying rows for the pickers (the entities are trees). Lists
   // feed the dropdown; tags feed the chosen-chips lookup and the hint buttons.
@@ -71,9 +79,9 @@ export function LinkEditorPopover() {
   const chosenTags = tagRows.filter((n) => tagIds.includes(n.item.id));
   // Hints = tags not yet chosen, narrowed by what's typed (case-insensitive
   // substring). Typing both filters the hints and names the tag to add.
-  const query = tagInput.trim().toLowerCase();
+  const tagQuery = tagInput.trim().toLowerCase();
   const hintTags = tagRows.filter(
-    (n) => !tagIds.includes(n.item.id) && n.item.name.toLowerCase().includes(query),
+    (n) => !tagIds.includes(n.item.id) && n.item.name.toLowerCase().includes(tagQuery),
   );
 
   // Reset to a clean draft whenever the popover opens; clear on close too so a
@@ -81,11 +89,13 @@ export function LinkEditorPopover() {
   // pre-selection tracks the view the user opened it from.
   const onOpenChange = (next: boolean) => {
     if (next) {
-      setAdvanced(false);
+      setOpenAdvanced(false);
       setUrl('');
       setListId(defaultListId);
       setTagIds([]);
       setTagInput('');
+      setUrlError(null);
+      setUrlWarning(false);
     }
     setOpen(next);
   };
@@ -105,19 +115,39 @@ export function LinkEditorPopover() {
     if (name === '' || addingTag) return;
     setAddingTag(true);
     try {
-      const tag = await findOrCreate(name);
+      const tag = await findOrCreateTag(name);
       if (tag) addTag(tag.id);
     } finally {
       setAddingTag(false);
     }
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
-    if (url.trim() === '' || saving) return;
+    if (saving) return;
+
+    const trimmed = url.trim();
+    // Required: an empty URL is a hard error and blocks the save.
+    if (trimmed === '') {
+      setUrlError('Please enter a URL.');
+      setUrlWarning(false);
+      return;
+    }
+    setUrlError(null);
+
+    // Soft: a URL we can't normalize only warns. The first submit arms the
+    // warning and relabels Save → Confirm; submitting again (Confirm) saves the
+    // raw text as typed. A normalizable value (incl. a bare domain) saves the
+    // normalized https:// form.
+    const normalized = normalizeUrl(trimmed);
+    if (normalized === null && !urlWarning) {
+      setUrlWarning(true);
+      return;
+    }
+
     setSaving(true);
     try {
-      await create({ url, listId, tagIds });
+      await create({ url: normalized ?? trimmed, listId, tagIds });
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -133,7 +163,7 @@ export function LinkEditorPopover() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="link-url">URL</Label>
             <Input
@@ -142,24 +172,42 @@ export function LinkEditorPopover() {
               inputMode="url"
               placeholder="https://example.com"
               autoFocus
+              aria-invalid={urlError !== null}
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                // Editing re-opens the question: clear the error and disarm the
+                // warning so the button reverts to Save and re-validates.
+                setUrlError(null);
+                setUrlWarning(false);
+              }}
             />
+            {urlError !== null ? (
+              <p role="alert" className="text-xs text-destructive">
+                {urlError}
+              </p>
+            ) : urlWarning ? (
+              <p role="alert" className="text-xs text-amber-600 dark:text-amber-500">
+                This doesn’t look like a valid URL. Click Confirm to save it anyway.
+              </p>
+            ) : null}
           </div>
 
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            aria-expanded={advanced}
+            aria-expanded={openAdvanced}
             className="-mx-1 justify-between"
-            onClick={() => setAdvanced((v) => !v)}
+            onClick={() => setOpenAdvanced((v) => !v)}
           >
             Advanced
-            <ChevronDown className={cn('size-4 transition-transform', advanced && 'rotate-180')} />
+            <ChevronDown
+              className={cn('size-4 transition-transform', openAdvanced && 'rotate-180')}
+            />
           </Button>
 
-          {advanced && (
+          {openAdvanced && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="link-list">List</Label>
@@ -179,9 +227,7 @@ export function LinkEditorPopover() {
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="link-tag">Tags</Label>
-                <p className="text-xs text-muted-foreground">
-                  Type below or choose from hints
-                </p>
+                <p className="text-xs text-muted-foreground">Type below or choose from hints</p>
 
                 {chosenTags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
@@ -250,8 +296,8 @@ export function LinkEditorPopover() {
             <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="default" size="sm" disabled={url.trim() === '' || saving}>
-              Save
+            <Button type="submit" variant="default" size="sm" disabled={saving}>
+              {urlWarning ? 'Confirm' : 'Save'}
             </Button>
           </div>
         </form>
