@@ -3,6 +3,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * The installed Radix primitives expose their state as `data-state="…"` and their
+ * axis as `data-orientation="…"`, but the shadcn components style them with the
+ * shorthand variants (`data-checked:`, `data-active:`, `data-horizontal:`, …).
+ * Without a mapping each shorthand compiles to a bare `[data-checked]` /
+ * `[data-horizontal]` selector that never matches, so those styles silently never
+ * apply (the radio dot, the active tab highlight, the vertical/horizontal tab
+ * layout, etc.). Bridge them here, in one place, so every shorthand — and its
+ * `has-`/`group-` compositions — resolves to the real Radix attribute.
+ *
+ * `data-disabled` and `data-highlighted` are emitted natively by Radix, so they
+ * need no bridge.
+ */
+@custom-variant data-checked (&[data-state="checked"]);
+@custom-variant data-active (&[data-state="active"]);
+@custom-variant data-open (&[data-state="open"]);
+@custom-variant data-closed (&[data-state="closed"]);
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
 :root {
   color-scheme: light;
   --radius: 0.625rem;
