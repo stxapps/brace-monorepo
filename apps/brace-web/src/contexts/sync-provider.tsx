@@ -111,8 +111,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     const session = getSession();
     if (!session) return; // mirror not hydrated yet; the next render will retry
-    const deps: SyncDeps = { username, encryptionKey: session.encryptionKey };
 
+    const deps: SyncDeps = { username, encryptionKey: session.encryptionKey };
     // Fresh slate for the indicator — a stale 'error' from a previous account
     // (or a pre-retry run) must not bleed into this one.
     setBgSync('idle');
