@@ -21,7 +21,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 
 import type { LinksLayout } from '@stxapps/shared';
 
-import { getLocalSettings } from '@/data/local-store';
+import { getLocalSettings } from '@/data/local-settings-store';
 import { readSettingsGeneral } from '@/data/queries';
 
 // The fallback layout before any choice is made (and while a liveQuery is still

@@ -4,7 +4,7 @@
 // setters mirror the read hook's three values, and each routes to the right store:
 //
 //   - setLinksLayoutSource / setLocalLinksLayout → the DEVICE-LOCAL `localSettings`
-//     store (no account, no sync — see local-store.ts);
+//     store (no account, no sync — see local-settings-store.ts);
 //   - setSyncLinksLayout → the SYNCED `settings/general.enc` blob via writeSettingsGeneral,
 //     then a sync kick, exactly like useListMutations writes a list and requests sync.
 //
@@ -19,7 +19,7 @@ import type { LinksLayoutSource } from './use-settings';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
-import { setLocalSettings } from '@/data/local-store';
+import { setLocalSettings } from '@/data/local-settings-store';
 import { writeSettingsGeneral } from '@/data/mutations';
 
 export interface SettingMutations {
