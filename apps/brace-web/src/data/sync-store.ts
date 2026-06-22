@@ -96,14 +96,21 @@ export async function resetCursor(
   await db.syncMeta.update(username, { syncCursorUpdatedAt, syncCursorPath });
 }
 
-// Tear down synced data on sign-out: wipe ALL tables — data and bookkeeping.
-// The local store holds DECRYPTED bookmarks, so a second user on the same device
-// must not read the first's plaintext. Deliberately not account-scoped: `items`
-// carries no owner column (see PendingOpRecord in db.ts), so a scoped clear
-// would leave the previous account's plaintext behind. Called from
-// auth-provider's endSession (and so the onSessionInvalid path) alongside
+// Tear down synced data on sign-out: wipe ALL tables — data, bookkeeping, and the
+// device-local settings. The local store holds DECRYPTED bookmarks, so a second
+// user on the same device must not read the first's plaintext; `localSettings`
+// is wiped for the same reason (and because the "Device" layout choice is meant to
+// be cleared on sign-out — see LocalSettingsRecord in db.ts). Deliberately not
+// account-scoped: `items` carries no owner column (see PendingOpRecord in db.ts),
+// so a scoped clear would leave the previous account's plaintext behind. Called
+// from auth-provider's endSession (and so the onSessionInvalid path) alongside
 // clearSession.
 export async function clearSyncData(): Promise<void> {
-  await Promise.all([db.items.clear(), db.syncMeta.clear(), db.pendingOps.clear()]);
+  await Promise.all([
+    db.items.clear(),
+    db.syncMeta.clear(),
+    db.pendingOps.clear(),
+    db.localSettings.clear(),
+  ]);
   clearDecodeCache(); // drop decoded-link plaintext too — mirrors this items wipe (decode-cache.ts)
 }

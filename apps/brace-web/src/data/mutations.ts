@@ -22,13 +22,16 @@ import {
   type OpKind,
   type Pin,
   pinSchema,
+  SETTINGS_GENERAL_PATH,
+  type SettingsGeneral,
+  settingsGeneralSchema,
   type Tag,
   tagSchema,
 } from '@stxapps/shared';
 
 import { db } from '@/data/db';
 import { enqueueDelete } from '@/data/pending-store';
-import { toItemRecord } from '@/data/projection';
+import { parseBlob, toItemRecord } from '@/data/projection';
 import type { WithPath } from '@/data/queries';
 
 const encoder = new TextEncoder();
@@ -198,4 +201,37 @@ export async function writePin(
 // link itself is untouched (separate file).
 export function deletePin(username: string, path: string): Promise<void> {
   return deleteEntity(username, path);
+}
+
+// Patch the synced general-settings blob (`settings/general.enc`) and write it —
+// the SYNCED side of a setting (the "Sync" tab), so it rides the same
+// writeEntity → pending-op → R2 path as every other entity. Unlike the others
+// this is a single well-known path, not a per-id create, so it READS the current
+// blob first and merges: the schema is `looseObject`, so an unknown field a newer
+// client wrote (or another general setting) is round-tripped, not stripped (see
+// entities.ts). An absent blob starts from `createdAt: 0`, exactly like the first
+// edit of an untouched system-list default. Stamps `updatedAt` now (and
+// `createdAt` on first write), validates, then writes.
+export async function writeSettingsGeneral(
+  username: string,
+  patch: Partial<Pick<SettingsGeneral, 'linkLayout'>>,
+): Promise<void> {
+  const now = Date.now();
+  const record = await db.items.get(SETTINGS_GENERAL_PATH);
+  const current: SettingsGeneral = parseBlob(record?.data, settingsGeneralSchema) ?? {
+    createdAt: 0,
+    updatedAt: 0,
+  };
+  const next: WithPath<SettingsGeneral> = {
+    ...current,
+    ...patch,
+    createdAt: current.createdAt === 0 ? now : current.createdAt,
+    updatedAt: now,
+    path: SETTINGS_GENERAL_PATH,
+  };
+  const { path: _path, ...blob } = next;
+  if (!settingsGeneralSchema.safeParse(blob).success) {
+    throw new Error('writeSettingsGeneral: invalid settings');
+  }
+  await writeEntity(username, next);
 }

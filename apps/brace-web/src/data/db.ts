@@ -19,7 +19,7 @@
 
 import Dexie, { type EntityTable, type Table } from 'dexie';
 
-import type { OpKind } from '@stxapps/shared';
+import type { LinkLayout, OpKind } from '@stxapps/shared';
 
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
@@ -145,10 +145,31 @@ export interface PendingOpRecord {
   baseUpdatedAt: number;
 }
 
+// Device-local settings that DELIBERATELY never sync — the off-sync counterpart
+// to the synced `settings/general.enc` file. Unlike everything in `items`, these
+// rows have no path, no op-log entry, and no R2 object: the sync engine never
+// touches this table, and `clearSyncData` (sync-store.ts) wipes it on sign-out so
+// a second user on the device can't inherit the first's preferences.
+//
+// A single row (constant `id`) holds the Settings → Miscs "Device" tab choices:
+//   - `layoutSource` — which source the links page actually renders, `'sync'` (the
+//     synced `settings/general.enc` value) or `'device'` (this row's own
+//     `linkLayout`). It's device-local on purpose: "use this device's own layout"
+//     is a per-device decision that must NOT propagate to other devices.
+//   - `linkLayout` — this device's own layout, applied only while `layoutSource`
+//     is `'device'`.
+export interface LocalSettingsRecord {
+  // Single-row table — one settings blob per device, keyed by a constant.
+  id: 'singleton';
+  layoutSource: 'sync' | 'device';
+  linkLayout: LinkLayout;
+}
+
 class BraceDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
   items!: EntityTable<ItemRecord, 'path'>;
   pendingOps!: Table<PendingOpRecord, [string, string]>;
+  localSettings!: EntityTable<LocalSettingsRecord, 'id'>;
 
   constructor() {
     super('brace-data');
@@ -174,6 +195,9 @@ class BraceDb extends Dexie {
       // the one-row-per-(account,path) upsert above; the `username` index scopes a
       // drain to the active account. Unlisted stores (syncMeta, items) carry forward.
       pendingOps: '[username+path], username',
+      // Device-local settings — a single row keyed by the constant `id`. No sync
+      // bookkeeping, so just the primary key.
+      localSettings: 'id',
     });
   }
 }

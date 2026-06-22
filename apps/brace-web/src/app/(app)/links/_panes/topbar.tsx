@@ -2,22 +2,21 @@
 
 // The bar to the right of the sidebar. Left: the active selection's name (what
 // the main pane is showing). Right: the primary actions — add, search, bulk
-// edit, overflow — plus the list/card/table layout switch.
+// edit, overflow. The list/card/table layout switch used to live here too; it
+// moved to Settings → Miscs (a choose-once setting with a sync/device split), so
+// the topbar stays minimal.
 //
 // The overflow menu (More options) is wired up; add/search/bulk-edit are still
 // `onClick` stubs — this scaffold owns layout and state plumbing, not those flows.
 
 import {
-  LayoutGrid,
   LifeBuoy,
-  List,
   LogOut,
   MoreHorizontal,
   RefreshCw,
   Search,
   Settings,
   SquarePen,
-  Table,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -30,22 +29,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
-import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLists } from '../../_hooks/use-lists';
 import { useSignOut } from '../../_hooks/use-sign-out';
 import { useTags } from '../../_hooks/use-tags';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 import { LinkEditorPopover } from '../_components/link-editor-popover';
-import { type LayoutMode, useLinksPage } from '../_contexts/page-provider';
+import { useLinksPage } from '../_contexts/page-provider';
 
 import { useSync } from '@/contexts/sync-provider';
-
-const LAYOUT_OPTIONS: { mode: LayoutMode; label: string; icon: React.ReactNode }[] = [
-  { mode: 'list', label: 'List layout', icon: <List className="size-4" /> },
-  { mode: 'card', label: 'Card layout', icon: <LayoutGrid className="size-4" /> },
-  { mode: 'table', label: 'Table layout', icon: <Table className="size-4" /> },
-];
 
 function useSelectionLabel(): string {
   const { selection } = useLinksPage();
@@ -60,28 +52,6 @@ function useSelectionLabel(): string {
     return flattenTree(lists).find((n) => n.item.id === selection.id)?.item.name ?? 'Unknown';
   }
   return flattenTree(tags).find((n) => n.item.id === selection.id)?.item.name ?? 'Unknown';
-}
-
-function LayoutSwitch() {
-  const { layoutMode, setLayoutMode } = useLinksPage();
-  return (
-    <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
-      {LAYOUT_OPTIONS.map(({ mode, label, icon }) => (
-        <Button
-          key={mode}
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          aria-pressed={layoutMode === mode}
-          onClick={() => setLayoutMode(mode)}
-          className={cn('rounded', layoutMode === mode && 'bg-muted text-foreground')}
-        >
-          {icon}
-        </Button>
-      ))}
-    </div>
-  );
 }
 
 // The overflow menu behind the "More options" button: account- and session-level
@@ -138,7 +108,6 @@ export function Topbar() {
       <h1 className="truncate text-lg font-semibold">{label}</h1>
 
       <div className="flex items-center gap-2">
-        <LayoutSwitch />
         <LinkEditorPopover />
         <Button variant="ghost" size="icon-sm" aria-label="Search">
           <Search className="size-4" />

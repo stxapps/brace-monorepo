@@ -14,7 +14,7 @@
 import Dexie from 'dexie';
 import type { z } from 'zod';
 
-import type { Link, List, Pin, Tag } from '@stxapps/shared';
+import type { Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
 import {
   compareRank,
   ENC_SUFFIX,
@@ -24,6 +24,8 @@ import {
   META_PREFIX,
   PINS_PREFIX,
   pinSchema,
+  SETTINGS_GENERAL_PATH,
+  settingsGeneralSchema,
   SYSTEM_LIST_DEFAULTS,
   SYSTEM_LIST_IDS,
   TAGS_PREFIX,
@@ -200,6 +202,15 @@ export function readTags(): Promise<TagItem[]> {
 // the whole namespace is read and decoded, no index, like lists/tags.
 export function readPins(): Promise<PinItem[]> {
   return readNamespace(PINS_PREFIX, pinSchema);
+}
+
+// The synced general-settings blob (`settings/general.enc`), or undefined if this
+// device hasn't synced/written one. A single well-known path (not a namespace), so
+// it's a direct `get` + decode rather than a prefix scan. `parseBlob` returns
+// undefined for an absent or forward-incompatible blob; callers default each field.
+export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined> {
+  const record = await db.items.get(SETTINGS_GENERAL_PATH);
+  return parseBlob(record?.data, settingsGeneralSchema);
 }
 
 // How many links currently belong to `listId`, counted straight off the

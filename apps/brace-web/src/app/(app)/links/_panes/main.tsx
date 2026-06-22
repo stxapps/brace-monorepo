@@ -1,10 +1,11 @@
 'use client';
 
 // The main pane: reads the paginated link query once and hands it to whichever
-// layout the topbar selected. Each layout owns its own scroll/virtualization, so
-// this is a thin switch — it's the single place the data hook meets the layouts.
+// layout the user picked in Settings → Miscs (useSettings.layoutMode). Each layout
+// owns its own scroll/virtualization, so this is a thin switch — it's the single
+// place the data hook meets the layouts.
 
-import { useLinksPage } from '../_contexts/page-provider';
+import { useSettings } from '../../_hooks/use-settings';
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';
@@ -18,7 +19,7 @@ const LAYOUTS: Record<string, (props: LinkLayoutProps) => React.ReactNode> = {
 };
 
 export function Main() {
-  const { layoutMode } = useLinksPage();
+  const { layoutMode } = useSettings();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
 
   const Layout = LAYOUTS[layoutMode];

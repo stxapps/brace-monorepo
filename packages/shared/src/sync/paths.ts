@@ -29,6 +29,13 @@ export const SETTINGS_PREFIX = 'settings/';
 // The encrypted-blob suffix every path ends with.
 export const ENC_SUFFIX = '.enc';
 
+// The well-known path of the general settings file (`settingsGeneralSchema`). The
+// `settings/` family is keyed by a fixed concern name, not a random id, so its
+// paths are baked into client code rather than generated — one source of truth so
+// the read/write edges can't drift on the literal. (`general` is the first such
+// concern; a new concern adds its own `SETTINGS_<NAME>_PATH` const beside this.)
+export const SETTINGS_GENERAL_PATH = `${SETTINGS_PREFIX}general${ENC_SUFFIX}`;
+
 // The id-keyed namespaces — every prefix whose path is `{prefix}{randomId}.enc`.
 // `settings/` is excluded on purpose: its segment is a fixed lowercase concern
 // name, not a random id, so it's validated as its own shape.
