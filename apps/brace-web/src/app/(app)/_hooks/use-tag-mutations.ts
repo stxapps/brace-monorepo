@@ -15,13 +15,7 @@
 
 import { useCallback, useMemo } from 'react';
 
-import {
-  compareRank,
-  ENC_SUFFIX,
-  rankForIndex,
-  rerankToOrder,
-  TAGS_PREFIX,
-} from '@stxapps/shared';
+import { compareRank, ENC_SUFFIX, rankForIndex, rerankToOrder, TAGS_PREFIX } from '@stxapps/shared';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
