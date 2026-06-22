@@ -36,8 +36,8 @@ import { useLists } from '../../_hooks/use-lists';
 import { useSignOut } from '../../_hooks/use-sign-out';
 import { useTags } from '../../_hooks/use-tags';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
+import { LinkEditorPopover } from '../_components/link-editor-popover';
 import { type LayoutMode, useLinksPage } from '../_contexts/page-provider';
-import { LinkEditorPopover } from './link-editor-popover';
 
 import { useSync } from '@/contexts/sync-provider';
 

@@ -165,7 +165,12 @@ export function ShowMore({ hasMore, showMore }: ShowMoreProps) {
 // it stays pinned to the top of the pane instead of riding the scrolled content.
 // Clicking applies the held results AND scrolls the layout to top, so the
 // reorder lands where the user can see it rather than shifting them mid-list.
-export function RefreshPill({ show, onClick }: { show: boolean; onClick: () => void }) {
+interface RefreshPillProps {
+  show: boolean;
+  onClick: () => void;
+}
+
+export function RefreshPill({ show, onClick }: RefreshPillProps) {
   if (!show) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">

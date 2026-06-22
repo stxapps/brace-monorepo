@@ -1,5 +1,5 @@
-import { Sidebar } from './_components/sidebar';
-import { Topbar } from './_components/topbar';
+import { Sidebar } from './_panes/sidebar';
+import { Topbar } from './_panes/topbar';
 
 // Shared chrome for every settings section route (`/settings/[section]`): the
 // two-pane frame — a full-height sidebar on the left; a topbar above the
