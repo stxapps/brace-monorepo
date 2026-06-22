@@ -45,6 +45,7 @@ export function SignInForm() {
             id="username"
             type="text"
             autoComplete="username"
+            autoFocus
             aria-invalid={!!errors.username}
             {...register('username')}
           />
