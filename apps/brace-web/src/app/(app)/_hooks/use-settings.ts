@@ -52,8 +52,7 @@ export function useSettings(): Settings {
   const syncLinksLayout = general?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
   const linksLayoutSource = local?.linksLayoutSource ?? 'sync';
   const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
-  const linksLayout =
-    linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
+  const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
 
   return { linksLayout, linksLayoutSource, syncLinksLayout, localLinksLayout };
 }

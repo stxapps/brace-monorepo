@@ -23,19 +23,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/compon
 import { useSettingMutations } from '../../../_hooks/use-setting-mutations';
 import { type LinksLayoutSource, useSettings } from '../../../_hooks/use-settings';
 
-const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> = {
-  list: { label: 'List', hint: 'A dense, single-column list.', icon: <List className="size-4" /> },
-  card: {
-    label: 'Card',
-    hint: 'A grid of preview cards.',
-    icon: <LayoutGrid className="size-4" />,
-  },
-  table: {
-    label: 'Table',
-    hint: 'Columns with a header row.',
-    icon: <Table className="size-4" />,
-  },
-};
+const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> =
+  {
+    list: {
+      label: 'List',
+      hint: 'A dense, single-column list.',
+      icon: <List className="size-4" />,
+    },
+    card: {
+      label: 'Card',
+      hint: 'A grid of preview cards.',
+      icon: <LayoutGrid className="size-4" />,
+    },
+    table: {
+      label: 'Table',
+      hint: 'Columns with a header row.',
+      icon: <Table className="size-4" />,
+    },
+  };
 
 // The three layout radios for one source. `value`/`onChange` are wired to either
 // the synced or the device layout by the parent, so this row is source-agnostic.
@@ -73,8 +78,7 @@ function LayoutRadioGroup({
 
 export function MiscSection() {
   const { linksLayoutSource, syncLinksLayout, localLinksLayout } = useSettings();
-  const { setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout } =
-    useSettingMutations();
+  const { setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout } = useSettingMutations();
   const [error, setError] = useState<string | null>(null);
 
   // Surface a failed write (e.g. the synced write with no active account) rather
@@ -87,9 +91,7 @@ export function MiscSection() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
       <h2 className="text-xl font-semibold">Misc.</h2>
-      <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        General preferences for the app.
-      </p>
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">General preferences for the app.</p>
 
       <section>
         <h3 className="text-base font-medium">Link layout</h3>
@@ -120,7 +122,10 @@ export function MiscSection() {
               tab is the active source (use-settings.ts), so the shown radios always
               reflect the layout the app is rendering. */}
           <TabsContent value="sync">
-            <LayoutRadioGroup value={syncLinksLayout} onChange={(l) => run(setSyncLinksLayout(l))} />
+            <LayoutRadioGroup
+              value={syncLinksLayout}
+              onChange={(l) => run(setSyncLinksLayout(l))}
+            />
           </TabsContent>
           <TabsContent value="local">
             <LayoutRadioGroup
