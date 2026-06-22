@@ -12,6 +12,8 @@
 // every device (sibling order is by `rank`, ties broken by `id`; the cycle scan
 // walks ids in sorted order), so two devices render the same tree.
 
+import { compareRank } from './rank';
+
 // The structural contract an entity must satisfy to be tree-able. Any `T` with
 // these fields works; the node carries the whole `T` so the UI keeps its `path`,
 // `name`, timestamps, etc.
@@ -36,14 +38,6 @@ export interface BuildTreeOptions {
 }
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
-
-// Ascending by rank, then id as a stable, cross-device tiebreak for equal ranks
-// (concurrent inserts at the same slot).
-function compare(a: TreeItem, b: TreeItem): number {
-  if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
-  if (a.id !== b.id) return a.id < b.id ? -1 : 1;
-  return 0;
-}
 
 export function buildTree<T extends TreeItem>(
   items: T[],
@@ -89,7 +83,7 @@ export function buildTree<T extends TreeItem>(
   const build = (parentId: string | null, depth: number): TreeNode<T>[] =>
     (childrenOf.get(parentId) ?? [])
       .slice()
-      .sort(compare)
+      .sort(compareRank)
       .map((item) => ({ item, depth, children: build(item.id, depth + 1) }));
 
   return build(null, 0);

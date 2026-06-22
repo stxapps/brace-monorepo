@@ -14,12 +14,18 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { ENC_SUFFIX, META_PREFIX, PINS_PREFIX, rankForIndex } from '@stxapps/shared';
+import {
+  compareRank,
+  ENC_SUFFIX,
+  META_PREFIX,
+  PINS_PREFIX,
+  rankForIndex,
+} from '@stxapps/shared';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
 import { deletePin, writePin } from '@/data/mutations';
-import { comparePinRank, type LinkItem, type PinItem, readPins } from '@/data/queries';
+import { type LinkItem, type PinItem, readPins } from '@/data/queries';
 
 // A link's id is the `{id}` of its `meta/{id}.enc` path; the pin shadows it at
 // `pins/{id}.enc`. Derive both from the link's stored path so callers pass a
@@ -52,7 +58,7 @@ export function usePinMutations(): PinMutations {
 
       const id = linkIdOf(link);
       // Top of the section = index 0 among the current pins, ascending by rank.
-      const ordered = (await readPins()).sort(comparePinRank);
+      const ordered = (await readPins()).sort(compareRank);
       const pinItem: PinItem = {
         id,
         rank: rankForIndex(ordered, 0),
@@ -85,7 +91,7 @@ export function usePinMutations(): PinMutations {
       if (!username) throw new Error('usePinMutations: no active account');
 
       const id = linkIdOf(link);
-      const ordered = (await readPins()).sort(comparePinRank);
+      const ordered = (await readPins()).sort(compareRank);
       const i = ordered.findIndex((p) => p.id === id);
       if (i < 0) return; // not pinned
 

@@ -16,6 +16,7 @@ import type { z } from 'zod';
 
 import type { Link, List, Pin, Tag } from '@stxapps/shared';
 import {
+  compareRank,
   ENC_SUFFIX,
   linkSchema,
   LISTS_PREFIX,
@@ -199,15 +200,6 @@ export function readTags(): Promise<TagItem[]> {
 // the whole namespace is read and decoded, no index, like lists/tags.
 export function readPins(): Promise<PinItem[]> {
   return readNamespace(PINS_PREFIX, pinSchema);
-}
-
-// Pin order: ascending `rank`, ties broken by `id` — the same deterministic,
-// cross-device comparison buildTree uses for ranked siblings, so every device
-// renders the pinned section in the same order.
-export function comparePinRank(a: PinItem, b: PinItem): number {
-  if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
-  if (a.id !== b.id) return a.id < b.id ? -1 : 1;
-  return 0;
 }
 
 // How many links currently belong to `listId`, counted straight off the
@@ -417,7 +409,7 @@ async function readRest(
 async function readPinnedOverlay(
   query: LinkQuery,
 ): Promise<{ links: LinkItem[]; paths: Set<string> }> {
-  const pins = (await readPins()).sort(comparePinRank);
+  const pins = (await readPins()).sort(compareRank);
   if (pins.length === 0) return { links: [], paths: new Set() };
 
   const records = await db.items.bulkGet(pins.map((pin) => `${META_PREFIX}${pin.id}${ENC_SUFFIX}`));

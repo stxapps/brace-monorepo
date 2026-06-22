@@ -13,7 +13,6 @@ import {
   List,
   LogOut,
   MoreHorizontal,
-  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -37,6 +36,7 @@ import { useLists } from '../_hooks/use-lists';
 import { useSignOut } from '../_hooks/use-sign-out';
 import { useTags } from '../_hooks/use-tags';
 import { DEFAULT_SECTION_ID } from '../settings/sections';
+import { LinkEditorPopover } from './_components/link-editor-popover';
 import { type LayoutMode, useLinksPage } from './_contexts/page-provider';
 
 import { useSync } from '@/contexts/sync-provider';
@@ -139,10 +139,7 @@ export function Topbar() {
 
       <div className="flex items-center gap-2">
         <LayoutSwitch />
-        <Button variant="default" size="sm">
-          <Plus className="size-4" />
-          Add
-        </Button>
+        <LinkEditorPopover />
         <Button variant="ghost" size="icon-sm" aria-label="Search">
           <Search className="size-4" />
         </Button>

@@ -22,6 +22,8 @@ import {
   type OpKind,
   type Pin,
   pinSchema,
+  type Tag,
+  tagSchema,
 } from '@stxapps/shared';
 
 import { db } from '@/data/db';
@@ -134,6 +136,38 @@ export async function writeList(
 // deletable, a non-empty list keeps its links) before reaching here.
 export function deleteList(username: string, list: WithPath<List>): Promise<void> {
   return deleteEntity(username, list.path);
+}
+
+// Apply a patch to a tag and write it — create (new `tags/{id}.enc`) or edit.
+// Identical shape to writeList (tags are the same one-file-per-entity tree, just
+// without the system-list defaults): stamps `updatedAt` now, stamps `createdAt`
+// on first write (`createdAt === 0`), and validates against `tagSchema` before
+// the write so a bad patch can't poison the store (TS-narrows the spread back to
+// a Tag). `path` is the store key, dropped before validating the blob.
+export async function writeTag(
+  username: string,
+  tag: WithPath<Tag>,
+  patch: Partial<Pick<Tag, 'name' | 'parentId' | 'rank'>>,
+): Promise<void> {
+  const now = Date.now();
+  const next: WithPath<Tag> = {
+    ...tag,
+    ...patch,
+    createdAt: tag.createdAt === 0 ? now : tag.createdAt,
+    updatedAt: now,
+  };
+  const { path: _path, ...blob } = next;
+  if (!tagSchema.safeParse(blob).success) {
+    throw new Error(`writeTag: invalid tag ${tag.id}`);
+  }
+  await writeEntity(username, next);
+}
+
+// Delete one tag: drop its `tags/{id}.enc`. Thin like deleteList — a dangling
+// `tagIds` reference left on a link is NORMAL and skipped at read time
+// (entities.ts), so there's no link rewrite to do here.
+export function deleteTag(username: string, tag: WithPath<Tag>): Promise<void> {
+  return deleteEntity(username, tag.path);
 }
 
 // Apply a patch to a pin and write it — the put side of pin/reorder. Stamps

@@ -16,6 +16,19 @@
 
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
+// The deterministic sibling order every ranked view shares: ascending `rank`,
+// ties broken by `id` (concurrent inserts at the same slot can mint equal keys —
+// see above). This is the SAME ordering buildTree applies to each sibling group
+// (tree.ts), lifted here so callers that pre-sort a flat namespace before
+// `rankForIndex` (which reads the neighbours at the target index) and readers
+// that order pins use one definition. Generic over any `{ rank, id }` entity —
+// lists, tags, pins.
+export function compareRank<T extends { rank: string; id: string }>(a: T, b: T): number {
+  if (a.rank !== b.rank) return a.rank < b.rank ? -1 : 1;
+  if (a.id !== b.id) return a.id < b.id ? -1 : 1;
+  return 0;
+}
+
 // A key ordered strictly between `a` and `b` (ascending). Pass `null` for an
 // open end: `between(null, b)` prepends before everything, `between(a, null)`
 // appends after everything, `between(null, null)` is the first key in an empty
