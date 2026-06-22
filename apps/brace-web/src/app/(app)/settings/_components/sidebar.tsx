@@ -13,7 +13,7 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
+import { SETTINGS_SECTIONS, type SettingsSection } from '../sections';
 
 function NavItem({ section }: { section: SettingsSection }) {
   const pathname = usePathname();
