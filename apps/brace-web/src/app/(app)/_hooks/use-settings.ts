@@ -1,7 +1,7 @@
 'use client';
 
 // Reactive read of the user's app settings — today, the links layout. Two sources
-// feed it (see docs/local-first-sync.md "data model — settings" and the Miscs
+// feed it (see docs/local-first-sync.md "data model — settings" and the Misc
 // settings section):
 //
 //   - the SYNCED value in `settings/general.enc` (`readSettingsGeneral`), shared

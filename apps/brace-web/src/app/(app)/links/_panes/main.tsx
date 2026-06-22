@@ -1,7 +1,7 @@
 'use client';
 
 // The main pane: reads the paginated link query once and hands it to whichever
-// layout the user picked in Settings → Miscs (useSettings.layoutMode). Each layout
+// layout the user picked in Settings → Misc (useSettings.layoutMode). Each layout
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
 // place the data hook meets the layouts.
 

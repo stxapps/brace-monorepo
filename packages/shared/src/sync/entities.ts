@@ -122,7 +122,7 @@ export type LinkLayout = (typeof LINK_LAYOUTS)[number];
 // field here for a general setting, or a NEW `settings/<concern>.enc` schema
 // when a group of settings should stop clobbering the rest under LWW.
 //
-// `linkLayout` is OPTIONAL: it's the SYNCED link layout (the Settings → Miscs
+// `linkLayout` is OPTIONAL: it's the SYNCED link layout (the Settings → Misc
 // "Sync" tab). Absent until the user picks one, and an older client that never
 // wrote it still parses — `looseObject` round-trips it for clients that don't
 // model it yet. The device-local alternative ("Device" tab) lives off-sync in the

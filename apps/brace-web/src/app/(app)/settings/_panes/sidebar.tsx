@@ -1,7 +1,7 @@
 'use client';
 
 // Full-height left rail for the settings page: a back-to-the-app button pinned
-// top-right, then the section menu (Account, Subscription, Lists, Tags, Miscs.,
+// top-right, then the section menu (Account, Subscription, Lists, Tags, Misc.,
 // About). Each entry is a link to `/settings/[section]`; the active one is
 // derived from the pathname (the URL is the source of truth), and the matching
 // section page renders the content.

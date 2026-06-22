@@ -6,7 +6,7 @@
 
 import { SETTINGS_SECTIONS, type SettingsSectionId } from '../sections';
 import { ListsSection } from './_lists/lists-section';
-import { MiscsSection } from './_miscs/miscs-section';
+import { MiscSection } from './_misc/misc-section';
 
 function Placeholder({ id }: { id: SettingsSectionId }) {
   const label = SETTINGS_SECTIONS.find((s) => s.id === id)?.label ?? id;
@@ -23,7 +23,7 @@ const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
   subscription: () => <Placeholder id="subscription" />,
   lists: () => <ListsSection />,
   tags: () => <Placeholder id="tags" />,
-  miscs: () => <MiscsSection />,
+  misc: () => <MiscSection />,
   about: () => <Placeholder id="about" />,
 };
 

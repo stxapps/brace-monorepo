@@ -151,7 +151,7 @@ export interface PendingOpRecord {
 // touches this table, and `clearSyncData` (sync-store.ts) wipes it on sign-out so
 // a second user on the device can't inherit the first's preferences.
 //
-// A single row (constant `id`) holds the Settings → Miscs "Device" tab choices:
+// A single row (constant `id`) holds the Settings → Misc "Device" tab choices:
 //   - `layoutSource` — which source the links page actually renders, `'sync'` (the
 //     synced `settings/general.enc` value) or `'device'` (this row's own
 //     `linkLayout`). It's device-local on purpose: "use this device's own layout"

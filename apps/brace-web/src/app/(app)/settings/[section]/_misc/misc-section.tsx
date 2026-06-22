@@ -1,6 +1,6 @@
 'use client';
 
-// The Miscs settings section: small app-wide preferences. Today it owns the link
+// The Misc settings section: small app-wide preferences. Today it owns the link
 // LAYOUT — list / card / table — which used to live as a quick switch in the links
 // topbar. Moving it here makes it a choose-once setting and unlocks the sync/device
 // split the topbar couldn't express.
@@ -71,7 +71,7 @@ function LayoutRadioGroup({
   );
 }
 
-export function MiscsSection() {
+export function MiscSection() {
   const { layoutSource, syncLayout, deviceLayout } = useSettings();
   const { setLayoutSource, setSyncLayout, setDeviceLayout } = useSettingMutations();
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function MiscsSection() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
-      <h2 className="text-xl font-semibold">Miscs.</h2>
+      <h2 className="text-xl font-semibold">Misc.</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
         General preferences for the app.
       </p>

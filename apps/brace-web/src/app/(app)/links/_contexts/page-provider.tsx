@@ -10,7 +10,7 @@
 // random token — NEVER the plaintext list/tag name, which stays encrypted in the
 // local store. That's what keeps the URL zero-knowledge. (The list/card/table
 // layout used to live here as a localStorage preference; it moved to a real
-// setting — see `useSettings` / Settings → Miscs.)
+// setting — see `useSettings` / Settings → Misc.)
 //
 // The provider supplies its OWN Suspense boundary (see LinksPageProvider below):
 // useSearchParams() opts the subtree out of static prerendering, which Next
