@@ -12,6 +12,9 @@ a decode cache),
 (typed once in `@stxapps/shared`, shared by server and clients),
 [account.md](./account.md) for the password-derived account model (key
 derivation, username/password rules, the wallet comparison),
+[link-extraction.md](./link-extraction.md) for how a saved link's
+title/image/screenshot/archive get filled in (privacy-first, clients do the
+work, the `extraction/` entity),
 [extension.md](./extension.md) for the brace-extension auth flow (own sign-in,
 no inherited session) and the move-shared-auth-code-later decision,
 [env-files.md](./env-files.md) for per-app environment configuration across
