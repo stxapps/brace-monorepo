@@ -99,8 +99,8 @@ export type ItemType =
   | 'tag'
   | 'pin'
   | 'extraction'
-  | 'settings'
-  | 'files';
+  | 'setting'
+  | 'file';
 
 export interface ItemRecord {
   path: string;

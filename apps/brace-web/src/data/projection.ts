@@ -69,8 +69,8 @@ export function itemTypeForPath(path: string): ItemType | undefined {
   if (path.startsWith(TAGS_PREFIX)) return 'tag';
   if (path.startsWith(PINS_PREFIX)) return 'pin';
   if (path.startsWith(EXTRACTIONS_PREFIX)) return 'extraction';
-  if (path.startsWith(SETTINGS_PREFIX)) return 'settings';
-  if (path.startsWith(FILES_PREFIX)) return 'files';
+  if (path.startsWith(SETTINGS_PREFIX)) return 'setting';
+  if (path.startsWith(FILES_PREFIX)) return 'file';
   return undefined;
 }
 
@@ -84,7 +84,7 @@ export function itemTypeForPath(path: string): ItemType | undefined {
 export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array): ItemRecord {
   const itemType = itemTypeForPath(path);
   const record: ItemRecord = { path, updatedAt, data, itemType };
-  if (!data || itemType === undefined || itemType === 'files') return record;
+  if (!data || itemType === undefined || itemType === 'file') return record;
 
   if (itemType === 'link') {
     const link = parseBlob(data, linkSchema);
