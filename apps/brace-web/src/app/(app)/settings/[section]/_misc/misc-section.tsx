@@ -16,12 +16,10 @@ import { useState } from 'react';
 import { LayoutGrid, List, Table } from 'lucide-react';
 
 import { LINKS_LAYOUTS, type LinksLayout } from '@stxapps/shared';
+import { type LinksLayoutSource, useSettingMutations, useSettings } from '@stxapps/web-react';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
-
-import { useSettingMutations } from '../../../_hooks/use-setting-mutations';
-import { type LinksLayoutSource, useSettings } from '../../../_hooks/use-settings';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> =
   {

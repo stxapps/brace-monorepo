@@ -5,7 +5,8 @@
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
 // place the data hook meets the layouts.
 
-import { useSettings } from '../../_hooks/use-settings';
+import { useSettings } from '@stxapps/web-react';
+
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';

@@ -76,6 +76,13 @@ export const linkSchema = z.looseObject({
   // `titleImage` extraction facet; absent until a client extracts it (a web-only
   // user with no extractor gets none — the "web-only gap").
   imageId: z.string().optional(),
+  // The full-page screenshot's content file (the `{id}` of `files/{id}.enc`),
+  // absent until the `screenshot` extraction facet captures one. Distinct from
+  // `imageId` (the page's og:image preview): this is a rendered capture of the page
+  // as the user saw it, written by an active-page-tier client (the extension's
+  // `tabs.captureVisibleTab`). Heavy media, fetched lazily on open — same
+  // `files/{id}.enc`-ref rule as `pageArchiveId`/`imageId`.
+  screenshotId: z.string().optional(),
   // Manual user overrides for the two display fields extraction otherwise owns. The
   // UI renders `customTitle ?? title` and `customImageId ?? imageId`, so a manual
   // edit always wins over the extracted/discovered value. Extraction writes ONLY
@@ -210,9 +217,15 @@ export const facetSchema = z.looseObject({
 });
 export type Facet = z.infer<typeof facetSchema>;
 
+// A link carries only the facets some client has actually started — `titleImage`
+// done while `screenshot` is still missing, etc. — so this is a PARTIAL record:
+// every facet key is optional and absent ≠ pending (a missing facet is "no client
+// has touched this job yet"). `z.partialRecord`, not `z.record`, because the latter
+// over an enum key infers an EXHAUSTIVE `Record` (all 8 required) — which neither
+// matches reality nor parses a real one-facet extraction.
 export const extractionSchema = z.looseObject({
   id: z.string(), // = the link's id (the `{id}` of `links/{id}.enc`)
-  facets: z.record(
+  facets: z.partialRecord(
     z.enum([
       'titleImage',
       'readMode',

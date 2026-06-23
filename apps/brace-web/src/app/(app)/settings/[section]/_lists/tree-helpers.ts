@@ -6,8 +6,7 @@
 // just shape, so it's trivially testable.
 
 import { LIST_NO_CHILDREN_IDS, type TreeNode } from '@stxapps/shared';
-
-import type { ListItem } from '@/data/queries';
+import type { ListItem } from '@stxapps/web-react';
 
 // One rendered row: the list plus everything the row's controls need without a
 // second tree walk. `siblings` is the row's ordered sibling group INCLUDING

@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 
 import { ARCHIVE_ID, isSystemListId, MY_LIST_ID, TRASH_ID } from '@stxapps/shared';
+import { type ListItem, useListMutations, useLists } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -65,8 +66,6 @@ import {
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 
-import { useListMutations } from '../../../_hooks/use-list-mutations';
-import { useLists } from '../../../_hooks/use-lists';
 import {
   excludeActiveDescendants,
   getMovePlan,
@@ -75,8 +74,6 @@ import {
   type Projection,
 } from './dnd-helpers';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
-
-import type { ListItem } from '@/data/queries';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
 

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { SignInForm } from '@stxapps/web-ui/components/auth/sign-in-form';
 import {
   CardContent,
   CardDescription,
@@ -8,8 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@stxapps/web-ui/components/ui/card';
-
-import { SignInForm } from './sign-in-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
 

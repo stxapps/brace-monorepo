@@ -21,6 +21,7 @@ import {
 import Link from 'next/link';
 
 import { ALL_LABEL, flattenTree } from '@stxapps/shared';
+import { useLists, useSignOut, useSync, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -30,14 +31,9 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
-import { useLists } from '../../_hooks/use-lists';
-import { useSignOut } from '../../_hooks/use-sign-out';
-import { useTags } from '../../_hooks/use-tags';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 import { LinkEditorPopover } from '../_components/link-editor-popover';
 import { useLinksPage } from '../_contexts/page-provider';
-
-import { useSync } from '@/contexts/sync-provider';
 
 function useSelectionLabel(): string {
   const { selection } = useLinksPage();

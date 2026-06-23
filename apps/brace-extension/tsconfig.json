@@ -9,10 +9,16 @@
   },
   "references": [
     {
+      "path": "../../packages/react"
+    },
+    {
       "path": "../../packages/shared"
     },
     {
       "path": "../../packages/web-ui"
+    },
+    {
+      "path": "../../packages/web-react"
     }
   ]
 }

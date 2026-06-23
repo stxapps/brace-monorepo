@@ -1,6 +1,7 @@
+import { SyncProvider } from '@stxapps/web-react';
+
 import { AuthGuard } from '@/components/auth-guard';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
-import { SyncProvider } from '@/contexts/sync-provider';
 
 // Guard for the signed-in app (/links, /settings, …). Two gates, in order:
 //   AuthGuard       — "do you have a session?" (client-side: the session lives

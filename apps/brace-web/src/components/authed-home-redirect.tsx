@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 
-import { useAuth } from '../contexts/auth-provider';
+import { useAuth } from '@stxapps/web-react';
 
 // Authed visitors to the public landing ('/') belong in the app, so bounce them
 // to /links — the same rule GuestGuard applies to /sign-in and /create-account.

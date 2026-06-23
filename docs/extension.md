@@ -30,10 +30,34 @@ from (username, password) via `@stxapps/web-crypto` — rather than reading the
 web app's session. (This supersedes an earlier idea that the extension would
 inherit the session out of shared storage.)
 
-### decision (2026-06-08): keep the auth glue app-local in brace-web for now
+### decision (2026-06-23): the move happened — the auth glue (and the whole local-first stack) now lives in the packages
 
-These five files stay in `apps/brace-web` until brace-extension's auth work
-actually starts:
+brace-extension's auth work has begun, so the trigger below fired. The auth
+glue — and the rest of the shared local-first stack (data layer, sync engine,
+sync/auth providers, editor hooks) — moved out of `apps/brace-web` into the
+packages, with brace-web re-importing from them (single source of truth):
+
+- `create-account-form.tsx`, `sign-in-form.tsx` →
+  `@stxapps/web-ui/components/auth/*`
+- `use-create-account.ts` / `use-sign-in.ts` / `use-sign-out.ts`,
+  `auth-provider.tsx`, `sync-provider.tsx`, `session-store.ts`, the `data/*`
+  store + the `sync/*` engine, and the `(app)/_hooks` editor family →
+  `@stxapps/web-react` (see [architecture.md](./architecture.md)).
+
+The inversion the move required: the two auth submit hooks and the sync engine
+no longer reach for brace-web's app-local `@/lib/api`. They read the configured
+client through the `@stxapps/react` seam — `useApiClient()` in the hooks,
+`SyncDeps.api` (threaded from the provider) in the engine — so each app binds
+its own baseUrl. brace-web's `lib/api.ts` stays app-local (it owns
+`NEXT_PUBLIC_API_URL`); the extension's `utils/api.ts` is its counterpart
+(base URL from the build mode).
+
+The original "move later" reasoning is kept below for the record.
+
+---
+
+The decision (2026-06-08) had been to keep these five files app-local until
+brace-extension's auth work actually started:
 
 - `app/(auth)/create-account/create-account-form.tsx`
 - `app/(auth)/create-account/use-create-account.ts`
@@ -41,7 +65,7 @@ actually starts:
 - `contexts/auth-provider.tsx`
 - `data/session-store.ts`
 
-**Why move later, not now:**
+**Why move later, not now (the reasoning at the time):**
 
 - They're **thin app glue**, not reusable logic — the heavy, genuinely-shared
   parts are already in the packages listed above. There's little "design for

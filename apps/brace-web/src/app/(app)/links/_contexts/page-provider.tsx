@@ -22,8 +22,7 @@ import { createContext, Suspense, useCallback, useContext, useMemo } from 'react
 import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/navigation';
 
 import { ALL_ID, DEFAULT_LIST_ID } from '@stxapps/shared';
-
-import type { LinkQuery } from '@/data/queries';
+import type { LinkQuery } from '@stxapps/web-react';
 
 // What the main pane is filtered to. `all` is the unfiltered Show-All view;
 // `list`/`tag` carry the selected entity's bare id (a system constant or a user

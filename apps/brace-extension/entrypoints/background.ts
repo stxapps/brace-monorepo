@@ -1,69 +1,72 @@
 /**
- * Background service worker.
+ * Background service worker — the privileged core of the extension.
  *
- * Owns the privileged capture work for the bookmark manager so the popup can
- * stay a pure UI surface:
- *   - reads the active tab's url/title
- *   - screenshots the visible viewport (`tabs.captureVisibleTab` — only callable
- *     from an extension page, never a content script)
- *   - archives the page by injecting a serializer into it on demand
- *     (`scripting.executeScript`), so we never need a persistent content script
+ * MV3 service workers are EPHEMERAL (no long-running loop), so the recurring work
+ * is driven by a `chrome.alarms` tick rather than a timer:
+ *   - on each alarm (and on startup) it runs a selective SYNC cycle
+ *     (`runSync` → `runIncrementalSync`, materializing only links/ + extractions/).
+ *   - it answers the typed popup → background message protocol, owning ALL
+ *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now), EXTRACT (capture a
+ *     facet from the active tab + write back), GET_SYNC_STATUS (read the mirror).
  *
- * The popup talks to it via a single `SAVE_PAGE` message.
+ * The popup never fetches brace-api or touches a tab directly — it sends a message
+ * and renders the result.
  */
 
-export type SavePageMessage = { type: 'SAVE_PAGE' };
+import { getSession, loadSession } from '@stxapps/web-react';
 
-export interface SavedPage {
-  url: string;
-  title: string;
-  /** PNG data URL of the visible viewport. */
-  screenshot: string;
-  /** Serialized DOM at capture time. */
-  html: string;
-  savedAt: number;
-}
+import { runExtraction } from '@/utils/extraction-worker';
+import type { ExtensionMessage, MessageResponses } from '@/utils/messages';
+import { readSyncStatus } from '@/utils/messages';
+import { runSync } from '@/utils/sync-runner';
 
-export type SavePageResponse = { ok: true; page: SavedPage } | { ok: false; error: string };
+const SYNC_ALARM = 'brace-sync';
+// MV3 caps alarm frequency at ~1/min; one minute is the tightest useful cadence.
+const SYNC_PERIOD_MINUTES = 1;
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener((message: SavePageMessage, _sender, sendResponse) => {
-    if (message?.type !== 'SAVE_PAGE') return;
+  // Periodic sync. `create` with the same name is idempotent across worker restarts.
+  browser.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === SYNC_ALARM) void runSync();
+  });
+  // Kick one cycle as the worker spins up (on install / browser start / wake).
+  void runSync();
 
-    savePage()
-      .then((page) => sendResponse({ ok: true, page } satisfies SavePageResponse))
-      .catch((err) =>
-        sendResponse({ ok: false, error: errorMessage(err) } satisfies SavePageResponse),
-      );
-
-    // Returning true keeps the message channel open for the async response.
+  browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
+    handle(message).then(sendResponse, (err: unknown) =>
+      sendResponse({ ok: false, error: errorMessage(err) }),
+    );
+    // Keep the channel open for the async response.
     return true;
   });
 });
 
-async function savePage(): Promise<SavedPage> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id == null) throw new Error('No active tab to save.');
+async function handle(
+  message: ExtensionMessage,
+): Promise<MessageResponses[ExtensionMessage['type']]> {
+  switch (message.type) {
+    case 'KICK_SYNC':
+      await runSync();
+      return { ok: true };
 
-  const { id: tabId, windowId, url = '', title = '' } = tab;
+    case 'EXTRACT': {
+      const username = await currentUsername();
+      if (!username) return { ok: false, error: 'Not signed in' };
+      await runExtraction(username, message.linkId, message.facet);
+      // Push the freshly written files/links to the server (and pull anything new).
+      void runSync();
+      return { ok: true };
+    }
 
-  // Refuse pages we can't inject into (chrome://, the web store, etc.).
-  if (!/^https?:/.test(url)) {
-    throw new Error('This page cannot be archived (only http/https pages are supported).');
+    case 'GET_SYNC_STATUS':
+      return readSyncStatus();
   }
+}
 
-  // Screenshot the visible viewport. Run before injection so the capture
-  // reflects what the user currently sees.
-  const screenshot = await browser.tabs.captureVisibleTab(windowId, { format: 'png' });
-
-  // Archive: inject a serializer into the page on demand and read the DOM back.
-  const [injection] = await browser.scripting.executeScript({
-    target: { tabId },
-    func: () => new XMLSerializer().serializeToString(document),
-  });
-  const html = (injection?.result as string | undefined) ?? '';
-
-  return { url, title, screenshot, html, savedAt: Date.now() };
+async function currentUsername(): Promise<string | null> {
+  const session = (await loadSession()) ?? getSession();
+  return session?.username ?? null;
 }
 
 function errorMessage(err: unknown): string {

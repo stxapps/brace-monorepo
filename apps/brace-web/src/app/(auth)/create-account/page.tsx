@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { CreateAccountForm } from '@stxapps/web-ui/components/auth/create-account-form';
 import {
   CardContent,
   CardDescription,
@@ -8,8 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@stxapps/web-ui/components/ui/card';
-
-import { CreateAccountForm } from './create-account-form';
 
 export const metadata: Metadata = { title: 'Create account' };
 

@@ -3,7 +3,7 @@
 import { type ReactNode, Suspense } from 'react';
 import { redirect, usePathname, useSearchParams } from 'next/navigation';
 
-import { useAuth } from '../contexts/auth-provider';
+import { useAuth } from '@stxapps/web-react';
 
 // Client-side gate for the signed-in app. Auth is client-only — the bearer token
 // and non-extractable encryptionKey live in IndexedDB (see session-store), never

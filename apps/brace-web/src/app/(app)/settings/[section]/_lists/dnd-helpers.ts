@@ -13,10 +13,9 @@
 import { arrayMove } from '@dnd-kit/sortable';
 
 import { LIST_NO_CHILDREN_IDS, type TreeNode } from '@stxapps/shared';
+import type { ListItem } from '@stxapps/web-react';
 
 import { childrenOf, type ListRow } from './tree-helpers';
-
-import type { ListItem } from '@/data/queries';
 
 // Px per indent level — the single source of truth for the tree's indent.
 // dnd-kit reports the drag offset in px, so the projection thinks in px; the rows

@@ -53,11 +53,17 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 
 #### @stxapps/web-react
 
-- used by brace-web, brace-extension, brace-docs
+- used by brace-web, brace-extension, brace-docs, web-ui (auth forms)
 - web-only React hooks/contexts/logic — the web-only sibling of `@stxapps/react`
   (same React-logic layer, but free to use browser-only APIs like IndexedDB and
   Web Crypto). Home for things shared across the web apps that aren't components
-  (those live in `web-ui`) or pure crypto (that lives in `web-crypto`).
+  (those live in `web-ui`) or pure crypto (that lives in `web-crypto`). In
+  particular it owns the **local-first stack** shared by brace-web and
+  brace-extension: the auth + sync providers (`contexts/`), the Dexie store and
+  data layer (`data/`), the hand-rolled sync engine (`sync/`), and the
+  editor/auth hooks (`hooks/`). These reach the API through `useApiClient()` /
+  `SyncDeps.api` — the `@stxapps/react` seam each app binds to its own baseUrl —
+  so nothing here imports an app's `process.env`.
 
 ### dependency rules
 
@@ -74,11 +80,15 @@ platform-agnostic `react` can't reach it. `web-crypto` itself depends only on
   `web-ui`. In practice the platform-agnostic `react` lib still can't reach
   `web-crypto` (it's `platform:web`); only the `platform:web` sibling
   `web-react` does.
-- `web-ui` may import `shared` and `react` — not the other way around.
+- `web-ui` may import `shared`, `react`, and `web-react` (it's the UI layer,
+  above the React-logic layer) — not the other way around. Most `web-ui`
+  components are presentational and don't reach for `web-react`, but the auth
+  forms (`components/auth/*`) do: they pair the shared field UI with the
+  `useSignIn` / `useCreateAccount` submit hooks that live in `web-react`.
 - `web-crypto` may import `shared` only.
 - `web-react` is the web-only sibling of `react` (same React-logic layer, but
-  `platform:web`): it may import `shared`, `react`, and `web-crypto`. Apps
-  consume it; `web-ui` does not.
+  `platform:web`): it may import `shared`, `react`, and `web-crypto`. Apps and
+  `web-ui` (for the auth forms) consume it; it must not import `web-ui`.
 - Apps may import any package; **packages must never import an app.**
 - `web-ui`, `web-crypto`, and `web-react` are web-only — do not import them from
   code meant to run on Expo/native (`react` and `shared` stay platform-agnostic).

@@ -30,11 +30,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
+import { type LinkItem, type LinksResult, readLinks, useSync } from '@stxapps/web-react';
+
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
-
-import { useSync } from '@/contexts/sync-provider';
-import { type LinkItem, type LinksResult, readLinks } from '@/data/queries';
 
 const PAGE_SIZE = 50;
 

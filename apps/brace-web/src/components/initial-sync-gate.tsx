@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
-import { useSync } from '../contexts/sync-provider';
+import { useSync } from '@stxapps/web-react';
 
 // Renders the app subtree only once the local store is usable; otherwise shows an
 // in-route loading/error screen. This is a CONTENT SWAP, not a redirect: the

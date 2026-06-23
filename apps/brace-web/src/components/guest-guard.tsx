@@ -3,7 +3,7 @@
 import { type ReactNode, Suspense } from 'react';
 import { redirect, useSearchParams } from 'next/navigation';
 
-import { useAuth } from '../contexts/auth-provider';
+import { useAuth } from '@stxapps/web-react';
 
 // Where to send an authenticated visitor: honor a `?next=` set by AuthGuard, but
 // only ever to an in-app path. Anything that isn't a plain relative path (absolute

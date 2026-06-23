@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowUp, MoreHorizontal, Pin, PinOff, RefreshCw } from 'lucide-react';
 
+import { type LinkItem, usePinMutations } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -17,10 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
-import { usePinMutations } from '../../_hooks/use-pin-mutations';
 import { useLinksViewState } from '../_contexts/view-state-provider';
-
-import type { LinkItem } from '@/data/queries';
 
 export interface LinkLayoutProps {
   links: LinkItem[];

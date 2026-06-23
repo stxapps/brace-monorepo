@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { ChevronDown, Plus, X } from 'lucide-react';
 
 import { DEFAULT_LIST_ID, flattenTree, normalizeUrl, TRASH_ID } from '@stxapps/shared';
+import { useLinkMutations, useLists, useTagMutations, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
@@ -36,10 +37,6 @@ import {
 } from '@stxapps/web-ui/components/ui/select';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { useLinkMutations } from '../../_hooks/use-link-mutations';
-import { useLists } from '../../_hooks/use-lists';
-import { useTagMutations } from '../../_hooks/use-tag-mutations';
-import { useTags } from '../../_hooks/use-tags';
 import { useLinksPage } from '../_contexts/page-provider';
 
 // The list to pre-select: the one the user is currently viewing (so "add" lands

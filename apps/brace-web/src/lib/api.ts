@@ -1,6 +1,5 @@
 import { createApiClient } from '@stxapps/shared';
-
-import { getSession, getToken, notifySessionInvalid } from '../data/session-store';
+import { getSession, getToken, notifySessionInvalid } from '@stxapps/web-react';
 
 // App-level binding of the shared typed client to brace-api's base URL.
 // Set NEXT_PUBLIC_API_URL per environment.

@@ -18,5 +18,23 @@
       "default": "./src/index.ts"
     },
     "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@stxapps/react": "*",
+    "@stxapps/shared": "*",
+    "@stxapps/web-crypto": "*",
+    "dexie": "^4.4.3",
+    "dexie-react-hooks": "^4.4.0",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   }
 }

@@ -42,6 +42,10 @@ export default defineConfig({
       host_permissions: [apiHost],
       permissions: [
         'storage',
+        // The background service worker is ephemeral in MV3 — it can't hold a
+        // long-running loop — so the sync + extraction cycles are driven by a
+        // periodic chrome.alarms tick (see entrypoints/background.ts).
+        'alarms',
         // activeTab grants temporary host access to the current tab on click,
         // covering url/title reads + captureVisibleTab on it
         'activeTab',
