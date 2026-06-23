@@ -23,17 +23,17 @@ import { z } from 'zod';
 // `LastModified` that drives sync ordering (an ItemRecord/op-log `updatedAt`),
 // which is infrastructure the plaintext doesn't depend on.
 
-// The plaintext of `meta/{id}.enc` — one bookmark ("link" in product language).
-// Small by design (< ~2 KB budget): list-view fields only, so the whole library
-// is browsable offline after first sync. Heavy content (archives, screenshots,
-// long notes) lives in separate `files/{id}.enc` blobs referenced by id — never
-// inlined here. `tagIds`/`listId` hold ids of `tags/{id}.enc` / `lists/{id}.enc`
-// files; a dangling id (tag deleted on another device) is NORMAL and the UI
-// skips it, never errors.
+// The plaintext of `links/{id}.enc` — one link. Small by design (< ~2 KB
+// budget): list-view fields only, so the whole library is browsable offline
+// after first sync. Heavy content (archives, screenshots, long notes) lives in
+// separate `files/{id}.enc` blobs referenced by id — never inlined here.
+// `tagIds`/`listId` hold ids of `tags/{id}.enc` / `lists/{id}.enc` files; a
+// dangling id (tag deleted on another device) is NORMAL and the UI skips it,
+// never errors.
 //
 // Reference fields end in `Id`/`Ids` and store the BARE entity id, never a full
 // path: the `{namespace}` prefix + `.enc` suffix is applied at the read edge
-// (paths.ts), the same convention the link's own `meta/{id}.enc` path follows.
+// (paths.ts), the same convention the link's own `links/{id}.enc` path follows.
 export const linkSchema = z.looseObject({
   title: z.string(),
   url: z.string(),
@@ -89,9 +89,9 @@ export type List = z.infer<typeof listSchema>;
 
 // The plaintext of `pins/{id}.enc` — marks a link as pinned ("pin to the top").
 // One file per pinned link, with `id` repeating the link's id (the `{id}` of its
-// `meta/{id}.enc`), so a pin is self-contained AND its own last-writer-wins point:
+// `links/{id}.enc`), so a pin is self-contained AND its own last-writer-wins point:
 // pinning, unpinning, or reordering writes ONLY this file, so it never clobbers a
-// concurrent edit to the link's `meta` blob (title/tags/list) — the same isolation
+// concurrent edit to the link's blob (title/tags/list) — the same isolation
 // reasoning that gives lists/tags one file each. A flag inside `linkSchema` would
 // instead make every pin/reorder rewrite the link and collide under LWW.
 //

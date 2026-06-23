@@ -83,7 +83,7 @@ export function dropCachedLink(path: string): void {
 
 // Drop every cached decode — called from clearSyncData on sign-out (alongside the
 // `items` wipe it mirrors), so a second user on the same device can't read the
-// first's decoded bookmarks.
+// first's decoded links.
 export function clearDecodeCache(): void {
   cache.clear();
 }

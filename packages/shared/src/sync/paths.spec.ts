@@ -27,13 +27,13 @@ describe('syncPathSchema covers the whole path contract', () => {
 
   it('rejects traversal, unknown namespaces, and wrong suffixes', () => {
     const bad = [
-      '../meta/x.enc', // traversal out of the user root
-      'meta/../files/x.enc', // embedded traversal
-      'meta/x.txt', // wrong suffix
-      'meta/.enc', // empty id segment
+      '../links/x.enc', // traversal out of the user root
+      'links/../files/x.enc', // embedded traversal
+      'links/x.txt', // wrong suffix
+      'links/.enc', // empty id segment
       'unknown/x.enc', // namespace not in the contract
       'settings/General.enc', // concern must be lowercase
-      'meta/x.enc/y.enc', // smuggled second segment
+      'links/x.enc/y.enc', // smuggled second segment
     ];
     for (const path of bad) {
       expect(syncPathSchema.safeParse(path).success).toBe(false);

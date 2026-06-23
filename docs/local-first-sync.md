@@ -124,7 +124,7 @@ access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` / `lib/env.ts`
 encrypted file. Random ids — never content-derived — so filenames leak nothing:
 
 ```
-/users/{uid}/meta/{id}.enc        ← encrypted bookmark metadata (small, < ~2 KB)
+/users/{uid}/links/{id}.enc       ← encrypted link metadata (small, < ~2 KB)
 /users/{uid}/files/{id}.enc       ← encrypted content / archived page / screenshot
 /users/{uid}/tags/{id}.enc        ← encrypted { id, name, updatedAt }
 /users/{uid}/lists/{id}.enc       ← encrypted { id, name, updatedAt }
@@ -132,7 +132,7 @@ encrypted file. Random ids — never content-derived — so filenames leak nothi
 /users/{uid}/settings/general.enc ← encrypted general user settings
 ```
 
-A bookmark's metadata references the other files by id; the reference graph lives
+A link's metadata references the other files by id; the reference graph lives
 **inside** the ciphertext, so the server never sees it:
 
 ```json
@@ -206,7 +206,7 @@ tag/list names.
   where `{id}` is the pinned link's id), each holding `{ id, rank, … }`. A pin is
   the same LWW-isolation move applied to a per-link flag: keeping pin state in its
   own file means pinning/unpinning/reordering writes only the pin and never
-  clobbers a concurrent edit to the link's `meta/{id}.enc` blob (and vice-versa) —
+  clobbers a concurrent edit to the link's `links/{id}.enc` blob (and vice-versa) —
   a `pinned` field _inside_ metadata could not. `rank` is a fractional index (the
   same scheme as tag/list order) so reordering a pin rewrites only that one pin.
   Pin = `put`; unpin = `delete`. No `listId` in the pin: the link already records
@@ -241,7 +241,7 @@ tag/list names.
   wire every object is the same opaque encrypted frame (see _crypto boundary —
   blob wire format_); nothing about an R2 object distinguishes JSON from an
   image. The decrypted bytes are typed by **convention baked into the client**:
-  the index namespaces — `meta/`, `tags/`, `lists/`, `pins/`, `settings/` — are
+  the index namespaces — `links/`, `tags/`, `lists/`, `pins/`, `settings/` — are
   UTF-8 JSON (decode, then `JSON.parse`), while `files/` is raw content whose meaning
   comes from the **metadata field that references it** — `pageArchive` means an
   HTML archive, a `screenshot`/`thumbnail` field means an image. The client only
@@ -364,7 +364,7 @@ than the cursor plus the retained-range bounds, so the client can tell increment
 from fallback:
 
 ```
-GET /v1/ops/list?since=2026-04-13T10:00:00.000Z&sincePath=meta/m_abc.enc&limit=500
+GET /v1/ops/list?since=2026-04-13T10:00:00.000Z&sincePath=links/l_abc.enc&limit=500
 → {
     ops: [{ op, path, updatedAt }, ...],   // ordered by (updatedAt, path)
     oldestUpdatedAt,   // min updated_at still retained — null on an empty log
@@ -492,7 +492,7 @@ page per call**:
 ```
 GET /v1/files/list?limit=1000
 → {
-    files: [ { path: "meta/m_abc.enc", updatedAt: 1744538400000 }, ... ],
+    files: [ { path: "links/l_abc.enc", updatedAt: 1744538400000 }, ... ],
     nextPageToken: "…" | null,   // R2's opaque list cursor; null when complete
   }
 ```
@@ -604,7 +604,7 @@ control** — the split is forced, not stylistic.
   boundary. This is a property of the **sequence** of commits, and **only the
   client can own it**, for three reasons the server can't get around:
   1. **No referential knowledge.** Content is opaque (E2E). The server sees
-     `meta/{id}` and `files/{id}` as unrelated paths; it can confirm _an object_
+     `links/{id}` and `files/{id}` as unrelated paths; it can confirm _an object_
      exists (that's A), never that _the content this metadata points at_ exists —
      it can't read the reference graph, and a note may reference zero or many
      content files.
@@ -684,7 +684,7 @@ decision, not an accident.
 Because the server can't inspect contents, it must enforce policy on the
 **envelope**:
 
-- the wire carries each path **relative to the user's root** (`meta/{id}.enc`, …),
+- the wire carries each path **relative to the user's root** (`links/{id}.enc`, …),
   never the `/users/{uid}/` prefix. On **every** `POST /v1/files/sign` (and every
   `ops/*` / `files/*` call) the Worker derives the `/users/{authedUid}/` prefix
   from the session and prepends it (`lib/r2-keys.ts`), so a path can only ever

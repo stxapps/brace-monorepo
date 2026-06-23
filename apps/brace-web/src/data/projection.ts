@@ -19,9 +19,9 @@ import { z } from 'zod';
 
 import {
   FILES_PREFIX,
+  LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
-  META_PREFIX,
   PINS_PREFIX,
   SETTINGS_PREFIX,
   TAGS_PREFIX,
@@ -63,7 +63,7 @@ export function parseBlob<T extends z.ZodTypeAny>(
 // The path's namespace prefix → its `itemType`. `undefined` for an unknown
 // prefix (forward-compat: a namespace this client version doesn't model yet).
 export function itemTypeForPath(path: string): ItemType | undefined {
-  if (path.startsWith(META_PREFIX)) return 'meta';
+  if (path.startsWith(LINKS_PREFIX)) return 'link';
   if (path.startsWith(LISTS_PREFIX)) return 'list';
   if (path.startsWith(TAGS_PREFIX)) return 'tag';
   if (path.startsWith(PINS_PREFIX)) return 'pin';
@@ -84,7 +84,7 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
   const record: ItemRecord = { path, updatedAt, data, itemType };
   if (!data || itemType === undefined || itemType === 'files') return record;
 
-  if (itemType === 'meta') {
+  if (itemType === 'link') {
     const link = parseBlob(data, linkSchema);
     if (link) {
       record.itemCreatedAt = link.createdAt;

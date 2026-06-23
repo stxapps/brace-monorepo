@@ -3,12 +3,12 @@
 // Edit operations for links, bound to the active account and wired to a sync
 // kick — the link sibling of useListMutations. Today it owns just `create` (the
 // quick-add flow from the topbar); rename/move/remove/setTags land here as the
-// editor grows. Each op writes exactly ONE link file (`meta/{id}.enc`) via
+// editor grows. Each op writes exactly ONE link file (`links/{id}.enc`) via
 // writeLink, the same one-file-per-entity LWW model the lists/tags/pins use.
 
 import { useCallback, useMemo } from 'react';
 
-import { ENC_SUFFIX, META_PREFIX } from '@stxapps/shared';
+import { ENC_SUFFIX, LINKS_PREFIX } from '@stxapps/shared';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
@@ -54,7 +54,7 @@ export function useLinkMutations(): LinkMutations {
         listId: draft.listId,
         createdAt: 0,
         updatedAt: 0,
-        path: `${META_PREFIX}${id}${ENC_SUFFIX}`,
+        path: `${LINKS_PREFIX}${id}${ENC_SUFFIX}`,
       };
 
       await writeLink(username, link, {});

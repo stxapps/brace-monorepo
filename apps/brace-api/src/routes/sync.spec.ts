@@ -46,7 +46,7 @@ describe('sync control plane', () => {
         (
           await app.request(
             opsCommitEndpoint.path,
-            json({}, { ops: [{ op: 'put', path: 'meta/a.enc' }] }),
+            json({}, { ops: [{ op: 'put', path: 'links/a.enc' }] }),
             env,
           )
         ).status,
@@ -55,7 +55,7 @@ describe('sync control plane', () => {
         (
           await app.request(
             filesSignEndpoint.path,
-            json({}, { op: 'get', paths: ['meta/a.enc'] }),
+            json({}, { op: 'get', paths: ['links/a.enc'] }),
             env,
           )
         ).status,
@@ -67,11 +67,11 @@ describe('sync control plane', () => {
     it('commits a put and pulls it back over the op list', async () => {
       const { userId, auth } = await authFor('sync-commit-1');
       // The client PUTs the blob to R2 first (here directly), then commits.
-      await env.USER_FILES.put(userFileKey(userId, 'meta/m1.enc'), 'ciphertext');
+      await env.USER_FILES.put(userFileKey(userId, 'links/m1.enc'), 'ciphertext');
 
       const commit = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { ops: [{ op: 'put', path: 'meta/m1.enc' }] }),
+        json(auth, { ops: [{ op: 'put', path: 'links/m1.enc' }] }),
         env,
       );
       expect(commit.status).toBe(200);
@@ -81,10 +81,10 @@ describe('sync control plane', () => {
       };
       expect(failed).toEqual([]);
       expect(results).toHaveLength(1);
-      expect(results[0].path).toBe('meta/m1.enc');
+      expect(results[0].path).toBe('links/m1.enc');
       expect(typeof results[0].updatedAt).toBe('number');
       // Commit recorded R2's own LastModified.
-      const head = await env.USER_FILES.head(userFileKey(userId, 'meta/m1.enc'));
+      const head = await env.USER_FILES.head(userFileKey(userId, 'links/m1.enc'));
       expect(results[0].updatedAt).toBe(head?.uploaded.getTime());
 
       const list = await app.request(`${opsListEndpoint.path}`, { headers: auth }, env);
@@ -96,7 +96,7 @@ describe('sync control plane', () => {
         hasMore: boolean;
       };
       expect(pulled.ops).toEqual([
-        { op: 'put', path: 'meta/m1.enc', updatedAt: results[0].updatedAt },
+        { op: 'put', path: 'links/m1.enc', updatedAt: results[0].updatedAt },
       ]);
       expect(pulled.newestUpdatedAt).toBe(results[0].updatedAt);
       expect(pulled.hasMore).toBe(false);
@@ -105,15 +105,15 @@ describe('sync control plane', () => {
     it('commits a batch and reports puts whose R2 object is missing in failed', async () => {
       const { userId, auth } = await authFor('sync-commit-batch-1');
       // Two of the three puts have objects in R2; the third never landed.
-      await env.USER_FILES.put(userFileKey(userId, 'meta/a.enc'), 'aa');
+      await env.USER_FILES.put(userFileKey(userId, 'links/a.enc'), 'aa');
       await env.USER_FILES.put(userFileKey(userId, 'files/b.enc'), 'bb');
 
       const commit = await app.request(
         opsCommitEndpoint.path,
         json(auth, {
           ops: [
-            { op: 'put', path: 'meta/a.enc' },
-            { op: 'put', path: 'meta/missing.enc' },
+            { op: 'put', path: 'links/a.enc' },
+            { op: 'put', path: 'links/missing.enc' },
             { op: 'put', path: 'files/b.enc' },
           ],
         }),
@@ -125,27 +125,27 @@ describe('sync control plane', () => {
         failed: { path: string; reason: string }[];
       };
       // The two real objects commit; the missing path is reported in failed.
-      expect(results.map((r) => r.path).sort()).toEqual(['files/b.enc', 'meta/a.enc']);
-      expect(failed).toEqual([{ path: 'meta/missing.enc', reason: 'no_object' }]);
+      expect(results.map((r) => r.path).sort()).toEqual(['files/b.enc', 'links/a.enc']);
+      expect(failed).toEqual([{ path: 'links/missing.enc', reason: 'no_object' }]);
 
       const list = await app.request(opsListEndpoint.path, { headers: auth }, env);
       const pulled = (await list.json()) as { ops: { path: string }[] };
-      expect(pulled.ops.map((o) => o.path).sort()).toEqual(['files/b.enc', 'meta/a.enc']);
+      expect(pulled.ops.map((o) => o.path).sort()).toEqual(['files/b.enc', 'links/a.enc']);
     });
 
     it('commits a delete: removes the R2 object, logs the op, frees the listing', async () => {
       const { userId, auth } = await authFor('sync-delete-1');
       // Put-then-commit so the object, its op, and its quota entry all exist.
-      await env.USER_FILES.put(userFileKey(userId, 'meta/d1.enc'), 'ciphertext');
+      await env.USER_FILES.put(userFileKey(userId, 'links/d1.enc'), 'ciphertext');
       await app.request(
         opsCommitEndpoint.path,
-        json(auth, { ops: [{ op: 'put', path: 'meta/d1.enc' }] }),
+        json(auth, { ops: [{ op: 'put', path: 'links/d1.enc' }] }),
         env,
       );
 
       const commit = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { ops: [{ op: 'delete', path: 'meta/d1.enc' }] }),
+        json(auth, { ops: [{ op: 'delete', path: 'links/d1.enc' }] }),
         env,
       );
       expect(commit.status).toBe(200);
@@ -154,12 +154,12 @@ describe('sync control plane', () => {
         failed: unknown[];
       };
       expect(failed).toEqual([]);
-      expect(results.map((r) => r.path)).toEqual(['meta/d1.enc']);
+      expect(results.map((r) => r.path)).toEqual(['links/d1.enc']);
 
       // The object is GONE from R2 — the server deletes it at commit (the client
       // can't: files/sign mints only PUT/GET URLs). R2 is truth, so without this
       // the download-authoritative fallback would resurrect every deleted file.
-      await expect(env.USER_FILES.head(userFileKey(userId, 'meta/d1.enc'))).resolves.toBeNull();
+      await expect(env.USER_FILES.head(userFileKey(userId, 'links/d1.enc'))).resolves.toBeNull();
       const listing = await app.request(filesListEndpoint.path, { headers: auth }, env);
       expect(((await listing.json()) as { files: unknown[] }).files).toEqual([]);
 
@@ -171,7 +171,7 @@ describe('sync control plane', () => {
       // Re-committing the delete is idempotent — the absent key is a no-op.
       const again = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { ops: [{ op: 'delete', path: 'meta/d1.enc' }] }),
+        json(auth, { ops: [{ op: 'delete', path: 'links/d1.enc' }] }),
         env,
       );
       expect(again.status).toBe(200);
@@ -207,13 +207,13 @@ describe('sync control plane', () => {
       const { auth } = await authFor('sync-noobject-1');
       const res = await app.request(
         opsCommitEndpoint.path,
-        json(auth, { ops: [{ op: 'put', path: 'meta/missing.enc' }] }),
+        json(auth, { ops: [{ op: 'put', path: 'links/missing.enc' }] }),
         env,
       );
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({
         results: [],
-        failed: [{ path: 'meta/missing.enc', reason: 'no_object' }],
+        failed: [{ path: 'links/missing.enc', reason: 'no_object' }],
       });
 
       const list = await app.request(opsListEndpoint.path, { headers: auth }, env);
@@ -224,10 +224,10 @@ describe('sync control plane', () => {
   describe(`GET ${filesListEndpoint.path}`, () => {
     it('lists only the calling user’s objects, with R2 timestamps', async () => {
       const { userId, auth } = await authFor('sync-list-1');
-      await env.USER_FILES.put(userFileKey(userId, 'meta/x.enc'), 'x');
+      await env.USER_FILES.put(userFileKey(userId, 'links/x.enc'), 'x');
       await env.USER_FILES.put(userFileKey(userId, 'tags/t.enc'), 'tt');
       // Another user's object must NOT appear.
-      await env.USER_FILES.put(userFileKey('sync-list-other', 'meta/y.enc'), 'y');
+      await env.USER_FILES.put(userFileKey('sync-list-other', 'links/y.enc'), 'y');
 
       const res = await app.request(filesListEndpoint.path, { headers: auth }, env);
       expect(res.status).toBe(200);
@@ -235,7 +235,7 @@ describe('sync control plane', () => {
         files: { path: string; updatedAt: number }[];
         nextPageToken: string | null;
       };
-      expect(files.map((f) => f.path).sort()).toEqual(['meta/x.enc', 'tags/t.enc']);
+      expect(files.map((f) => f.path).sort()).toEqual(['links/x.enc', 'tags/t.enc']);
       expect(files.every((f) => typeof f.updatedAt === 'number')).toBe(true);
       // Two objects, well under the page limit, so the listing is complete.
       expect(nextPageToken).toBeNull();
@@ -244,7 +244,7 @@ describe('sync control plane', () => {
     it('pages the listing when more objects remain than the limit', async () => {
       const { userId, auth } = await authFor('sync-list-page-1');
       for (const id of ['a', 'b', 'c']) {
-        await env.USER_FILES.put(userFileKey(userId, `meta/${id}.enc`), id);
+        await env.USER_FILES.put(userFileKey(userId, `links/${id}.enc`), id);
       }
 
       // limit=2 over 3 objects ⇒ first page is full and carries a nextPageToken.
@@ -272,7 +272,7 @@ describe('sync control plane', () => {
 
       // The two pages together cover every object exactly once.
       const all = [...page1.files, ...page2.files].map((f) => f.path).sort();
-      expect(all).toEqual(['meta/a.enc', 'meta/b.enc', 'meta/c.enc']);
+      expect(all).toEqual(['links/a.enc', 'links/b.enc', 'links/c.enc']);
     });
   });
 
@@ -281,12 +281,12 @@ describe('sync control plane', () => {
       const { userId, auth } = await authFor('sync-sign-1');
       const res = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'put', paths: ['meta/a.enc', 'files/b.enc'] }),
+        json(auth, { op: 'put', paths: ['links/a.enc', 'files/b.enc'] }),
         env,
       );
       expect(res.status).toBe(200);
       const { urls } = (await res.json()) as { urls: { path: string; url: string }[] };
-      expect(urls.map((u) => u.path)).toEqual(['meta/a.enc', 'files/b.enc']);
+      expect(urls.map((u) => u.path)).toEqual(['links/a.enc', 'files/b.enc']);
       for (const { path, url } of urls) {
         // Dev env: the blob-proxy URL, keyed under users/{uid}/ (see routes/local-r2.ts).
         expect(url).toContain('/v1/files/blob/');
@@ -298,13 +298,13 @@ describe('sync control plane', () => {
       const { userId, auth } = await authFor('sync-sign-2');
       const res = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'get', paths: ['meta/a.enc'] }),
+        json(auth, { op: 'get', paths: ['links/a.enc'] }),
         env,
       );
       expect(res.status).toBe(200);
       const { urls } = (await res.json()) as { urls: { path: string; url: string }[] };
       expect(urls).toHaveLength(1);
-      expect(urls[0].url).toContain(`/v1/files/blob/${userFileKey(userId, 'meta/a.enc')}`);
+      expect(urls[0].url).toContain(`/v1/files/blob/${userFileKey(userId, 'links/a.enc')}`);
     });
 
     it('round-trips a blob through the dev proxy (PUT then GET)', async () => {
@@ -313,7 +313,7 @@ describe('sync control plane', () => {
       // the local stand-in for direct browser↔R2 transfer (routes/local-r2.ts).
       const signPut = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'put', paths: ['meta/rt.enc'] }),
+        json(auth, { op: 'put', paths: ['links/rt.enc'] }),
         env,
       );
       const putUrl = ((await signPut.json()) as { urls: { url: string }[] }).urls[0].url;
@@ -324,11 +324,11 @@ describe('sync control plane', () => {
       );
       expect(put.status).toBe(200);
       // The proxy wrote through the binding to the user-namespaced key.
-      expect(await env.USER_FILES.head(userFileKey(userId, 'meta/rt.enc'))).not.toBeNull();
+      expect(await env.USER_FILES.head(userFileKey(userId, 'links/rt.enc'))).not.toBeNull();
 
       const signGet = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'get', paths: ['meta/rt.enc'] }),
+        json(auth, { op: 'get', paths: ['links/rt.enc'] }),
         env,
       );
       const getUrl = ((await signGet.json()) as { urls: { url: string }[] }).urls[0].url;
@@ -340,7 +340,7 @@ describe('sync control plane', () => {
     it('returns 404 for a missing blob through the dev proxy', async () => {
       const { userId } = await authFor('sync-sign-404');
       const get = await app.request(
-        `/v1/files/blob/${userFileKey(userId, 'meta/nope.enc')}`,
+        `/v1/files/blob/${userFileKey(userId, 'links/nope.enc')}`,
         {},
         env,
       );
@@ -351,7 +351,7 @@ describe('sync control plane', () => {
       const { auth } = await authFor('sync-sign-3');
       const res = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'put', paths: ['meta/ok.enc', 'not-a-namespace/evil'] }),
+        json(auth, { op: 'put', paths: ['links/ok.enc', 'not-a-namespace/evil'] }),
         env,
       );
       expect(res.status).toBe(400);

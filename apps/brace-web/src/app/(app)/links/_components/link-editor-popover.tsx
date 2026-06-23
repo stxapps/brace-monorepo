@@ -9,7 +9,7 @@
 // content) is the future dialog/route, not this.
 //
 // Shape: a URL field always visible, an "Advanced" disclosure that reveals the
-// list picker + tag editor, and Save/Cancel. Saving writes one `meta/{id}.enc`
+// list picker + tag editor, and Save/Cancel. Saving writes one `links/{id}.enc`
 // via useLinkMutations and kicks a sync; the title is back-filled later by a
 // metadata fetch, so the form only collects a URL (+ optional list/tags).
 //

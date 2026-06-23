@@ -74,14 +74,14 @@ Fetching a URL is easy wherever there's no CORS; **screenshots and archives are
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                          | title + image | read mode        | screenshot              | archive |
-| -------------------------------------- | ------------- | ---------------- | ----------------------- | ------- |
-| extension — **icon click, active tab** | ✅ live DOM   | ✅ live DOM      | ✅ `captureVisibleTab`  | ✅      |
-| extension — **background, queued URL** | ✅ raw HTML   | ⚠️ raw HTML      | ❌ no open tab          | ⚠️      |
-| mobile — **share sheet (foreground)**  | ✅            | ✅ WebView       | ⚠️ WebView render       | ⚠️      |
-| mobile — **background queue**          | ✅            | ⚠️               | ❌                      | ❌      |
-| `brace-api` Worker (**unused**)        | ✅            | ✅ (linkedom)    | ❌ needs Browser Rndr.  | ❌      |
-| third-party service (**rejected**)     | ✅            | ✅               | ✅                      | ✅      |
+| client / mode                          | title + image | read mode     | screenshot             | archive |
+| -------------------------------------- | ------------- | ------------- | ---------------------- | ------- |
+| extension — **icon click, active tab** | ✅ live DOM   | ✅ live DOM   | ✅ `captureVisibleTab` | ✅      |
+| extension — **background, queued URL** | ✅ raw HTML   | ⚠️ raw HTML   | ❌ no open tab         | ⚠️      |
+| mobile — **share sheet (foreground)**  | ✅            | ✅ WebView    | ⚠️ WebView render      | ⚠️      |
+| mobile — **background queue**          | ✅            | ⚠️            | ❌                     | ❌      |
+| `brace-api` Worker (**unused**)        | ✅            | ✅ (linkedom) | ❌ needs Browser Rndr. | ❌      |
+| third-party service (**rejected**)     | ✅            | ✅            | ✅                     | ✅      |
 
 Two consequences baked into the design:
 
@@ -97,12 +97,12 @@ Two consequences baked into the design:
   system must record _which tier_ produced the current result. See
   _the extraction entity_.
 
-### the data model: result in `meta`, bookkeeping in `extraction/`
+### the data model: result in `links`, bookkeeping in `extraction/`
 
 There are two kinds of state, and conflating them is the trap:
 
 1. **Display result** — the title/image the UI renders, the heavy refs it opens.
-   Written **once** on completion. Belongs in `meta/{id}.enc`, the always-resident
+   Written **once** on completion. Belongs in `links/{id}.enc`, the always-resident
    list-view blob, so the library renders offline and the UI never has to join a
    second file to draw a row. Heavy outputs (screenshot, archived page) stay in
    `files/{id}.enc` referenced by id, exactly as `pageArchiveId` already is.
@@ -111,19 +111,19 @@ There are two kinds of state, and conflating them is the trap:
    automated** state written by background actors on a different schedule than
    user edits.
 
-Putting (2) in `meta` would repeat the mistake the `pins/` design exists to
+Putting (2) in `links` would repeat the mistake the `pins/` design exists to
 avoid: a churny `pending → claimed → done/failed` field rewriting the link blob
 clobbers a concurrent user title/tag edit under file-level LWW, and bloats the
 `< ~2 KB` metadata budget. By the same reasoning that gives pins their own file,
 **coordination state gets its own LWW-isolated file, `extraction/{id}.enc`,
-shadowing `meta/{id}.enc`** (`{id}` = the link's id), one file per link.
+shadowing `links/{id}.enc`** (`{id}` = the link's id), one file per link.
 
-The split keeps **one source of truth for the title** (it lives only in `meta`,
+The split keeps **one source of truth for the title** (it lives only in `links`,
 never copied into `extraction/`); `extraction/` answers only "who/when/quality/
-retry?", which `meta` deliberately doesn't carry.
+retry?", which `links` deliberately doesn't carry.
 
 > **The one residual cost.** Completing an extraction writes _two_ files: the
-> `meta` title/image backfill _and_ the `extraction/` bookkeeping. The `meta`
+> `links` title/image backfill _and_ the `extraction/` bookkeeping. The `links`
 > write is a read-merge-write, so it has the usual small LWW clobber window
 > against a concurrent user title edit (see [local-first-sync.md](./local-first-sync.md)
 > — _conflict policy_). Bounded, one-time (not churny), and acceptable for a
@@ -137,15 +137,15 @@ id, one self-contained file per link). Lives in `@stxapps/shared`
 
 ```ts
 export const extractionSchema = z.looseObject({
-  id: z.string(),                 // = the link's id ({id} of meta/{id}.enc)
+  id: z.string(), // = the link's id ({id} of links/{id}.enc)
   status: z.enum(['pending', 'done', 'failed']),
   tier: z.enum(['active-page', 'bg-fetch']).optional(), // who/quality produced the result
-  extractedBy: z.string().optional(),       // client/device id — provenance
+  extractedBy: z.string().optional(), // client/device id — provenance
   extractedAt: z.number().int().optional(),
-  attempts: z.number().int(),               // backoff counter
+  attempts: z.number().int(), // backoff counter
   nextEligibleAt: z.number().int().optional(), // don't retry before this;
-                                               // omit + status:'failed' = permanent (404/410)
-  claimedBy: z.string().optional(),         // soft TTL lease — cross-device dedup
+  // omit + status:'failed' = permanent (404/410)
+  claimedBy: z.string().optional(), // soft TTL lease — cross-device dedup
   claimedAt: z.number().int().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
@@ -198,7 +198,7 @@ in `shared`.
 
 ### everything is async; nothing blocks the save
 
-The save path is unchanged: writing `meta/{id}.enc` makes the link exist
+The save path is unchanged: writing `links/{id}.enc` makes the link exist
 **immediately** (see [local-first-sync.md](./local-first-sync.md) — _push_). All
 extraction is **fire-and-forget after that** — the user never waits on a fetch or
 a render, on any client. Results arrive later and the UI updates reactively when

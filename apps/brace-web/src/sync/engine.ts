@@ -73,7 +73,7 @@ const PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
 
 // A path under `files/` is heavy content (archived page, screenshot). Per the doc,
 // content is fetched LAZILY (on open/scroll), never eagerly on sync — so sync only
-// tracks its `updatedAt` and downloads the always-resident index (meta/tags/lists/
+// tracks its `updatedAt` and downloads the always-resident index (links/tags/lists/
 // settings). loadEntityContent() pulls a content blob on demand.
 function isContentPath(path: string): boolean {
   return path.startsWith(FILES_PREFIX);
@@ -341,7 +341,7 @@ async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Comm
   // then content. Unlike the puts below this is ONE call, not two: commitBatched
   // commits its input in array order across sequential chunks, so the concatenation
   // already IS the phase order — every entity's metadata-delete commits no later than
-  // its content-delete. The one chunk that can straddle the meta/content boundary
+  // its content-delete. The one chunk that can straddle the metadata/content boundary
   // commits both in a single atomic log write (the safe direction, never
   // content-before-metadata), so splitting it would only cost a redundant partial
   // commit when the metadata count isn't a multiple of COMMIT_BATCH.

@@ -13,7 +13,7 @@ export function userPrefix(userId: string): string {
 }
 
 // Full R2 object key for a user's relative path, e.g.
-// ('u1', 'meta/m_abc.enc') → 'users/u1/meta/m_abc.enc'.
+// ('u1', 'links/l_abc.enc') → 'users/u1/links/l_abc.enc'.
 export function userFileKey(userId: string, relativePath: string): string {
   return userPrefix(userId) + relativePath;
 }

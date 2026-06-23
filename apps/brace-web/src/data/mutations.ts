@@ -76,7 +76,7 @@ export async function deleteEntity(username: string, path: string): Promise<void
   });
 }
 
-// Apply a patch to a link and write it — create (new `meta/{id}.enc`) or edit.
+// Apply a patch to a link and write it — create (new `links/{id}.enc`) or edit.
 // Stamps `updatedAt` now so the in-blob "date modified" advances on EVERY edit;
 // that's what keeps the `[itemType+itemUpdatedAt]` sort indexes (db.ts) and the
 // decode cache's version (decode-cache.ts) correct — both ride on `itemUpdatedAt`,
@@ -103,7 +103,7 @@ export async function writeLink(
   await writeEntity(username, next);
 }
 
-// Delete one link: drop its `meta/{id}.enc`. Thin like deleteList/deletePin —
+// Delete one link: drop its `links/{id}.enc`. Thin like deleteList/deletePin —
 // higher-level cleanup (its pin, its `files/` content) is the caller's concern.
 export function deleteLink(username: string, link: WithPath<Link>): Promise<void> {
   return deleteEntity(username, link.path);

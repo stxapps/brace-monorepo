@@ -18,10 +18,10 @@ import type { Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
 import {
   compareRank,
   ENC_SUFFIX,
+  LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
   listSchema,
-  META_PREFIX,
   PINS_PREFIX,
   pinSchema,
   SETTINGS_GENERAL_PATH,
@@ -375,7 +375,7 @@ async function readRest(
       return rangeFastPath(index.list, query.lists.any[0], limit, exclude);
     }
     if (query.lists.any.length === 0) {
-      return rangeFastPath(index.type, 'meta', limit, exclude);
+      return rangeFastPath(index.type, 'link', limit, exclude);
     }
   }
 
@@ -393,7 +393,7 @@ async function readRest(
   // the page detects `hasMore`), so it touches a bounded slice, not the library.
   const records = await db.items
     .where(index.type)
-    .between(['meta', Dexie.minKey], ['meta', Dexie.maxKey], true, true)
+    .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
     .reverse()
     .filter((record) => {
       if (exclude.has(record.path) || !columnMatches(record, query)) return false;
@@ -412,7 +412,7 @@ async function readRest(
 
 // The pinned links that MATCH `query`, in pin-rank order — the overlay floated to
 // the top of every view a pinned link appears in. Reads the small `pins/`
-// namespace, looks up each pin's `meta/{id}.enc` record (bulkGet preserves the
+// namespace, looks up each pin's `links/{id}.enc` record (bulkGet preserves the
 // rank order of the keys), and keeps only those that exist and pass the same
 // column + text predicates the rest of the query uses. A pin whose link is gone
 // or doesn't match the active view is simply skipped. Returns the decoded links
@@ -423,7 +423,9 @@ async function readPinnedOverlay(
   const pins = (await readPins()).sort(compareRank);
   if (pins.length === 0) return { links: [], paths: new Set() };
 
-  const records = await db.items.bulkGet(pins.map((pin) => `${META_PREFIX}${pin.id}${ENC_SUFFIX}`));
+  const records = await db.items.bulkGet(
+    pins.map((pin) => `${LINKS_PREFIX}${pin.id}${ENC_SUFFIX}`),
+  );
   const links: LinkItem[] = [];
   const paths = new Set<string>();
   const hasText = hasTextClause(query);

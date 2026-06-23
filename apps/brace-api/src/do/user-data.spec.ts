@@ -20,9 +20,9 @@ describe('UserDataDO op log', () => {
     const stub = userDataStub(env, 'user-a');
 
     const { results } = await stub.commitOps([
-      { op: 'put', path: 'meta/a.enc', updatedAt: 1000, size: 3 },
-      { op: 'put', path: 'meta/b.enc', updatedAt: 2000, size: 5 },
-      { op: 'delete', path: 'meta/a.enc', updatedAt: 3000, size: 0 },
+      { op: 'put', path: 'links/a.enc', updatedAt: 1000, size: 3 },
+      { op: 'put', path: 'links/b.enc', updatedAt: 2000, size: 5 },
+      { op: 'delete', path: 'links/a.enc', updatedAt: 3000, size: 0 },
     ]);
 
     // commitOps returns each recorded updatedAt (input order) the client advances
@@ -33,7 +33,7 @@ describe('UserDataDO op log', () => {
     // (updatedAt, path).
     const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await stub.listOps(null, null, 500);
     expect(hasMore).toBe(false);
-    expect(ops.map((o) => o.path).sort()).toEqual(['meta/a.enc', 'meta/a.enc', 'meta/b.enc']);
+    expect(ops.map((o) => o.path).sort()).toEqual(['links/a.enc', 'links/a.enc', 'links/b.enc']);
     expect(oldestUpdatedAt).toBe(1000);
     expect(newestUpdatedAt).toBe(3000);
 
@@ -48,7 +48,7 @@ describe('UserDataDO op log', () => {
     const stub = userDataStub(env, 'user-page');
     let ts = 1000;
     for (const id of ['a', 'b', 'c']) {
-      await stub.commitOps([{ op: 'put', path: `meta/${id}.enc`, updatedAt: ts, size: 1 }]);
+      await stub.commitOps([{ op: 'put', path: `links/${id}.enc`, updatedAt: ts, size: 1 }]);
       ts += 1000;
     }
 
@@ -78,7 +78,7 @@ describe('UserDataDO op log', () => {
     // Distinct userIds map to distinct DO instances (idFromName), so logs don't
     // bleed across users — the per-user isolation the DO model buys us.
     await userDataStub(env, 'user-b').commitOps([
-      { op: 'put', path: 'meta/only.enc', updatedAt: 1000, size: 1 },
+      { op: 'put', path: 'links/only.enc', updatedAt: 1000, size: 1 },
     ]);
 
     const otherUser = await userDataStub(env, 'user-c').listOps(null, null, 500);

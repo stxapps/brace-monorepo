@@ -19,14 +19,14 @@ import { ENC_SUFFIX, ID_KEYED_PREFIXES, SETTINGS_PREFIX } from './paths';
 export const opKindSchema = z.enum(['put', 'delete']);
 export type OpKind = z.infer<typeof opKindSchema>;
 
-// A path RELATIVE to the user's storage root — `meta/{id}.enc`, `files/{id}.enc`,
+// A path RELATIVE to the user's storage root — `links/{id}.enc`, `files/{id}.enc`,
 // `tags/{id}.enc`, `lists/{id}.enc`, `pins/{id}.enc`, or the fixed-name
 // `settings/<concern>.enc`.
 // The `/users/{uid}/` prefix that namespaces the R2 object is NEVER on the wire:
 // the server derives it from the authenticated session and prepends it, so one
 // user can't name another's path (the authorization check in docs/local-first-
 // sync.md "authorization & quota" reduces to "validate the shape, then prefix").
-// The id segment is the random-id family (meta/files/tags/lists/pins) or a fixed
+// The id segment is the random-id family (links/files/tags/lists/pins) or a fixed
 // lowercase concern name (settings) — both end in `.enc`. Anchored + a closed
 // charset, so there is no path-separator or traversal sequence to smuggle a key
 // outside the namespace.
@@ -35,7 +35,7 @@ export type OpKind = z.infer<typeof opKindSchema>;
 // namespaces as literals: the id-keyed group comes straight from
 // `ID_KEYED_PREFIXES`, so a namespace added there is validated here automatically
 // and this server-side gate can't drift from storage. See paths.ts.
-const RANDOM_ID = '[A-Za-z0-9_-]+'; // meta/files/tags/lists/pins id segment
+const RANDOM_ID = '[A-Za-z0-9_-]+'; // links/files/tags/lists/pins id segment
 const CONCERN = '[a-z0-9-]+'; // settings/<concern> — fixed lowercase name
 // Escape regex metacharacters so a prefix/suffix const is matched literally.
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -50,7 +50,7 @@ export const syncPathSchema = z
     new RegExp(
       `^(?:(?:${idKeyedGroup})\\/${RANDOM_ID}|${namespace(SETTINGS_PREFIX)}\\/${CONCERN})${escapeRe(ENC_SUFFIX)}$`,
     ),
-    'expected a sync path like meta/<id>.enc',
+    'expected a sync path like links/<id>.enc',
   );
 
 // Contract caps, defined once so the server's validation and the client's

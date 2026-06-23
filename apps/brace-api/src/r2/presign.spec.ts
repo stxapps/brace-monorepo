@@ -18,13 +18,13 @@ describe('presignR2Url', () => {
   it('signs an R2 S3 endpoint URL with the canonical query params', async () => {
     const url = await presignR2Url(
       creds,
-      { key: 'users/u1/meta/a.enc', method: 'PUT', expiresIn: 300 },
+      { key: 'users/u1/links/a.enc', method: 'PUT', expiresIn: 300 },
       now,
     );
     const parsed = new URL(url);
 
     expect(parsed.origin).toBe('https://acct123.r2.cloudflarestorage.com');
-    expect(parsed.pathname).toBe('/brace-user-files/users/u1/meta/a.enc');
+    expect(parsed.pathname).toBe('/brace-user-files/users/u1/links/a.enc');
     expect(parsed.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256');
     expect(parsed.searchParams.get('X-Amz-Credential')).toBe(
       'AKIDEXAMPLE/20260616/auto/s3/aws4_request',
@@ -37,7 +37,7 @@ describe('presignR2Url', () => {
   });
 
   it('is deterministic for a fixed clock and varies the signature by method', async () => {
-    const opts = { key: 'users/u1/meta/a.enc', expiresIn: 300 } as const;
+    const opts = { key: 'users/u1/links/a.enc', expiresIn: 300 } as const;
     const put1 = await presignR2Url(creds, { ...opts, method: 'PUT' }, now);
     const put2 = await presignR2Url(creds, { ...opts, method: 'PUT' }, now);
     const get = await presignR2Url(creds, { ...opts, method: 'GET' }, now);

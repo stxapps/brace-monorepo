@@ -4,7 +4,7 @@
 // the pinned section — bound to the active account and wired to a sync kick. Each
 // op writes exactly ONE pin file (writePin) or deletes one (deletePin); pins are
 // their own LWW point (entities.ts), so pinning/reordering a link never rewrites
-// the link's meta blob and concurrent pin moves on two devices don't collide.
+// the link's blob and concurrent pin moves on two devices don't collide.
 //
 // Reorder is just a new `rank` (rank.ts fractional index), the same way
 // useListMutations reorders lists: pick the destination index, rankForIndex turns
@@ -14,18 +14,18 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { compareRank, ENC_SUFFIX, META_PREFIX, PINS_PREFIX, rankForIndex } from '@stxapps/shared';
+import { compareRank, ENC_SUFFIX, LINKS_PREFIX, PINS_PREFIX, rankForIndex } from '@stxapps/shared';
 
 import { useAuth } from '@/contexts/auth-provider';
 import { useSync } from '@/contexts/sync-provider';
 import { deletePin, writePin } from '@/data/mutations';
 import { type LinkItem, type PinItem, readPins } from '@/data/queries';
 
-// A link's id is the `{id}` of its `meta/{id}.enc` path; the pin shadows it at
+// A link's id is the `{id}` of its `links/{id}.enc` path; the pin shadows it at
 // `pins/{id}.enc`. Derive both from the link's stored path so callers pass a
 // LinkItem and nothing reconstructs ids by hand.
 function linkIdOf(link: LinkItem): string {
-  return link.path.slice(META_PREFIX.length, -ENC_SUFFIX.length);
+  return link.path.slice(LINKS_PREFIX.length, -ENC_SUFFIX.length);
 }
 function pinPathOf(linkId: string): string {
   return `${PINS_PREFIX}${linkId}${ENC_SUFFIX}`;

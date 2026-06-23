@@ -55,15 +55,15 @@ export interface SyncMetaRecord {
 
 // One decrypted entity, keyed by its per-file path — the generic local store the
 // sync engine writes into (one entity per file, per docs/local-first-sync.md
-// "data model"). Every namespace flows through here identically: `meta/{id}.enc`
-// (the always-resident bookmark index), `tags/{id}.enc`, `lists/{id}.enc`,
+// "data model"). Every namespace flows through here identically: `links/{id}.enc`
+// (the always-resident link index), `tags/{id}.enc`, `lists/{id}.enc`,
 // `settings/<concern>.enc`, and lazily-fetched `files/{id}.enc` content.
 //
 // "Item" (not "entity" — that reads like a server-side D1 row — and not "file"
 // — that's the `files/` namespace specifically) is the established name for this
 // one-table-of-every-type store in E2E sync systems (Standard Notes, Joplin).
 //
-// - `path` is the FULL relative path (`meta/m_abc.enc`) AND the primary key — the
+// - `path` is the FULL relative path (`links/l_abc.enc`) AND the primary key — the
 //   same key the op log, pending queue, and R2 use, so reconcile can compare a
 //   server op to a local record directly (there is no separate id; the path IS
 //   the id). Named `path`, not `id`, to match every other layer and to avoid
@@ -80,7 +80,7 @@ export interface SyncMetaRecord {
 // The `item*` columns are the QUERY PROJECTION: the few list-view fields lifted
 // out of the decrypted `data` blob so IndexedDB can index them. Without them a
 // view like "newest 30 links in this list" would have to read+JSON.parse every
-// `meta/` blob into memory and sort there — O(library) on every reactive tick. A
+// `links/` blob into memory and sort there — O(library) on every reactive tick. A
 // compound index over these columns turns it into a keyset walk that materializes
 // only the page shown. They're DERIVED, not authoritative: `data` is the source
 // of truth, and every column here is computed FROM it by the single projector
@@ -88,10 +88,10 @@ export interface SyncMetaRecord {
 // so the index can never drift from the bytes it indexes (no second table, no
 // cross-table transaction; the column is written in the same `put` as `data`).
 // All are sparse: a record gets a key only where the field applies (a `files/`
-// content record has none; only `meta/` links carry `itemListId`/`itemTagIds`),
+// content record has none; only `links/` links carry `itemListId`/`itemTagIds`),
 // and IndexedDB simply omits keyless records from that index — exactly the
 // per-type filtering we want.
-export type ItemType = 'meta' | 'list' | 'tag' | 'pin' | 'settings' | 'files';
+export type ItemType = 'link' | 'list' | 'tag' | 'pin' | 'settings' | 'files';
 
 export interface ItemRecord {
   path: string;
