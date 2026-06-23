@@ -129,6 +129,7 @@ encrypted file. Random ids — never content-derived — so filenames leak nothi
 /users/{uid}/tags/{id}.enc        ← encrypted { id, name, updatedAt }
 /users/{uid}/lists/{id}.enc       ← encrypted { id, name, updatedAt }
 /users/{uid}/pins/{id}.enc        ← encrypted { id, rank, … }; {id} = a pinned link's id
+/users/{uid}/extractions/{id}.enc ← encrypted per-link extraction bookkeeping; {id} = the link's id
 /users/{uid}/settings/general.enc ← encrypted general user settings
 ```
 
@@ -212,6 +213,18 @@ tag/list names.
   Pin = `put`; unpin = `delete`. No `listId` in the pin: the link already records
   its list, so a pin floats the link to the top of every view it appears in, and a
   pin whose link is gone is just another dangling id the read layer skips.
+- **Extractions** ("fill in a saved link's title/image/screenshot/archive") are
+  stored one per link (`extractions/{id}.enc`, where `{id}` is the link's id), each
+  holding a map of facet → `{ status, tier, attempts, … }`. Same LWW-isolation move
+  as pins: the **display result** (the extracted title/image) is backfilled into the
+  link's own `links/{id}.enc` blob, but the **churny, automated bookkeeping** —
+  who/when/quality, retry backoff, the per-facet dedup lease — gets its own file so a
+  background extractor's `pending → done` churn never clobbers a concurrent user
+  title/tag edit (and never bloats the `< ~2 KB` metadata budget). Written by
+  background actors (the extension, future Expo app), never by `brace-api`, which
+  stays a blind sync broker. The work loop is a **query**, not a queue object: a link
+  with no `extractions/` file is unextracted. See
+  [link-extraction.md](./link-extraction.md) for the entity and the privacy stance.
 - **Settings use a fixed `settings/` namespace** (`settings/general.enc` today).
   Unlike every other file — a random id (see _storage layout_) — these are
   **well-known paths** baked into client code, the one non-random-id family.
@@ -245,7 +258,8 @@ tag/list names.
   wire every object is the same opaque encrypted frame (see _crypto boundary —
   blob wire format_); nothing about an R2 object distinguishes JSON from an
   image. The decrypted bytes are typed by **convention baked into the client**:
-  the index namespaces — `links/`, `tags/`, `lists/`, `pins/`, `settings/` — are
+  the index namespaces — `links/`, `tags/`, `lists/`, `pins/`, `extractions/`,
+  `settings/` — are
   UTF-8 JSON (decode, then `JSON.parse`), while `files/` is raw content whose meaning
   comes from the **metadata field that references it** — `pageArchive` means an
   HTML archive, a `screenshot`/`thumbnail` field means an image. The client only

@@ -20,14 +20,14 @@ export const opKindSchema = z.enum(['put', 'delete']);
 export type OpKind = z.infer<typeof opKindSchema>;
 
 // A path RELATIVE to the user's storage root — `links/{id}.enc`, `files/{id}.enc`,
-// `tags/{id}.enc`, `lists/{id}.enc`, `pins/{id}.enc`, or the fixed-name
-// `settings/<concern>.enc`.
+// `tags/{id}.enc`, `lists/{id}.enc`, `pins/{id}.enc`, `extractions/{id}.enc`, or the
+// fixed-name `settings/<concern>.enc`.
 // The `/users/{uid}/` prefix that namespaces the R2 object is NEVER on the wire:
 // the server derives it from the authenticated session and prepends it, so one
 // user can't name another's path (the authorization check in docs/local-first-
 // sync.md "authorization & quota" reduces to "validate the shape, then prefix").
-// The id segment is the random-id family (links/files/tags/lists/pins) or a fixed
-// lowercase concern name (settings) — both end in `.enc`. Anchored + a closed
+// The id segment is the random-id family (links/files/tags/lists/pins/extractions)
+// or a fixed lowercase concern name (settings) — both end in `.enc`. Anchored + a closed
 // charset, so there is no path-separator or traversal sequence to smuggle a key
 // outside the namespace.
 //
@@ -35,7 +35,7 @@ export type OpKind = z.infer<typeof opKindSchema>;
 // namespaces as literals: the id-keyed group comes straight from
 // `ID_KEYED_PREFIXES`, so a namespace added there is validated here automatically
 // and this server-side gate can't drift from storage. See paths.ts.
-const RANDOM_ID = '[A-Za-z0-9_-]+'; // links/files/tags/lists/pins id segment
+const RANDOM_ID = '[A-Za-z0-9_-]+'; // links/files/tags/lists/pins/extractions id segment
 const CONCERN = '[a-z0-9-]+'; // settings/<concern> — fixed lowercase name
 // Escape regex metacharacters so a prefix/suffix const is matched literally.
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

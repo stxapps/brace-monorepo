@@ -98,7 +98,7 @@ Two consequences baked into the design:
   system must record _which tier_ produced the current result. See
   _the extraction entity_.
 
-### the data model: result in `links`, bookkeeping in `extraction/`
+### the data model: result in `links`, bookkeeping in `extractions/`
 
 There are two kinds of state, and conflating them is the trap:
 
@@ -120,15 +120,15 @@ Putting (2) in `links` would repeat the mistake the `pins/` design exists to
 avoid: a churny `pending → claimed → done/failed` field rewriting the link blob
 clobbers a concurrent user title/tag edit under file-level LWW, and bloats the
 `< ~2 KB` metadata budget. By the same reasoning that gives pins their own file,
-**coordination state gets its own LWW-isolated file, `extraction/{id}.enc`,
+**coordination state gets its own LWW-isolated file, `extractions/{id}.enc`,
 shadowing `links/{id}.enc`** (`{id}` = the link's id), one file per link.
 
 The split keeps **one source of truth for the title** (it lives only in `links`,
-never copied into `extraction/`); `extraction/` answers only "who/when/quality/
+never copied into `extractions/`); `extractions/` answers only "who/when/quality/
 retry?", which `links` deliberately doesn't carry.
 
 > **The one residual cost.** Completing an extraction writes _two_ files: the
-> `links` title/image backfill _and_ the `extraction/` bookkeeping. The `links`
+> `links` title/image backfill _and_ the `extractions/` bookkeeping. The `links`
 > write is a read-merge-write, so it has the usual small LWW clobber window
 > against a concurrent user title edit (see [local-first-sync.md](./local-first-sync.md)
 > — _conflict policy_). Bounded, one-time (not churny), and acceptable for a
@@ -139,9 +139,9 @@ retry?", which `links` deliberately doesn't carry.
 A user can manually set a link's title and image. The override is a **pair of
 optional fields on `linkSchema`** — `customTitle` and `customImageId` (a
 `files/{id}.enc` ref to a user-picked image) — **not a new entity**, and that
-placement is the deliberate inverse of the `pins/`/`extraction/` split:
+placement is the deliberate inverse of the `pins/`/`extractions/` split:
 
-- `pins/` and `extraction/` get their own LWW-isolated files because they hold
+- `pins/` and `extractions/` get their own LWW-isolated files because they hold
   **churny, automated** state that would clobber concurrent user edits if it lived
   in the link blob.
 - A manual override is the **opposite**: a low-frequency edit a user makes in the
@@ -183,7 +183,7 @@ manual edit always wins. Three properties fall out for free:
 
 ### the extraction entity
 
-`extraction/{id}.enc` plaintext (mirrors `pinSchema`: `id` repeats the link's
+`extractions/{id}.enc` plaintext (mirrors `pinSchema`: `id` repeats the link's
 id, one self-contained file per link). Lives in `@stxapps/shared`
 (`sync/entities.ts`), `z.looseObject` so older clients round-trip unknown fields.
 
@@ -247,9 +247,9 @@ Each facet answers the same questions independently:
   after a background bg-fetch only got title + image).
 
 **Path layout — one flat file per link, facets inside; not one prefix per
-facet.** We deliberately keep `extraction/{id}.enc` (flat — fits the existing
+facet.** We deliberately keep `extractions/{id}.enc` (flat — fits the existing
 `{prefix}{id}.enc` / `ID_KEYED_PREFIXES` grammar) rather than splitting to
-`extraction/{facet}/{id}.enc`. A per-facet split would fully isolate each facet's
+`extractions/{facet}/{id}.enc`. A per-facet split would fully isolate each facet's
 write, but it multiplies extraction objects per link by the facet count (~8×),
 turns the single-segment key into a 2-level path the sync engine doesn't parse
 today, and only buys protection against a **rare, self-healing** race: two
@@ -260,11 +260,11 @@ backfill write). Keeping every facet in one blob also makes the cross-facet
 **upgrade** decision a single-file read. **Flip condition:** if you later want
 **selective sync by facet** (a constrained client syncing only the facets it can
 produce) or a facet turns individually high-churn, split _that_ facet out — and
-split **facet-first** (`extraction/{facet}/{id}.enc`, the per-facet queue-scan
+split **facet-first** (`extractions/{facet}/{id}.enc`, the per-facet queue-scan
 axis), never link-first. Don't pre-pay it.
 
 Wire it the standard three-step (see `paths.ts` header — _adding a namespace_):
-add `EXTRACTION_PREFIX = 'extraction/'` to `paths.ts`, add it to
+add `EXTRACTIONS_PREFIX = 'extractions/'` to `paths.ts`, add it to
 `ID_KEYED_PREFIXES`, add `extractionSchema` here. On `linkSchema` (already done
 for the display fields, beside `pageArchiveId`, same `files/{id}.enc` reference
 pattern and plaintext-typing rule — see [local-first-sync.md](./local-first-sync.md)
@@ -277,7 +277,7 @@ and `screenshotId?` (the `screenshot` facet, when that facet is wired).
 There is **no separate queue object**. A client's extraction work loop is a query
 over synced state:
 
-- **default tier (title + image, read-mode):** a link with no `extraction/` file,
+- **default tier (title + image, read-mode):** a link with no `extractions/` file,
   or one whose `status` is `pending` and not claimed within the lease window.
 - **best-effort tier (screenshot/archive):** an _active-context_ save extracts
   immediately and writes `files/` + the `links/` ref; the background loop's only
@@ -286,7 +286,7 @@ over synced state:
   signal, no explicit field needed.
 
 The loop: **claim** (write the lease) → **extract** → **write back** (result into
-`links/` and/or `files/`, bookkeeping into `extraction/`) → all of it syncs as
+`links/` and/or `files/`, bookkeeping into `extractions/`) → all of it syncs as
 ordinary encrypted blobs through the existing engine. The extension and the Expo
 app run the **same loop** against the same contract — the reason the schema lives
 in `shared`.
@@ -297,7 +297,7 @@ The save path is unchanged: writing `links/{id}.enc` makes the link exist
 **immediately** (see [local-first-sync.md](./local-first-sync.md) — _push_). All
 extraction is **fire-and-forget after that** — the user never waits on a fetch or
 a render, on any client. Results arrive later and the UI updates reactively when
-the patched `links/`/`extraction/` blobs land in Dexie (`liveQuery`). This holds
+the patched `links/`/`extractions/` blobs land in Dexie (`liveQuery`). This holds
 regardless of tier: an active-tab capture and a background catch-up are both
 post-save, off the critical path.
 
@@ -314,15 +314,15 @@ flags, realized at the namespace granularity rather than the facet one.
 
 For an extension whose job is extraction + save, the minimum working set is:
 
-- **eagerly: `links/` + `extraction/`.** Both are needed — and `extraction/`
+- **eagerly: `links/` + `extractions/`.** Both are needed — and `extractions/`
   **alone is not enough**:
-  - a freshly-saved link has **no** `extraction/` file (its absence _is_ the
+  - a freshly-saved link has **no** `extractions/` file (its absence _is_ the
     pending signal), so new work is only discoverable from the `links/` index;
   - the **URL** to fetch lives in `links/{id}.enc`;
   - write-back of `title`/`imageId` is a **read-merge-write** that must round-trip
     the link blob's unknown fields (the `looseObject` rule), so the current link
     blob has to be in hand.
-    For 10 000 links this is ~2.5 MB (`links/`) + a sparse, tiny `extraction/` set —
+    For 10 000 links this is ~2.5 MB (`links/`) + a sparse, tiny `extractions/` set —
     trivial.
 - **lazily / never: `files/`.** Heavy content is on-demand for **every** client
   already; the extension fetches a `files/` blob only to **upgrade** an existing

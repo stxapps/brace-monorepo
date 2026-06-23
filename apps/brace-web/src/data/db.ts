@@ -57,7 +57,9 @@ export interface SyncMetaRecord {
 // sync engine writes into (one entity per file, per docs/local-first-sync.md
 // "data model"). Every namespace flows through here identically: `links/{id}.enc`
 // (the always-resident link index), `tags/{id}.enc`, `lists/{id}.enc`,
-// `settings/<concern>.enc`, and lazily-fetched `files/{id}.enc` content.
+// `pins/{id}.enc`, `extractions/{id}.enc` (per-link extraction bookkeeping —
+// docs/link-extraction.md), `settings/<concern>.enc`, and lazily-fetched
+// `files/{id}.enc` content.
 //
 // "Item" (not "entity" — that reads like a server-side D1 row — and not "file"
 // — that's the `files/` namespace specifically) is the established name for this
@@ -91,7 +93,14 @@ export interface SyncMetaRecord {
 // content record has none; only `links/` links carry `itemListId`/`itemTagIds`),
 // and IndexedDB simply omits keyless records from that index — exactly the
 // per-type filtering we want.
-export type ItemType = 'link' | 'list' | 'tag' | 'pin' | 'settings' | 'files';
+export type ItemType =
+  | 'link'
+  | 'list'
+  | 'tag'
+  | 'pin'
+  | 'extraction'
+  | 'settings'
+  | 'files';
 
 export interface ItemRecord {
   path: string;

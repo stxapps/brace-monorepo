@@ -166,6 +166,70 @@ export const pinSchema = z.looseObject({
 });
 export type Pin = z.infer<typeof pinSchema>;
 
+// The plaintext of `extractions/{id}.enc` — per-link extraction bookkeeping, with
+// `id` repeating the link's id (the `{id}` of its `links/{id}.enc`), so it's
+// self-contained AND its own last-writer-wins point. Like `pins/`, this is the
+// LWW-isolation move applied to CHURNY, AUTOMATED state — who extracted, when, at
+// what quality, whether it's claimed, whether it failed and when to retry — written
+// by background actors on a different schedule than user edits. Keeping it OUT of
+// `linkSchema` means that churn never clobbers a concurrent user title/tag edit and
+// never bloats the link's < ~2 KB budget. The DISPLAY result extraction produces
+// (`title`/`imageId`/`pageArchiveId`/`screenshotId`) lives in `links/`, NEVER copied
+// here — there is one source of truth for the title; `extractions/` answers only
+// "who/when/quality/retry?". See docs/link-extraction.md.
+//
+// A link is NOT one extraction with one lifecycle: title+image, read-mode,
+// screenshot, archive, keywords, tags, summary, and (deferred) vectors are
+// INDEPENDENT jobs — each produced by a different client/tier at a different time,
+// each able to be `pending` while another is `done`. So the entity carries a MAP of
+// facet → state (`facets`), not a flat `status`. One flat file per link with the
+// facets inside (not one prefix per facet): a per-facet split would multiply objects
+// ~8× and only guard a rare, self-healing race — see the doc's "path layout" note.
+
+// One facet's state — the same who/when/quality/retry/lease questions answered
+// independently per job. `z.looseObject` so a newer client adding a field round-trips
+// through older ones (the file-wide rule above).
+export const facetSchema = z.looseObject({
+  status: z.enum(['pending', 'done', 'failed']),
+  // who/quality produced it — `active-page` beats `bg-fetch` beats `server`; a client
+  // whose tier beats a `done` facet's stored tier may re-extract to UPGRADE it.
+  tier: z.enum(['active-page', 'bg-fetch', 'server']).optional(),
+  extractedBy: z.string().optional(), // client/device id — provenance
+  extractedAt: z.number().int().optional(),
+  attempts: z.number().int(), // backoff counter for transient failures
+  // Don't retry before this. OMITTED together with `status: 'failed'` = a PERMANENT
+  // failure (404/410, robots block); present = a transient one eligible to retry.
+  // Because this is SYNCED, one device's failure stops every device retrying.
+  nextEligibleAt: z.number().int().optional(),
+  // Soft TTL lease for cross-device dedup, PER FACET (so the extension claiming
+  // `screenshot` doesn't block the phone claiming `summary` on the same link). A
+  // soft lease, not a hard lock — file-level LWW resolves the rare race; don't reach
+  // for distributed locking for a single user's few devices.
+  claimedBy: z.string().optional(),
+  claimedAt: z.number().int().optional(),
+});
+export type Facet = z.infer<typeof facetSchema>;
+
+export const extractionSchema = z.looseObject({
+  id: z.string(), // = the link's id (the `{id}` of `links/{id}.enc`)
+  facets: z.record(
+    z.enum([
+      'titleImage',
+      'readMode',
+      'screenshot',
+      'archive',
+      'keywords',
+      'tags',
+      'summary',
+      'vectors',
+    ]),
+    facetSchema,
+  ),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type Extraction = z.infer<typeof extractionSchema>;
+
 // How the links library lays out its rows: `list` (dense default), `card` (a grid
 // of previews), `table` (columnar). A cross-platform contract — not a web-only
 // union — because the user's choice can be SYNCED (see `settingsGeneralSchema`
