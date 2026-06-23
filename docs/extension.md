@@ -70,3 +70,38 @@ validate the interface against. Destinations:
 - `create-account-form.tsx`, `sign-in-form.tsx` → `@stxapps/web-ui`
 - `use-create-account.ts`, `auth-provider.tsx`, `session-store.ts` →
   `@stxapps/web-react`
+
+### wxt conventions
+
+- **Use `browser.*` from wxt, not raw `chrome.*`.** wxt's `browser` namespace is
+  Promise-based and cross-browser, so you don't hand-write callback wrappers or
+  per-browser branches. Reach for `chrome.*` directly only for a Chrome-specific
+  API with no standard equivalent (rare).
+- **Entrypoints map to extension contexts.** wxt's `entrypoints/` directory is the
+  contract: `background.ts` → the MV3 service worker; `popup/` → the quick-save +
+  recent-list React app; `options/` → account / passphrase / key-management React
+  app; `content.ts` → the programmatic content script (active-tab DOM read for the
+  active-page extraction tier — see [link-extraction.md](./link-extraction.md)).
+
+### storage across extension contexts
+
+The extension has three persistence layers, and which one to use depends on the
+context that has to reach the data:
+
+- **`browser.storage.local` / `.session`** — the primary cross-context store.
+  Reach for it for state the background worker and the popup both touch, because
+  the **popup's lifecycle is short** (it unmounts on close, so its in-memory and
+  page-scoped `localStorage` state is fragile), and the **MV3 background service
+  worker has no DOM and no `localStorage`** at all. `.session` is
+  memory-backed and cleared on browser restart — the right home for ephemeral
+  unlocked state.
+- **IndexedDB** — for larger structured data and richer local querying (e.g. a
+  local encrypted link index for search), available in both popup and background
+  contexts. It is also where the extension keeps its **non-extractable
+  `encryptionKey` `CryptoKey`** (structured-clone storable; `browser.storage`,
+  being JSON-serialized, can't hold a `CryptoKey`) — the same `session-store.ts`
+  shape brace-web uses, on the `chrome-extension://` origin. This is consistent
+  with the extension deriving and holding its **own** key (see _the extension runs
+  its own sign-in_ above).
+- **`localStorage`** — technically works in the popup/options pages, but not worth
+  relying on given the popup's short lifecycle; prefer `browser.storage`.
