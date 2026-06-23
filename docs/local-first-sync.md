@@ -229,9 +229,13 @@ tag/list names.
   the local index; content/archives download **lazily, never on first sync**. The
   list-view fields (title, URL, tags, list, a truncated preview) live in metadata,
   so the **whole library is browsable and searchable offline** after first sync —
-  only heavy media is deferred. Keep large fields (long descriptions, notes,
-  thumbnails) **out of metadata** — store them as separate `files/{id}.enc`; never
-  inline a thumbnail, or you blow the `< 2 KB` budget. Two lazy triggers:
+  only heavy media is deferred. Keep large fields (long descriptions, long-form
+  notes, thumbnails) **out of metadata** — store them as separate `files/{id}.enc`;
+  never inline a thumbnail, or you blow the `< 2 KB` budget. A **short** user note
+  is the deliberate exception: it's a **capped** inline field (`linkSchema.note`,
+  ≤ 500 chars) precisely so it renders in the list view and stays searchable
+  offline — the cap is what keeps it inside the budget; anything longer becomes a
+  `files/{id}.enc` (`noteId`, deferred). Two lazy triggers:
   **viewport/scroll** fetches per-row media (thumbnail/screenshot) as rows come
   into view (prefetch slightly ahead); **open** fetches the full archived page.
   Each fetched blob is decrypted once and **cached in Dexie**, so re-views are

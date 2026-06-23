@@ -34,8 +34,30 @@ import { z } from 'zod';
 // Reference fields end in `Id`/`Ids` and store the BARE entity id, never a full
 // path: the `{namespace}` prefix + `.enc` suffix is applied at the read edge
 // (paths.ts), the same convention the link's own `links/{id}.enc` path follows.
+// Char caps for the inline, user-/extraction-written text fields — the single
+// source of truth the input edge, the extractor, and this schema all share, so the
+// limit can't drift between where it's enforced and where it's validated. They
+// protect the `< ~2 KB` metadata budget (see local-first-sync.md "metadata vs
+// content"); counts are UTF-16 length, so worst-case multi-byte text stays bounded.
+// Keep them GENEROUS: because this schema parses persisted bytes, a value over the
+// cap fails to parse and drops the WHOLE link from the UI — so the cap must never
+// trip a legitimate value, and writers (the editor, the extractor truncating
+// og:title) enforce the same number up front. `url` is deliberately NOT capped: it
+// is the link's identity, so truncating it would corrupt the link — the per-user
+// byte quota is its only backstop.
+export const LINK_TITLE_MAX = 300; // `title` + `customTitle` (a title either way)
+export const LINK_NOTE_MAX = 500; // short inline note; long-form → files/ (`noteId`)
+
 export const linkSchema = z.looseObject({
-  title: z.string(),
+  // The link's "discovered/provisional" title — NOT the user's typed title. It
+  // holds a URL-host placeholder at save, then is BACKFILLED/overwritten by the
+  // `titleImage` extraction facet (see docs/link-extraction.md). Any title the user
+  // types — whether at save or in a later edit — goes in `customTitle` below and is
+  // sticky, so `title` can be re-extracted or tier-upgraded freely without ever
+  // losing the user's words.
+  title: z.string().max(LINK_TITLE_MAX),
+  // Uncapped on purpose — the link's identity must never be truncated (see the
+  // `LINK_TITLE_MAX` note above); the per-user byte quota is the only backstop.
   url: z.string(),
   // Tag ids (the `{id}` of `tags/{id}.enc`). Order is the user's tag order.
   tagIds: z.array(z.string()),
@@ -46,6 +68,41 @@ export const linkSchema = z.looseObject({
   // "plaintext typing"); if a field ever needs to hold several formats, make it
   // an object with an explicit `type` beside the id — a per-field schema decision.
   pageArchiveId: z.string().optional(),
+  // The link's preview image (the page's og:image / lead image), shown in card and
+  // table layouts. A `files/{id}.enc` reference, never inlined — heavy media
+  // fetched lazily on scroll (see local-first-sync.md "metadata vs content"), the
+  // same rule and pattern as `pageArchiveId`. Distinct from a full-page screenshot
+  // (the `screenshot` extraction facet, its own ref). Backfilled by the
+  // `titleImage` extraction facet; absent until a client extracts it (a web-only
+  // user with no extractor gets none — the "web-only gap").
+  imageId: z.string().optional(),
+  // Manual user overrides for the two display fields extraction otherwise owns. The
+  // UI renders `customTitle ?? title` and `customImageId ?? imageId`, so a manual
+  // edit always wins over the extracted/discovered value. Extraction writes ONLY
+  // `title`/`imageId` and NEVER these, so re-running or tier-upgrading extraction
+  // can't clobber a user's override — and clearing the field reverts to the fetched
+  // value, which is still present. A title the user types AT SAVE counts as an
+  // override too (it's sticky), so it lands here, not in `title`. `customImageId`
+  // is a `files/{id}.enc` ref (a user-picked/uploaded image), same heavy-media rule
+  // as `imageId`.
+  //
+  // These live here in `links/` — one file, one user gesture, beside
+  // `title`/`tagIds`/`listId` — NOT a separate entity/file. A manual override is a
+  // low-frequency USER edit, the opposite of the churny automated state that earns
+  // `pins/` and `extraction/` their own LWW-isolated files; a shadow override file
+  // would only force a single edit to write two files and race under LWW.
+  customTitle: z.string().max(LINK_TITLE_MAX).optional(),
+  customImageId: z.string().optional(),
+  // The user's own free-text note on the link — their annotation, NOT the page's
+  // extracted description/summary (that's the extraction `summary` facet; a field
+  // named `note` is always the user's words). Kept INLINE so it shows in the list
+  // view and stays searchable offline like `title`/`url` — and therefore CAPPED to
+  // protect the `< ~2 KB` metadata budget (see local-first-sync.md "metadata vs
+  // content"). The cap counts UTF-16 length, so worst-case multi-byte text still
+  // stays bounded. Long-form multi-paragraph notes do NOT belong here — those are a
+  // separate `files/{id}.enc` blob (a `noteId` ref, deferred), the same lazy
+  // heavy-field rule as archives/screenshots.
+  note: z.string().max(LINK_NOTE_MAX).optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
