@@ -4,15 +4,15 @@
   "license": "MIT",
   "scripts": {
     "reset": "nx reset",
-    "lint": "nx run-many -t lint",
-    "lint:fix": "nx run-many -t lint -- --fix",
+    "lint": "nx run-many -t lint --output-style=stream",
+    "lint:fix": "nx run-many -t lint --output-style=stream -- --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "fix": "npm run lint:fix && npm run format",
-    "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test",
-    "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web",
-    "build": "nx run-many -t build"
+    "typecheck": "nx run-many -t typecheck --output-style=stream",
+    "test": "nx run-many -t test --output-style=stream",
+    "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web --output-style=stream",
+    "build": "nx run-many -t build --output-style=stream"
   },
   "private": true,
   "devDependencies": {
