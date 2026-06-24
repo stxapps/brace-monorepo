@@ -1,6 +1,7 @@
 {
   "extends": ["../../tsconfig.base.json", "./.wxt/tsconfig.json"],
   "compilerOptions": {
+    "lib": ["es2022", "dom", "dom.iterable"],
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "composite": false,
