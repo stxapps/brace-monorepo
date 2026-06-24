@@ -201,7 +201,7 @@ export function ExternalSyncProvider({
   bgSync?: BgSyncState;
 }) {
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
-  const request = useCallback(() => {
+  const requestSyncWithNonce = useCallback(() => {
     setLocalWriteNonce((n) => n + 1);
     requestSync();
   }, [requestSync]);
@@ -212,9 +212,9 @@ export function ExternalSyncProvider({
       bgSync,
       localWriteNonce,
       retryInitialSync: () => undefined,
-      requestSync: request,
+      requestSync: requestSyncWithNonce,
     }),
-    [storeStatus, bgSync, localWriteNonce, request],
+    [storeStatus, bgSync, localWriteNonce, requestSyncWithNonce],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
