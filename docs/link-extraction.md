@@ -134,6 +134,49 @@ retry?", which `links` deliberately doesn't carry.
 > — _conflict policy_). Bounded, one-time (not churny), and acceptable for a
 > single-user app — the same tradeoff every backfill write makes.
 
+### the preview image is a downloaded blob, never the remote URL
+
+Extraction discovers the preview image as a **URL** (og:image / lead image). The
+tempting shortcut is to store that URL and render `<img src>` straight from it —
+no download, no `files/{id}.enc`, no quota, faster first paint. **Don't.**
+`links.imageId` is a downloaded, encrypted `files/{id}.enc` blob; the URL is only
+an _input to the fetch_, never persisted. Three reasons, heaviest first:
+
+- **It would reintroduce the exact leak this whole doc avoids.** A remote URL in
+  the always-resident `links/` blob means every device that renders the list
+  `fetch`es that third-party host on every paint — beaconing the user's IP, that
+  they saved the page, and timing to an arbitrary party (and its CDN/trackers),
+  on _every viewing device, forever_, including the web-only client that
+  otherwise never touches the URL. The **asymmetry** is the point: the
+  _extracting_ client already fetched the page and already learned the URL — it's
+  paid the privacy cost (see _the stance_) — so _it_ downloading the image bytes
+  costs nothing extra, and once it writes the encrypted blob every other device
+  reads only ciphertext through sync. Download = pay the privacy cost **once, at
+  the client that already knows**; remote URL = pay it on **every render, on every
+  device**.
+- **It would break the offline / local-first promise.** An encrypted
+  `files/{id}.enc` image is stable, synced, and offline-available — and
+  lazy-fetched on scroll, so storing it costs nothing up front (see
+  [local-first-sync.md](./local-first-sync.md) — _metadata vs content_; same
+  heavy-media rule as `pageArchiveId`/`screenshotId`/`customImageId`). A remote
+  URL rots, gets hotlink-protected, silently changes content, needs the network,
+  and is dark offline.
+- **It would break the blob convention.** `imageId` is typed as a bare
+  `files/{id}.enc` ref — "a field name types its blob" (see
+  [local-first-sync.md](./local-first-sync.md) — _plaintext typing_) — the same
+  rule as `screenshotId` / `pageArchiveId` / `customImageId`. A plaintext,
+  externally-mutable `https://…` string is a new pattern the sync/crypto path
+  never sees, and a stored pointer-to-plaintext the encrypted blob isn't.
+
+The cost is real and accepted: a one-time download, the bytes against the
+per-user quota, and IndexedDB content accumulation (bounded by the deferred
+content-cache LRU — see [local-first-sync.md](./local-first-sync.md) _deferred_).
+It buys the privacy guarantee, and the cheaper "just use the URL" path is cheaper
+**precisely because it leaks**. If first-paint latency ever matters, leave
+`imageId` **absent** until the blob lands — the card shows no preview, the same
+_web-only gap_ behavior — rather than rendering the remote URL as a placeholder,
+because the placeholder _is_ the leak.
+
 ### manual overrides: `customTitle` / `customImageId`
 
 A user can manually set a link's title and image. The override is a **pair of
