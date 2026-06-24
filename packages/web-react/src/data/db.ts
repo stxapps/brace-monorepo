@@ -115,6 +115,18 @@ export interface ItemRecord {
   // be renamed, but its id is stable, and that's what a link stores.
   itemListId?: string;
   itemTagIds?: string[];
+  // Links only: the link's stored (normalized) URL — indexed so `readLinkByUrl`
+  // (the extension popup's "is this tab already saved?" check) is an index lookup
+  // instead of a full `links/` scan + decode-every-blob. Callers normalize the
+  // query URL the same way the editor normalized this one before storing.
+  itemUrl?: string;
+  // Extractions only: one `${status}:${facet}` token per facet (projection.ts) —
+  // e.g. `["pending:titleImage", "done:readMode"]`. Backs the `*itemFacetStatuses`
+  // multiEntry index so the options page tallies facet status with three
+  // `startsWith('done:'|'pending:'|'failed:').count()` range-counts (one index entry
+  // per facet, so the count is exact facet totals) and the extraction work loop finds
+  // pending work via `equals('pending:titleImage')` — neither read decodes a blob.
+  itemFacetStatuses?: string[];
 }
 
 // One local mutation not yet committed to the server — the durable pending-ops
@@ -191,9 +203,15 @@ class BraceDb extends Dexie {
       //                                          (membership; multiEntry can't
       //                                          compound, so the tag view sorts its
       //                                          matched subset in JS).
+      //   itemUrl                              — exact link lookup by URL
+      //                                          (readLinkByUrl), links only.
+      //   *itemFacetStatuses (multiEntry)      — `${status}:${facet}` per facet;
+      //                                          extraction facet counts + work-loop
+      //                                          lookups, extractions only.
       items:
         'path, updatedAt, [itemType+itemUpdatedAt], [itemType+itemCreatedAt], ' +
-        '[itemListId+itemUpdatedAt], [itemListId+itemCreatedAt], *itemTagIds',
+        '[itemListId+itemUpdatedAt], [itemListId+itemCreatedAt], *itemTagIds, itemUrl, ' +
+        '*itemFacetStatuses',
       // pending-ops queue. Compound `[username+path]` primary key gives
       // the one-row-per-(account,path) upsert above; the `username` index scopes a
       // drain to the active account. Unlisted stores (syncMeta, items) carry forward.

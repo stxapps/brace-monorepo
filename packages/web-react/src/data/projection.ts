@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import {
   EXTRACTIONS_PREFIX,
+  extractionSchema,
   FILES_PREFIX,
   LINKS_PREFIX,
   linkSchema,
@@ -102,11 +103,35 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
       // problem — itemType already scopes them.)
       record.itemListId = link.listId;
       record.itemTagIds = link.tagIds;
+      record.itemUrl = link.url;
     }
     return record;
   }
 
-  // lists, tags, pins, extractions, and EVERY settings concern: only the edit time
+  // Extractions are the one non-link type with a churny, indexable INNER shape, so
+  // they get the only other type-aware branch. `extractions/{id}.enc` shadows a link
+  // one-to-one, so the namespace grows with the library — reading them all to tally
+  // facet status (the options page) would be O(library). Instead project each facet's
+  // `${status}:${facet}` into a multiEntry column (`*itemFacetStatuses`, db.ts): one
+  // index entry per facet lets the counts come from three `startsWith('done:'|…).count()`
+  // range-counts (readExtractionFacetCounts) and the future work-loop find pending
+  // work by `equals('pending:titleImage')` — no scan, no decode. This is the only
+  // place the projector reads an entity's internal structure beyond `links`.
+  if (itemType === 'extraction') {
+    const extraction = parseBlob(data, extractionSchema);
+    if (extraction) {
+      record.itemCreatedAt = extraction.createdAt;
+      record.itemUpdatedAt = extraction.updatedAt;
+      const statuses: string[] = [];
+      for (const [facet, state] of Object.entries(extraction.facets)) {
+        if (state?.status) statuses.push(`${state.status}:${facet}`);
+      }
+      record.itemFacetStatuses = statuses;
+    }
+    return record;
+  }
+
+  // lists, tags, pins, and EVERY settings concern: only the edit time
   // is worth indexing (their views are small, prefix-scanned/exact-path reads — see queries.ts —
   // but the column keeps the projector uniform and leaves them orderable for
   // free). Decoded concern-agnostically, so this never assumes a settings file is

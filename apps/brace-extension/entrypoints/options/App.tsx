@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { readExtractions, useAuth, useSignOut } from '@stxapps/web-react';
+import { readExtractionFacetCounts, useAuth, useSignOut } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import {
@@ -59,16 +59,11 @@ function Status({ username }: { username: string | null }) {
   const sync = useSyncStatus();
   const signOut = useSignOut();
 
-  const extractions = useLiveQuery(() => readExtractions(), []);
-  const counts = useMemo(() => {
-    const acc = { pending: 0, done: 0, failed: 0 };
-    for (const extraction of extractions ?? []) {
-      for (const facet of Object.values(extraction.facets)) {
-        if (facet?.status) acc[facet.status] += 1;
-      }
-    }
-    return acc;
-  }, [extractions]);
+  const counts = useLiveQuery(() => readExtractionFacetCounts(), []) ?? {
+    done: 0,
+    pending: 0,
+    failed: 0,
+  };
 
   const lastSync = sync.lastSyncAt ? new Date(sync.lastSyncAt).toLocaleString() : 'never';
 

@@ -218,17 +218,15 @@ export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined
 }
 
 // One link looked up by its exact stored URL, or undefined — the extension popup's
-// "is this active tab already saved?" check. Scans the `links/` namespace (a prefix
-// index range, not the whole table) and decodes through the link cache; the editor
-// stores the normalized url, so callers normalize the tab url the same way before
-// querying. Exact match: a deliberate, scaffold-simple identity check, not fuzzy.
+// "is this active tab already saved?" check. Served by the `itemUrl` index (db.ts):
+// a single keyed lookup, not a `links/` scan that decodes every blob until a match
+// — load-bearing because the callers are `useLiveQuery` (popup), re-running on every
+// store write. The editor stores the normalized url, so callers normalize the tab url
+// the same way before querying. Exact match: a deliberate, scaffold-simple identity
+// check, not fuzzy. `itemUrl` is links-only (projection.ts), so the hit is a link.
 export async function readLinkByUrl(url: string): Promise<LinkItem | undefined> {
-  const records = await db.items.where('path').startsWith(LINKS_PREFIX).toArray();
-  for (const record of records) {
-    const link = decodeCachedLink(record);
-    if (link && link.url === url) return link;
-  }
-  return undefined;
+  const record = await db.items.where('itemUrl').equals(url).first();
+  return record ? decodeCachedLink(record) : undefined;
 }
 
 // One link by its id (the `{id}` of its `links/{id}.enc`), or undefined — the
@@ -249,10 +247,26 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   return decode(record, extractionSchema);
 }
 
-// Every extraction entity — the options/status page's facet counts. Small set,
-// read whole and decoded like the other namespace reads.
-export function readExtractions(): Promise<ExtractionItem[]> {
-  return readNamespace(EXTRACTIONS_PREFIX, extractionSchema);
+// The options/status page's facet tallies (how many facets across the whole library
+// are done / pending / failed). `extractions/` shadows `links/` one-to-one, so this
+// set grows with the library — reading and decoding it whole would be O(library) on
+// every reactive tick. Instead each facet projects a `${status}:${facet}` token into
+// the `*itemFacetStatuses` multiEntry index (projection.ts), so each status total is
+// an index range-count: one index entry per facet means the count is the exact facet
+// total, no records read and no blobs decoded.
+export interface ExtractionFacetCounts {
+  done: number;
+  pending: number;
+  failed: number;
+}
+
+export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
+  const [done, pending, failed] = await Promise.all([
+    db.items.where('itemFacetStatuses').startsWith('done:').count(),
+    db.items.where('itemFacetStatuses').startsWith('pending:').count(),
+    db.items.where('itemFacetStatuses').startsWith('failed:').count(),
+  ]);
+  return { done, pending, failed };
 }
 
 // The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /
