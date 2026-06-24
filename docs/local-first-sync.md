@@ -72,13 +72,17 @@ the crypto boundary (encrypt before PUT / decrypt after GET via
 (with retry/backoff and offline handling), and the conflict policy.
 
 It talks to the API through the shared **contract client** (see
-[api-contracts.md](./api-contracts.md)). Because it runs outside React, it calls
-`callEndpoint` directly — no hooks:
+[api-contracts.md](./api-contracts.md)). Because it runs outside React it can't
+use the `useApiClient()` hook — so the app injects the configured client as
+`SyncDeps.api` instead (the same auth-aware `createAuthApiClient` instance the
+React tree gets via `ApiClientProvider`: bound to the app's baseUrl with the
+bearer token attached — see _assembling the client_ in
+[api-contracts.md](./api-contracts.md)). The engine just calls
+`deps.api.call(endpoint, input)` — no raw baseUrl, no hooks:
 
 ```ts
-import { callEndpoint, opsListEndpoint } from '@stxapps/shared';
-const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await callEndpoint(
-  { baseUrl: API_URL },
+import { opsListEndpoint } from '@stxapps/shared';
+const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await deps.api.call(
   opsListEndpoint,
   // the cursor is the compound (updatedAt, path), not a seq — see *the ops/list endpoint*
   { since: syncCursorUpdatedAt, sincePath: syncCursorPath, limit: 500 },
@@ -279,7 +283,7 @@ tag/list names.
   list, order by edit time) without reading and `JSON.parse`-ing the whole
   library on every reactive tick, it indexes a few list-view fields. Those
   index columns are **derived, not authoritative**: a single projector
-  (`brace-web` `data/projection.ts` `toItemRecord`) decodes the bytes and lifts
+  (`web-react` `data/projection.ts` `toItemRecord`) decodes the bytes and lifts
   out the queryable fields, and **every** write into the store funnels through
   it, so the columns are written in the same record `put` as the bytes and can
   never drift from them (no second table, no cross-table transaction). The
@@ -635,7 +639,7 @@ A is the **primitive B is built on**: because every commit is R2-first/log-last
 and the DO write is atomic, each phase is durable as a unit before the next
 begins. That durability is exactly what lets the engine sequence the four phases
 and trust each is real before opening the next. The engine realizes B in
-`pushPending` (`brace-web/src/sync/engine.ts`), and two things there are
+`pushPending` (`packages/web-react/src/sync/engine.ts`), and two things there are
 **load-bearing for correctness**, not just tidiness:
 
 - **sequential `await` between phases** — the durability-before-next-phase
@@ -673,7 +677,7 @@ data**, so the sync layer is entirely oblivious to them.
 
 **Blob wire format.** Every R2 object is the binary frame
 `[version(1) || iv(12) || ciphertext+tag]` — packed/unpacked by the sync
-engine's crypto boundary (`sync/crypto.ts` in brace-web). The constants
+engine's crypto boundary (`sync/crypto.ts` in web-react). The constants
 (`BLOB_FORMAT_V1`, `AES_GCM_IV_BYTES`) live in `@stxapps/shared`
 (`crypto/params.ts`) because they are a **cross-platform contract** like the
 key-derivation parameters: a blob packed on web must unpack on the extension
@@ -733,19 +737,24 @@ not Hono-vs-R2.
 **Use it for component-facing API endpoints.** Auth (username check, sign-in,
 create-account, session), account settings, a sync-status read — these go through
 TanStack Query (`useQuery`/`useMutation`) for uniform loading/error/retry/dedup
-state and devtools. Those hooks live in `@stxapps/react` and **wrap
-`callEndpoint`**, so the shared contract stays the single source of truth and the
-hooks stay reusable on brace-extension and (future) brace-expo.
+state and devtools. Those hooks live in `@stxapps/react` and call the injected
+client via **`useApiClient().call(endpoint, …)`** (the contract client from the
+provider — see _assembling the client_ in [api-contracts.md](./api-contracts.md)),
+so the shared contract stays the single source of truth and the hooks stay
+reusable on brace-extension and (future) brace-expo.
 
 **Don't use it for the local-first data path.** The Dexie `liveQuery` store is
 already the read cache for bookmarks — adding TanStack Query there just creates a
 second, competing cache — and the sync engine runs at background/app level, not
 in React, so hooks don't apply. Its control-plane calls (sync pull, commit,
-signed URLs) and the R2 blob PUT/GET use plain `callEndpoint`/`fetch`; results
-land in Dexie, which the UI observes reactively.
+signed URLs) go through the same contract client, injected as **`SyncDeps.api`**
+rather than read from a hook; the R2 blob PUT/GET use plain `fetch` (signed URL,
+no contract). Results land in Dexie, which the UI observes reactively.
 
-In short: **component server calls → TanStack Query; background sync engine + R2
-→ plain `callEndpoint`.** Both call the same `@stxapps/shared` contracts.
+In short: **component server calls → TanStack Query over `useApiClient()`;
+background sync engine → the same client via `SyncDeps.api`; R2 blobs → plain
+`fetch`.** All control-plane calls share the same `@stxapps/shared` contracts and
+the one injected client.
 
 ### deferred
 

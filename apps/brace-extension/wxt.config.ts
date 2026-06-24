@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
+import { loadEnv } from 'vite';
 import { defineConfig } from 'wxt';
 
 // See https://wxt.dev/api/config.html
@@ -16,10 +17,14 @@ export default defineConfig({
   manifestVersion: 3,
   manifest: ({ browser, mode }) => {
     const isFirefox = browser === 'firefox';
-    // brace-api host the extension talks to, per build mode — mirrors
-    // brace-web's NEXT_PUBLIC_API_URL (dev :8787, staging/prod custom domains).
+    // brace-api host the extension talks to, per build mode. Single source of
+    // truth: the same WXT_PUBLIC_API_URL that utils/api.ts reads, loaded here at
+    // config time from `.env.<mode>` (dev :8787, staging/prod custom domains).
     // `mode` is 'development' for `wxt`/`wxt dev`, 'production' for `wxt build`,
-    // and 'staging' when built with `--mode staging`.
+    // and 'staging' when built with `--mode staging`. In the manifest function
+    // `import.meta.env` isn't the bundle env yet, so we read the file directly
+    // via Vite's loadEnv; deriving the host from the URL the client uses keeps
+    // the grant from ever drifting out of sync with api.ts.
     //
     // Auth is a bearer token (Authorization header) shared across web,
     // extension, and the future mobile app — NOT a cookie. In MV3, the
@@ -29,12 +34,10 @@ export default defineConfig({
     // tier's host (no localhost/staging in the production store build).
     // NOTE: content scripts get NO CORS exemption — route their API calls
     // through background.ts rather than fetching brace-api directly.
-    const apiHost =
-      mode === 'production'
-        ? 'https://api.brace.to/*'
-        : mode === 'staging'
-          ? 'https://api.staging.brace.to/*'
-          : 'http://localhost:8787/*';
+    const apiUrl = loadEnv(mode, process.cwd(), 'WXT_PUBLIC_').WXT_PUBLIC_API_URL;
+    if (!apiUrl) throw new Error('WXT_PUBLIC_API_URL is not set');
+    // host_permissions needs a match pattern (origin + `/*`), not a bare origin.
+    const apiHost = `${new URL(apiUrl).origin}/*`;
     return {
       name: 'Brace.to - Bookmark Manager',
       description:

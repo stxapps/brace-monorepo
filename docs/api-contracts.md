@@ -61,6 +61,41 @@ pinned to `/v1` while the web app moves to `/v2`. Bumping means adding an
 (`/`, `/health`) stay **unversioned** — `app.ts` mixes both by mounting versioned
 sub-apps alongside the bare root routes.
 
+### assembling the client (the injection seam)
+
+The contract above says how to *call* brace-api; this is how a running app gets a
+*configured* client into its hooks. It's a dependency-inversion seam — each layer
+adds one concern and refuses to know the next one up, so the only thing that knows
+the runtime URL is the app:
+
+| layer | piece | adds | deliberately doesn't know |
+| ----- | ----- | ---- | ------------------------- |
+| `shared` | `createApiClient({ baseUrl, fetch? })` | the typed transport (contracts → `fetch`) | auth, React, the environment |
+| `react` | `ApiClientProvider` / `useApiClient` | a React **seam** — a context hole the hooks read | which client, which baseUrl |
+| `web-react` | `createAuthApiClient({ baseUrl })` | bearer-token `authFetch` (+ the mid-session 401/expiry → `notifySessionInvalid` loop, reading `session-store`) | the environment |
+| app | `const baseUrl = <env>; api = createAuthApiClient({ baseUrl })` | the **one** concrete client + provides it | — (it's the top) |
+
+Why the seam exists: the query/mutation hooks in `@stxapps/react` need *a* client,
+but importing one would drag an app's env var into a package — forbidden by the
+`type:`/`platform:` boundaries. So the hooks read `useApiClient()` from context and
+the app injects the concrete client via `<ApiClientProvider client={api}>`. Same
+hooks run unchanged in brace-web, brace-extension, and future brace-expo.
+
+Why `baseUrl` stays in the app: auth is shared across the web apps (so it lives in
+`web-react`), but the URL is resolved from a **bundler-inlined** env var that
+differs per app — `process.env.NEXT_PUBLIC_API_URL` (Next) vs
+`import.meta.env.WXT_PUBLIC_API_URL` (wxt) — and the literal access must stay in
+app code for the bundler to inline it. See [env-files.md](./env-files.md).
+
+Two consumption paths, one client. A web app has only the React tree
+(`<ApiClientProvider client={api}>` in `inner-layout.tsx` / popup `providers.tsx`).
+The extension also runs a **background service worker** that isn't React, so it
+can't use `useApiClient()` — instead `utils/sync-runner.ts` imports the same `api`
+and hands it to the sync engine as `SyncDeps.api`. That's the reason
+`createAuthApiClient` is a plain factory in `web-react` rather than a React hook:
+it has to be callable from a non-React module too. Both paths share one in-memory
+session mirror, so the bearer token stays consistent.
+
 ### adding an endpoint
 
 1. **Contract** — in `packages/shared/src/<area>/endpoints.ts`, define the
@@ -78,9 +113,11 @@ response })` descriptor — prefix `path` with `` `${API_V1}/…` `` (see _url
    Mount it in `app.ts` via `app.route('/', <area>Routes)`. (CORS lives in
    `app.ts` — `CORS_ORIGINS`, default `http://localhost:3000`, the web dev port.)
 
-3. **Client** — call `api.call(endpoint, input)`. `api` is `createApiClient`
-   bound to brace-api's base URL in `apps/brace-web/src/lib/api.ts`
-   (`NEXT_PUBLIC_API_URL`, default `http://localhost:8787`). Components should go
-   through the TanStack Query hooks in `@stxapps/react` (which wrap
-   `callEndpoint`); the background sync engine calls `callEndpoint` directly. See
+3. **Client** — call `api.call(endpoint, input)`. `api` is the per-app client
+   from `createAuthApiClient` (`apps/brace-web/src/lib/api.ts` with
+   `NEXT_PUBLIC_API_URL`, `apps/brace-extension/utils/api.ts` with
+   `WXT_PUBLIC_API_URL`; both default the dev URL to `http://localhost:8787`) —
+   see _assembling the client_ above. Components should go through the TanStack
+   Query hooks in `@stxapps/react` (which wrap `callEndpoint` via
+   `useApiClient()`); the background sync engine calls through `SyncDeps.api`. See
    [local-first-sync.md](./local-first-sync.md) for that dividing line.

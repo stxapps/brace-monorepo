@@ -59,11 +59,13 @@ Current var: `NEXT_PUBLIC_API_URL` → the matching brace-api URL. Adding a new
 var = add the line to all three files (the symmetry is deliberate: there is no
 config hiding in `package.json`).
 
-### brace-extension — wxt / Vite (planned, not yet wired)
+### brace-extension — wxt / Vite (implemented)
 
 wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need the
 **`WXT_PUBLIC_`** prefix and are read via `import.meta.env.WXT_PUBLIC_*` — baked
-into the bundle just like brace-web. The mode is chosen with `--mode`:
+into the bundle just like brace-web. The mode is chosen with `--mode`, and unlike
+brace-web's `staging` (which needs the Nx `envFile` indirection because Next
+can't pick a production-mode build by mode) wxt selects the file natively:
 
 | command                    | mode          | env file           |
 | -------------------------- | ------------- | ------------------ |
@@ -71,12 +73,31 @@ into the bundle just like brace-web. The mode is chosen with `--mode`:
 | `wxt build`                | `production`  | `.env.production`  |
 | `wxt build --mode staging` | `staging`     | `.env.staging`     |
 
-**Current state:** the extension talks to the page via `browser.runtime`
-messaging and has **no API-URL env yet**. When it starts calling brace-api, add
-`WXT_PUBLIC_API_URL`, the three `.env.*` files under `apps/brace-extension/`, and
-a `--mode staging` build target (mirroring brace-web's `staging` Nx config).
-Unlike brace-web, wxt selects the file by `--mode` natively, so no Nx `envFile`
-indirection is needed.
+Files in `apps/brace-extension/` (all committed — every value is public):
+
+| file               | used by                                 |
+| ------------------ | --------------------------------------- |
+| `.env.development` | `nx dev @stxapps/brace-extension`       |
+| `.env.production`  | `nx build @stxapps/brace-extension`     |
+| `.env.staging`     | `nx build:staging @stxapps/brace-extension` (and `build:firefox:staging`) |
+
+Current var: `WXT_PUBLIC_API_URL` → the matching brace-api URL.
+
+**Two consumers, one source of truth.** Unlike brace-web (one consumer,
+`lib/api.ts`), the extension reads the URL in two places that must never drift —
+the manifest `host_permissions` grant has to match the origin the client fetches,
+or the MV3 background worker's CORS-exempt requests break. Both derive from the
+same `WXT_PUBLIC_API_URL`:
+
+- `utils/api.ts` reads `import.meta.env.WXT_PUBLIC_API_URL` (bundled context).
+- `wxt.config.ts` can't use `import.meta.env` in its `manifest` function (it runs
+  at config time, before the bundle env exists), so it reads the same `.env.<mode>`
+  via Vite's `loadEnv(mode, process.cwd(), 'WXT_PUBLIC_')` and derives the host
+  match pattern as `new URL(apiUrl).origin + '/*'`.
+
+Both throw if the var is unset, mirroring brace-web's missing-`NEXT_PUBLIC_API_URL`
+guard. The `staging` build is a plain `--mode staging` npm script + Nx target
+(`build:staging`, `build:firefox:staging`) — no Nx `envFile` needed.
 
 ### brace-api — Hono on Cloudflare Workers
 

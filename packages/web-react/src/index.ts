@@ -25,6 +25,7 @@ export * from './hooks/use-sign-in';
 export * from './hooks/use-sign-out';
 export * from './hooks/use-tag-mutations';
 export * from './hooks/use-tags';
+export * from './lib/api';
 export * from './sync/crypto';
 export * from './sync/engine';
 export * from './sync/r2';
