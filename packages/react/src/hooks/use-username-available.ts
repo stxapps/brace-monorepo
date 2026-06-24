@@ -9,7 +9,7 @@ import {
   usernameSchema,
 } from '@stxapps/shared';
 
-import { useApiClient } from '../contexts/api-client';
+import { useApiClient } from '../contexts/api-client-provider';
 import { useDebouncedValue } from './use-debounced-value';
 
 // One source of truth for the query so the live hook and the submit-time check
