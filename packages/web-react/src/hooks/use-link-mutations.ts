@@ -63,9 +63,11 @@ export function useLinkMutations(): LinkMutations {
       // A blank note stays absent (not an empty string) — keeps the link's blob
       // minimal and matches "omitted → no note".
       const note = draft.note?.trim();
-      await writeLink(username, link, note ? { note } : {});
+      if (note) link.note = note;
+
+      await writeLink(username, link, {});
       requestSync();
-      return { ...link, ...(note ? { note } : {}) };
+      return link;
     },
     [username, requestSync],
   );
