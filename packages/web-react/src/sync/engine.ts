@@ -215,7 +215,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (;;) {
+  for (; ;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;
@@ -456,7 +456,8 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   // Selective sync: drop the namespaces this client doesn't materialize before any
   // sign/GET work (the cursor is advanced by the caller from the full op/file set, so
   // skipping these downloads never strands it). A no-op for a full-sync client.
-  if (deps.pathFilter) entries = entries.filter((e) => deps.pathFilter!(e.path));
+  const { pathFilter } = deps;
+  if (pathFilter) entries = entries.filter((e) => pathFilter(e.path));
   if (entries.length === 0) return;
 
   // Skip paths whose local record is already current (same-or-newer server stamp,
