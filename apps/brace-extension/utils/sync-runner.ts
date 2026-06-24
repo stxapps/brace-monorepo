@@ -60,7 +60,12 @@ export function runSync(): Promise<void> {
         await setStatus({ storeStatus: 'syncing-initial' });
         await runInitialSync(deps);
       }
-      await setStatus({ storeStatus: 'ready', bgSync: 'idle', lastSyncAt: Date.now(), lastError: null });
+      await setStatus({
+        storeStatus: 'ready',
+        bgSync: 'idle',
+        lastSyncAt: Date.now(),
+        lastError: null,
+      });
     } catch (err) {
       await setStatus({
         bgSync: 'error',

@@ -16,12 +16,12 @@
 import { useCallback, useMemo } from 'react';
 
 import { compareRank, ENC_SUFFIX, rankForIndex, rerankToOrder, TAGS_PREFIX } from '@stxapps/shared';
+import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { deleteTag, writeTag } from '../data/mutations';
 import { readTags, type TagItem } from '../data/queries';
-import { newId } from '../lib/ids';
 
 export interface TagMutations {
   // Create a tag and place it at `index` within `parentId`'s children. Mirrors

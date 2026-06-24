@@ -1,7 +1,7 @@
 import { type Facet, LINK_TITLE_MAX } from '@stxapps/shared';
+import { newId } from '@stxapps/web-crypto';
 import {
   type ExtractionFacet,
-  newId,
   readLinkById,
   writeExtraction,
   writeFile,

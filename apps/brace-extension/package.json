@@ -67,6 +67,7 @@
     "@mozilla/readability": "^0.6.0",
     "@stxapps/react": "*",
     "@stxapps/shared": "*",
+    "@stxapps/web-crypto": "*",
     "@stxapps/web-react": "*",
     "@stxapps/web-ui": "*",
     "@tanstack/react-query": "^5.101.0",

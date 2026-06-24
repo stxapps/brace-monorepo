@@ -93,14 +93,7 @@ export interface SyncMetaRecord {
 // content record has none; only `links/` links carry `itemListId`/`itemTagIds`),
 // and IndexedDB simply omits keyless records from that index — exactly the
 // per-type filtering we want.
-export type ItemType =
-  | 'link'
-  | 'list'
-  | 'tag'
-  | 'pin'
-  | 'extraction'
-  | 'setting'
-  | 'file';
+export type ItemType = 'link' | 'list' | 'tag' | 'pin' | 'extraction' | 'setting' | 'file';
 
 export interface ItemRecord {
   path: string;

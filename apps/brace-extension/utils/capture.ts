@@ -75,8 +75,7 @@ export async function captureReadMode(tabId: number): Promise<Uint8Array> {
       clone
         .querySelectorAll('script, style, noscript, iframe, svg, link, meta')
         .forEach((el) => el.remove());
-      const article =
-        clone.querySelector('article') ?? clone.querySelector('main') ?? clone.body;
+      const article = clone.querySelector('article') ?? clone.querySelector('main') ?? clone.body;
       return article ? article.innerHTML : '';
     },
   });

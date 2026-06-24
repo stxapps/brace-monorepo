@@ -9,12 +9,12 @@
 import { useCallback, useMemo } from 'react';
 
 import { ENC_SUFFIX, LINKS_PREFIX } from '@stxapps/shared';
+import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { writeLink } from '../data/mutations';
 import { type LinkItem } from '../data/queries';
-import { newId } from '../lib/ids';
 
 // What the add form collects. `title` is intentionally absent: a link is saved
 // from just a URL, and its title is back-filled by a later metadata fetch (so

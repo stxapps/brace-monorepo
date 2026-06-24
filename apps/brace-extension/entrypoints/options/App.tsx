@@ -38,7 +38,10 @@ function useSyncStatus(): SyncStatus {
     void readSyncStatus().then((s) => {
       if (active) setStatus(s);
     });
-    const handler: Parameters<typeof browser.storage.onChanged.addListener>[0] = (changes, area) => {
+    const handler: Parameters<typeof browser.storage.onChanged.addListener>[0] = (
+      changes,
+      area,
+    ) => {
       if (area !== 'local') return;
       const next = changes[SYNC_STATUS_KEY]?.newValue as SyncStatus | undefined;
       if (next) setStatus(next);
@@ -115,11 +118,7 @@ function Status({ username }: { username: string | null }) {
         </div>
       </section>
 
-      <Button
-        variant="outline"
-        disabled={signOut.isPending}
-        onClick={() => signOut.mutate()}
-      >
+      <Button variant="outline" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
         {signOut.isPending ? 'Signing out…' : 'Sign out'}
       </Button>
     </div>

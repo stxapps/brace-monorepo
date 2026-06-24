@@ -1,4 +1,4 @@
-import { newId } from '@stxapps/web-react';
+import { newId } from '@stxapps/web-crypto';
 
 // A stable per-INSTALL id for this extension, minted once and persisted. It's the
 // `extractedBy` / `claimedBy` provenance the extraction facets record (entities.ts)

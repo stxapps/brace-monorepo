@@ -49,7 +49,9 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 #### @stxapps/web-crypto
 
 - used by brace-web, brace-extension, and web-react
-- web-only KDF, AES-256-GCM
+- web-only crypto-global primitives: KDF, AES-256-GCM, and id minting
+  (`newId`, a `crypto.randomUUID()` wrapper; brace-api keeps its own copy since
+  it's `platform:worker` and can't import this `platform:web` package)
 
 #### @stxapps/web-react
 

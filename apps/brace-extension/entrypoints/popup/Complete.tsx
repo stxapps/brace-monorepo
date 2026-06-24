@@ -83,7 +83,11 @@ export function Complete({ link }: { link: LinkItem }) {
       </div>
 
       <div className="facet-buttons">
-        <FacetButton label="Screenshot" state={facetState('screenshot')} onClick={() => run('screenshot')} />
+        <FacetButton
+          label="Screenshot"
+          state={facetState('screenshot')}
+          onClick={() => run('screenshot')}
+        />
         <FacetButton label="Archive" state={facetState('archive')} onClick={() => run('archive')} />
       </div>
     </div>

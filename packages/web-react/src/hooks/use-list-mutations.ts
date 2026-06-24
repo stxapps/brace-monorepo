@@ -23,12 +23,12 @@ import {
   rerankToOrder,
   TRASH_ID,
 } from '@stxapps/shared';
+import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { deleteList, writeList } from '../data/mutations';
 import { countLinksInList, type ListItem, readLists } from '../data/queries';
-import { newId } from '../lib/ids';
 
 export interface ListMutations {
   // Create a list and place it at `index` within `parentId`'s children. Mirrors

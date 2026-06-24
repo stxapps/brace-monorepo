@@ -27,7 +27,10 @@ export const themeStorage: ThemeStorage = {
     mirror(state);
   },
   subscribe: (cb) => {
-    const handler: Parameters<typeof browser.storage.onChanged.addListener>[0] = (changes, area) => {
+    const handler: Parameters<typeof browser.storage.onChanged.addListener>[0] = (
+      changes,
+      area,
+    ) => {
       if (area !== 'sync') return;
       const change = changes[THEME_STORAGE_KEY];
       if (change && change.newValue != null) {
