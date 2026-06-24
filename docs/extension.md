@@ -5,96 +5,6 @@ Notes on the `brace-extension` (wxt) app and how its UI/logic relates to
 and dependency rules, and [account.md](./account.md) for the
 password-derived account model the auth flows build on.
 
-### auth code: shared via packages, not the web app
-
-The reusable substance of the auth flows already lives in the packages, not in
-`brace-web`:
-
-- form logic — `useCreateAccountForm`, `useSignInForm`, `useUsernameAvailable`
-  in `@stxapps/react`
-- schemas + endpoint descriptors in `@stxapps/shared`
-- KDF / signing / AES in `@stxapps/web-crypto`
-- inputs / buttons / fields in `@stxapps/web-ui`
-
-So when the extension grows its own auth UI, it composes those packages the same
-way brace-web does — it does **not** import anything from `brace-web` (apps never
-import apps).
-
-### the extension runs its own sign-in — it does not inherit the web session
-
-The non-extractable `encryptionKey` (AES-256-GCM `CryptoKey`) can't cross the
-web↔extension boundary: it lives in brace-web's IndexedDB on the `app.brace.to`
-origin, and the extension runs on a separate `chrome-extension://` origin. So
-the extension unlocks **on its own** — its own sign-in, deriving its own keys
-from (username, password) via `@stxapps/web-crypto` — rather than reading the
-web app's session. (This supersedes an earlier idea that the extension would
-inherit the session out of shared storage.)
-
-### decision (2026-06-23): the move happened — the auth glue (and the whole local-first stack) now lives in the packages
-
-brace-extension's auth work has begun, so the trigger below fired. The auth
-glue — and the rest of the shared local-first stack (data layer, sync engine,
-sync/auth providers, editor hooks) — moved out of `apps/brace-web` into the
-packages, with brace-web re-importing from them (single source of truth):
-
-- `create-account-form.tsx`, `sign-in-form.tsx` →
-  `@stxapps/web-ui/components/auth/*`
-- `use-create-account.ts` / `use-sign-in.ts` / `use-sign-out.ts`,
-  `auth-provider.tsx`, `sync-provider.tsx`, `session-store.ts`, the `data/*`
-  store + the `sync/*` engine, and the `(app)/_hooks` editor family →
-  `@stxapps/web-react` (see [architecture.md](./architecture.md)).
-
-The inversion the move required: the two auth submit hooks and the sync engine
-no longer reach for brace-web's app-local `@/lib/api`. They read the configured
-client through the `@stxapps/react` seam — `useApiClient()` in the hooks,
-`SyncDeps.api` (threaded from the provider) in the engine — so each app binds
-its own baseUrl. brace-web's `lib/api.ts` stays app-local (it owns
-`NEXT_PUBLIC_API_URL`); the extension's `utils/api.ts` is its counterpart
-(base URL from the build mode).
-
-The original "move later" reasoning is kept below for the record.
-
----
-
-The decision (2026-06-08) had been to keep these five files app-local until
-brace-extension's auth work actually started:
-
-- `app/(auth)/create-account/create-account-form.tsx`
-- `app/(auth)/create-account/use-create-account.ts`
-- `app/(auth)/sign-in/sign-in-form.tsx`
-- `contexts/auth-provider.tsx`
-- `data/session-store.ts`
-
-**Why move later, not now (the reasoning at the time):**
-
-- They're **thin app glue**, not reusable logic — the heavy, genuinely-shared
-  parts are already in the packages listed above. There's little "design for
-  sharing" left to capture.
-- `use-create-account.ts` couples to the app-local `@/lib/api` instance
-  (per-app, env-configured base URL) and `@/contexts/auth-provider`. Sharing it
-  means inverting those dependencies — and the right shape for that inversion is
-  driven by the extension's real api-config and provider tree, which don't exist
-  yet. Freezing the interface against a single consumer is premature abstraction:
-  design it now, redesign + re-test both apps later.
-- `sign-in-form.tsx`'s `onSubmit` is still a stub (the KDF→sign→session sequence
-  isn't written). Finish the flow once in brace-web before sharing it, rather
-  than share → finish → re-verify two apps.
-- Cost is asymmetric: moving later is a mechanical `git mv` + import fixups;
-  moving now-wrong is a double refactor plus a double re-test.
-
-**To keep "later" cheap (free, do it as you go):** keep these files
-Next-agnostic — no `next/navigation`, `next/image`, `server-only`, or RSC-only
-assumptions. They already are (`'use client'` is a harmless no-op under
-wxt/Vite, and `session-store.ts` is pure IndexedDB with zero app deps).
-
-**The trigger to move:** when brace-extension's auth work begins and its
-api-config + provider shape exist — then there are two real consumers to
-validate the interface against. Destinations:
-
-- `create-account-form.tsx`, `sign-in-form.tsx` → `@stxapps/web-ui`
-- `use-create-account.ts`, `auth-provider.tsx`, `session-store.ts` →
-  `@stxapps/web-react`
-
 ### wxt conventions
 
 - **Use `browser.*` from wxt, not raw `chrome.*`.** wxt's `browser` namespace is
@@ -106,6 +16,15 @@ validate the interface against. Destinations:
   recent-list React app; `options/` → account / passphrase / key-management React
   app; `content.ts` → the programmatic content script (active-tab DOM read for the
   active-page extraction tier — see [link-extraction.md](./link-extraction.md)).
+- **`brace-extension/utils/` is a WXT-reserved directory name** — don't rename it
+  to `lib/` for consistency with the other apps/packages. WXT (like Nuxt) does
+  directory-based auto-imports: it scans `utils/` (alongside `components/`,
+  `composables/`, `hooks/`, and `entrypoints/`/`public/`/`assets/`) and
+  regenerates `.wxt/types/imports-module.d.ts` + `.wxt/eslint-auto-imports.mjs`
+  from it. Renaming the folder stops WXT from registering those modules into the
+  `#imports` virtual module. `lib/` is our house style only for folders we
+  organize freely (`brace-api/src/lib`, `web-react/src/lib`, the packages); the
+  framework-reserved names stay as the framework expects.
 
 ### storage across extension contexts
 
@@ -129,3 +48,44 @@ context that has to reach the data:
   its own sign-in_ above).
 - **`localStorage`** — technically works in the popup/options pages, but not worth
   relying on given the popup's short lifecycle; prefer `browser.storage`.
+
+### the extension runs its own sign-in — it does not inherit the web session
+
+The non-extractable `encryptionKey` (AES-256-GCM `CryptoKey`) can't cross the
+web↔extension boundary: it lives in brace-web's IndexedDB on the `app.brace.to`
+origin, and the extension runs on a separate `chrome-extension://` origin. So
+the extension unlocks **on its own** — its own sign-in, deriving its own keys
+from (username, password) via `@stxapps/web-crypto` — rather than reading the
+web app's session. (This supersedes an earlier idea that the extension would
+inherit the session out of shared storage.)
+
+### auth code lives in the packages, not the web app
+
+The auth flows and the rest of the shared local-first stack live in the
+packages, not in `brace-web` — brace-web re-imports from them (single source of
+truth), and the extension composes the same packages, importing **nothing** from
+`brace-web` (apps never import apps).
+
+The reusable primitives:
+
+- form logic — `useCreateAccountForm`, `useSignInForm`, `useUsernameAvailable`
+  in `@stxapps/react`
+- schemas + endpoint descriptors in `@stxapps/shared`
+- KDF / signing / AES in `@stxapps/web-crypto`
+- inputs / buttons / fields in `@stxapps/web-ui`
+
+The auth glue + local-first stack:
+
+- `create-account-form.tsx`, `sign-in-form.tsx` →
+  `@stxapps/web-ui/components/auth/*`
+- `use-create-account.ts` / `use-sign-in.ts` / `use-sign-out.ts`,
+  `auth-provider.tsx`, `sync-provider.tsx`, `session-store.ts`, the `data/*`
+  store + the `sync/*` engine, and the `(app)/_hooks` editor family →
+  `@stxapps/web-react` (see [architecture.md](./architecture.md)).
+
+The auth submit hooks and the sync engine don't reach for an app-local
+`@/lib/api`. They read the configured client through the `@stxapps/react`
+seam — `useApiClient()` in the hooks, `SyncDeps.api` (threaded from the
+provider) in the engine — so each app binds its own baseUrl. brace-web's
+`lib/api.ts` stays app-local (it owns `NEXT_PUBLIC_API_URL`); the extension's
+`utils/api.ts` is its counterpart (base URL from the build mode).

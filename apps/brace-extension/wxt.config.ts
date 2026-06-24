@@ -44,7 +44,7 @@ export default defineConfig({
         'storage',
         // The background service worker is ephemeral in MV3 — it can't hold a
         // long-running loop — so the sync + extraction cycles are driven by a
-        // periodic chrome.alarms tick (see entrypoints/background.ts).
+        // periodic browser.alarms tick (see entrypoints/background.ts).
         'alarms',
         // activeTab grants temporary host access to the current tab on click,
         // covering url/title reads + captureVisibleTab on it
@@ -52,20 +52,17 @@ export default defineConfig({
         // required to call scripting.executeScript (archive serializer
         // injection in background.ts); activeTab only grants host access
         'scripting',
-        'management',
-        // Firefox reads auth cookies directly; Chrome queries display info
-        ...(isFirefox ? ['cookies'] : ['system.display']),
       ],
       // action.default_title comes from the popup's <title> (entrypoints/popup).
       ...(isFirefox
         ? {
-            browser_specific_settings: {
-              gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
-            },
-          }
+          browser_specific_settings: {
+            gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
+          },
+        }
         : {
-            minimum_chrome_version: '93',
-          }),
+          minimum_chrome_version: '93',
+        }),
     };
   },
   vite: () => ({

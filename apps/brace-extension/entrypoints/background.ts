@@ -2,7 +2,7 @@
  * Background service worker — the privileged core of the extension.
  *
  * MV3 service workers are EPHEMERAL (no long-running loop), so the recurring work
- * is driven by a `chrome.alarms` tick rather than a timer:
+ * is driven by a `browser.alarms` tick rather than a timer:
  *   - on each alarm (and on startup) it runs a selective SYNC cycle
  *     (`runSync` → `runIncrementalSync`, materializing only links/ + extractions/).
  *   - it answers the typed popup → background message protocol, owning ALL
