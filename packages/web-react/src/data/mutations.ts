@@ -25,7 +25,6 @@ import {
   linkSchema,
   type List,
   listSchema,
-  type OpKind,
   type Pin,
   pinSchema,
   SETTINGS_GENERAL_PATH,
@@ -42,27 +41,37 @@ import type { WithPath } from './queries';
 
 const encoder = new TextEncoder();
 
-// Persist one entity locally and queue it for upload. `item` carries its `path`
-// (the app-only store key); everything else is the blob to encrypt, so `path` is
-// stripped before encoding — it's reconstructed from the namespace on read, never
-// stored inside the ciphertext (see entities.ts on reference ids vs. paths).
+// Persist one path's RAW bytes locally and queue the upload — the base primitive
+// the JSON-entity path (writeEntity) and the opaque-media path (writeFile) both
+// share: a `files/{id}.enc` content blob (screenshots, archives, read-mode) stores
+// its bytes verbatim, a JSON entity stores its encoded blob, but both do the same
+// local-put + pending-op in one transaction. The sync engine encrypts + PUTs the
+// bytes downstream like any other op.
 //
 // `baseUpdatedAt` is the path's current server stamp (0 if it has no record yet —
 // a fresh create, including the first edit of an untouched system-list default):
 // the base reconcile diffs the next pulled stamp against to tell our own echo
 // from a real conflict. The local `items.updatedAt` is left at that base until
 // the commit restamps it.
-async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
-  const { path, ...entity } = item;
-  const bytes = encoder.encode(JSON.stringify(entity));
-  const op: OpKind = 'put';
-
+async function writeBytes(username: string, path: string, bytes: Uint8Array): Promise<void> {
   await db.transaction('rw', db.items, db.pendingOps, async () => {
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     await db.items.put(toItemRecord(path, baseUpdatedAt, bytes));
-    await db.pendingOps.put({ username, path, op, baseUpdatedAt });
+    await db.pendingOps.put({ username, path, op: 'put', baseUpdatedAt });
   });
+}
+
+// Persist one entity locally and queue it for upload — the JSON-entity path layered
+// over writeBytes. `item` carries its `path` (the app-only store key); everything
+// else is the blob to encrypt, so `path` is stripped before encoding — it's
+// reconstructed from the namespace on read, never stored inside the ciphertext (see
+// entities.ts on reference ids vs. paths). The encoded blob then goes through the
+// shared writeBytes primitive, so the local-put + pending-op atomicity (and the
+// `baseUpdatedAt` base-stamp handling) lives in one place.
+async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
+  const { path, ...entity } = item;
+  await writeBytes(username, path, encoder.encode(JSON.stringify(entity)));
 }
 
 // Delete one entity by path: drop the local record and queue the server delete in
@@ -287,19 +296,6 @@ export async function writeExtraction(
     throw new Error(`writeExtraction: invalid extraction ${linkId}`);
   }
   await writeEntity(username, next);
-}
-
-// Persist one entity's RAW bytes locally and queue the upload — the bytes path that
-// mirrors writeEntity, but WITHOUT the JSON-encode step. `files/{id}.enc` content
-// (screenshots, archives, read-mode) is opaque media, not a JSON entity, so it
-// stores its bytes verbatim; the sync engine encrypts + PUTs them like any other op.
-async function writeBytes(username: string, path: string, bytes: Uint8Array): Promise<void> {
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
-    const existing = await db.items.get(path);
-    const baseUpdatedAt = existing?.updatedAt ?? 0;
-    await db.items.put(toItemRecord(path, baseUpdatedAt, bytes));
-    await db.pendingOps.put({ username, path, op: 'put', baseUpdatedAt });
-  });
 }
 
 // Write a `files/{id}.enc` content blob (a captured screenshot/archive/read-mode
