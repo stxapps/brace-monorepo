@@ -26,7 +26,7 @@ export const PINS_PREFIX = 'pins/';
 // The MACHINE half of a link — `extractions/{id}.enc`, where `{id}` is the link's id
 // (so `extractions/{id}.enc` shadows `links/{id}.enc`). One file per link holding BOTH
 // the extracted display result (title, imageId, pageArchiveId, screenshotId) AND the
-// per-facet automated bookkeeping (status/tier/retry). Split BY WRITER from the
+// per-facet automated bookkeeping (status/extractedBy/retry). Split BY WRITER from the
 // user-authored `links/{id}.enc`, so a background extractor writes only this file and
 // never clobbers a concurrent user edit under file-level LWW (see link-extraction.md).
 export const EXTRACTIONS_PREFIX = 'extractions/';

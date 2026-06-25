@@ -194,10 +194,19 @@ export const facetSchema = z.looseObject({
   // failure (404/410, robots block), never retry. Because this is SYNCED, one device's
   // `permanent`/`failed` stops every device retrying.
   status: z.enum(['done', 'failed', 'permanent']),
-  // who/quality produced it — `active-page` beats `bg-fetch` beats `server`; a client
-  // whose tier beats a `done` facet's stored tier may re-extract to UPGRADE it.
-  tier: z.enum(['active-page', 'bg-fetch', 'server']).optional(),
-  extractedBy: z.string().optional(), // who ran the last attempt — client/device id
+  // WHO ran the last attempt — a `platform:env` string (`extension:fg`, `extension:bg`,
+  // `expo:fg`, `expo:bg`, `server`), NOT a device id: nothing reads this for identity
+  // (there's no claim lease and no per-device coordination — see below), only for
+  // QUALITY. Quality (the upgrade axis) is DERIVED from it by the shared `tierOf()` helper
+  // — `:fg` → active-page beats `:bg` → bg-fetch beats `server` — so a client whose
+  // derived tier beats a `done` facet's may re-extract to UPGRADE it. There is no stored
+  // `tier` field: it's a pure function of `extractedBy`, and a derived value sitting
+  // beside its input is the same drift-prone two-field invariant we avoid with
+  // `nextEligibleAt` below. Kept a `z.string()` (not an enum) so a future platform/env a
+  // newer client emits round-trips through older ones (the file-wide rule) instead of
+  // failing to parse; `tierOf()` ranks an unrecognized value conservatively low so it
+  // never wrongly out-ranks a known active-page result.
+  extractedBy: z.string().optional(),
   extractedAt: z.number().int().optional(), // when — success time when done, last try when failed
   attempts: z.number().int(), // backoff counter — retry when now >= extractedAt + backoff(attempts)
   // No claim lease (`claimedBy`/`claimedAt`): a rare double-extraction is resolved by

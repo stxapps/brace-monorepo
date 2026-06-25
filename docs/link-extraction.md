@@ -96,7 +96,8 @@ Two consequences baked into the design:
   (icon click / foreground share). Don't fight the platforms to background them.
 - A link extracted at a **low tier** (background raw-HTML, no screenshot) should
   be **upgradable** when a **higher-tier** client later sees it — which means the
-  system must record _which tier_ produced the current result. See
+  system must record _who_ produced the current result (`extractedBy`, from which the
+  tier is derived). See
   _the extraction entity_.
 
 ### who extracts: the client that did the save
@@ -324,8 +325,14 @@ export const facetSchema = z.looseObject({
   // permanent → hard failure (404/410, robots block) — never retry.
   // there is no 'pending': a facet with no entry (or a link with no
   // extractions/ file at all) IS pending — absence is the signal.
-  tier: z.enum(['active-page', 'bg-fetch', 'server']).optional(), // who/quality produced it
-  extractedBy: z.string().optional(), // who ran the last attempt — client/device id
+  extractedBy: z.string().optional(), // who ran the last attempt — a `platform:env`
+  // string (extension:fg | extension:bg | expo:fg | expo:bg | server), NOT a device id.
+  // Quality (the upgrade axis) is DERIVED from it by the shared tierOf() helper —
+  // :fg → active-page beats :bg → bg-fetch beats server. No stored `tier` field: it's a
+  // pure function of extractedBy (storing it beside its input is the same drift-prone
+  // two-field invariant we avoid with nextEligibleAt). Left a z.string() (not an enum) so
+  // a future platform/env round-trips through older clients; tierOf() ranks an unknown
+  // value conservatively low.
   extractedAt: z.number().int().optional(), // when the last attempt ran — success time when done, last try when failed
   attempts: z.number().int(), // backoff counter — retry when now >= extractedAt + backoff(attempts)
 });
@@ -363,7 +370,18 @@ Each facet answers the same questions independently:
 
 - **who / when** → `extractedBy` / `extractedAt` — a who/when pair describing the
   **last extraction attempt** (the success on a `done` facet, the last try on a
-  `failed` one); **quality** → `tier` (active-page beats bg-fetch beats server).
+  `failed` one). `extractedBy` is a **`platform:env` string** (`extension:fg`,
+  `extension:bg`, `expo:fg`, `expo:bg`, `server`), **not a device id** — nothing reads
+  it for identity (no claim lease, no per-device coordination), only for quality.
+  **quality** → **derived** from `extractedBy` by the shared `tierOf()` helper:
+  `:fg` → active-page beats `:bg` → bg-fetch beats `server`. There is **no stored
+  `tier` field** — it's a pure function of `extractedBy`, and a derived value beside its
+  input is the same drift-prone two-field invariant we reject for `nextEligibleAt`.
+  `tierOf()` lives in `shared` next to `backoff()` (so every client agrees) and ranks an
+  **unrecognized** value conservatively low, so a future `platform:env` a newer client
+  emits round-trips through older clients (the `looseObject` rule — an unknown *enum
+  value* would instead fail to parse, which is why `extractedBy` stays a `z.string()`)
+  without ever wrongly out-ranking a known active-page result.
 - **retry, but not forever** → for a transient `failed`, the deciding client
   computes eligibility itself: retry once `now >= extractedAt + backoff(attempts)`.
   We **don't store a `nextEligibleAt`** — it's fully derived from `extractedAt`
@@ -391,9 +409,10 @@ Each facet answers the same questions independently:
   coordination), not a synced lease — and it's **deferred** until it proves real,
   since the device the import landed on usually drains it alone (see _imported
   links_).
-- **upgrade** → a client whose `tier` beats a facet's stored `tier` may
-  re-extract that `done` facet (e.g. you open the real page in the extension
-  after a background bg-fetch only got title + image).
+- **upgrade** → a client whose **derived tier** (`tierOf(extractedBy)`) beats a `done`
+  facet's may re-extract it (e.g. you open the real page in the extension —
+  `extension:fg` → active-page — after a background `extension:bg` bg-fetch only got
+  title + image).
 
 **Path layout — one flat file per link, facets inside; not one prefix per
 facet.** We deliberately keep `extractions/{id}.enc` (flat — fits the existing
@@ -555,15 +574,32 @@ For an extension whose job is extraction + save, the minimum working set is:
 - **eagerly: `links/` + `extractions/`.** Both are needed — and `extractions/`
   **alone is not enough**:
   - a freshly-saved link has **no** `extractions/` file (its absence _is_ the
-    pending signal), so new work is only discoverable from the `links/` index;
-  - the **URL** to fetch lives in `links/{id}.enc` (read-only for the extractor —
-    it reads the URL but never writes this file);
+    pending signal), so new work is only discoverable from the `links/` namespace.
+    Note the subtlety: **discovering** pending work needs only the link **paths** —
+    the set difference (all link ids _minus_ those carrying a `done`/`permanent`
+    `titleImage` token), both sides keyed off the op-list + the `*itemFacetStatuses`
+    index, a primary-key prefix scan with no blob. So *detection* alone would let
+    `links/` ride at the **metadata-only** disposition (path + `updatedAt`, blob
+    deferred — the same `data: undefined` mode `files/` uses). What forces the
+    **full** link blob is the next two bullets, not detection;
+  - the **URL** to fetch lives **inside** `links/{id}.enc` (read-only for the
+    extractor — it reads the URL but never writes this file). The op-list can't
+    surface it — it's in the ciphertext — so extracting a link needs its blob;
+  - the extension popup's **"is this tab already saved?" dedup** (`readLinkByUrl`)
+    is an `itemUrl` index hit, and `itemUrl` is **projected only from the decrypted
+    link blob** — so the popup needs `links/` blobs resident, not just paths;
   - write-back of `title`/`imageId` is a **read-merge-write of the `extractions/`
     blob** that must round-trip its unknown fields (the `looseObject` rule), so the
     current extraction blob (if any) has to be in hand — but the link blob is never
     rewritten.
     For 10 000 links this is ~2.5 MB (`links/`) + the `extractions/` set (now holds
-    the titles/refs too, no longer tiny, but still small) — trivial.
+    the titles/refs too, no longer tiny, but still small) — trivial. So we keep
+    `links/` at **full download**, not metadata-only: the two-line saving isn't worth
+    losing popup dedup, and the URL is needed at extraction time anyway. (The engine
+    _does_ have a latent third disposition — `skip` / metadata-only / full, today
+    selected by `pathFilter` + the hardcoded `isContentPath` `files/` rule; promoting
+    a namespace to metadata-only is the knob to reach for **only** when a heavy
+    namespace is genuinely never read by that client, which `links/` isn't here.)
 - **lazily / never: `files/`.** Heavy content is on-demand for **every** client
   already; the extension fetches a `files/` blob only to **upgrade** an existing
   screenshot/archive, never routinely.
@@ -595,8 +631,9 @@ it's built it is a **separate app**, not a route in `brace-api`:
   the requesting client. The **client** (which holds the data key) does the E2E
   write-back into `links` / `files` / `extraction`. The extractor **holds no key,
   persists nothing, writes no blob** — so what it can leak is transient (a URL it
-  saw mid-fetch), not stored. Results it produces carry `tier: 'server'` (lowest
-  quality, above nothing), so any active-page client can later **upgrade** them.
+  saw mid-fetch), not stored. Results it produces carry `extractedBy: 'server'`
+  (`tierOf` → server, the lowest quality, above nothing), so any active-page client can
+  later **upgrade** them.
 - **Anonymous, not session-bound.** Requiring a logged-in session id would
   convert the leak from "the server saw this URL" into "the server can tie this
   URL to _this account_" — a **strictly worse** leak than the one this whole doc
@@ -638,8 +675,8 @@ default.
   on SPAs. Active-tab/WebView extraction (live DOM) is the high-quality path;
   background is best-effort. No fix beyond the tier model — just don't promise
   read-mode parity across tiers.
-- **Re-extract / upgrade UX.** The `tier` field _enables_ upgrading a low-tier
-  result, but the trigger (automatic on a higher-tier sighting vs. a manual
+- **Re-extract / upgrade UX.** The derived tier (`tierOf(extractedBy)`) _enables_
+  upgrading a low-tier result, but the trigger (automatic on a higher-tier sighting vs. a manual
   "re-extract" button) is an open product call.
 - **Archive on background tier.** Capturing a full archive without an open
   page is the weak spot (offscreen/hidden-tab rendering is heavy and flaky). For
