@@ -16,6 +16,7 @@ import type { z } from 'zod';
 
 import type { Extraction, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
 import {
+  backoff,
   compareRank,
   ENC_SUFFIX,
   EXTRACTIONS_PREFIX,
@@ -345,6 +346,62 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   ]);
   const failed = failedTransient + permanent;
   return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
+}
+
+// The `{id}` of an id-keyed path (`links/{id}.enc`, `extractions/{id}.enc`) — the
+// co-key the writer-split shares across the two namespaces (entities.ts). A prefix +
+// suffix strip, the inverse of building the path from an id.
+function idFromPath(path: string, prefix: string): string {
+  return path.slice(prefix.length, -ENC_SUFFIX.length);
+}
+
+// The residual extraction queue, as a QUERY (there's no queue object — see
+// docs/link-extraction.md "the queue is a query"). Returns up to `limit` links whose
+// `titleImage` facet is PENDING for this client to fill at bg-fetch tier: a link with
+// no `done`/`permanent` titleImage facet, where any prior `failed` attempt is past its
+// backoff (`now >= extractedAt + backoff(attempts)`). `permanent` (404/410, robots) and
+// still-cooling-down `failed` facets are skipped — one device's outcome, synced, stops
+// every device. The link blob carries the URL the caller fetches.
+//
+// Cost: three index range-reads of the small `*itemFacetStatuses` token set to build the
+// "blocked" id set, a decode of only the (few) `failed` extractions to check backoff, then
+// a bounded newest-first walk of `links/` that stops at `limit`. The full library is never
+// decoded — the deliberate "local queue scan is free" property the doc relies on.
+export async function readLinksPendingTitleImage(now: number, limit: number): Promise<LinkItem[]> {
+  const [donePaths, permanentPaths, failedPaths] = await Promise.all([
+    db.items.where('itemFacetStatuses').equals('done:titleImage').primaryKeys(),
+    db.items.where('itemFacetStatuses').equals('permanent:titleImage').primaryKeys(),
+    db.items.where('itemFacetStatuses').equals('failed:titleImage').primaryKeys(),
+  ]);
+
+  // Link ids whose titleImage is settled (done/permanent) — never re-queued here.
+  const blocked = new Set<string>();
+  for (const path of donePaths) blocked.add(idFromPath(path as string, EXTRACTIONS_PREFIX));
+  for (const path of permanentPaths) blocked.add(idFromPath(path as string, EXTRACTIONS_PREFIX));
+
+  // A `failed` facet is pending again only once past its backoff; until then, block it.
+  const failedRecords = await db.items.bulkGet(failedPaths as string[]);
+  for (const record of failedRecords) {
+    if (!record) continue;
+    const extraction = decodeCachedExtraction(record);
+    const facet = extraction?.facets.titleImage;
+    if (!extraction || !facet) continue;
+    const eligibleAt = (facet.extractedAt ?? 0) + backoff(facet.attempts);
+    if (now < eligibleAt) blocked.add(extraction.id); // still cooling down
+    // else: leave unblocked — it's pending again and the walk below picks it up.
+  }
+
+  // Walk links newest-added first, skipping blocked ids; `filter` then `limit` touches a
+  // bounded slice, not the library. createdAt order so a fresh import drains oldest-saved
+  // last (newest first), matching how the user sees the list fill in.
+  const records = await db.items
+    .where('[itemType+itemCreatedAt]')
+    .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
+    .reverse()
+    .filter((record) => !blocked.has(idFromPath(record.path, LINKS_PREFIX)))
+    .limit(limit)
+    .toArray();
+  return decodeLinks(records);
 }
 
 // The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /

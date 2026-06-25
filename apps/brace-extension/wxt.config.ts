@@ -30,10 +30,10 @@ export default defineConfig({
     // extension, and the future mobile app — NOT a cookie. In MV3, the
     // background/service-worker's fetches to a host_permissions origin are
     // EXEMPT from CORS, so the extension never appears in brace-api's
-    // CORS_ORIGINS allow-list. Keep this minimal: each build ships only its own
-    // tier's host (no localhost/staging in the production store build).
-    // NOTE: content scripts get NO CORS exemption — route their API calls
-    // through background.ts rather than fetching brace-api directly.
+    // CORS_ORIGINS allow-list. The api host is per-tier (no localhost/staging in
+    // the production store build). NOTE: content scripts get NO CORS exemption —
+    // route their API calls through background.ts rather than fetching brace-api
+    // directly.
     const apiUrl = loadEnv(mode, process.cwd(), 'WXT_PUBLIC_').WXT_PUBLIC_API_URL;
     if (!apiUrl) throw new Error('WXT_PUBLIC_API_URL is not set');
     // host_permissions needs a match pattern (origin + `/*`), not a bare origin.
@@ -42,7 +42,15 @@ export default defineConfig({
       name: 'Brace.to - Bookmark Manager',
       description:
         'Save links to visit later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
-      host_permissions: [apiHost],
+      // `<all_urls>` is what unlocks BACKGROUND title+image extraction (bg-fetch
+      // tier): the service worker `fetch`es saved third-party URLs to read their
+      // OpenGraph tags, and MV3 only exempts background fetches from CORS for
+      // host_permissions origins — a queued link has no open tab to borrow
+      // `activeTab` from (that covers only the active-tab capture path). This is
+      // the privacy cost the doc makes explicit: the EXTRACTING client learns the
+      // URL it fetches (docs/link-extraction.md "the stance"). The api host stays
+      // listed too so the bearer-auth calls to brace-api keep their CORS exemption.
+      host_permissions: [apiHost, '<all_urls>'],
       permissions: [
         'storage',
         // The background service worker is ephemeral in MV3 — it can't hold a
