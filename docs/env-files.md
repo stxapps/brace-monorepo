@@ -75,10 +75,10 @@ can't pick a production-mode build by mode) wxt selects the file natively:
 
 Files in `apps/brace-extension/` (all committed — every value is public):
 
-| file               | used by                                 |
-| ------------------ | --------------------------------------- |
-| `.env.development` | `nx dev @stxapps/brace-extension`       |
-| `.env.production`  | `nx build @stxapps/brace-extension`     |
+| file               | used by                                                                   |
+| ------------------ | ------------------------------------------------------------------------- |
+| `.env.development` | `nx dev @stxapps/brace-extension`                                         |
+| `.env.production`  | `nx build @stxapps/brace-extension`                                       |
 | `.env.staging`     | `nx build:staging @stxapps/brace-extension` (and `build:firefox:staging`) |
 
 Current var: `WXT_PUBLIC_API_URL` → the matching brace-api URL.

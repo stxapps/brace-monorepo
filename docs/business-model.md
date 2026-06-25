@@ -28,13 +28,13 @@ decisions that make brace private:
 
 Rough infra for a heavy 30k-link / 3 GB user, priced on R2:
 
-| item                       | math                  | cost/yr     |
-| -------------------------- | --------------------- | ----------- |
-| R2 storage (3 GB)          | 3 × $0.015 × 12       | **~$0.54**  |
-| R2 egress                  | free                  | **$0**      |
-| R2 writes (Class A, ~30k)  | 30k × $4.50/M         | **~$0.14**  |
-| R2 reads (Class B, sparse) | sync-driven           | **~$0.10–0.50** |
-| D1 (metadata rows)         | tiny                  | **~cents**  |
+| item                       | math            | cost/yr         |
+| -------------------------- | --------------- | --------------- |
+| R2 storage (3 GB)          | 3 × $0.015 × 12 | **~$0.54**      |
+| R2 egress                  | free            | **$0**          |
+| R2 writes (Class A, ~30k)  | 30k × $4.50/M   | **~$0.14**      |
+| R2 reads (Class B, sparse) | sync-driven     | **~$0.10–0.50** |
+| D1 (metadata rows)         | tiny            | **~cents**      |
 
 So even a worst-case whale costs **~$1–2/yr** in infra against $24+/yr revenue —
 an 85%+ gross margin. **Cost is never the wall; customer acquisition is.**
@@ -51,22 +51,22 @@ moat** (image/screenshot/archive blobs = the storage tail; AI = compute), never
 the things that are nearly free and build the habit (metadata, sync, encryption).
 Free users then cost cents, and the upgrade triggers are features people feel.
 
-|                                       | **Free**                          | **Plus** — $24/yr          | **Pro** — $48/yr            |
-| ------------------------------------- | --------------------------------- | -------------------------- | --------------------------- |
-| Price                                 | $0                                | $24/yr ($3/mo)             | $48/yr ($5/mo) · lifetime $149 |
-| Saved links                           | 200                               | Unlimited                  | Unlimited                   |
-| E2E encryption                        | ✅                                | ✅                         | ✅                          |
-| Sync across devices                   | ✅ (habit-builder — don't cap)    | ✅                         | ✅                          |
-| Extension (save + extract)            | ✅                                | ✅                         | ✅                          |
-| Title + tags + lists/folders          | ✅                                | ✅                         | ✅                          |
-| Preview images (downloaded blob)      | ❌ metadata-only (title/host)     | ✅                         | ✅                          |
-| Read-mode (clean reader text)         | ❌                                | ✅                         | ✅                          |
-| Screenshot capture                    | ❌                                | ✅                         | ✅                          |
-| Full-page archive (offline snapshot)  | ❌                                | last 50 links              | Unlimited                   |
-| Storage quota (blobs)                 | n/a (no blobs)                    | 5 GB                       | 20 GB                       |
-| On-device AI (auto-tag, summary)      | ❌                                | basic (auto-tag, keywords) | full (summaries, semantic search) |
-| Server extraction (`brace-extractor`) | ❌                                | opt-in                     | opt-in                      |
-| Support                               | community/docs                    | email                      | priority email              |
+|                                       | **Free**                       | **Plus** — $24/yr          | **Pro** — $48/yr                  |
+| ------------------------------------- | ------------------------------ | -------------------------- | --------------------------------- |
+| Price                                 | $0                             | $24/yr ($3/mo)             | $48/yr ($5/mo) · lifetime $149    |
+| Saved links                           | 200                            | Unlimited                  | Unlimited                         |
+| E2E encryption                        | ✅                             | ✅                         | ✅                                |
+| Sync across devices                   | ✅ (habit-builder — don't cap) | ✅                         | ✅                                |
+| Extension (save + extract)            | ✅                             | ✅                         | ✅                                |
+| Title + tags + lists/folders          | ✅                             | ✅                         | ✅                                |
+| Preview images (downloaded blob)      | ❌ metadata-only (title/host)  | ✅                         | ✅                                |
+| Read-mode (clean reader text)         | ❌                             | ✅                         | ✅                                |
+| Screenshot capture                    | ❌                             | ✅                         | ✅                                |
+| Full-page archive (offline snapshot)  | ❌                             | last 50 links              | Unlimited                         |
+| Storage quota (blobs)                 | n/a (no blobs)                 | 5 GB                       | 20 GB                             |
+| On-device AI (auto-tag, summary)      | ❌                             | basic (auto-tag, keywords) | full (summaries, semantic search) |
+| Server extraction (`brace-extractor`) | ❌                             | opt-in                     | opt-in                            |
+| Support                               | community/docs                 | email                      | priority email                    |
 
 Why these cuts:
 
@@ -96,25 +96,25 @@ break-even is replacing your income, which is an acquisition problem.**
 
 Assumptions (all editable):
 
-| input                         | value                  | note                            |
-| ----------------------------- | ---------------------- | ------------------------------- |
-| Blended price                 | 80% Plus / 20% Pro     | = $28.80/yr gross per paid sub  |
-| Payment fees                  | 2.9% + $0.30/yr        | annual billing = one charge/yr  |
-| **Net revenue / paid sub**    | **~$27.7/yr**          | after Stripe                    |
-| Infra / paid sub              | ~$2/yr                 | heavy blob user; most lighter   |
-| Infra / free sub              | ~$0.05/yr              | metadata-only, mostly sync ops  |
-| **Contribution / paid sub**   | **~$25.7/yr**          | net rev − infra                 |
-| Fixed baseline                | ~$500/yr               | Workers paid plan, domains, tools |
-| Free→paid conversion          | 2% (cons.) – 4% (opt.) | typical prosumer freemium       |
+| input                       | value                  | note                              |
+| --------------------------- | ---------------------- | --------------------------------- |
+| Blended price               | 80% Plus / 20% Pro     | = $28.80/yr gross per paid sub    |
+| Payment fees                | 2.9% + $0.30/yr        | annual billing = one charge/yr    |
+| **Net revenue / paid sub**  | **~$27.7/yr**          | after Stripe                      |
+| Infra / paid sub            | ~$2/yr                 | heavy blob user; most lighter     |
+| Infra / free sub            | ~$0.05/yr              | metadata-only, mostly sync ops    |
+| **Contribution / paid sub** | **~$25.7/yr**          | net rev − infra                   |
+| Fixed baseline              | ~$500/yr               | Workers paid plan, domains, tools |
+| Free→paid conversion        | 2% (cons.) – 4% (opt.) | typical prosumer freemium         |
 
 `paid subs needed ≈ (annual target + $500 + free_base × $0.05) ÷ $25.7`
 
-| Goal                              | Annual target | Paid subs | Free base @ 2% | Free base @ 4% |
-| --------------------------------- | ------------- | --------- | -------------- | -------------- |
-| **A. Cover infra only**           | ~$500         | **~20**   | ~1,000         | ~500           |
-| **B. Ramen / part-time** ($12k)   | ~$12.5k       | **~490**  | ~24,500        | ~12,250        |
-| **C. Modest salary** ($60k)       | ~$66k¹        | **~2,560**| ~128,000       | ~64,000        |
-| **D. Comfortable solo SaaS** ($120k) | ~$126k¹    | **~4,900**| ~245,000       | ~122,500       |
+| Goal                                 | Annual target | Paid subs  | Free base @ 2% | Free base @ 4% |
+| ------------------------------------ | ------------- | ---------- | -------------- | -------------- |
+| **A. Cover infra only**              | ~$500         | **~20**    | ~1,000         | ~500           |
+| **B. Ramen / part-time** ($12k)      | ~$12.5k       | **~490**   | ~24,500        | ~12,250        |
+| **C. Modest salary** ($60k)          | ~$66k¹        | **~2,560** | ~128,000       | ~64,000        |
+| **D. Comfortable solo SaaS** ($120k) | ~$126k¹       | **~4,900** | ~245,000       | ~122,500       |
 
 ¹ includes free-base infra drag: 128k free × $0.05 ≈ **$6.4k/yr** of pure
 hosting cost for non-payers. Real at scale — at the salary level, free-user

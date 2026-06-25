@@ -59,13 +59,13 @@ export default defineConfig({
       // action.default_title comes from the popup's <title> (entrypoints/popup).
       ...(isFirefox
         ? {
-          browser_specific_settings: {
-            gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
-          },
-        }
+            browser_specific_settings: {
+              gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
+            },
+          }
         : {
-          minimum_chrome_version: '93',
-        }),
+            minimum_chrome_version: '93',
+          }),
     };
   },
   vite: () => ({

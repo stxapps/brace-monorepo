@@ -77,8 +77,8 @@ Fetching a URL is easy wherever there's no CORS; **screenshots and archives are
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                           | title + image | read mode     | screenshot            | archive |
-| --------------------------------------- | ------------- | ------------- | --------------------- | ------- |
+| client / mode                           | title + image | read mode     | screenshot             | archive |
+| --------------------------------------- | ------------- | ------------- | ---------------------- | ------- |
 | extension — **icon click, active tab**  | ✅ live DOM   | ✅ live DOM   | ✅ `captureVisibleTab` | ✅      |
 | extension — **background, queued URL**  | ✅ raw HTML   | ⚠️ raw HTML   | ❌ no open tab         | ⚠️      |
 | mobile — **share sheet (foreground)**   | ✅            | ✅ WebView    | ⚠️ WebView render      | ⚠️      |
@@ -107,10 +107,10 @@ for a given link. The rule is simple and removes almost all cross-client
 coordination: **the client that performs the save extracts that link, at save
 time, from the best context it has.**
 
-| save happens on…            | extracts title+image via                      | tier        | cost / privacy                                              |
-| --------------------------- | --------------------------------------------- | ----------- | ----------------------------------------------------------- |
-| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free |
-| **mobile / share sheet**    | native fetch (no CORS) / a WebView            | active-page | free, private                                               |
+| save happens on…            | extracts title+image via                      | tier        | cost / privacy                                                   |
+| --------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------- |
+| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free      |
+| **mobile / share sheet**    | native fetch (no CORS) / a WebView            | active-page | free, private                                                    |
 | **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, deferred (see _server extraction_) |
 
 The third row is the correction to an easy misread of _the stance_: "the web app
@@ -123,13 +123,13 @@ the client that drives it. So a web-app save is enriched at save time **if** the
 user has opted into server extraction — otherwise it stays the documented
 _web-only gap_.
 
-**Preference order on a web-app save.** `brace-extractor` is the *fallback*, not
+**Preference order on a web-app save.** `brace-extractor` is the _fallback_, not
 the first choice. When a capable extension is present in the **same browser**, the
-more private path is to let *it* extract — locally, so no server ever sees the URL
+more private path is to let _it_ extract — locally, so no server ever sees the URL
 — and that result reaches the web app's list through **synced `links/`**, the
 cross-client bus, with no direct handoff. So the order is **same-browser
 extension (local, private) → `brace-extractor` (opted-in, server sees the URL) →
-web-only gap**. The corollary: when the extension is installed, the *best* save
+web-only gap**. The corollary: when the extension is installed, the _best_ save
 path is the extension itself (its toolbar button / context menu / shortcut) — it
 saves and extracts inline at **active-page** tier, the highest quality and most
 private, with zero cross-client coordination. Treat `brace-web`'s own save UI as
@@ -146,7 +146,7 @@ Two consequences:
   (cross-device), and **bulk imports** (see _imported links_). Steady-state, the
   query is mostly empty.
 - **No web→extension _save handoff_ — but a content-script presence bridge is
-  right.** It's tempting to route a web-app save *directly* to a same-browser
+  right.** It's tempting to route a web-app save _directly_ to a same-browser
   extension so the extension extracts it. Don't do that as a **data/save
   handoff**: the cross-client bus is already **synced `links/` + `extractions/`**,
   so a web-app save reaches the extension through sync — **cross-device, with no
@@ -379,22 +379,22 @@ Each facet answers the same questions independently:
   input is the same drift-prone two-field invariant we reject for `nextEligibleAt`.
   `tierOf()` lives in `shared` next to `backoff()` (so every client agrees) and ranks an
   **unrecognized** value conservatively low, so a future `platform:env` a newer client
-  emits round-trips through older clients (the `looseObject` rule — an unknown *enum
-  value* would instead fail to parse, which is why `extractedBy` stays a `z.string()`)
+  emits round-trips through older clients (the `looseObject` rule — an unknown _enum
+  value_ would instead fail to parse, which is why `extractedBy` stays a `z.string()`)
   without ever wrongly out-ranking a known active-page result.
 - **retry, but not forever** → for a transient `failed`, the deciding client
   computes eligibility itself: retry once `now >= extractedAt + backoff(attempts)`.
   We **don't store a `nextEligibleAt`** — it's fully derived from `extractedAt`
-  + `attempts` given the shared `backoff()` curve (which lives in `shared`, so
-  every client agrees), and storing a derived value alongside its inputs is the
-  same fragile two-field invariant we avoid elsewhere. A hard failure is the
-  explicit **`status: 'permanent'`** (404/410, robots block) — never retried, no
-  timestamp arithmetic, no implicit "failed-with-no-deadline = permanent" rule to
-  get wrong. Because this is **synced**, one device's `permanent` (or fresh
-  `failed`) stops _every_ device retrying that facet — not the per-device thrash a
-  device-local marker would give. (If we ever honor a server-supplied
-  `Retry-After` / 429, _that_ deadline isn't derivable from `attempts` and earns
-  its own field at that point — until then, don't pre-pay it.)
+  - `attempts` given the shared `backoff()` curve (which lives in `shared`, so
+    every client agrees), and storing a derived value alongside its inputs is the
+    same fragile two-field invariant we avoid elsewhere. A hard failure is the
+    explicit **`status: 'permanent'`** (404/410, robots block) — never retried, no
+    timestamp arithmetic, no implicit "failed-with-no-deadline = permanent" rule to
+    get wrong. Because this is **synced**, one device's `permanent` (or fresh
+    `failed`) stops _every_ device retrying that facet — not the per-device thrash a
+    device-local marker would give. (If we ever honor a server-supplied
+    `Retry-After` / 429, _that_ deadline isn't derivable from `attempts` and earns
+    its own field at that point — until then, don't pre-pay it.)
 - **cross-device dedup** → **none, by design.** There is no claim lease. A lease
   would force an extra _write-claim-then-sync before extraction_ on the critical
   path, yet stay best-effort anyway (two devices waking in the same poll window
@@ -578,7 +578,7 @@ For an extension whose job is extraction + save, the minimum working set is:
     Note the subtlety: **discovering** pending work needs only the link **paths** —
     the set difference (all link ids _minus_ those carrying a `done`/`permanent`
     `titleImage` token), both sides keyed off the op-list + the `*itemFacetStatuses`
-    index, a primary-key prefix scan with no blob. So *detection* alone would let
+    index, a primary-key prefix scan with no blob. So _detection_ alone would let
     `links/` ride at the **metadata-only** disposition (path + `updatedAt`, blob
     deferred — the same `data: undefined` mode `files/` uses). What forces the
     **full** link blob is the next two bullets, not detection;

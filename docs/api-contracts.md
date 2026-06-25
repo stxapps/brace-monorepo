@@ -63,19 +63,19 @@ sub-apps alongside the bare root routes.
 
 ### assembling the client (the injection seam)
 
-The contract above says how to *call* brace-api; this is how a running app gets a
-*configured* client into its hooks. It's a dependency-inversion seam — each layer
+The contract above says how to _call_ brace-api; this is how a running app gets a
+_configured_ client into its hooks. It's a dependency-inversion seam — each layer
 adds one concern and refuses to know the next one up, so the only thing that knows
 the runtime URL is the app:
 
-| layer | piece | adds | deliberately doesn't know |
-| ----- | ----- | ---- | ------------------------- |
-| `shared` | `createApiClient({ baseUrl, fetch? })` | the typed transport (contracts → `fetch`) | auth, React, the environment |
-| `react` | `ApiClientProvider` / `useApiClient` | a React **seam** — a context hole the hooks read | which client, which baseUrl |
-| `web-react` | `createAuthApiClient({ baseUrl })` | bearer-token `authFetch` (+ the mid-session 401/expiry → `notifySessionInvalid` loop, reading `session-store`) | the environment |
-| app | `const baseUrl = <env>; api = createAuthApiClient({ baseUrl })` | the **one** concrete client + provides it | — (it's the top) |
+| layer       | piece                                                           | adds                                                                                                           | deliberately doesn't know    |
+| ----------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `shared`    | `createApiClient({ baseUrl, fetch? })`                          | the typed transport (contracts → `fetch`)                                                                      | auth, React, the environment |
+| `react`     | `ApiClientProvider` / `useApiClient`                            | a React **seam** — a context hole the hooks read                                                               | which client, which baseUrl  |
+| `web-react` | `createAuthApiClient({ baseUrl })`                              | bearer-token `authFetch` (+ the mid-session 401/expiry → `notifySessionInvalid` loop, reading `session-store`) | the environment              |
+| app         | `const baseUrl = <env>; api = createAuthApiClient({ baseUrl })` | the **one** concrete client + provides it                                                                      | — (it's the top)             |
 
-Why the seam exists: the query/mutation hooks in `@stxapps/react` need *a* client,
+Why the seam exists: the query/mutation hooks in `@stxapps/react` need _a_ client,
 but importing one would drag an app's env var into a package — forbidden by the
 `type:`/`platform:` boundaries. So the hooks read `useApiClient()` from context and
 the app injects the concrete client via `<ApiClientProvider client={api}>`. Same
