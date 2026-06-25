@@ -18,14 +18,15 @@ import type { Extraction, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps
 import {
   backoff,
   compareRank,
-  ENC_SUFFIX,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
+  idFromPath,
   LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
   listSchema,
+  pathFromId,
   PINS_PREFIX,
   pinSchema,
   SETTINGS_GENERAL_PATH,
@@ -197,8 +198,7 @@ function decodeCachedExtraction(record: ItemRecord): ExtractionItem | undefined 
 // the writer-split's co-key (entities.ts). Both are id-keyed namespaces, so this is a
 // prefix swap.
 function extractionPathForLink(linkPath: string): string {
-  const id = linkPath.slice(LINKS_PREFIX.length, -ENC_SUFFIX.length);
-  return `${EXTRACTIONS_PREFIX}${id}${ENC_SUFFIX}`;
+  return pathFromId(idFromPath(linkPath, LINKS_PREFIX), EXTRACTIONS_PREFIX);
 }
 
 // Resolve one link + its (optional) extraction into the display row the UI renders —
@@ -254,7 +254,7 @@ async function readNamespace<T extends z.ZodTypeAny>(
 function mergeSystemLists(stored: ListItem[]): ListItem[] {
   const storedById = new Map(stored.map((list) => [list.id, list]));
   const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(
-    (def) => storedById.get(def.id) ?? { ...def, path: `${LISTS_PREFIX}${def.id}${ENC_SUFFIX}` },
+    (def) => storedById.get(def.id) ?? { ...def, path: pathFromId(def.id, LISTS_PREFIX) },
   );
   for (const list of stored) {
     if (!SYSTEM_LIST_IDS.has(list.id)) resolved.push(list);
@@ -306,7 +306,7 @@ export async function readLinkByUrl(url: string): Promise<LinkItem | undefined> 
 // direct-path counterpart of readLinkByUrl, used by the background extraction worker
 // (which holds a link id from the EXTRACT message and needs the entity to patch).
 export async function readLinkById(linkId: string): Promise<LinkItem | undefined> {
-  const record = await db.items.get(`${LINKS_PREFIX}${linkId}${ENC_SUFFIX}`);
+  const record = await db.items.get(pathFromId(linkId, LINKS_PREFIX));
   if (!record) return undefined;
   return decode(record, linkSchema);
 }
@@ -315,7 +315,7 @@ export async function readLinkById(linkId: string): Promise<LinkItem | undefined
 // `links/{id}.enc`), or undefined if none has synced/been written yet. A direct
 // exact-path read + decode — the path is derived from the id, no scan.
 export async function readExtraction(linkId: string): Promise<ExtractionItem | undefined> {
-  const record = await db.items.get(`${EXTRACTIONS_PREFIX}${linkId}${ENC_SUFFIX}`);
+  const record = await db.items.get(pathFromId(linkId, EXTRACTIONS_PREFIX));
   if (!record) return undefined;
   return decode(record, extractionSchema);
 }
@@ -346,13 +346,6 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   ]);
   const failed = failedTransient + permanent;
   return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
-}
-
-// The `{id}` of an id-keyed path (`links/{id}.enc`, `extractions/{id}.enc`) — the
-// co-key the writer-split shares across the two namespaces (entities.ts). A prefix +
-// suffix strip, the inverse of building the path from an id.
-function idFromPath(path: string, prefix: string): string {
-  return path.slice(prefix.length, -ENC_SUFFIX.length);
 }
 
 // The residual extraction queue, as a QUERY (there's no queue object — see
@@ -387,7 +380,10 @@ export async function readLinksPendingTitleImage(now: number, limit: number): Pr
     const facet = extraction?.facets.titleImage;
     if (!extraction || !facet) continue;
     const eligibleAt = (facet.extractedAt ?? 0) + backoff(facet.attempts);
-    if (now < eligibleAt) blocked.add(extraction.id); // still cooling down
+    // Block by the PATH's id, not the blob's `extraction.id` copy — identity comes
+    // from the path (idFromPath / paths.ts), the one authority a round-tripped blob
+    // can't drift from.
+    if (now < eligibleAt) blocked.add(idFromPath(record.path, EXTRACTIONS_PREFIX)); // still cooling down
     // else: leave unblocked — it's pending again and the walk below picks it up.
   }
 
@@ -411,7 +407,7 @@ export async function readLinksPendingTitleImage(now: number, limit: number): Pr
 // preview a captured image without round-tripping R2 — the lazy network fetch
 // (loadEntityContent) is the sync engine's job, not the UI's.
 export async function readFileBytes(fileId: string): Promise<Uint8Array | undefined> {
-  const record = await db.items.get(`${FILES_PREFIX}${fileId}${ENC_SUFFIX}`);
+  const record = await db.items.get(pathFromId(fileId, FILES_PREFIX));
   return record?.data;
 }
 
@@ -690,7 +686,7 @@ async function readPinnedOverlay(
   if (pins.length === 0) return { links: [], paths: new Set() };
 
   const records = await db.items.bulkGet(
-    pins.map((pin) => `${LINKS_PREFIX}${pin.id}${ENC_SUFFIX}`),
+    pins.map((pin) => pathFromId(pin.id, LINKS_PREFIX)),
   );
   const hasUrl = !clauseEmpty(query.url);
   const passed: LinkItem[] = [];

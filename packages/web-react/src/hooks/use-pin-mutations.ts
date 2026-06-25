@@ -14,7 +14,14 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { compareRank, ENC_SUFFIX, LINKS_PREFIX, PINS_PREFIX, rankForIndex } from '@stxapps/shared';
+import {
+  compareRank,
+  idFromPath,
+  LINKS_PREFIX,
+  pathFromId,
+  PINS_PREFIX,
+  rankForIndex,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -25,10 +32,10 @@ import { type LinkItem, type PinItem, readPins } from '../data/queries';
 // `pins/{id}.enc`. Derive both from the link's stored path so callers pass a
 // LinkItem and nothing reconstructs ids by hand.
 function linkIdOf(link: LinkItem): string {
-  return link.path.slice(LINKS_PREFIX.length, -ENC_SUFFIX.length);
+  return idFromPath(link.path, LINKS_PREFIX);
 }
 function pinPathOf(linkId: string): string {
-  return `${PINS_PREFIX}${linkId}${ENC_SUFFIX}`;
+  return pathFromId(linkId, PINS_PREFIX);
 }
 
 export interface PinMutations {

@@ -8,7 +8,7 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { ENC_SUFFIX, LINKS_PREFIX } from '@stxapps/shared';
+import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
@@ -59,7 +59,7 @@ export function useLinkMutations(): LinkMutations {
         listId: draft.listId,
         createdAt: 0,
         updatedAt: 0,
-        path: `${LINKS_PREFIX}${id}${ENC_SUFFIX}`,
+        path: pathFromId(id, LINKS_PREFIX),
       };
 
       // A blank note stays absent (not an empty string) — keeps the link's blob

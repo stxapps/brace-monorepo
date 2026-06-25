@@ -15,7 +15,6 @@
 // base, which is exactly what reconcile compares against.
 
 import {
-  ENC_SUFFIX,
   type Extraction,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -25,6 +24,7 @@ import {
   linkSchema,
   type List,
   listSchema,
+  pathFromId,
   type Pin,
   pinSchema,
   SETTINGS_GENERAL_PATH,
@@ -292,7 +292,7 @@ export async function writeExtraction(
   patch: ExtractionPatch,
 ): Promise<void> {
   const now = Date.now();
-  const path = `${EXTRACTIONS_PREFIX}${linkId}${ENC_SUFFIX}`;
+  const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
   const record = await db.items.get(path);
   const current: Extraction = parseBlob(record?.data, extractionSchema) ?? {
     id: linkId,
@@ -324,5 +324,5 @@ export async function writeExtraction(
 // writeExtraction, content-before-metadata — the same ordering the sync engine's push
 // phases preserve.
 export function writeFile(username: string, fileId: string, data: Uint8Array): Promise<void> {
-  return writeBytes(username, `${FILES_PREFIX}${fileId}${ENC_SUFFIX}`, data);
+  return writeBytes(username, pathFromId(fileId, FILES_PREFIX), data);
 }

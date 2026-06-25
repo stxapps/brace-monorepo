@@ -16,9 +16,9 @@
 import { useCallback, useMemo } from 'react';
 
 import {
-  ENC_SUFFIX,
   isSystemListId,
   LISTS_PREFIX,
+  pathFromId,
   rankForIndex,
   rerankToOrder,
   TRASH_ID,
@@ -87,7 +87,7 @@ export function useListMutations(): ListMutations {
         rank: rankForIndex(siblings, index),
         createdAt: 0,
         updatedAt: 0,
-        path: `${LISTS_PREFIX}${id}${ENC_SUFFIX}`,
+        path: pathFromId(id, LISTS_PREFIX),
       };
 
       await writeList(username, list, {});

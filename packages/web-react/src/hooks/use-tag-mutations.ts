@@ -15,7 +15,7 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { compareRank, ENC_SUFFIX, rankForIndex, rerankToOrder, TAGS_PREFIX } from '@stxapps/shared';
+import { compareRank, pathFromId, rankForIndex, rerankToOrder, TAGS_PREFIX } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
@@ -83,7 +83,7 @@ export function useTagMutations(): TagMutations {
         rank: rankForIndex(siblings, index),
         createdAt: 0,
         updatedAt: 0,
-        path: `${TAGS_PREFIX}${id}${ENC_SUFFIX}`,
+        path: pathFromId(id, TAGS_PREFIX),
       };
 
       await writeTag(username, tag, {});

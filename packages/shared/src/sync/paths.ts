@@ -36,6 +36,28 @@ export const SETTINGS_PREFIX = 'settings/';
 // The encrypted-blob suffix every path ends with.
 export const ENC_SUFFIX = '.enc';
 
+// The bare `{id}` of an id-keyed path — `idFromPath('links/abc.enc', LINKS_PREFIX)`
+// → `'abc'`. The inverse of building `{prefix}{id}.enc`: strip the namespace prefix
+// and the `.enc` suffix. The ONE home for this slice math, so every read edge (and
+// any writer that holds a path) derives an id the same way — and, crucially, derives
+// it from the PATH, the only authority for identity. An entity's plaintext `id` copy
+// (tags/lists/pins/extractions carry one) is a redundant convenience that a loose,
+// round-tripped blob could drift on; never trust it for identity, go through here.
+// `path` is assumed to be under `prefix` — the caller names the namespace.
+export function idFromPath(path: string, prefix: string): string {
+  return path.slice(prefix.length, -ENC_SUFFIX.length);
+}
+
+// The id-keyed path for a bare `{id}` — `pathFromId('abc', LINKS_PREFIX)` →
+// `'links/abc.enc'`. The inverse of `idFromPath` and its housemate, so building and
+// parsing the `{prefix}{id}.enc` shape can never drift apart. Use it wherever a layer
+// holds a bare entity id (a reference field, a freshly minted id, a pin's link id) and
+// needs the `items`/R2 key. Arg order mirrors `idFromPath`: the value first, then the
+// namespace prefix.
+export function pathFromId(id: string, prefix: string): string {
+  return `${prefix}${id}${ENC_SUFFIX}`;
+}
+
 // The well-known path of the general settings file (`settingsGeneralSchema`). The
 // `settings/` family is keyed by a fixed concern name, not a random id, so its
 // paths are baked into client code rather than generated — one source of truth so
