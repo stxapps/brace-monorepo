@@ -28,9 +28,14 @@
 // Together they're airtight: a local edit moves `itemUpdatedAt`; any server rewrite
 // moves `updatedAt`. (A content hash would also work but costs an O(bytes) pass per
 // resident link per reactive tick — pure overhead on the all-hits hot path.)
-// Links only; the tiny lists/tags/pins namespaces read whole and skip the cache.
+//
+// Two caches, same versioning: `links/` and `extractions/`. The writer-split means a
+// list row now joins both blobs (the user-authored link + the machine-derived
+// extraction — see docs/link-extraction.md), and both are re-read on every reactive
+// tick, so both need the same O(changed) memo. The tiny lists/tags/pins namespaces
+// read whole and skip the cache.
 
-import type { LinkItem } from './queries';
+import type { ExtractionItem, LinkItem } from './queries';
 
 // Bounded so the cache can't grow without limit, but MAX sits WELL ABOVE the
 // largest plausible loaded working set (a fully-scrolled large library), so for
@@ -47,20 +52,52 @@ import type { LinkItem } from './queries';
 // is above the working set, eviction almost never runs, so FIFO behaves the same
 // as LRU in practice while costing nothing on reads.
 const MAX = 50000;
-const cache = new Map<string, { updatedAt: number; itemUpdatedAt: number; link: LinkItem }>();
 
-// A live entry for `path` whose bytes haven't changed since it was cached, or
-// `undefined` (miss / stale) — the caller then decodes and `setCachedLink`s. Stale
-// iff EITHER version axis moved (see the header). No recency bookkeeping (see the
-// FIFO note above): a hit is a single Map lookup and two integer compares.
+interface Entry<T> {
+  updatedAt: number;
+  itemUpdatedAt: number;
+  value: T;
+}
+
+// One path-keyed, version-pair memo. A hit is a single Map lookup + two integer
+// compares; stale iff EITHER version axis moved (see the header). No recency
+// bookkeeping (FIFO eviction — see the note above).
+function makeCache<T>() {
+  const cache = new Map<string, Entry<T>>();
+  return {
+    get(path: string, updatedAt: number, itemUpdatedAt: number): T | undefined {
+      const hit = cache.get(path);
+      if (!hit || hit.updatedAt !== updatedAt || hit.itemUpdatedAt !== itemUpdatedAt) {
+        return undefined;
+      }
+      return hit.value;
+    },
+    set(path: string, updatedAt: number, itemUpdatedAt: number, value: T): void {
+      cache.set(path, { updatedAt, itemUpdatedAt, value });
+      if (cache.size > MAX) {
+        cache.delete(cache.keys().next().value as string); // evict oldest-inserted (FIFO)
+      }
+    },
+    drop(path: string): void {
+      cache.delete(path);
+    },
+    clear(): void {
+      cache.clear();
+    },
+  };
+}
+
+const linkCache = makeCache<LinkItem>();
+const extractionCache = makeCache<ExtractionItem>();
+
+// A live decoded link for `path` whose bytes haven't changed since it was cached, or
+// `undefined` (miss / stale) — the caller then decodes and `setCachedLink`s.
 export function getCachedLink(
   path: string,
   updatedAt: number,
   itemUpdatedAt: number,
 ): LinkItem | undefined {
-  const hit = cache.get(path);
-  if (!hit || hit.updatedAt !== updatedAt || hit.itemUpdatedAt !== itemUpdatedAt) return undefined;
-  return hit.link;
+  return linkCache.get(path, updatedAt, itemUpdatedAt);
 }
 
 export function setCachedLink(
@@ -69,21 +106,41 @@ export function setCachedLink(
   itemUpdatedAt: number,
   link: LinkItem,
 ): void {
-  cache.set(path, { updatedAt, itemUpdatedAt, link });
-  if (cache.size > MAX) {
-    cache.delete(cache.keys().next().value as string); // evict oldest-inserted (FIFO)
-  }
+  linkCache.set(path, updatedAt, itemUpdatedAt, link);
 }
 
-// Drop one entry — used when a record's bytes go absent/unparseable, so a later
+// Drop one link entry — used when a record's bytes go absent/unparseable, so a later
 // re-appearance isn't masked by a stale decode.
 export function dropCachedLink(path: string): void {
-  cache.delete(path);
+  linkCache.drop(path);
 }
 
-// Drop every cached decode — called from clearSyncData on sign-out (alongside the
-// `items` wipe it mirrors), so a second user on the same device can't read the
-// first's decoded links.
+// The `extractions/` counterpart, used by the link↔extraction join in the read layer.
+export function getCachedExtraction(
+  path: string,
+  updatedAt: number,
+  itemUpdatedAt: number,
+): ExtractionItem | undefined {
+  return extractionCache.get(path, updatedAt, itemUpdatedAt);
+}
+
+export function setCachedExtraction(
+  path: string,
+  updatedAt: number,
+  itemUpdatedAt: number,
+  extraction: ExtractionItem,
+): void {
+  extractionCache.set(path, updatedAt, itemUpdatedAt, extraction);
+}
+
+export function dropCachedExtraction(path: string): void {
+  extractionCache.drop(path);
+}
+
+// Drop every cached decode (both caches) — called from clearSyncData on sign-out
+// (alongside the `items` wipe it mirrors), so a second user on the same device can't
+// read the first's decoded data.
 export function clearDecodeCache(): void {
-  cache.clear();
+  linkCache.clear();
+  extractionCache.clear();
 }

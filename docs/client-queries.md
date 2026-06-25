@@ -21,8 +21,13 @@ A link's authoritative data is an **opaque encrypted blob** (`data` on the
 `items` record). You can't index or query ciphertext, so the few fields a list
 view sorts and filters on are **projected** out of the blob into plain indexed
 columns by the single write-edge projector (`data/projection.ts` `toItemRecord`),
-written in the same `put` as the blob so they can never drift from it. db.ts
-declares:
+written in the same `put` as the blob so they can never drift from it. Every
+projected column (`itemListId`, `*itemTagIds`, the date keys) comes from the
+**user-authored `links/` blob**, so the writer-split that moved the extracted
+`title`/`imageId` into a separate `extractions/{id}.enc` record (see
+[local-first-sync.md](./local-first-sync.md)) leaves **sort and non-text filtering
+untouched** — only the displayed title/image and a `title` search term need the
+co-keyed extraction record (see below). db.ts declares:
 
 ```
 path, updatedAt,
@@ -46,10 +51,24 @@ single positive list (or no filter) walks one compound index with an exact
 `.count()` total (`rangeFastPath`); a positive tag clause drives the
 `*itemTagIds` index and finishes over that subset (`finishFromCandidates`);
 anything else (multi-list, `none`, text words) walks the all-links ordered index
-and filters/decodes lazily, stopping at the page. **Text predicates
-(`url`/`title` words) live inside the blob, so they can never be index-served** —
-they're always a JS post-filter on the decoded link, and the total is non-exact
-under search.
+and filters/decodes lazily, stopping at the page. **Text predicates live inside the
+blobs, so they can never be index-served** — they're always a JS post-filter, and
+the total is non-exact under search. Note the one cross-record wrinkle from the
+writer-split: a `url` word matches on the decoded **link**, but a `title` word now
+matches on the decoded **extraction** — so the title post-filter **joins the
+co-keyed `extractions/` record** (same `{id}`) and decodes it too. That join is the
+deliberate cost of keeping `links/` user-only; it falls only on text search (and on
+row display, for the title/image), never on the index-served browse path.
+
+**Why not project a `displayTitle` column onto the link record instead?** It would
+make `title` index-/scan-served again, but it would have to be derived from a
+**different** record's blob (the extraction's), so it could no longer be written in
+the link's own `put` — breaking the "same-`put`, can-never-drift" invariant the
+projector depends on, and forcing every extraction write to also touch the link's
+projected row (a cross-record write the split exists to avoid). The read-time join
+keeps the synced truth cleanly writer-split and the projector single-record; if
+title search ever profiles as hot, the right fix is a **local-only** derived column
+rebuilt on ingest (never synced, so no LWW), not a projected column on the link.
 
 ### liveQuery + virtual scrolling
 
@@ -86,7 +105,13 @@ or sync. The cache memoizes decoded links keyed by `path` and **versioned by
 `record.updatedAt`** (the blob-write timestamp — bumped on every write; _not_
 `itemUpdatedAt`, which a re-encrypt/merge/migration can leave untouched while the
 bytes change). That turns re-decode into O(changed): only records whose bytes
-actually changed re-parse. It's bounded (FIFO-evicted, with the cap set well
+actually changed re-parse. The cache is keyed by `path`, so it spans **both**
+record kinds the writer-split produces — the `links/` blob and its co-keyed
+`extractions/` blob — each versioned by its own `updatedAt`. So the per-row join
+(resolving the displayed title as `customTitle ?? extraction.title ?? host(url)`
+and the image as `customImageId ?? extraction.imageId`) is also O(changed): an
+extraction landing re-decodes only that one extraction record, not the link beside
+it, and vice-versa. It's bounded (FIFO-evicted, with the cap set well
 above any plausible resident set so eviction effectively never fires), and it's
 cleared on sign-out from
 inside `clearSyncData` — co-located with the `items` wipe it mirrors, so a second

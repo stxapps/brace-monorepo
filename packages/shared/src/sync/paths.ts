@@ -23,12 +23,12 @@ export const FILES_PREFIX = 'files/';
 // Pinned-link markers — `pins/{id}.enc`, where `{id}` is the pinned link's id (so
 // `pins/{id}.enc` shadows `links/{id}.enc`). One small file per pinned link.
 export const PINS_PREFIX = 'pins/';
-// Per-link extraction bookkeeping — `extractions/{id}.enc`, where `{id}` is the
-// link's id (so `extractions/{id}.enc` shadows `links/{id}.enc`). One file per link
-// holding the CHURNY, AUTOMATED extraction state (facet → status/tier/retry/lease),
-// kept OUT of the link blob so a background extractor never clobbers a concurrent
-// user edit under file-level LWW — the same isolation move as `pins/`. The display
-// result extraction produces (title, imageId, …) lives in `links/`, not here.
+// The MACHINE half of a link — `extractions/{id}.enc`, where `{id}` is the link's id
+// (so `extractions/{id}.enc` shadows `links/{id}.enc`). One file per link holding BOTH
+// the extracted display result (title, imageId, pageArchiveId, screenshotId) AND the
+// per-facet automated bookkeeping (status/tier/retry). Split BY WRITER from the
+// user-authored `links/{id}.enc`, so a background extractor writes only this file and
+// never clobbers a concurrent user edit under file-level LWW (see link-extraction.md).
 export const EXTRACTIONS_PREFIX = 'extractions/';
 // Concern-scoped settings — `settings/<concern>.enc`.
 export const SETTINGS_PREFIX = 'settings/';

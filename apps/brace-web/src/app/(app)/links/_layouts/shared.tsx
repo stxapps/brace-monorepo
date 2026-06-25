@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowUp, MoreHorizontal, Pin, PinOff, RefreshCw } from 'lucide-react';
 
-import { type LinkItem, usePinMutations } from '@stxapps/web-react';
+import { type LinkItem, type LinkView, usePinMutations } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -21,7 +21,9 @@ import {
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
 export interface LinkLayoutProps {
-  links: LinkItem[];
+  // Display-resolved rows (link joined with its extraction): `link.title` /
+  // `link.imageId` are the override-wins resolved values — see LinkView.
+  links: LinkView[];
   // Leading `pinnedCount` entries of `links` are pinned, in pin-rank order (top
   // first). A row at index `i` is pinned iff `i < pinnedCount`; it's the topmost
   // pin at `i === 0` and the bottom pin at `i === pinnedCount - 1`.

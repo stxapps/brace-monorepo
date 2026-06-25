@@ -113,10 +113,12 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
   // one-to-one, so the namespace grows with the library — reading them all to tally
   // facet status (the options page) would be O(library). Instead project each facet's
   // `${status}:${facet}` into a multiEntry column (`*itemFacetStatuses`, db.ts): one
-  // index entry per facet lets the counts come from three `startsWith('done:'|…).count()`
-  // range-counts (readExtractionFacetCounts) and the future work-loop find pending
-  // work by `equals('pending:titleImage')` — no scan, no decode. This is the only
-  // place the projector reads an entity's internal structure beyond `links`.
+  // index entry per facet lets the done/failed/permanent counts come from
+  // `equals('done:titleImage')`-style range-counts (readExtractionFacetCounts) — no
+  // scan, no decode. There is no `pending` status (entities.ts): pending = ABSENCE (no
+  // facet entry, often no extractions file at all), so the work loop / pending count is
+  // a set difference (links minus the recorded outcomes), not an index token. This is
+  // the only place the projector reads an entity's internal structure beyond `links`.
   if (itemType === 'extraction') {
     const extraction = parseBlob(data, extractionSchema);
     if (extraction) {

@@ -2,20 +2,23 @@ import { type Facet, LINK_TITLE_MAX } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
   type ExtractionFacet,
+  type ExtractionFields,
   readLinkById,
   writeExtraction,
   writeFile,
-  writeLink,
 } from '@stxapps/web-react';
 
 import { captureArchive, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
 import { getClientId } from './client-id';
 
 // The extraction worker: capture one facet of one link from the ACTIVE TAB, then
-// write back (the heavy bytes into `files/`, the display refs onto the link, and the
-// facet's done/failed bookkeeping into `extractions/`). The DISPLAY result lives in
-// `links/` (title/imageId/screenshotId/pageArchiveId); `extractions/` records only
-// who/when/quality (link-extraction.md). This client's tier is `active-page`.
+// write back — the heavy bytes into `files/`, and BOTH the display refs and the
+// facet's done/failed bookkeeping into `extractions/{id}.enc`. The extractor NEVER
+// writes `links/{id}.enc` (the user's file): the writer-split keeps the machine half
+// (title/imageId/screenshotId/pageArchiveId + facet state) in `extractions/`, so a
+// background capture can't clobber a concurrent user edit (link-extraction.md). One
+// read-merge-write per completion carries the field + its facet status together. This
+// client's tier is `active-page`.
 //
 // Driven by the popup's EXTRACT message (cheap facets auto on save, heavy ones on a
 // button) — i.e. only while the tab is focused, which is exactly when active-page
@@ -26,8 +29,11 @@ export async function runExtraction(
   linkId: string,
   facet: ExtractionFacet,
 ): Promise<void> {
-  const link = await readLinkById(linkId);
-  if (!link) throw new Error(`runExtraction: link ${linkId} not found locally`);
+  // Guard: the link must exist locally (we only need to know it's real; the URL to
+  // fetch isn't needed for active-tab capture, which reads the live DOM).
+  if (!(await readLinkById(linkId))) {
+    throw new Error(`runExtraction: link ${linkId} not found locally`);
+  }
 
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id == null || tab.windowId == null) throw new Error('No active tab to extract from');
@@ -38,42 +44,37 @@ export async function runExtraction(
     switch (facet) {
       case 'titleImage': {
         const { title, image } = await captureTitleImage(tabId);
-        // One writeLink with the combined patch — two calls would each spread the
-        // stale `link` and clobber the other's field.
-        const patch: Parameters<typeof writeLink>[2] = {};
-        if (title) patch.title = title.slice(0, LINK_TITLE_MAX);
+        const fields: ExtractionFields = {};
+        if (title) fields.title = title.slice(0, LINK_TITLE_MAX);
         if (image) {
           const imageId = newId();
           await writeFile(username, imageId, image); // content before metadata
-          patch.imageId = imageId;
+          fields.imageId = imageId;
         }
-        if (Object.keys(patch).length > 0) await writeLink(username, link, patch);
-        await markDone(username, linkId, facet, clientId);
+        await markDone(username, linkId, facet, clientId, { fields });
         break;
       }
       case 'readMode': {
         const html = await captureReadMode(tabId);
         const fileId = newId();
         await writeFile(username, fileId, html);
-        // No link field references read-mode yet; the facet records its file id
+        // No display field references read-mode yet; the facet records its file id
         // (looseObject round-trips it) so a future reader can find it.
-        await markDone(username, linkId, facet, clientId, { fileId });
+        await markDone(username, linkId, facet, clientId, { extra: { fileId } });
         break;
       }
       case 'screenshot': {
         const png = await captureScreenshot(tab.windowId);
         const screenshotId = newId();
         await writeFile(username, screenshotId, png);
-        await writeLink(username, link, { screenshotId });
-        await markDone(username, linkId, facet, clientId);
+        await markDone(username, linkId, facet, clientId, { fields: { screenshotId } });
         break;
       }
       case 'archive': {
         const dom = await captureArchive(tabId);
         const pageArchiveId = newId();
         await writeFile(username, pageArchiveId, dom);
-        await writeLink(username, link, { pageArchiveId });
-        await markDone(username, linkId, facet, clientId);
+        await markDone(username, linkId, facet, clientId, { fields: { pageArchiveId } });
         break;
       }
       default:
@@ -81,14 +82,15 @@ export async function runExtraction(
     }
   } catch (err) {
     // Transient failure: record it so the UI can show "retry". A real retry/backoff
-    // policy (nextEligibleAt, attempt counting across cycles) is a later enhancement.
+    // policy (attempt counting across cycles, the eligibility computed from
+    // extractedAt + backoff(attempts)) is a later enhancement.
     const failed: Facet = {
       status: 'failed',
       tier: 'active-page',
       extractedBy: clientId,
       attempts: 1,
     };
-    await writeExtraction(username, linkId, facet, failed);
+    await writeExtraction(username, linkId, { facet, state: failed });
     throw err;
   }
 }
@@ -98,7 +100,7 @@ function markDone(
   linkId: string,
   facet: ExtractionFacet,
   clientId: string,
-  extra: Record<string, unknown> = {},
+  opts: { fields?: ExtractionFields; extra?: Record<string, unknown> } = {},
 ): Promise<void> {
   const state: Facet = {
     status: 'done',
@@ -106,7 +108,7 @@ function markDone(
     extractedBy: clientId,
     extractedAt: Date.now(),
     attempts: 0,
-    ...extra,
+    ...opts.extra,
   };
-  return writeExtraction(username, linkId, facet, state);
+  return writeExtraction(username, linkId, { fields: opts.fields, facet, state });
 }

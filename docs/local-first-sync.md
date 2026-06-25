@@ -138,15 +138,28 @@ encrypted file. Random ids — never content-derived — so filenames leak nothi
 ```
 
 A link's metadata references the other files by id; the reference graph lives
-**inside** the ciphertext, so the server never sees it:
+**inside** the ciphertext, so the server never sees it. A link is split across two
+metadata blobs by **writer** — `links/{id}.enc` (user-authored) and
+`extractions/{id}.enc` (machine-derived, same id) — so a background extractor never
+rewrites the user's file (see [link-extraction.md](./link-extraction.md)):
 
 ```json
+// links/{id}.enc — user-authored only
 {
-  "title": "Some Article",
   "url": "https://...",
-  "tags": ["tag_id_1", "tag_id_2"],
-  "list": "list_id_1",
-  "pageArchive": "{id}.enc",
+  "tagIds": ["tag_id_1", "tag_id_2"],
+  "listId": "list_id_1",
+  "customTitle": "my own name for it",   // optional override
+  "createdAt": "...",
+  "updatedAt": "..."
+}
+// extractions/{id}.enc — machine-derived (same {id})
+{
+  "id": "{id}",
+  "title": "Some Article",               // discovered og:title
+  "imageId": "{id}.enc",                 // → files/ preview blob
+  "pageArchiveId": "{id}.enc",           // → files/ archive blob
+  "facets": { "titleImage": { "status": "done" } },
   "createdAt": "...",
   "updatedAt": "..."
 }
@@ -218,16 +231,21 @@ tag/list names.
   its list, so a pin floats the link to the top of every view it appears in, and a
   pin whose link is gone is just another dangling id the read layer skips.
 - **Extractions** ("fill in a saved link's title/image/screenshot/archive") are
-  stored one per link (`extractions/{id}.enc`, where `{id}` is the link's id), each
-  holding a map of facet → `{ status, tier, attempts, … }`. Same LWW-isolation move
-  as pins: the **display result** (the extracted title/image) is backfilled into the
-  link's own `links/{id}.enc` blob, but the **churny, automated bookkeeping** —
-  who/when/quality, retry backoff, the per-facet dedup lease — gets its own file so a
-  background extractor's `pending → done` churn never clobbers a concurrent user
-  title/tag edit (and never bloats the `< ~2 KB` metadata budget). Written by
-  background actors (the extension, future Expo app), never by `brace-api`, which
-  stays a blind sync broker. The work loop is a **query**, not a queue object: a link
-  with no `extractions/` file is unextracted. See
+  stored one per link (`extractions/{id}.enc`, where `{id}` is the link's id). This
+  is the **machine-written half** of a link, holding **both** the extracted display
+  result (`title`, `imageId`, `pageArchiveId`, `screenshotId`) **and** the
+  per-facet bookkeeping (`{ status, tier, attempts, … }`). It's a stronger
+  LWW-isolation move than pins': the split is **by writer**, so a background
+  extractor writes only this file and can **never** read-merge-write the user's
+  `links/{id}.enc` and clobber a concurrent list/tag/title edit (the one
+  unrecoverable race the old "backfill display into `links/`" layout risked). Races
+  inside `extractions/` are between two extraction writes only — idempotent,
+  self-healing. The UI joins the two blobs to render a row (`customTitle ??
+extraction.title ?? host(url)`). Written by client extractors (the extension,
+  future Expo app, the web app orchestrating `brace-extractor` or an import), never
+  by `brace-api`, which stays a blind sync broker. The work loop is a **query**, not
+  a queue object: a link with no `done` `titleImage` facet (no `extractions/` file,
+  or one not yet extracted) is pending. See
   [link-extraction.md](./link-extraction.md) for the entity and the privacy stance.
 - **Settings use a fixed `settings/` namespace** (`settings/general.enc` today).
   Unlike every other file — a random id (see _storage layout_) — these are
@@ -244,9 +262,10 @@ tag/list names.
   cleanup is required — LWW plus tolerant rendering covers it.
 - **Metadata vs. content.** Metadata is small (`< ~2 KB`) and always synced into
   the local index; content/archives download **lazily, never on first sync**. The
-  list-view fields (title, URL, tags, list, a truncated preview) live in metadata,
-  so the **whole library is browsable and searchable offline** after first sync —
-  only heavy media is deferred. Keep large fields (long descriptions, long-form
+  list-view fields live in metadata-class blobs that are all eagerly synced — the
+  URL, tags, list, note, and overrides in `links/`, and the extracted title/image
+  in `extractions/` — so the **whole library is browsable and searchable offline**
+  after first sync (the view joins the two by id), only heavy media is deferred. Keep large fields (long descriptions, long-form
   notes, thumbnails) **out of metadata** — store them as separate `files/{id}.enc`;
   never inline a thumbnail, or you blow the `< 2 KB` budget. A **short** user note
   is the deliberate exception: it's a **capped** inline field (`linkSchema.note`,

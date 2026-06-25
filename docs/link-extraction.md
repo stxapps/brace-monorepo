@@ -48,7 +48,9 @@ so the posture is deliberately conservative:
 - **The clients do the work, never the sync server.** `brace-api` stays a blind
   sync broker — it never fetches a user's URLs, so it never learns them. All
   extraction runs in clients the user already installed and trusts: the
-  **extension** and the (future) **Expo** app.
+  **extension** and the (future) **Expo** app — or a client _orchestrating_ the
+  opt-in `brace-extractor` for a web-app save (it holds the key and writes the
+  result back; see _who extracts_). `brace-api` never fetches a URL either way.
 - **No third-party extraction service.** A separate blind service can't write
   results back under E2E (it has no key), so it could only offer poll-and-hope;
   and it would leak every URL to a new party. Rejected on both privacy and cost.
@@ -75,14 +77,13 @@ Fetching a URL is easy wherever there's no CORS; **screenshots and archives are
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                           | title + image | read mode     | screenshot             | archive |
-| --------------------------------------- | ------------- | ------------- | ---------------------- | ------- |
+| client / mode                           | title + image | read mode     | screenshot            | archive |
+| --------------------------------------- | ------------- | ------------- | --------------------- | ------- |
 | extension — **icon click, active tab**  | ✅ live DOM   | ✅ live DOM   | ✅ `captureVisibleTab` | ✅      |
 | extension — **background, queued URL**  | ✅ raw HTML   | ⚠️ raw HTML   | ❌ no open tab         | ⚠️      |
 | mobile — **share sheet (foreground)**   | ✅            | ✅ WebView    | ⚠️ WebView render      | ⚠️      |
 | mobile — **background queue**           | ✅            | ⚠️            | ❌                     | ❌      |
 | `brace-extractor` Worker (**deferred**) | ✅            | ✅ (linkedom) | ❌ needs Browser Rndr. | ❌      |
-| third-party service (**rejected**)      | ✅            | ✅            | ✅                     | ✅      |
 
 Two consequences baked into the design:
 
@@ -98,52 +99,128 @@ Two consequences baked into the design:
   system must record _which tier_ produced the current result. See
   _the extraction entity_.
 
-### the data model: result in `links`, bookkeeping in `extractions/`
+### who extracts: the client that did the save
 
-There are two kinds of state, and conflating them is the trap:
+Capability tiers say what each client _can_ do; this says _who actually does it_
+for a given link. The rule is simple and removes almost all cross-client
+coordination: **the client that performs the save extracts that link, at save
+time, from the best context it has.**
 
-1. **Display result** — the title/image the UI renders, the heavy refs it opens.
-   Written **once** on completion. Belongs in `links/{id}.enc`, the always-resident
-   list-view blob, so the library renders offline and the UI never has to join a
-   second file to draw a row. The title lands in `links.title`; the preview image
-   lands in `links.imageId` (a `files/{id}.enc` ref — heavy media, never inlined).
-   Other heavy outputs (screenshot, archived page) stay in `files/{id}.enc`
-   referenced by id too, exactly as `pageArchiveId` already is. Where the user has
-   set a **manual override**, it sits beside these in the same blob
-   (`customTitle` / `customImageId`) and the UI prefers it — see _manual overrides_.
-2. **Coordination + provenance** — who extracted, when, at what quality, whether
-   it's claimed, whether it failed and when to retry. This is **churny,
-   automated** state written by background actors on a different schedule than
-   user edits.
+| save happens on…            | extracts title+image via                      | tier        | cost / privacy                                              |
+| --------------------------- | --------------------------------------------- | ----------- | ----------------------------------------------------------- |
+| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free |
+| **mobile / share sheet**    | native fetch (no CORS) / a WebView            | active-page | free, private                                               |
+| **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, deferred (see _server extraction_) |
 
-Putting (2) in `links` would repeat the mistake the `pins/` design exists to
-avoid: a churny `pending → claimed → done/failed` field rewriting the link blob
-clobbers a concurrent user title/tag edit under file-level LWW, and bloats the
-`< ~2 KB` metadata budget. By the same reasoning that gives pins their own file,
-**coordination state gets its own LWW-isolated file, `extractions/{id}.enc`,
-shadowing `links/{id}.enc`** (`{id}` = the link's id), one file per link.
+The third row is the correction to an easy misread of _the stance_: "the web app
+can't extract" is true only of **fetching** — a `brace-web` tab can't `fetch` an
+arbitrary URL (CORS). But the web app **holds the data key**, so it can still
+_orchestrate_ extraction: `POST` the URL to `brace-extractor`, get plaintext
+title+image back, encrypt, and write the result into `extractions/`/`files/` itself.
+`brace-extractor` is a pure function (see _server extraction_); the web app is
+the client that drives it. So a web-app save is enriched at save time **if** the
+user has opted into server extraction — otherwise it stays the documented
+_web-only gap_.
 
-The split keeps **one source of truth for the title** (it lives only in `links`,
-never copied into `extractions/`); `extractions/` answers only "who/when/quality/
-retry?", which `links` deliberately doesn't carry.
+**Preference order on a web-app save.** `brace-extractor` is the *fallback*, not
+the first choice. When a capable extension is present in the **same browser**, the
+more private path is to let *it* extract — locally, so no server ever sees the URL
+— and that result reaches the web app's list through **synced `links/`**, the
+cross-client bus, with no direct handoff. So the order is **same-browser
+extension (local, private) → `brace-extractor` (opted-in, server sees the URL) →
+web-only gap**. The corollary: when the extension is installed, the *best* save
+path is the extension itself (its toolbar button / context menu / shortcut) — it
+saves and extracts inline at **active-page** tier, the highest quality and most
+private, with zero cross-client coordination. Treat `brace-web`'s own save UI as
+the path for when no extension is there. Both clients are full participants in the
+bus: the web app syncs its library as the primary, full-sync client; the extension
+as a **selective-sync** client (see _what each client syncs_).
 
-> **The one residual cost.** Completing an extraction writes _two_ files: the
-> `links` title/image backfill _and_ the `extractions/` bookkeeping. The `links`
-> write is a read-merge-write, so it has the usual small LWW clobber window
-> against a concurrent user title edit (see [local-first-sync.md](./local-first-sync.md)
-> — _conflict policy_). Bounded, one-time (not churny), and acceptable for a
-> single-user app — the same tradeoff every backfill write makes.
+Two consequences:
+
+- **The background queue is a safety net, not the primary path.** Because each
+  save is extracted by the client that made it, the `extractions/` pending
+  machinery (extract → write-back) exists only for the **residual**: a
+  save on a client that couldn't extract, later picked up by one that can
+  (cross-device), and **bulk imports** (see _imported links_). Steady-state, the
+  query is mostly empty.
+- **No web→extension _save handoff_ — but a content-script presence bridge is
+  right.** It's tempting to route a web-app save *directly* to a same-browser
+  extension so the extension extracts it. Don't do that as a **data/save
+  handoff**: the cross-client bus is already **synced `links/` + `extractions/`**,
+  so a web-app save reaches the extension through sync — **cross-device, with no
+  extension-id handshake** — and the extension needs the synced link blob in hand
+  anyway to read the URL it must fetch. A direct save-channel would be a
+  worse-constrained version of a path we already have. Note the "strictly better"
+  holds **only for `title+image`** (and read-mode): **screenshot/archive have no
+  server path at all** (`brace-extractor` can't render), so those stay
+  extension-active-tab only regardless of any bridge. What a thin **content-script
+  bridge** _is_ for — and what the preference order above needs — is **presence
+  detection: is a capable extension installed and signed in?** The web app can't
+  choose "extension → server → gap" without knowing. Prefer a content-script
+  bridge over `externally_connectable` for this: it doubles as a cross-browser
+  presence signal (announce on injection / answer a ping) without hardcoding a
+  per-store extension id, and `externally_connectable` for web pages is
+  effectively Chrome-only. The bridge may also carry an optional **"sync now"
+  nudge** to collapse the idle-poll wait — never the URL, never the save itself
+  (see _the queue is a query_ for the cadence this feeds).
+
+### the data model: user data in `links/`, everything machine-derived in `extractions/`
+
+The split is **by writer**, and getting the axis right is the whole game:
+
+1. **`links/{id}.enc` — user-authored only.** `url`, `listId`, `tagIds`,
+   `customTitle`, `customImageId`, `note`. Every field is written by a user gesture
+   (save, edit, tag, move, annotate). Nothing a background actor produces touches
+   this file.
+2. **`extractions/{id}.enc` — everything a machine derives.** Both the **display
+   result** (`title`, `imageId`, `pageArchiveId`, `screenshotId`) _and_ the
+   **coordination/provenance** bookkeeping (the per-facet who/when/quality/retry
+   map). `{id}` repeats the link's id; one file per link, shadowing `links/{id}.enc`.
+
+Why this beats the older "display result in `links/`, bookkeeping in `extractions/`"
+split (which divided by _render-need_, not writer): with title/image in `links/`,
+completing an extraction did a **read-merge-write on the user's file**, which under
+file-level LWW could **silently clobber a concurrent user edit** — change list,
+retag, set `customTitle`. The two-field `customTitle ?? title` rule prevented a
+_field_ collision but not the _file_-level one, and the damaging direction
+(extraction overwriting a user's list/tags/title) is the **one unrecoverable race in
+the whole design** — extraction never re-derives a user's list assignment. The
+writer-split makes it **impossible by construction**: extraction writes only
+`extractions/`, so it can never overwrite a `links/` field.
+
+Two things fall out, both wins:
+
+- **No more two-file completion.** Extraction completion now writes **one** file
+  (`extractions/`, result + bookkeeping together), not two. A 5 000-link import is
+  ~5 000 sync ops, not ~10 000.
+- **Races that remain are self-healing.** The only LWW races left inside
+  `extractions/` are between two extraction writes (e.g. two devices finishing two
+  facets in one sync window) — idempotent, re-extract fixes them. No user data is
+  ever on the losing side.
+
+The cost is a **render-time join**: drawing a row needs both files, co-keyed by the
+same `{id}` (the UI resolves `customTitle ?? extraction.title ?? host(url)` and
+`customImageId ?? extraction.imageId`). For the virtual-scrolled window that's a
+primary-key batch get + one extra decrypt per visible row — cheap; and sort/filter
+(date/list/tag) is unaffected because those keys all stay on the `links/` record.
+The one real edge is **title search**, which now spans two stores — see
+[client-queries.md](./client-queries.md).
+
+> **One source of truth per field still holds.** The displayed title resolves
+> `customTitle ?? extraction.title`; each value lives in exactly one file
+> (`customTitle` in `links/`, `title` in `extractions/`), never copied across.
 
 ### the preview image is a downloaded blob, never the remote URL
 
 Extraction discovers the preview image as a **URL** (og:image / lead image). The
 tempting shortcut is to store that URL and render `<img src>` straight from it —
 no download, no `files/{id}.enc`, no quota, faster first paint. **Don't.**
-`links.imageId` is a downloaded, encrypted `files/{id}.enc` blob; the URL is only
-an _input to the fetch_, never persisted. Three reasons, heaviest first:
+`extraction.imageId` is a downloaded, encrypted `files/{id}.enc` blob; the URL is
+only an _input to the fetch_, never persisted. Three reasons, heaviest first:
 
 - **It would reintroduce the exact leak this whole doc avoids.** A remote URL in
-  the always-resident `links/` blob means every device that renders the list
+  the always-resident `extractions/` blob means every device that renders the list
   `fetch`es that third-party host on every paint — beaconing the user's IP, that
   they saved the page, and timing to an arbitrary party (and its CDN/trackers),
   on _every viewing device, forever_, including the web-only client that
@@ -164,7 +241,8 @@ an _input to the fetch_, never persisted. Three reasons, heaviest first:
 - **It would break the blob convention.** `imageId` is typed as a bare
   `files/{id}.enc` ref — "a field name types its blob" (see
   [local-first-sync.md](./local-first-sync.md) — _plaintext typing_) — the same
-  rule as `screenshotId` / `pageArchiveId` / `customImageId`. A plaintext,
+  rule as `screenshotId` / `pageArchiveId` (its siblings in `extractions/`) and the
+  user's `customImageId` in `links/`. A plaintext,
   externally-mutable `https://…` string is a new pattern the sync/crypto path
   never sees, and a stored pointer-to-plaintext the encrypted blob isn't.
 
@@ -181,48 +259,49 @@ because the placeholder _is_ the leak.
 
 A user can manually set a link's title and image. The override is a **pair of
 optional fields on `linkSchema`** — `customTitle` and `customImageId` (a
-`files/{id}.enc` ref to a user-picked image) — **not a new entity**, and that
-placement is the deliberate inverse of the `pins/`/`extractions/` split:
+`files/{id}.enc` ref to a user-picked image) — **not a new entity**. They sit in
+`links/` beside `tagIds`/`listId` because a manual override is a **low-frequency
+user edit** made in the same gesture as editing those; a separate
+`customTitle/{id}.enc` would force one user edit to write two files and race them
+under LWW. (The extracted counterparts, `title`/`imageId`, are the _opposite_ — a
+machine writer on its own schedule — which is exactly why they live in
+`extractions/`, not here.)
 
-- `pins/` and `extractions/` get their own LWW-isolated files because they hold
-  **churny, automated** state that would clobber concurrent user edits if it lived
-  in the link blob.
-- A manual override is the **opposite**: a low-frequency edit a user makes in the
-  same gesture as editing `title`/`tagIds`/`listId`, so it belongs **in the same
-  file**, beside them. A separate `customTitle/{id}.enc` would force one user edit
-  to write two files and race them under file-level LWW — manufacturing the very
-  problem the isolated files exist to avoid, for state that doesn't need it.
+**Two fields across two files, so extraction and the user can never collide.** The
+two halves split cleanly by writer _and_ by file:
 
-**Two fields, not one, so extraction and the user never collide on a field.** The
-two halves split cleanly by writer:
+- **extraction owns `extraction.title` / `extraction.imageId`** — the
+  discovered/provisional values, in `extractions/`. It writes them unconditionally on
+  completion or tier-upgrade, and **never reads or writes the `custom*` fields** (it
+  doesn't even open `links/`).
+- **the user owns `links.customTitle` / `links.customImageId`** — written only by the
+  explicit "edit title/image" action, in `links/`.
 
-- **extraction owns `title` / `imageId`** — the discovered/provisional values. It
-  writes them unconditionally on completion or tier-upgrade, and **never reads or
-  writes the `custom*` fields**.
-- **the user owns `customTitle` / `customImageId`** — written only by the explicit
-  "edit title/image" action.
-
-The UI renders **`customTitle ?? title`** and **`customImageId ?? imageId`**, so a
-manual edit always wins. Three properties fall out for free:
+The UI renders **`customTitle ?? extraction.title ?? host(url)`** and
+**`customImageId ?? extraction.imageId`**, so a manual edit always wins. Three
+properties fall out for free:
 
 - **Re-extraction is safe.** A higher-tier client re-extracting `titleImage`
-  rewrites `title`/`imageId` and the override is untouched — no "is this
-  user-set?" flag to read, no conditional in the write path. This is why the
-  separate-field shape beats a single `title` + `titleSource` provenance flag: the
-  extractor stays a blind writer.
-- **Revert is trivial.** Clearing `customTitle` (delete the field) falls back to
-  the still-present extracted `title` — the discovered value was never destroyed.
-- **One file, one LWW point.** A manual override and a concurrent extraction
-  backfill share only the link blob's existing LWW window (the bounded backfill
-  race in _the data model_ above) — no new cross-file invariant.
+  rewrites `extraction.title`/`imageId` and the override — in a different file — is
+  untouched. No "is this user-set?" flag, no conditional in the write path: the
+  extractor stays a blind writer. This is why the separate-field shape beats a single
+  `title` + `titleSource` provenance flag.
+- **Revert is trivial.** Clearing `customTitle` (delete the field) falls back to the
+  still-present `extraction.title` — the discovered value was never destroyed; if
+  extraction never ran, it falls through to `host(url)`.
+- **No shared LWW point at all.** A manual override writes `links/`; a concurrent
+  extraction backfill writes `extractions/`. Different files — so unlike the old
+  layout there is **no clobber window between them whatsoever**, not even a bounded
+  one.
 
-> **Save-time title is sticky.** Any title the user types — whether **at save** or
-> in a later edit — goes into `customTitle` and is **never** overwritten by
-> extraction. `title` holds only the **provisional** value: a URL-host placeholder
-> at save, replaced by the extracted og:title when `titleImage` lands. So a
-> user-named link keeps its name forever; an unnamed one shows the placeholder
-> until extraction fills `title` (or stays a bare host on a web-only client — the
-> _web-only gap_).
+> **Save-time title is sticky.** Any title the user types — whether **at save** or in
+> a later edit — goes into `customTitle` and is **never** overwritten by extraction.
+> `extraction.title` holds only the **provisional** value, filled when `titleImage`
+> lands (or pre-seeded from a bulk import — see _imported links_). An unnamed link
+> shows `host(url)`, derived at render, until extraction fills `extraction.title` (or
+> stays a bare host on a web-only client — the _web-only gap_). So a user-named link
+> keeps its name forever; an unnamed one upgrades from host → og:title when extraction
+> runs.
 
 ### the extraction entity
 
@@ -230,28 +309,37 @@ manual edit always wins. Three properties fall out for free:
 id, one self-contained file per link). Lives in `@stxapps/shared`
 (`sync/entities.ts`), `z.looseObject` so older clients round-trip unknown fields.
 
-A link is no longer **one** extraction with **one** lifecycle: title+image,
-read-mode, screenshot, archive, keywords, tags, summary, and (deferred) vectors
-are **independent jobs** — each produced by a different client/tier at a
-different time, each able to be `pending` while another is `done`. So the entity
-carries a **map of facet → state**, not a flat `status`:
+The entity holds both halves of the machine-derived state: the **display result**
+(the fields the UI renders) and the **bookkeeping**. A link is no longer **one**
+extraction with **one** lifecycle: title+image, read-mode, screenshot, archive,
+keywords, tags, summary, and (deferred) vectors are **independent jobs** — each
+produced by a different client/tier at a different time, each able to be pending
+(no entry) while another is `done`. So the bookkeeping is a **map of facet →
+state**, not a flat `status`:
 
 ```ts
 export const facetSchema = z.looseObject({
-  status: z.enum(['pending', 'done', 'failed']),
+  status: z.enum(['done', 'failed', 'permanent']),
+  // done → success; failed → transient (retry after backoff);
+  // permanent → hard failure (404/410, robots block) — never retry.
+  // there is no 'pending': a facet with no entry (or a link with no
+  // extractions/ file at all) IS pending — absence is the signal.
   tier: z.enum(['active-page', 'bg-fetch', 'server']).optional(), // who/quality produced it
-  extractedBy: z.string().optional(), // client/device id — provenance
-  extractedAt: z.number().int().optional(),
-  attempts: z.number().int(), // backoff counter
-  nextEligibleAt: z.number().int().optional(), // don't retry before this;
-  // omit + status:'failed' = permanent (404/410)
-  claimedBy: z.string().optional(), // soft TTL lease — cross-device dedup, per facet
-  claimedAt: z.number().int().optional(),
+  extractedBy: z.string().optional(), // who ran the last attempt — client/device id
+  extractedAt: z.number().int().optional(), // when the last attempt ran — success time when done, last try when failed
+  attempts: z.number().int(), // backoff counter — retry when now >= extractedAt + backoff(attempts)
 });
 
 export const extractionSchema = z.looseObject({
   id: z.string(), // = the link's id ({id} of links/{id}.enc)
-  facets: z.record(
+  // display result — what the UI renders, the machine-written half of a link's
+  // display (the user-written half, customTitle/customImageId, is on linkSchema):
+  title: z.string().max(LINK_TITLE_MAX).optional(), // discovered/provisional og:title (or imported)
+  imageId: z.string().optional(), // og:image preview — a files/{id}.enc ref, never the remote URL
+  pageArchiveId: z.string().optional(), // archived page — files/{id}.enc, from the `archive` facet
+  screenshotId: z.string().optional(), // full-page screenshot — files/{id}.enc, from `screenshot`
+  // bookkeeping — partialRecord: a missing facet key = pending (not yet done):
+  facets: z.partialRecord(
     z.enum([
       'titleImage',
       'readMode',
@@ -273,18 +361,36 @@ export type Extraction = z.infer<typeof extractionSchema>;
 
 Each facet answers the same questions independently:
 
-- **who** → `extractedBy` / `tier`; **when** → `extractedAt`; **quality** →
-  `tier` (active-page beats bg-fetch beats server).
-- **don't retry forever** → `attempts` + `nextEligibleAt` for transient failures;
-  `status: 'failed'` with no `nextEligibleAt` for hard ones (404/410, robots
-  block). Because this is **synced**, one device's failure stops _every_ device
-  retrying that facet — not the per-device thrash a device-local marker would give.
-- **cross-device dedup** → the `claimedBy` + `claimedAt` soft lease, now **per
-  facet** so the extension claiming `screenshot` doesn't block the phone claiming
-  `summary` on the same link. It's a **soft TTL lease, not a hard lock**: for a
-  single user with a few of their own devices contention is rare, so a lease to
-  cut obvious duplicate work plus file-level LWW to resolve races is enough —
-  don't reach for distributed locking.
+- **who / when** → `extractedBy` / `extractedAt` — a who/when pair describing the
+  **last extraction attempt** (the success on a `done` facet, the last try on a
+  `failed` one); **quality** → `tier` (active-page beats bg-fetch beats server).
+- **retry, but not forever** → for a transient `failed`, the deciding client
+  computes eligibility itself: retry once `now >= extractedAt + backoff(attempts)`.
+  We **don't store a `nextEligibleAt`** — it's fully derived from `extractedAt`
+  + `attempts` given the shared `backoff()` curve (which lives in `shared`, so
+  every client agrees), and storing a derived value alongside its inputs is the
+  same fragile two-field invariant we avoid elsewhere. A hard failure is the
+  explicit **`status: 'permanent'`** (404/410, robots block) — never retried, no
+  timestamp arithmetic, no implicit "failed-with-no-deadline = permanent" rule to
+  get wrong. Because this is **synced**, one device's `permanent` (or fresh
+  `failed`) stops _every_ device retrying that facet — not the per-device thrash a
+  device-local marker would give. (If we ever honor a server-supplied
+  `Retry-After` / 429, _that_ deadline isn't derivable from `attempts` and earns
+  its own field at that point — until then, don't pre-pay it.)
+- **cross-device dedup** → **none, by design.** There is no claim lease. A lease
+  would force an extra _write-claim-then-sync before extraction_ on the critical
+  path, yet stay best-effort anyway (two devices waking in the same poll window
+  both see "unclaimed" and both extract). The failure it guards against —
+  duplicate extraction — is **self-healing**: the same URL yields the same
+  title/image (idempotent) and file-level LWW keeps one write; the cost is a
+  wasted fetch, not a wrong result. This is the same "don't reach for distributed
+  locking" call, taken to its conclusion for a single user with a few devices.
+  The one place duplicate work actually stings is a **bulk import** (two devices
+  grinding the same thousands of URLs); the answer there is **deterministic
+  sharding** (partition by `id` hash so devices self-divide with zero
+  coordination), not a synced lease — and it's **deferred** until it proves real,
+  since the device the import landed on usually drains it alone (see _imported
+  links_).
 - **upgrade** → a client whose `tier` beats a facet's stored `tier` may
   re-extract that `done` facet (e.g. you open the real page in the extension
   after a background bg-fetch only got title + image).
@@ -297,9 +403,10 @@ write, but it multiplies extraction objects per link by the facet count (~8×),
 turns the single-segment key into a 2-level path the sync engine doesn't parse
 today, and only buys protection against a **rare, self-healing** race: two
 devices completing two _different_ facets of the _same_ link inside one sync
-window file-level-clobber each other, and the lost `done` simply looks `pending`
-and re-extracts (idempotent — the same residual-cost class as the `links`
-backfill write). Keeping every facet in one blob also makes the cross-facet
+window file-level-clobber each other, and the lost `done` simply looks pending
+and re-extracts (idempotent — and since `extractions/` holds no user data, the
+clobber only ever costs re-doable machine work). Keeping every facet in one blob
+also makes the cross-facet
 **upgrade** decision a single-file read. **Flip condition:** if you later want
 **selective sync by facet** (a constrained client syncing only the facets it can
 produce) or a facet turns individually high-churn, split _that_ facet out — and
@@ -308,31 +415,118 @@ axis), never link-first. Don't pre-pay it.
 
 Wire it the standard three-step (see `paths.ts` header — _adding a namespace_):
 add `EXTRACTIONS_PREFIX = 'extractions/'` to `paths.ts`, add it to
-`ID_KEYED_PREFIXES`, add `extractionSchema` here. On `linkSchema` (already done
-for the display fields, beside `pageArchiveId`, same `files/{id}.enc` reference
-pattern and plaintext-typing rule — see [local-first-sync.md](./local-first-sync.md)
-_plaintext typing_): `imageId?` (the `titleImage` facet's preview image),
-`customTitle?` / `customImageId?` (the manual overrides — see _manual overrides_),
-and `screenshotId?` (the `screenshot` facet, when that facet is wired).
+`ID_KEYED_PREFIXES`, add `extractionSchema` here — with the **display fields**
+(`title?`, `imageId?`, `pageArchiveId?`, `screenshotId?`, all `files/{id}.enc` refs
+except the inline `title`, same plaintext-typing rule — see
+[local-first-sync.md](./local-first-sync.md) _plaintext typing_) alongside `facets`.
+`linkSchema` keeps only the **user-authored** fields, including the manual overrides
+`customTitle?` / `customImageId?` (see _manual overrides_); it carries **none** of
+the extracted display fields — that's the writer-split (see _the data model_).
 
 ### the queue is a query, not a structure
 
-There is **no separate queue object**. A client's extraction work loop is a query
-over synced state:
+Save-time extraction (see _who extracts_) handles the common case; this loop
+drains the **residual** — cross-device pickups and bulk imports. There is still
+**no separate queue object**: a client's extraction work loop is a query over
+synced state:
 
-- **default tier (title + image, read-mode):** a link with no `extractions/` file,
-  or one whose `status` is `pending` and not claimed within the lease window.
+- **default tier (title + image, read-mode):** a link with no `extractions/` file
+  (absence _is_ pending), or a facet whose `status` is `failed` and now past its
+  backoff (`now >= extractedAt + backoff(attempts)`). A `permanent` facet is
+  skipped; there's no lease to check.
 - **best-effort tier (screenshot/archive):** an _active-context_ save extracts
-  immediately and writes `files/` + the `links/` ref; the background loop's only
-  job is to spot links **missing** those refs (`screenshotId` / `pageArchiveId`
-  absent) that this client's tier can satisfy — the absence _is_ the pending
-  signal, no explicit field needed.
+  immediately and writes the `files/` blob + the `extractions/` ref; the background
+  loop's only job is to spot links **missing** those refs (`extraction.screenshotId`
+  / `extraction.pageArchiveId` absent) that this client's tier can satisfy — the
+  absence _is_ the pending signal, no explicit field needed.
 
-The loop: **claim** (write the lease) → **extract** → **write back** (result into
-`links/` and/or `files/`, bookkeeping into `extractions/`) → all of it syncs as
-ordinary encrypted blobs through the existing engine. The extension and the Expo
-app run the **same loop** against the same contract — the reason the schema lives
-in `shared`.
+The loop: **extract** → **write back** (the result _and_ bookkeeping into
+`extractions/`, heavy bytes into `files/` — never `links/`, which the extractor
+never touches) → all of it syncs as ordinary encrypted blobs through the existing
+engine. There is no claim step — a rare double-extraction is
+resolved by idempotency + file-level LWW, not prevented by a lease (see _the
+extraction entity_). The extension and the Expo app run the **same loop** against
+the same contract — the reason the schema (including the shared `backoff()` curve)
+lives in `shared`.
+
+**Cadence is backlog-driven, not a fixed tick.** First separate the two costs the
+word "poll" hides: the **local queue scan** (querying synced Dexie state for
+pending work) is **free** — run it on every wake; only the **network sync poll**
+(`ops/list`, to _discover_ another device's changes) costs anything, and that's
+what cadence sizes. Because the loop is a query, a client sizes that sync poll to
+how much is pending: **idle (a long alarm — around an hour) when the query is
+empty**, ramping up to work a backlog down when it isn't (a fresh import, a batch
+of cross-device saves), then settling back. The idle interval is a **ceiling /
+backstop, not a fixed tick** — an hour is fine because `title+image` back-fills and
+nothing waits on it, but a backlog must _not_ wait an hour between chunks. This
+replaces a fixed fast poll — a 1-minute alarm spends a request every minute to
+almost always find nothing, the worst case for a single-user app whose data
+changes a few times a day. An empty poll returning "nothing pending" is the
+**intended** steady state, not waste. Pair it with cheap local wake triggers so
+freshness doesn't wait on the long alarm — browser start, popup/icon open, a save
+performed _in_ the extension, and (if wired) the **content-script "sync now"
+nudge** a `brace-web` save can post to a same-browser extension (see _who
+extracts_ — presence bridge). **Don't reach for server push** for title+image:
+nothing is on the critical path for it (the saving client already did it), so
+there's no latency for push to remove. (Push only becomes interesting if the
+extension ever becomes the authoritative background worker for a facet — which the
+active-page facets aren't.)
+
+### imported links: the bulk path
+
+Bulk import (a `bookmarks.html` export, Pocket/Raindrop/Pinboard, …) is the one
+workload _save-time extraction can't own_, and the reason the queue path above
+isn't optional. An interactive save is one link, at human pace, on the client
+with the most context; an import is the inverse on every axis:
+
+- **volume** — hundreds to thousands at once, not one-at-a-time;
+- **no active context** — no live tab per link, so screenshot/archive are out and
+  title+image is **bg-fetch tier at best** (raw HTML), never active-page;
+- **the importer is usually the web app** — a dropped export file — which can't
+  `fetch` at all.
+
+So imported links flow through the **queue, not the save-time path**, and they
+need **no new structure**: an imported link is a `links/{id}.enc` with **no
+`extractions/` file**, which _is_ the pending signal — the normal loop picks it
+up, and the `attempts`-driven backoff (retry once `now >= extractedAt +
+backoff(attempts)`) already gives retry pacing for free. The one thing the queue
+does _not_ give for free here is cross-device dedup: with no claim lease, two
+devices draining the same thousands both fetch them (idempotent, so still
+correct, just wasteful). If that ever bites, **deterministic sharding** by `id`
+hash divides the work with zero coordination — deferred, because the device the
+import landed on usually drains it alone (see _the extraction entity_). A title
+carried in the export seeds **`extraction.title` (provisional)**, not
+`customTitle` — the user didn't deliberately name it, so extraction may still
+upgrade it to the real og:title; it's just a better placeholder than a bare host
+meanwhile (see _manual overrides_). This is the one case an import writes an
+`extractions/` file up front — the pending signal then is the **absent `titleImage`
+facet**, not an absent file (the queue query already keys on the facet).
+
+**Imports are where `brace-extractor` stops being avoidable.** For a one-off web
+save it's a nicety; for a bulk import, client-only draining is genuinely weak — a
+web-only user gets thousands of bare URLs forever, and even with the extension,
+draining thousands via throttled raw-HTML `fetch` across ephemeral MV3 wake
+cycles is slow and flaky (slower still once the alarm is backed off). A bulk
+import is also the natural **opt-in moment** ("enrich my whole library?"). So the
+honest framing: _interactive saves justify **avoiding** `brace-extractor`;
+imports justify **building** it_ — different workloads, different answers.
+
+The real concerns for the bulk path are throughput, not latency (enrichment
+back-fills; the library is usable immediately):
+
+- **batch and pace.** `brace-extractor` takes `POST { urls }` (plural) and
+  IP-rate-limits — send chunks and respect backoff, never thousands of
+  singletons. Same for extension bg-fetch: pace per-host so one site isn't
+  hammered (and bot-protection isn't tripped).
+- **watch sync-op volume.** Each completion writes **one** `extractions/` blob
+  (result + bookkeeping together — the writer-split removed the second, `links/`
+  backfill write), so a 5 000-link import is ~5 000 writes through sync — still a
+  burst, but half what the old layout cost.
+- **progress is free** — "enriching 4 231 of 5 000…" is a count of links whose
+  `extractions/` has no `done` `titleImage` facet, the same query the loop runs.
+- **quality is upgradable.** Imports land at `server`/`bg-fetch` tier; opening the
+  real page in the extension later upgrades to active-page via the existing tier
+  rule. "Import cheap now, improve on first real visit" needs no new mechanism.
 
 ### everything is async; nothing blocks the save
 
@@ -340,9 +534,10 @@ The save path is unchanged: writing `links/{id}.enc` makes the link exist
 **immediately** (see [local-first-sync.md](./local-first-sync.md) — _push_). All
 extraction is **fire-and-forget after that** — the user never waits on a fetch or
 a render, on any client. Results arrive later and the UI updates reactively when
-the patched `links/`/`extractions/` blobs land in Dexie (`liveQuery`). This holds
-regardless of tier: an active-tab capture and a background catch-up are both
-post-save, off the critical path.
+the patched `extractions/` blob lands in Dexie (`liveQuery`); the join against the
+unchanged `links/` row re-resolves the displayed title/image. This holds regardless
+of tier: an active-tab capture and a background catch-up are both post-save, off the
+critical path.
 
 ### what each client syncs — the extension is a selective-sync client
 
@@ -361,12 +556,14 @@ For an extension whose job is extraction + save, the minimum working set is:
   **alone is not enough**:
   - a freshly-saved link has **no** `extractions/` file (its absence _is_ the
     pending signal), so new work is only discoverable from the `links/` index;
-  - the **URL** to fetch lives in `links/{id}.enc`;
-  - write-back of `title`/`imageId` is a **read-merge-write** that must round-trip
-    the link blob's unknown fields (the `looseObject` rule), so the current link
-    blob has to be in hand.
-    For 10 000 links this is ~2.5 MB (`links/`) + a sparse, tiny `extractions/` set —
-    trivial.
+  - the **URL** to fetch lives in `links/{id}.enc` (read-only for the extractor —
+    it reads the URL but never writes this file);
+  - write-back of `title`/`imageId` is a **read-merge-write of the `extractions/`
+    blob** that must round-trip its unknown fields (the `looseObject` rule), so the
+    current extraction blob (if any) has to be in hand — but the link blob is never
+    rewritten.
+    For 10 000 links this is ~2.5 MB (`links/`) + the `extractions/` set (now holds
+    the titles/refs too, no longer tiny, but still small) — trivial.
 - **lazily / never: `files/`.** Heavy content is on-demand for **every** client
   already; the extension fetches a `files/` blob only to **upgrade** an existing
   screenshot/archive, never routinely.
@@ -415,10 +612,12 @@ committed now (separate app, separate origin, anonymous, plaintext-return-only).
 
 ### the web-only gap (a conscious stance)
 
-A user on **`brace-web` only** — no extension, no phone — gets **no enrichment**:
-a saved link stays a bare URL with whatever title they typed. This is the direct,
-intended consequence of "clients do the work, the server stays blind." It is
-**not** a bug to paper over:
+A user on **`brace-web` only** — no extension, no phone — **and opted out of
+server extraction** gets **no enrichment**: a saved link stays a bare URL with
+whatever title they typed. (Opted _in_, the web app orchestrates `brace-extractor`
+at save time — see _who extracts_ — and there is no gap; that is the escape hatch
+below, realized.) Opted out, the gap is the direct, intended consequence of
+"clients do the work, the server stays blind." It is **not** a bug to paper over:
 
 - it keeps the default maximally private (nothing fetches your URLs until you
   install a client that does it locally);

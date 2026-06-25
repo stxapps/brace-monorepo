@@ -121,11 +121,12 @@ export interface ItemRecord {
   // query URL the same way the editor normalized this one before storing.
   itemUrl?: string;
   // Extractions only: one `${status}:${facet}` token per facet (projection.ts) —
-  // e.g. `["pending:titleImage", "done:readMode"]`. Backs the `*itemFacetStatuses`
-  // multiEntry index so the options page tallies facet status with three
-  // `startsWith('done:'|'pending:'|'failed:').count()` range-counts (one index entry
-  // per facet, so the count is exact facet totals) and the extraction work loop finds
-  // pending work via `equals('pending:titleImage')` — neither read decodes a blob.
+  // e.g. `["done:titleImage", "failed:readMode"]`. Backs the `*itemFacetStatuses`
+  // multiEntry index so the options page tallies facet status with
+  // `equals('done:titleImage')`-style range-counts (one index entry per facet, so the
+  // count is the exact per-link total) without decoding a blob. Statuses are
+  // done/failed/permanent only — pending = ABSENCE (no token), so the pending count is
+  // a set difference (link total minus recorded outcomes), see readExtractionFacetCounts.
   itemFacetStatuses?: string[];
 }
 

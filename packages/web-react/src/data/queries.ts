@@ -36,7 +36,14 @@ import {
 } from '@stxapps/shared';
 
 import { db, type ItemRecord } from './db';
-import { dropCachedLink, getCachedLink, setCachedLink } from './decode-cache';
+import {
+  dropCachedExtraction,
+  dropCachedLink,
+  getCachedExtraction,
+  getCachedLink,
+  setCachedExtraction,
+  setCachedLink,
+} from './decode-cache';
 import { parseBlob } from './projection';
 
 // A parsed entity always carries its source `items` path — the stable id every
@@ -48,6 +55,20 @@ export type ListItem = WithPath<List>;
 export type TagItem = WithPath<Tag>;
 export type PinItem = WithPath<Pin>;
 export type ExtractionItem = WithPath<Extraction>;
+
+// A link row resolved for DISPLAY: the user-authored link joined with its
+// machine-derived `extractions/{id}.enc` (the writer-split — docs/link-extraction.md).
+// The UI reads these resolved fields. `title`/`imageId` apply the override-wins rule
+// (`customTitle ?? extraction.title`, `customImageId ?? extraction.imageId`); the heavy
+// refs come straight from the extraction. A link with no extraction yet resolves
+// `title`/`imageId` to `customTitle`/`customImageId` (or `undefined` → the view falls
+// back to the URL host).
+export type LinkView = LinkItem & {
+  title?: string;
+  imageId?: string;
+  pageArchiveId?: string;
+  screenshotId?: string;
+};
 
 // --- the query grammar -------------------------------------------------------
 
@@ -94,7 +115,8 @@ export interface LinkQuery {
 // known (the query fetches one past the page to detect it).
 export interface LinksResult {
   // Pinned matching links FIRST (in pin-rank order), then the page of the rest.
-  links: LinkItem[];
+  // Display-resolved (link joined with its extraction — see LinkView).
+  links: LinkView[];
   // How many leading entries of `links` are pinned — the boundary the UI draws its
   // pinned section / "move up·down" affordances at. The pinned segment is always
   // returned whole (pins are few); `limit`/"show more" pages only the rest.
@@ -152,6 +174,56 @@ function decodeLinks(records: ItemRecord[]): LinkItem[] {
   return records
     .map((record) => decodeCachedLink(record))
     .filter((link): link is LinkItem => link !== undefined);
+}
+
+// The `extractions/` counterpart of decodeCachedLink — same memoized, version-keyed
+// decode (decode-cache.ts), so the per-row link↔extraction join is O(changed) too.
+function decodeCachedExtraction(record: ItemRecord): ExtractionItem | undefined {
+  const itemUpdatedAt = record.itemUpdatedAt ?? 0;
+  const cached = getCachedExtraction(record.path, record.updatedAt, itemUpdatedAt);
+  if (cached !== undefined) return cached;
+
+  const extraction = decode(record, extractionSchema);
+  if (extraction === undefined) {
+    dropCachedExtraction(record.path);
+    return undefined;
+  }
+  setCachedExtraction(record.path, record.updatedAt, itemUpdatedAt, extraction);
+  return extraction;
+}
+
+// The `extractions/{id}.enc` path shadowing a link's `links/{id}.enc` — same `{id}`,
+// the writer-split's co-key (entities.ts). Both are id-keyed namespaces, so this is a
+// prefix swap.
+function extractionPathForLink(linkPath: string): string {
+  const id = linkPath.slice(LINKS_PREFIX.length, -ENC_SUFFIX.length);
+  return `${EXTRACTIONS_PREFIX}${id}${ENC_SUFFIX}`;
+}
+
+// Resolve one link + its (optional) extraction into the display row the UI renders —
+// the override-wins join (`customTitle ?? extraction.title`, etc.).
+function toView(link: LinkItem, extraction: Extraction | undefined): LinkView {
+  return {
+    ...link,
+    title: link.customTitle ?? extraction?.title,
+    imageId: link.customImageId ?? extraction?.imageId,
+    pageArchiveId: extraction?.pageArchiveId,
+    screenshotId: extraction?.screenshotId,
+  };
+}
+
+// Batch-join a page of links with their co-keyed extractions (one `bulkGet` by path,
+// memoized decode) and resolve each to a display row. The page is small (one virtual
+// window), so this is cheap; it's the deliberate cost of keeping `links/` user-only
+// (see client-queries.md).
+async function joinExtractions(links: LinkItem[]): Promise<LinkView[]> {
+  if (links.length === 0) return [];
+  const records = await db.items.bulkGet(links.map((link) => extractionPathForLink(link.path)));
+  return links.map((link, i) => {
+    const record = records[i];
+    const extraction = record ? decodeCachedExtraction(record) : undefined;
+    return toView(link, extraction);
+  });
 }
 
 // --- namespace reads (small collections) -------------------------------------
@@ -247,13 +319,14 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   return decode(record, extractionSchema);
 }
 
-// The options/status page's facet tallies (how many facets across the whole library
-// are done / pending / failed). `extractions/` shadows `links/` one-to-one, so this
-// set grows with the library — reading and decoding it whole would be O(library) on
-// every reactive tick. Instead each facet projects a `${status}:${facet}` token into
-// the `*itemFacetStatuses` multiEntry index (projection.ts), so each status total is
-// an index range-count: one index entry per facet means the count is the exact facet
-// total, no records read and no blobs decoded.
+// The options/status page's enrichment tally, headlined on the `titleImage` facet (the
+// primary "fill in title + image" job). `done`/`failed` are exact index range-counts off
+// the `*itemFacetStatuses` multiEntry index (projection.ts) — one token per facet, so a
+// status:facet equals-count is the exact per-link count, no decode. `pending` can't be a
+// token: the writer-split makes pending = ABSENCE (a link with no `done`/`failed`/
+// `permanent` titleImage facet — often no extractions file at all — see
+// docs/link-extraction.md), so it's the link total minus the recorded outcomes. `failed`
+// folds in `permanent` (both are "not enriched, won't auto-retry without help").
 export interface ExtractionFacetCounts {
   done: number;
   pending: number;
@@ -261,12 +334,17 @@ export interface ExtractionFacetCounts {
 }
 
 export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
-  const [done, pending, failed] = await Promise.all([
-    db.items.where('itemFacetStatuses').startsWith('done:').count(),
-    db.items.where('itemFacetStatuses').startsWith('pending:').count(),
-    db.items.where('itemFacetStatuses').startsWith('failed:').count(),
+  const [totalLinks, done, failedTransient, permanent] = await Promise.all([
+    db.items
+      .where('[itemType+itemUpdatedAt]')
+      .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
+      .count(),
+    db.items.where('itemFacetStatuses').equals('done:titleImage').count(),
+    db.items.where('itemFacetStatuses').equals('failed:titleImage').count(),
+    db.items.where('itemFacetStatuses').equals('permanent:titleImage').count(),
   ]);
-  return { done, pending, failed };
+  const failed = failedTransient + permanent;
+  return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
 }
 
 // The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /
@@ -330,11 +408,25 @@ function wordsMatch(haystack: string, c: Clause): boolean {
   return true;
 }
 
-// The text predicates need the decoded link (url/title live inside the blob), so
-// these can never be index-served — always a JS post-filter (the "scan for now"
-// choice; the scalable upgrade is a write-time `*itemSearchWords` token index).
-function textMatches(link: LinkItem, q: LinkQuery): boolean {
-  return wordsMatch(link.url, q.url) && wordsMatch(link.title, q.title);
+function hasTitleClause(q: LinkQuery): boolean {
+  return !clauseEmpty(q.title);
+}
+
+// The URL text predicate — on the decoded LINK (url lives in `links/`), so it can run
+// inside the sync filter walk. Never index-served (text is in the blob): a JS post-filter
+// (the "scan for now" choice; the scalable upgrade is a write-time `*itemSearchWords`
+// token index).
+function urlMatches(link: LinkItem, q: LinkQuery): boolean {
+  return wordsMatch(link.url, q.url);
+}
+
+// The title text predicate — on the RESOLVED display title (`customTitle ?? extraction.title`).
+// `customTitle` is on the link, but `extraction.title` lives in the co-keyed
+// `extractions/{id}.enc`, so a title clause forces the link↔extraction JOIN; it can't run
+// in the sync walk. An empty haystack is fine: an `any` term fails (nothing to match), a
+// `none`-only term passes (nothing excluded).
+function titleMatches(link: LinkItem, extraction: Extraction | undefined, q: LinkQuery): boolean {
+  return wordsMatch(link.customTitle ?? extraction?.title ?? '', q.title);
 }
 
 // The compound index + record column backing each sort dimension. Both
@@ -386,12 +478,12 @@ async function rangeFastPath(
 // (still no decode — it's an indexed column), then decode only as far as the page
 // needs. Exact total when there's no text clause (the column survivors ARE the
 // match set); undefined once text filtering applies.
-function finishFromCandidates(
+async function finishFromCandidates(
   candidates: ItemRecord[],
   q: LinkQuery,
   limit: number,
   exclude: Set<string>,
-): RestResult {
+): Promise<RestResult> {
   const { column } = SORT_INDEXES[q.sort];
   const survivors = candidates.filter((r) => !exclude.has(r.path) && columnMatches(r, q));
   survivors.sort((a, b) => (b[column] ?? 0) - (a[column] ?? 0));
@@ -404,11 +496,43 @@ function finishFromCandidates(
     };
   }
 
+  if (hasTitleClause(q)) return finishWithTitleSearch(survivors, q, limit);
+
+  // url-only text: filter on the decoded link, no extraction join needed.
   const links: LinkItem[] = [];
   for (const record of survivors) {
     const link = decodeCachedLink(record);
-    if (link && textMatches(link, q)) {
+    if (link && urlMatches(link, q)) {
       links.push(link);
+      if (links.length > limit) break; // one past the page → hasMore
+    }
+  }
+  return { links: links.slice(0, limit), total: undefined, hasMore: links.length > limit };
+}
+
+// Finish a TITLE-search page. Title lives in `extractions/`, so it can't be filtered in
+// the sync walk: take the column-filtered survivor records (already in sort order), apply
+// the url clause on the decoded link, bulk-join their extractions, then apply the title
+// clause and page. Materializes the survivor set — title search is already non-exact / a
+// scan — so the cost is bounded by the column+url survivors (the whole library only for a
+// bare title search, which is exactly the old behavior's cost plus the extraction reads).
+async function finishWithTitleSearch(
+  survivors: ItemRecord[],
+  q: LinkQuery,
+  limit: number,
+): Promise<RestResult> {
+  const urlPassed: LinkItem[] = [];
+  for (const record of survivors) {
+    const link = decodeCachedLink(record);
+    if (link && urlMatches(link, q)) urlPassed.push(link);
+  }
+  const exRecords = await db.items.bulkGet(urlPassed.map((l) => extractionPathForLink(l.path)));
+  const links: LinkItem[] = [];
+  for (let i = 0; i < urlPassed.length; i++) {
+    const exRecord = exRecords[i];
+    const extraction = exRecord ? decodeCachedExtraction(exRecord) : undefined;
+    if (titleMatches(urlPassed[i], extraction, q)) {
+      links.push(urlPassed[i]);
       if (links.length > limit) break; // one past the page → hasMore
     }
   }
@@ -417,8 +541,14 @@ function finishFromCandidates(
 
 // The page of NON-pinned links — the driver result before the pinned overlay is
 // prepended (so no `pinnedCount` yet) and before `readLinks` stamps the page
-// identity (`query`/`limit`). Pinned links are excluded via `exclude`.
-type RestResult = Omit<LinksResult, 'pinnedCount' | 'query' | 'limit'>;
+// identity (`query`/`limit`). Pinned links are excluded via `exclude`. Carries plain
+// `LinkItem`s (not display-resolved `LinkView`s) — the extraction join is deferred to
+// readLinks, which joins the whole page (overlay + rest) in one pass.
+interface RestResult {
+  links: LinkItem[];
+  total?: number;
+  hasMore: boolean;
+}
 
 // One page of the link library for `query` MINUS `exclude`, ordered by
 // `query.sort` (descending — newest first). Picks the cheapest driver for the
@@ -455,9 +585,21 @@ async function readRest(
     return finishFromCandidates(candidates, query, limit, exclude);
   }
 
-  // No positive tag clause: walk all links newest-first, filtering as we go. The
-  // `filter` decodes to test text words and stops once `limit + 1` pass (one past
-  // the page detects `hasMore`), so it touches a bounded slice, not the library.
+  // A title clause can't be filtered in the sync walk (title lives in `extractions/`):
+  // gather every column-filtered survivor in sort order, then join + filter + page.
+  if (hasTitleClause(query)) {
+    const survivors = await db.items
+      .where(index.type)
+      .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
+      .reverse()
+      .filter((record) => !exclude.has(record.path) && columnMatches(record, query))
+      .toArray();
+    return finishWithTitleSearch(survivors, query, limit);
+  }
+
+  // No positive tag clause and no title clause: walk all links newest-first, filtering
+  // as we go on columns + url (decoded link). The `filter` stops once `limit + 1` pass
+  // (one past the page detects `hasMore`), so it touches a bounded slice, not the library.
   const records = await db.items
     .where(index.type)
     .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
@@ -465,7 +607,7 @@ async function readRest(
     .filter((record) => {
       if (exclude.has(record.path) || !columnMatches(record, query)) return false;
       const link = decodeCachedLink(record);
-      return link !== undefined && textMatches(link, query);
+      return link !== undefined && urlMatches(link, query);
     })
     .limit(limit + 1)
     .toArray();
@@ -490,20 +632,29 @@ async function readPinnedOverlay(
   const pins = (await readPins()).sort(compareRank);
   if (pins.length === 0) return { links: [], paths: new Set() };
 
-  const records = await db.items.bulkGet(
-    pins.map((pin) => `${LINKS_PREFIX}${pin.id}${ENC_SUFFIX}`),
-  );
-  const links: LinkItem[] = [];
-  const paths = new Set<string>();
-  const hasText = hasTextClause(query);
+  const records = await db.items.bulkGet(pins.map((pin) => `${LINKS_PREFIX}${pin.id}${ENC_SUFFIX}`));
+  const hasUrl = !clauseEmpty(query.url);
+  const passed: LinkItem[] = [];
   for (const record of records) {
     if (!record || !columnMatches(record, query)) continue;
     const link = decodeCachedLink(record);
-    if (!link || (hasText && !textMatches(link, query))) continue;
-    links.push(link);
-    paths.add(record.path);
+    if (!link || (hasUrl && !urlMatches(link, query))) continue;
+    passed.push(link);
   }
-  return { links, paths };
+
+  if (!hasTitleClause(query)) {
+    return { links: passed, paths: new Set(passed.map((l) => l.path)) };
+  }
+
+  // Title clause: join each pinned link's extraction (pins are few) and apply the filter.
+  const exRecords = await db.items.bulkGet(passed.map((l) => extractionPathForLink(l.path)));
+  const links: LinkItem[] = [];
+  passed.forEach((link, i) => {
+    const exRecord = exRecords[i];
+    const extraction = exRecord ? decodeCachedExtraction(exRecord) : undefined;
+    if (titleMatches(link, extraction, query)) links.push(link);
+  });
+  return { links, paths: new Set(links.map((l) => l.path)) };
 }
 
 // One page for `query`: the pinned matching links first (rank order, always whole),
@@ -513,8 +664,10 @@ async function readPinnedOverlay(
 export async function readLinks(query: LinkQuery, limit: number): Promise<LinksResult> {
   const overlay = await readPinnedOverlay(query);
   const rest = await readRest(query, limit, overlay.paths);
+  // Join the whole page (overlay + rest) with extractions in one pass → display rows.
+  const links = await joinExtractions([...overlay.links, ...rest.links]);
   return {
-    links: [...overlay.links, ...rest.links],
+    links,
     pinnedCount: overlay.links.length,
     total: rest.total === undefined ? undefined : overlay.links.length + rest.total,
     hasMore: rest.hasMore,

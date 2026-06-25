@@ -23,13 +23,16 @@ import { z } from 'zod';
 // `LastModified` that drives sync ordering (an ItemRecord/op-log `updatedAt`),
 // which is infrastructure the plaintext doesn't depend on.
 
-// The plaintext of `links/{id}.enc` — one link. Small by design (< ~2 KB
-// budget): list-view fields only, so the whole library is browsable offline
-// after first sync. Heavy content (archives, screenshots, long notes) lives in
-// separate `files/{id}.enc` blobs referenced by id — never inlined here.
-// `tagIds`/`listId` hold ids of `tags/{id}.enc` / `lists/{id}.enc` files; a
-// dangling id (tag deleted on another device) is NORMAL and the UI skips it,
-// never errors.
+// The plaintext of `links/{id}.enc` — the USER-AUTHORED half of one link. Small by
+// design (< ~2 KB budget): list-view fields only, so the whole library is browsable
+// offline after first sync. The machine-derived half (the extracted title/image, the
+// archive/screenshot refs, the extraction bookkeeping) lives in `extractions/{id}.enc`
+// — split BY WRITER so a background extractor never read-merge-writes this file and so
+// can never clobber a concurrent user edit under LWW (see docs/link-extraction.md "the
+// data model"). Heavy media itself (archive/screenshot/preview bytes, long notes) lives
+// in separate `files/{id}.enc` blobs referenced by id — never inlined. `tagIds`/`listId`
+// hold ids of `tags/{id}.enc` / `lists/{id}.enc` files; a dangling id (tag deleted on
+// another device) is NORMAL and the UI skips it, never errors.
 //
 // Reference fields end in `Id`/`Ids` and store the BARE entity id, never a full
 // path: the `{namespace}` prefix + `.enc` suffix is applied at the read edge
@@ -39,23 +42,19 @@ import { z } from 'zod';
 // limit can't drift between where it's enforced and where it's validated. They
 // protect the `< ~2 KB` metadata budget (see local-first-sync.md "metadata vs
 // content"); counts are UTF-16 length, so worst-case multi-byte text stays bounded.
-// Keep them GENEROUS: because this schema parses persisted bytes, a value over the
-// cap fails to parse and drops the WHOLE link from the UI — so the cap must never
-// trip a legitimate value, and writers (the editor, the extractor truncating
-// og:title) enforce the same number up front. `url` is deliberately NOT capped: it
+// Keep them GENEROUS: because these schemas parse persisted bytes, a value over the
+// cap fails to parse and drops the record from the UI (the link for `customTitle`/
+// `note`, the extraction for its `title`) — so the cap must never trip a legitimate
+// value, and writers (the editor, the extractor truncating og:title) enforce the same
+// number up front. The same `LINK_TITLE_MAX` is shared by `customTitle` and
+// `extractionSchema.title` so a title can't be valid in one file but not the other.
+// `url` is deliberately NOT capped: it
 // is the link's identity, so truncating it would corrupt the link — the per-user
 // byte quota is its only backstop.
-export const LINK_TITLE_MAX = 300; // `title` + `customTitle` (a title either way)
+export const LINK_TITLE_MAX = 300; // shared by `linkSchema.customTitle` + `extractionSchema.title` (a title either way)
 export const LINK_NOTE_MAX = 500; // short inline note; long-form → files/ (`noteId`)
 
 export const linkSchema = z.looseObject({
-  // The link's "discovered/provisional" title — NOT the user's typed title. It
-  // holds a URL-host placeholder at save, then is BACKFILLED/overwritten by the
-  // `titleImage` extraction facet (see docs/link-extraction.md). Any title the user
-  // types — whether at save or in a later edit — goes in `customTitle` below and is
-  // sticky, so `title` can be re-extracted or tier-upgraded freely without ever
-  // losing the user's words.
-  title: z.string().max(LINK_TITLE_MAX),
   // Uncapped on purpose — the link's identity must never be truncated (see the
   // `LINK_TITLE_MAX` note above); the per-user byte quota is the only backstop.
   url: z.string(),
@@ -63,47 +62,29 @@ export const linkSchema = z.looseObject({
   tagIds: z.array(z.string()),
   // List id (the `{id}` of `lists/{id}.enc`).
   listId: z.string(),
-  // Id of the archived page's content file (the `{id}` of `files/{id}.enc`),
-  // absent until one is saved. A field name types its blob (see the doc's
-  // "plaintext typing"); if a field ever needs to hold several formats, make it
-  // an object with an explicit `type` beside the id — a per-field schema decision.
-  pageArchiveId: z.string().optional(),
-  // The link's preview image (the page's og:image / lead image), shown in card and
-  // table layouts. A `files/{id}.enc` reference, never inlined — heavy media
-  // fetched lazily on scroll (see local-first-sync.md "metadata vs content"), the
-  // same rule and pattern as `pageArchiveId`. Distinct from a full-page screenshot
-  // (the `screenshot` extraction facet, its own ref). Backfilled by the
-  // `titleImage` extraction facet; absent until a client extracts it (a web-only
-  // user with no extractor gets none — the "web-only gap").
-  imageId: z.string().optional(),
-  // The full-page screenshot's content file (the `{id}` of `files/{id}.enc`),
-  // absent until the `screenshot` extraction facet captures one. Distinct from
-  // `imageId` (the page's og:image preview): this is a rendered capture of the page
-  // as the user saw it, written by an active-page-tier client (the extension's
-  // `tabs.captureVisibleTab`). Heavy media, fetched lazily on open — same
-  // `files/{id}.enc`-ref rule as `pageArchiveId`/`imageId`.
-  screenshotId: z.string().optional(),
-  // Manual user overrides for the two display fields extraction otherwise owns. The
-  // UI renders `customTitle ?? title` and `customImageId ?? imageId`, so a manual
-  // edit always wins over the extracted/discovered value. Extraction writes ONLY
-  // `title`/`imageId` and NEVER these, so re-running or tier-upgrading extraction
-  // can't clobber a user's override — and clearing the field reverts to the fetched
-  // value, which is still present. A title the user types AT SAVE counts as an
-  // override too (it's sticky), so it lands here, not in `title`. `customImageId`
-  // is a `files/{id}.enc` ref (a user-picked/uploaded image), same heavy-media rule
-  // as `imageId`.
+  // The user's DELIBERATE title/image override. The UI resolves the displayed title as
+  // `customTitle ?? extraction.title ?? host(url)` and the image as
+  // `customImageId ?? extraction.imageId`, so a manual edit always wins over the
+  // extracted/discovered value (which lives in `extractions/{id}.enc`). Because the two
+  // writers now own SEPARATE FILES — the user this one, extraction the extractions file
+  // — re-running or tier-upgrading extraction can't touch these at all, and clearing
+  // one reverts to the still-present extracted value. A title the user types AT SAVE is
+  // deliberate too, so it lands here. (A title that merely RODE IN from a bulk import is
+  // NOT deliberate — it seeds the provisional `extraction.title`, which extraction may
+  // still upgrade — see docs/link-extraction.md.) `customImageId` is a `files/{id}.enc`
+  // ref to a user-picked image, the same heavy-media rule as `extraction.imageId`.
   //
-  // These live here in `links/` — one file, one user gesture, beside
-  // `title`/`tagIds`/`listId` — NOT a separate entity/file. A manual override is a
-  // low-frequency USER edit, the opposite of the churny automated state that earns
-  // `pins/` and `extraction/` their own LWW-isolated files; a shadow override file
-  // would only force a single edit to write two files and race under LWW.
+  // These live here in `links/` — one file, one user gesture, beside `tagIds`/`listId`
+  // — NOT a separate entity/file. A manual override is a low-frequency USER edit, the
+  // opposite of the churny automated state that earns `pins/` and `extractions/` their
+  // own LWW-isolated files; a shadow override file would only force a single edit to
+  // write two files and race under LWW.
   customTitle: z.string().max(LINK_TITLE_MAX).optional(),
   customImageId: z.string().optional(),
   // The user's own free-text note on the link — their annotation, NOT the page's
   // extracted description/summary (that's the extraction `summary` facet; a field
   // named `note` is always the user's words). Kept INLINE so it shows in the list
-  // view and stays searchable offline like `title`/`url` — and therefore CAPPED to
+  // view and stays searchable offline like `customTitle`/`url` — and therefore CAPPED to
   // protect the `< ~2 KB` metadata budget (see local-first-sync.md "metadata vs
   // content"). The cap counts UTF-16 length, so worst-case multi-byte text still
   // stays bounded. Long-form multi-paragraph notes do NOT belong here — those are a
@@ -173,58 +154,85 @@ export const pinSchema = z.looseObject({
 });
 export type Pin = z.infer<typeof pinSchema>;
 
-// The plaintext of `extractions/{id}.enc` — per-link extraction bookkeeping, with
-// `id` repeating the link's id (the `{id}` of its `links/{id}.enc`), so it's
-// self-contained AND its own last-writer-wins point. Like `pins/`, this is the
-// LWW-isolation move applied to CHURNY, AUTOMATED state — who extracted, when, at
-// what quality, whether it's claimed, whether it failed and when to retry — written
-// by background actors on a different schedule than user edits. Keeping it OUT of
-// `linkSchema` means that churn never clobbers a concurrent user title/tag edit and
-// never bloats the link's < ~2 KB budget. The DISPLAY result extraction produces
-// (`title`/`imageId`/`pageArchiveId`/`screenshotId`) lives in `links/`, NEVER copied
-// here — there is one source of truth for the title; `extractions/` answers only
-// "who/when/quality/retry?". See docs/link-extraction.md.
+// The plaintext of `extractions/{id}.enc` — EVERYTHING a machine derives about a link,
+// with `id` repeating the link's id (the `{id}` of its `links/{id}.enc`), so it's
+// self-contained AND its own last-writer-wins point. This is the MACHINE-WRITTEN half
+// of a link; `links/{id}.enc` is the USER-WRITTEN half. The split is by WRITER, which
+// is the property that matters: extraction writes only THIS file, so it can never
+// read-merge-write the user's file and clobber a concurrent list/tag/title edit under
+// LWW — the one unrecoverable race the old "display result in links/" layout risked. It
+// carries two kinds of machine state, both written by the SAME writer (the extractor),
+// so LWW races between them are self-healing (re-extract is idempotent):
+//   1. the DISPLAY RESULT — `title` (the discovered/provisional og:title), `imageId`
+//      (og:image preview), `pageArchiveId`, `screenshotId` (heavy `files/{id}.enc`
+//      refs). The UI resolves `customTitle ?? title ?? host(url)` and
+//      `customImageId ?? imageId` (the `custom*` halves live in `linkSchema`).
+//   2. the BOOKKEEPING — the per-facet who/when/quality/retry map (`facets`).
+// A bulk-imported title (not a deliberate user name) seeds the provisional `title` here,
+// where extraction may still upgrade it — it does NOT go in `customTitle`. Written by
+// client extractors (the extension, future Expo app, the web app orchestrating
+// brace-extractor or an import), NEVER by `brace-api`, which stays a blind sync broker.
+// The work loop is a QUERY, not a queue object: a link with no `done` `titleImage`
+// facet (no extractions file at all, or one not yet extracted) is pending. See
+// docs/link-extraction.md.
 //
-// A link is NOT one extraction with one lifecycle: title+image, read-mode,
-// screenshot, archive, keywords, tags, summary, and (deferred) vectors are
-// INDEPENDENT jobs — each produced by a different client/tier at a different time,
-// each able to be `pending` while another is `done`. So the entity carries a MAP of
-// facet → state (`facets`), not a flat `status`. One flat file per link with the
-// facets inside (not one prefix per facet): a per-facet split would multiply objects
-// ~8× and only guard a rare, self-healing race — see the doc's "path layout" note.
+// A link is NOT one extraction with one lifecycle: title+image, read-mode, screenshot,
+// archive, keywords, tags, summary, and (deferred) vectors are INDEPENDENT jobs — each
+// produced by a different client/tier at a different time, each able to be missing while
+// another is `done`. So the entity carries a MAP of facet → state (`facets`), not a flat
+// `status`. One flat file per link with the facets inside (not one prefix per facet): a
+// per-facet split would multiply objects ~8× and only guard a rare, self-healing race —
+// see the doc's "path layout" note.
 
-// One facet's state — the same who/when/quality/retry/lease questions answered
-// independently per job. `z.looseObject` so a newer client adding a field round-trips
-// through older ones (the file-wide rule above).
+// One facet's state — the who/when/quality/retry questions answered independently per
+// job. `z.looseObject` so a newer client adding a field round-trips through older ones
+// (the file-wide rule above).
 export const facetSchema = z.looseObject({
-  status: z.enum(['pending', 'done', 'failed']),
+  // No `pending`: a facet no client has touched simply has NO entry (and a link with no
+  // extractions file has none at all) — absence IS pending. `done` = success; `failed` =
+  // transient, retry once `now >= extractedAt + backoff(attempts)`; `permanent` = hard
+  // failure (404/410, robots block), never retry. Because this is SYNCED, one device's
+  // `permanent`/`failed` stops every device retrying.
+  status: z.enum(['done', 'failed', 'permanent']),
   // who/quality produced it — `active-page` beats `bg-fetch` beats `server`; a client
   // whose tier beats a `done` facet's stored tier may re-extract to UPGRADE it.
   tier: z.enum(['active-page', 'bg-fetch', 'server']).optional(),
-  extractedBy: z.string().optional(), // client/device id — provenance
-  extractedAt: z.number().int().optional(),
-  attempts: z.number().int(), // backoff counter for transient failures
-  // Don't retry before this. OMITTED together with `status: 'failed'` = a PERMANENT
-  // failure (404/410, robots block); present = a transient one eligible to retry.
-  // Because this is SYNCED, one device's failure stops every device retrying.
-  nextEligibleAt: z.number().int().optional(),
-  // Soft TTL lease for cross-device dedup, PER FACET (so the extension claiming
-  // `screenshot` doesn't block the phone claiming `summary` on the same link). A
-  // soft lease, not a hard lock — file-level LWW resolves the rare race; don't reach
-  // for distributed locking for a single user's few devices.
-  claimedBy: z.string().optional(),
-  claimedAt: z.number().int().optional(),
+  extractedBy: z.string().optional(), // who ran the last attempt — client/device id
+  extractedAt: z.number().int().optional(), // when — success time when done, last try when failed
+  attempts: z.number().int(), // backoff counter — retry when now >= extractedAt + backoff(attempts)
+  // No claim lease (`claimedBy`/`claimedAt`): a rare double-extraction is resolved by
+  // idempotency + file-level LWW, not prevented by a synced lease (which would force an
+  // extra round-trip on the critical path yet stay best-effort anyway). No
+  // `nextEligibleAt` either — it's derived from `extractedAt` + `attempts` via the shared
+  // `backoff()` curve. See docs/link-extraction.md "the extraction entity".
 });
 export type Facet = z.infer<typeof facetSchema>;
 
-// A link carries only the facets some client has actually started — `titleImage`
-// done while `screenshot` is still missing, etc. — so this is a PARTIAL record:
-// every facet key is optional and absent ≠ pending (a missing facet is "no client
-// has touched this job yet"). `z.partialRecord`, not `z.record`, because the latter
-// over an enum key infers an EXHAUSTIVE `Record` (all 8 required) — which neither
-// matches reality nor parses a real one-facet extraction.
+// A link carries only the facets some client has finished — `titleImage` done while
+// `screenshot` is still missing, etc. — so `facets` is a PARTIAL record: a missing facet
+// key means "no client has done this job yet" = pending. `z.partialRecord`, not
+// `z.record`, because the latter over an enum key infers an EXHAUSTIVE `Record` (all 8
+// required) — which neither matches reality nor parses a real one-facet extraction. The
+// display fields are the results of specific facets: `title`/`imageId` from `titleImage`,
+// `pageArchiveId` from `archive`, `screenshotId` from `screenshot`; each is absent until
+// its facet lands. All but the inline `title` are `files/{id}.enc` refs — "a field name
+// types its blob" (see docs/local-first-sync.md "plaintext typing").
 export const extractionSchema = z.looseObject({
   id: z.string(), // = the link's id (the `{id}` of `links/{id}.enc`)
+  // The discovered/provisional title (og:title, or a bulk-imported title meanwhile),
+  // capped like `customTitle` (shared LINK_TITLE_MAX). The UI shows
+  // `customTitle ?? title ?? host(url)`, so this is the fallback below a user override.
+  title: z.string().max(LINK_TITLE_MAX).optional(),
+  // The page's og:image / lead-image preview — a `files/{id}.enc` ref, downloaded and
+  // encrypted by the extracting client, NEVER the remote URL (see the doc's "the preview
+  // image is a downloaded blob"). Shown as `customImageId ?? imageId`.
+  imageId: z.string().optional(),
+  // The archived page's content file (`files/{id}.enc`), from the `archive` facet.
+  pageArchiveId: z.string().optional(),
+  // The full-page screenshot (`files/{id}.enc`), from the `screenshot` facet — a rendered
+  // capture, distinct from the og:image `imageId`. Active-page tier only (the extension's
+  // `tabs.captureVisibleTab`).
+  screenshotId: z.string().optional(),
   facets: z.partialRecord(
     z.enum([
       'titleImage',

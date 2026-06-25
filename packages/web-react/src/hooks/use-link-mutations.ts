@@ -49,9 +49,11 @@ export function useLinkMutations(): LinkMutations {
 
       const id = newId();
       // createdAt: 0 → writeLink stamps it now (same first-write contract as
-      // writeList); path is the well-known store key its blob will live at.
+      // writeList); path is the well-known store key its blob will live at. No title
+      // here: a link is saved from just a URL, and its title is filled later into the
+      // separate `extractions/{id}.enc` (the writer-split — see docs/link-extraction.md);
+      // a user-typed title would go in `customTitle`, which this quick-add doesn't collect.
       const link: LinkItem = {
-        title: '',
         url,
         tagIds: draft.tagIds,
         listId: draft.listId,

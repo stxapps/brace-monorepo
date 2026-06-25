@@ -102,11 +102,12 @@ export async function deleteEntity(username: string, path: string): Promise<void
 export async function writeLink(
   username: string,
   link: WithPath<Link>,
+  // User-authored fields only — `links/{id}.enc` is the user half of a link. The
+  // extracted display fields (title/imageId/pageArchiveId/screenshotId) are NOT here:
+  // they live in `extractions/{id}.enc` and are written via writeExtraction, so a
+  // background extractor never rewrites this file (see docs/link-extraction.md).
   patch: Partial<
-    Pick<
-      Link,
-      'title' | 'url' | 'tagIds' | 'listId' | 'note' | 'pageArchiveId' | 'imageId' | 'screenshotId'
-    >
+    Pick<Link, 'url' | 'tagIds' | 'listId' | 'note' | 'customTitle' | 'customImageId'>
   >,
 ): Promise<void> {
   const now = Date.now();
@@ -261,19 +262,34 @@ export async function writeSettingsGeneral(
 // one of these per capture.
 export type ExtractionFacet = keyof Extraction['facets'];
 
-// Read-merge-write a single facet of a link's `extractions/{id}.enc` entity — the
-// churny, automated bookkeeping the extraction worker owns (who/when/quality/retry/
-// lease per facet, entities.ts). Read-merge-`put` (like writeSettingsGeneral) so a
-// facet update keeps the other facets, and `looseObject` round-trips any facet a
-// newer client wrote. The DISPLAY result (title/imageId/screenshotId/pageArchiveId)
-// is NEVER stored here — that lands on the link via writeLink; this answers only
-// "who/when/quality/retry?". `linkId` is the link's id (the `{id}` of its
-// `links/{id}.enc`), which is also this entity's id and path id.
+// The machine-written display fields on `extractions/{id}.enc` — the extracted
+// counterparts of the user's `customTitle`/`customImageId` on the link.
+export type ExtractionFields = Partial<
+  Pick<Extraction, 'title' | 'imageId' | 'pageArchiveId' | 'screenshotId'>
+>;
+
+// What one extraction write-back carries: an optional display-field patch and/or one
+// facet's bookkeeping. Both ride a SINGLE read-merge-write so a completion writes one
+// file (the writer-split removed the second, `links/` backfill write) and the field +
+// its facet status can't race each other.
+export interface ExtractionPatch {
+  fields?: ExtractionFields;
+  facet?: ExtractionFacet;
+  state?: Facet;
+}
+
+// Read-merge-write one link's `extractions/{id}.enc` — the MACHINE half of a link
+// (entities.ts): the extracted display result (title/imageId/pageArchiveId/
+// screenshotId) AND the per-facet who/when/quality/retry bookkeeping. The extractor
+// writes ONLY this file, never `links/{id}.enc`, so it can never clobber a concurrent
+// user edit (the writer-split — docs/link-extraction.md). Read-merge-`put` (like
+// writeSettingsGeneral) so an update keeps the other fields/facets, and `looseObject`
+// round-trips anything a newer client wrote. `linkId` is the link's id (the `{id}` of
+// its `links/{id}.enc`), which is also this entity's id and path id.
 export async function writeExtraction(
   username: string,
   linkId: string,
-  facet: ExtractionFacet,
-  state: Facet,
+  patch: ExtractionPatch,
 ): Promise<void> {
   const now = Date.now();
   const path = `${EXTRACTIONS_PREFIX}${linkId}${ENC_SUFFIX}`;
@@ -286,7 +302,11 @@ export async function writeExtraction(
   };
   const next: WithPath<Extraction> = {
     ...current,
-    facets: { ...current.facets, [facet]: state },
+    ...patch.fields,
+    facets:
+      patch.facet && patch.state
+        ? { ...current.facets, [patch.facet]: patch.state }
+        : current.facets,
     createdAt: current.createdAt === 0 ? now : current.createdAt,
     updatedAt: now,
     path,
@@ -299,9 +319,10 @@ export async function writeExtraction(
 }
 
 // Write a `files/{id}.enc` content blob (a captured screenshot/archive/read-mode
-// file). Only the lazy content record is created here; the link's reference to it
-// (`imageId` / `screenshotId` / `pageArchiveId`) is written separately via writeLink,
-// content-before-metadata — the same ordering the sync engine's push phases preserve.
+// file). Only the lazy content record is created here; the reference to it
+// (`imageId` / `screenshotId` / `pageArchiveId`) is written separately via
+// writeExtraction, content-before-metadata — the same ordering the sync engine's push
+// phases preserve.
 export function writeFile(username: string, fileId: string, data: Uint8Array): Promise<void> {
   return writeBytes(username, `${FILES_PREFIX}${fileId}${ENC_SUFFIX}`, data);
 }
