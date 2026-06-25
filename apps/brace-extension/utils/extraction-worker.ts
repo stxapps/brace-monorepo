@@ -9,7 +9,11 @@ import {
 } from '@stxapps/web-react';
 
 import { captureArchive, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
-import { getClientId } from './client-id';
+
+// `extractedBy` is a `platform:env` string, NOT a device id (entities.ts): the extension
+// captures from the focused active tab, so every facet it writes is foreground =
+// active-page tier. `tierOf()` derives quality from this — there's no stored `tier` field.
+const EXTRACTED_BY = 'extension:fg';
 
 // The extraction worker: capture one facet of one link from the ACTIVE TAB, then
 // write back — the heavy bytes into `files/`, and BOTH the display refs and the
@@ -38,7 +42,6 @@ export async function runExtraction(
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id == null || tab.windowId == null) throw new Error('No active tab to extract from');
   const tabId = tab.id;
-  const clientId = await getClientId();
 
   try {
     switch (facet) {
@@ -51,7 +54,7 @@ export async function runExtraction(
           await writeFile(username, imageId, image); // content before metadata
           fields.imageId = imageId;
         }
-        await markDone(username, linkId, facet, clientId, { fields });
+        await markDone(username, linkId, facet, { fields });
         break;
       }
       case 'readMode': {
@@ -60,21 +63,21 @@ export async function runExtraction(
         await writeFile(username, fileId, html);
         // No display field references read-mode yet; the facet records its file id
         // (looseObject round-trips it) so a future reader can find it.
-        await markDone(username, linkId, facet, clientId, { extra: { fileId } });
+        await markDone(username, linkId, facet, { extra: { fileId } });
         break;
       }
       case 'screenshot': {
         const png = await captureScreenshot(tab.windowId);
         const screenshotId = newId();
         await writeFile(username, screenshotId, png);
-        await markDone(username, linkId, facet, clientId, { fields: { screenshotId } });
+        await markDone(username, linkId, facet, { fields: { screenshotId } });
         break;
       }
       case 'archive': {
         const dom = await captureArchive(tabId);
         const pageArchiveId = newId();
         await writeFile(username, pageArchiveId, dom);
-        await markDone(username, linkId, facet, clientId, { fields: { pageArchiveId } });
+        await markDone(username, linkId, facet, { fields: { pageArchiveId } });
         break;
       }
       default:
@@ -86,8 +89,7 @@ export async function runExtraction(
     // extractedAt + backoff(attempts)) is a later enhancement.
     const failed: Facet = {
       status: 'failed',
-      tier: 'active-page',
-      extractedBy: clientId,
+      extractedBy: EXTRACTED_BY,
       attempts: 1,
     };
     await writeExtraction(username, linkId, { facet, state: failed });
@@ -99,13 +101,11 @@ function markDone(
   username: string,
   linkId: string,
   facet: ExtractionFacet,
-  clientId: string,
   opts: { fields?: ExtractionFields; extra?: Record<string, unknown> } = {},
 ): Promise<void> {
   const state: Facet = {
     status: 'done',
-    tier: 'active-page',
-    extractedBy: clientId,
+    extractedBy: EXTRACTED_BY,
     extractedAt: Date.now(),
     attempts: 0,
     ...opts.extra,

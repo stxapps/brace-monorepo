@@ -21,8 +21,15 @@ import { readSyncStatus } from '@/utils/messages';
 import { runSync } from '@/utils/sync-runner';
 
 const SYNC_ALARM = 'brace-sync';
-// MV3 caps alarm frequency at ~1/min; one minute is the tightest useful cadence.
-const SYNC_PERIOD_MINUTES = 1;
+// The alarm only drives the NETWORK SYNC POLL (`ops/list`, to discover other devices'
+// changes) — this client does no background extraction (active-page capture needs a
+// focused tab, so it runs only on the popup's EXTRACT message). Nothing is on the
+// critical path for it (the saving client already extracted), so this is the idle
+// CEILING the doc prescribes — ~1h, not a fast tick that spends a request a minute to
+// almost always find nothing. Freshness rides cheap local wake triggers instead (worker
+// startup below, KICK_SYNC from the popup, post-EXTRACT sync). See
+// docs/link-extraction.md "the queue is a query".
+const SYNC_PERIOD_MINUTES = 60;
 
 export default defineBackground(() => {
   // Periodic sync. `create` with the same name is idempotent across worker restarts.
