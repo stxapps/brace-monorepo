@@ -3,11 +3,12 @@
  *
  * MV3 service workers are EPHEMERAL (no long-running loop), so the recurring work
  * is driven by a `browser.alarms` tick rather than a timer:
- *   - on each alarm (and on startup) it runs SYNC → BACKGROUND EXTRACTION → SYNC
- *     (`syncExtractSync`): a selective sync cycle (materializing only links/ +
- *     extractions/), then drains the residual title+image queue at bg-fetch tier
- *     (`runBackgroundExtraction` — raw-HTML fetch, no open tab), then pushes the
- *     freshly written `extractions/`/`files/` back up.
+ *   - on each alarm (and on startup) it runs a SYNC cycle (`runSync`): a selective
+ *     sync materializing only links/ + extractions/. There is NO background
+ *     extraction sweep here — the extension is active-context only (no `<all_urls>`
+ *     host grant), so it never bg-fetches saved URLs; the bg-fetch residual is owned
+ *     by the deferred `brace-extractor` (docs/link-extraction.md "the extension is
+ *     active-context only").
  *   - it answers the typed popup → background message protocol, owning ALL
  *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now), EXTRACT (capture a
  *     facet from the active tab + write back), GET_SYNC_STATUS (read the mirror).
@@ -18,29 +19,28 @@
 
 import { getSession, loadSession } from '@stxapps/web-react';
 
-import { runBackgroundExtraction, runExtraction } from '@/utils/extraction-worker';
+import { runExtraction } from '@/utils/extraction-worker';
 import type { ExtensionMessage, MessageResponses } from '@/utils/messages';
 import { readSyncStatus } from '@/utils/messages';
 import { runSync } from '@/utils/sync-runner';
 
 const SYNC_ALARM = 'brace-sync';
 // The alarm drives the NETWORK SYNC POLL (`ops/list`, to discover other devices'
-// changes) plus the BACKGROUND EXTRACTION sweep that follows it. Nothing is on the
-// critical path here (the saving client already extracted; this only drains the residual
-// — cross-device pickups and imports), so this is the idle CEILING the doc prescribes —
-// ~1h, not a fast tick that spends a request a minute to almost always find nothing.
-// Freshness rides cheap local wake triggers instead (worker startup below, KICK_SYNC
-// from the popup, post-EXTRACT sync). See docs/link-extraction.md "the queue is a query".
+// changes). Nothing is on the critical path here (the saving client already
+// extracted), so this is the idle CEILING the doc prescribes — ~1h, not a fast tick
+// that spends a request a minute to almost always find nothing. Freshness rides cheap
+// local wake triggers instead (worker startup below, KICK_SYNC from the popup,
+// post-EXTRACT sync). See docs/link-extraction.md "the queue is a query".
 const SYNC_PERIOD_MINUTES = 60;
 
 export default defineBackground(() => {
-  // Periodic sync + extraction. `create` with the same name is idempotent across restarts.
+  // Periodic sync. `create` with the same name is idempotent across restarts.
   browser.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
   browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === SYNC_ALARM) void syncExtractSync();
+    if (alarm.name === SYNC_ALARM) void runSync();
   });
   // Kick one cycle as the worker spins up (on install / browser start / wake).
-  void syncExtractSync();
+  void runSync();
 
   browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
     handle(message).then(sendResponse, (err: unknown) =>
@@ -50,20 +50,6 @@ export default defineBackground(() => {
     return true;
   });
 });
-
-// The periodic cycle: SYNC (pull other devices' new links/extractions) → EXTRACT
-// (drain the residual title+image queue at bg-fetch tier — see runBackgroundExtraction)
-// → SYNC (push what we just wrote). The trailing sync is skipped when the sweep wrote
-// nothing (the steady state — every save's own client already extracted it), so an idle
-// tick costs exactly one `ops/list`. Signed out, the first sync presents an idle store
-// and there's no username to extract under.
-async function syncExtractSync(): Promise<void> {
-  await runSync();
-  const username = await currentUsername();
-  if (!username) return;
-  const written = await runBackgroundExtraction(username);
-  if (written > 0) await runSync();
-}
 
 async function handle(
   message: ExtensionMessage,

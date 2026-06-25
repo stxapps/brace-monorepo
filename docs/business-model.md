@@ -39,10 +39,12 @@ Rough infra for a heavy 30k-link / 3 GB user, priced on R2:
 So even a worst-case whale costs **~$1–2/yr** in infra against $24+/yr revenue —
 an 85%+ gross margin. **Cost is never the wall; customer acquisition is.**
 
-The one place cost _does_ leak in is the deferred **`brace-extractor`** server
-path (outbound fetch + compute + egress, and anonymous/abuse-exposed) — right call
-to keep it deferred and opt-in (see
-[link-extraction.md](./link-extraction.md) — _server extraction (deferred)_).
+The one place cost _does_ leak in is the **`brace-extractor`** server path
+(outbound fetch + compute + egress, and anonymous/abuse-exposed). It's now a
+**necessary** app to build — once the extension went active-context only it's the
+only bulk-enrichment path for web/desktop users — but its _feature_ stays **opt-in
+and off by default**, which is the right call on cost/abuse grounds too (see
+[link-extraction.md](./link-extraction.md) — _server extraction_).
 
 ### tiers
 

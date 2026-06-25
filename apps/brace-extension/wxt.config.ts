@@ -42,15 +42,19 @@ export default defineConfig({
       name: 'Brace.to - Bookmark Manager',
       description:
         'Save links to visit later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
-      // `<all_urls>` is what unlocks BACKGROUND title+image extraction (bg-fetch
-      // tier): the service worker `fetch`es saved third-party URLs to read their
-      // OpenGraph tags, and MV3 only exempts background fetches from CORS for
-      // host_permissions origins — a queued link has no open tab to borrow
-      // `activeTab` from (that covers only the active-tab capture path). This is
-      // the privacy cost the doc makes explicit: the EXTRACTING client learns the
-      // URL it fetches (docs/link-extraction.md "the stance"). The api host stays
-      // listed too so the bearer-auth calls to brace-api keep their CORS exemption.
-      host_permissions: [apiHost, '<all_urls>'],
+      // ONLY the api host — NO `<all_urls>`. A broad host grant is the one thing
+      // that would unlock BACKGROUND bg-fetch extraction (the service worker
+      // `fetch`ing arbitrary saved third-party URLs for their OpenGraph tags, which
+      // MV3 only CORS-exempts for host_permissions origins), but it costs the
+      // scariest install warning ("read and change all your data on all websites")
+      // and a store-review nightmare — for the extension's WEAKEST tier. The
+      // extension is deliberately ACTIVE-CONTEXT ONLY: it extracts from the focused
+      // tab via `activeTab` (warning-free, highest quality), and the background
+      // bg-fetch residual (cross-device pickups, bulk-import draining) is owned by
+      // the deferred server path `brace-extractor` instead. See
+      // docs/link-extraction.md "the extension is active-context only". The api host
+      // stays listed so the bearer-auth calls to brace-api keep their CORS exemption.
+      host_permissions: [apiHost],
       permissions: [
         'storage',
         // The background service worker is ephemeral in MV3 — it can't hold a

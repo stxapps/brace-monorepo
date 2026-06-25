@@ -194,10 +194,13 @@ export const facetSchema = z.looseObject({
   // failure (404/410, robots block), never retry. Because this is SYNCED, one device's
   // `permanent`/`failed` stops every device retrying.
   status: z.enum(['done', 'failed', 'permanent']),
-  // WHO ran the last attempt — a `platform:env` string (`extension:fg`, `extension:bg`,
-  // `expo:fg`, `expo:bg`, `server`), NOT a device id: nothing reads this for identity
+  // WHO ran the last attempt — a `platform:env` string (`extension:fg`, `expo:fg`,
+  // `expo:bg`, `server`), NOT a device id: nothing reads this for identity
   // (there's no claim lease and no per-device coordination — see below), only for
-  // QUALITY. Quality (the upgrade axis) is DERIVED from it by the shared `tierOf()` helper
+  // QUALITY. (The extension is active-context only, so it emits `:fg` only — never an
+  // `extension:bg`; the `:bg` tier comes from Expo background / `brace-extractor`. See
+  // docs/link-extraction.md "the extension is active-context only".)
+  // Quality (the upgrade axis) is DERIVED from it by the shared `tierOf()` helper
   // — `:fg` → active-page beats `:bg` → bg-fetch beats `server` — so a client whose
   // derived tier beats a `done` facet's may re-extract to UPGRADE it. There is no stored
   // `tier` field: it's a pure function of `extractedBy`, and a derived value sitting

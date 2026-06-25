@@ -65,11 +65,11 @@ transiently, even unstored — is a leak we choose not to take by default.
 > wall-clock, so awaiting a slow remote site is mostly un-billed I/O — cost is a
 > non-issue), and "synchronous endpoint" need not block the UI (fire-and-forget
 > after the save, patch the title in when it lands). So the blocker is **not**
-> latency or cost — it's that the server would see the URL. We keep that option
-> documented but **deferred**; if it's ever revived it must be its own explicit,
-> second opt-in, distinct from client extraction — and a **separate app/origin**
-> from the blind sync broker, never a route in `brace-api` — because its privacy
-> profile is strictly worse. See _server extraction (deferred)_.
+> latency or cost — it's that the server would see the URL. That's why server
+> extraction never lives in `brace-api`: it's its own explicit, second opt-in,
+> distinct from client extraction, in a **separate app on a separate origin**
+> (`brace-extractor`) — never a route in the blind sync broker — because its
+> privacy profile is strictly worse. See _server extraction_.
 
 ### capability tiers — not every client can do every job
 
@@ -77,21 +77,23 @@ Fetching a URL is easy wherever there's no CORS; **screenshots and archives are
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                           | title + image | read mode     | screenshot             | archive |
-| --------------------------------------- | ------------- | ------------- | ---------------------- | ------- |
-| extension — **icon click, active tab**  | ✅ live DOM   | ✅ live DOM   | ✅ `captureVisibleTab` | ✅      |
-| extension — **background, queued URL**  | ✅ raw HTML   | ⚠️ raw HTML   | ❌ no open tab         | ⚠️      |
-| mobile — **share sheet (foreground)**   | ✅            | ✅ WebView    | ⚠️ WebView render      | ⚠️      |
-| mobile — **background queue**           | ✅            | ⚠️            | ❌                     | ❌      |
-| `brace-extractor` Worker (**deferred**) | ✅            | ✅ (linkedom) | ❌ needs Browser Rndr. | ❌      |
+| client / mode                            | title + image | read mode     | screenshot             | archive |
+| ---------------------------------------- | ------------- | ------------- | ---------------------- | ------- |
+| extension — **icon click, active tab**   | ✅ live DOM   | ✅ live DOM   | ✅ `captureVisibleTab` | ✅      |
+| ~~extension — background, queued URL~~    | —             | —             | —                      | —       |
+| mobile — **share sheet (foreground)**    | ✅            | ✅ WebView    | ⚠️ WebView render      | ⚠️      |
+| mobile — **background queue**            | ✅            | ⚠️            | ❌                     | ❌      |
+| `brace-extractor` Worker (**planned**)   | ✅            | ✅ (linkedom) | ❌ needs Browser Rndr. | ❌      |
+
+The struck row is the **decision below**: the extension _could_ bg-fetch queued
+URLs with an `<all_urls>` host grant, but we **don't** — that capability moves to
+`brace-extractor` / mobile background.
 
 Two consequences baked into the design:
 
-- **Background queue processing is metadata + read-mode only.** A queued URL has
-  no open tab, so it can't be screenshotted without opening one (heavy, flaky).
-  On MV3 the extension background is an **ephemeral service worker** — it's
-  killed between events, so the queue is driven off `chrome.alarms`, not a
-  long-running loop. On mobile, background time is a few unreliable seconds. So:
+- **Background queue processing (where it exists) is metadata + read-mode only.**
+  A queued URL has no open tab, so it can't be screenshotted without opening one
+  (heavy, flaky). On mobile, background time is a few unreliable seconds. So:
   **screenshot/archive are best-effort, captured only from the active context**
   (icon click / foreground share). Don't fight the platforms to background them.
 - A link extracted at a **low tier** (background raw-HTML, no screenshot) should
@@ -99,6 +101,69 @@ Two consequences baked into the design:
   system must record _who_ produced the current result (`extractedBy`, from which the
   tier is derived). See
   _the extraction entity_.
+
+#### the extension is active-context only (no `<all_urls>`)
+
+The extension deliberately **does not** do background bg-fetch extraction, even
+though it technically could. Background fetching of arbitrary saved URLs requires
+a broad host grant (`<all_urls>` in `host_permissions`), and that grant is a poor
+trade:
+
+- **Install warning.** A required `<all_urls>` grant shows Chrome's scariest
+  install warning — _"Read and change all your data on all websites"_ — before the
+  user has any context for why a bookmark saver needs it. Worst-case install
+  conversion. `optional_host_permissions` only defers the prompt to a contextual
+  moment; it doesn't remove it, and still draws review scrutiny.
+- **Store review.** A required broad host grant trips heightened review on both
+  the Chrome Web Store and Firefox AMO (mandatory source review + a written
+  justification). "We background-fetch pages you saved elsewhere" is exactly the
+  pattern reviewers read as possible exfiltration/injection.
+- **It buys the extension's _weakest_ tier.** `<all_urls>` unlocks only the
+  background **bg-fetch** tier (title+image from raw HTML, no screenshot/archive).
+  The extension's _unique, irreplaceable_ value — active-tab DOM,
+  `captureVisibleTab`, archive — needs only **`activeTab` + `scripting`**, which
+  carry **no broad-host warning at all**. So the broad grant costs the biggest
+  install-funnel hit to add the lowest-quality capability.
+- **That capability has a better home.** The background/bg-fetch residual
+  (cross-device pickups, bulk-import draining) is what the
+  **`brace-extractor`** server path owns anyway — _"interactive saves justify
+  avoiding `brace-extractor`; imports justify building it"_ (see _imported links_,
+  _server extraction_). Paying `<all_urls>` to build a flaky,
+  MV3-ephemeral version of that is the wrong split — and dropping it is part of why
+  `brace-extractor` is now a **necessary** app, not a someday one.
+
+So the extension extracts **only from the focused active tab** (`extractedBy:
+'extension:fg'`, active-page tier) and runs **no headless background extraction
+sweep** — its background service worker does sync only. The tier/queue machinery
+below (`extractedBy`, the facet bookkeeping, the pending-work query) stays
+tier-agnostic and shared; it's the _bg-fetch arm in the extension_ that's dropped,
+not the model. The accepted cost: a link saved on another device isn't silently
+back-filled by a desktop extension in the background — it enriches when opened in
+the extension (active-page upgrade) or via `brace-extractor` (if opted in),
+otherwise it stays the _web-only gap_.
+
+**Why this _doesn't_ extend to the mobile app (`brace-expo`).** The instinct is
+that the same logic forbids background extraction on mobile too — it doesn't,
+because the reason above is **permission-shaped, and mobile has no equivalent
+cost**. A native app has **no CORS and no host-permission model**: it `fetch`es any
+URL without declaring per-host access, so there is **no `<all_urls>`-equivalent
+install warning** and no broad-host store-review flag (the native-HTTP escape hatch
+this doc opens with). The entire load-bearing argument against the extension's
+background sweep — the warning + the review — is simply **absent** on mobile, so
+reusing the conclusion would be cargo-culting it without its premise. What _does_
+limit mobile background is **reliability/battery, not permissions** — iOS
+`BGAppRefreshTask`/`BGProcessingTask` windows are opportunistic and unpredictable,
+Android has Doze/WorkManager throttling — and that's a reason to cap it at
+**best-effort**, not to forbid it. Privacy doesn't argue against it either: a
+background mobile fetch is a trusted, key-holding client doing local E2E work, the
+same privacy profile as the extension's _foreground_ capture — no new party learns
+the URL. So `brace-expo` **keeps** background extraction (`expo:bg`, bg-fetch tier),
+best-effort: the foreground share-sheet is its active-context tier, an opportunistic
+background drain handles the residual, and the bulk-import drain still belongs to
+`brace-extractor` (don't promise mobile-background throughput). One-line contrast:
+**the extension's background is dropped for a permission cost mobile doesn't pay;
+mobile's background stays, capped at best-effort for a reliability limit the
+extension's design never turned on.**
 
 ### who extracts: the client that did the save
 
@@ -111,7 +176,7 @@ time, from the best context it has.**
 | --------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------- |
 | **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free      |
 | **mobile / share sheet**    | native fetch (no CORS) / a WebView            | active-page | free, private                                                    |
-| **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, deferred (see _server extraction_) |
+| **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
 
 The third row is the correction to an easy misread of _the stance_: "the web app
 can't extract" is true only of **fetching** — a `brace-web` tab can't `fetch` an
@@ -150,12 +215,15 @@ Two consequences:
   extension so the extension extracts it. Don't do that as a **data/save
   handoff**: the cross-client bus is already **synced `links/` + `extractions/`**,
   so a web-app save reaches the extension through sync — **cross-device, with no
-  extension-id handshake** — and the extension needs the synced link blob in hand
-  anyway to read the URL it must fetch. A direct save-channel would be a
-  worse-constrained version of a path we already have. Note the "strictly better"
-  holds **only for `title+image`** (and read-mode): **screenshot/archive have no
-  server path at all** (`brace-extractor` can't render), so those stay
-  extension-active-tab only regardless of any bridge. What a thin **content-script
+  extension-id handshake**. And a handoff has nothing to unlock anyway: the
+  extension is **active-context only** (no background bg-fetch — see _the extension
+  is active-context only_), so it enriches a synced URL **only if the user actually
+  opens it in a tab**, never headlessly — a save-channel can't change that. A direct
+  save-channel would be a worse-constrained version of a path we already have. Note
+  the extension's privacy advantage holds **only for `title+image`** (and
+  read-mode), and only once opened: **screenshot/archive have no server path at
+  all** (`brace-extractor` can't render), so those stay extension-active-tab only
+  regardless of any bridge. What a thin **content-script
   bridge** _is_ for — and what the preference order above needs — is **presence
   detection: is a capable extension installed and signed in?** The web app can't
   choose "extension → server → gap" without knowing. Prefer a content-script
@@ -326,7 +394,9 @@ export const facetSchema = z.looseObject({
   // there is no 'pending': a facet with no entry (or a link with no
   // extractions/ file at all) IS pending — absence is the signal.
   extractedBy: z.string().optional(), // who ran the last attempt — a `platform:env`
-  // string (extension:fg | extension:bg | expo:fg | expo:bg | server), NOT a device id.
+  // string (extension:fg | expo:fg | expo:bg | server), NOT a device id. (The extension
+  // is active-context only — it emits extension:fg only, never extension:bg; the :bg tier
+  // comes from Expo background / brace-extractor. See "the extension is active-context only".)
   // Quality (the upgrade axis) is DERIVED from it by the shared tierOf() helper —
   // :fg → active-page beats :bg → bg-fetch beats server. No stored `tier` field: it's a
   // pure function of extractedBy (storing it beside its input is the same drift-prone
@@ -371,7 +441,8 @@ Each facet answers the same questions independently:
 - **who / when** → `extractedBy` / `extractedAt` — a who/when pair describing the
   **last extraction attempt** (the success on a `done` facet, the last try on a
   `failed` one). `extractedBy` is a **`platform:env` string** (`extension:fg`,
-  `extension:bg`, `expo:fg`, `expo:bg`, `server`), **not a device id** — nothing reads
+  `expo:fg`, `expo:bg`, `server` — the extension emits `:fg` only, never
+  `extension:bg`, being active-context only), **not a device id** — nothing reads
   it for identity (no claim lease, no per-device coordination), only for quality.
   **quality** → **derived** from `extractedBy` by the shared `tierOf()` helper:
   `:fg` → active-page beats `:bg` → bg-fetch beats `server`. There is **no stored
@@ -411,8 +482,8 @@ Each facet answers the same questions independently:
   links_).
 - **upgrade** → a client whose **derived tier** (`tierOf(extractedBy)`) beats a `done`
   facet's may re-extract it (e.g. you open the real page in the extension —
-  `extension:fg` → active-page — after a background `extension:bg` bg-fetch only got
-  title + image).
+  `extension:fg` → active-page — after a `server` extraction by `brace-extractor`,
+  or an `expo:bg` mobile background fetch, only got title + image).
 
 **Path layout — one flat file per link, facets inside; not one prefix per
 facet.** We deliberately keep `extractions/{id}.enc` (flat — fits the existing
@@ -464,9 +535,13 @@ The loop: **extract** → **write back** (the result _and_ bookkeeping into
 never touches) → all of it syncs as ordinary encrypted blobs through the existing
 engine. There is no claim step — a rare double-extraction is
 resolved by idempotency + file-level LWW, not prevented by a lease (see _the
-extraction entity_). The extension and the Expo app run the **same loop** against
-the same contract — the reason the schema (including the shared `backoff()` curve)
-lives in `shared`.
+extraction entity_). The **background** drain of this loop belongs to the clients
+that can run headless against a queued URL — the **Expo app** and
+**`brace-extractor`**; the **extension does not run it** (it's active-context only —
+see _the extension is active-context only_), so its only role in this loop is the
+**active-context** capture on a save / on opening a page. All run against the **same
+contract** — the reason the schema (including the shared `backoff()` curve) lives in
+`shared`.
 
 **Cadence is backlog-driven, not a fixed tick.** First separate the two costs the
 word "poll" hides: the **local queue scan** (querying synced Dexie state for
@@ -522,20 +597,23 @@ meanwhile (see _manual overrides_). This is the one case an import writes an
 facet**, not an absent file (the queue query already keys on the facet).
 
 **Imports are where `brace-extractor` stops being avoidable.** For a one-off web
-save it's a nicety; for a bulk import, client-only draining is genuinely weak — a
-web-only user gets thousands of bare URLs forever, and even with the extension,
-draining thousands via throttled raw-HTML `fetch` across ephemeral MV3 wake
-cycles is slow and flaky (slower still once the alarm is backed off). A bulk
-import is also the natural **opt-in moment** ("enrich my whole library?"). So the
-honest framing: _interactive saves justify **avoiding** `brace-extractor`;
-imports justify **building** it_ — different workloads, different answers.
+save it's a nicety; for a bulk import, client-only draining is genuinely weak. A
+web-only user gets thousands of bare URLs forever — and the **extension can't help
+here at all**: it's active-context only (no background bg-fetch — see _the extension
+is active-context only_), so it can only enrich an imported link if the user
+manually opens it in a tab, which nobody does for thousands of imports. That leaves
+**mobile background** (an `expo:bg` drain, also throttled and unreliable) or
+`brace-extractor`. A bulk import is also the natural **opt-in moment** ("enrich my
+whole library?"). So the honest framing: _interactive saves justify **avoiding**
+`brace-extractor`; imports justify **building** it_ — different workloads, different
+answers.
 
 The real concerns for the bulk path are throughput, not latency (enrichment
 back-fills; the library is usable immediately):
 
 - **batch and pace.** `brace-extractor` takes `POST { urls }` (plural) and
   IP-rate-limits — send chunks and respect backoff, never thousands of
-  singletons. Same for extension bg-fetch: pace per-host so one site isn't
+  singletons. Same for an Expo background drain: pace per-host so one site isn't
   hammered (and bot-protection isn't tripped).
 - **watch sync-op volume.** Each completion writes **one** `extractions/` blob
   (result + bookkeeping together — the writer-split removed the second, `links/`
@@ -581,10 +659,12 @@ For an extension whose job is extraction + save, the minimum working set is:
     index, a primary-key prefix scan with no blob. So _detection_ alone would let
     `links/` ride at the **metadata-only** disposition (path + `updatedAt`, blob
     deferred — the same `data: undefined` mode `files/` uses). What forces the
-    **full** link blob is the next two bullets, not detection;
-  - the **URL** to fetch lives **inside** `links/{id}.enc` (read-only for the
-    extractor — it reads the URL but never writes this file). The op-list can't
-    surface it — it's in the ciphertext — so extracting a link needs its blob;
+    **full** link blob is the next two bullets, not detection. (Note: for the
+    _extension_ the URL inside `links/{id}.enc` is **not** an extraction input — it's
+    active-context only, so it extracts the focused tab's live DOM, never a synced
+    URL. The URL-from-blob need is real only for the bg-fetch clients that drain
+    queued URLs headlessly — **Expo background / `brace-extractor`** — not for the
+    extension);
   - the extension popup's **"is this tab already saved?" dedup** (`readLinkByUrl`)
     is an `itemUrl` index hit, and `itemUrl` is **projected only from the decrypted
     link blob** — so the popup needs `links/` blobs resident, not just paths;
@@ -595,7 +675,7 @@ For an extension whose job is extraction + save, the minimum working set is:
     For 10 000 links this is ~2.5 MB (`links/`) + the `extractions/` set (now holds
     the titles/refs too, no longer tiny, but still small) — trivial. So we keep
     `links/` at **full download**, not metadata-only: the two-line saving isn't worth
-    losing popup dedup, and the URL is needed at extraction time anyway. (The engine
+    losing popup dedup. (The engine
     _does_ have a latent third disposition — `skip` / metadata-only / full, today
     selected by `pathFilter` + the hardcoded `isContentPath` `files/` rule; promoting
     a namespace to metadata-only is the knob to reach for **only** when a heavy
@@ -610,11 +690,16 @@ For an extension whose job is extraction + save, the minimum working set is:
 The cursor still advances across **all** ops (it's the global high-water mark);
 selective sync only changes which blobs get downloaded, not how the cursor moves.
 
-### server extraction (deferred): a separate `brace-extractor`, anonymous
+### server extraction: a separate `brace-extractor`, anonymous
 
 The escape hatch from _the stance_ — letting a server fetch URLs when no capable
-client is installed — is the **second, explicit opt-in**, never the default. When
-it's built it is a **separate app**, not a route in `brace-api`:
+client is installed — is the **second, explicit opt-in**, never the default. It is
+**necessary, not deferred**: once the extension went active-context only (no
+background bg-fetch — see _the extension is active-context only_), `brace-extractor`
+became the **only** bulk-enrichment path for `brace-web`/desktop users and the
+realistic one for large imports, so it's a committed app to build, not a someday.
+"Necessary to build" is **not** "on by default", though — server extraction stays
+the second opt-in below. It is a **separate app**, not a route in `brace-api`:
 
 - **A new nx app, `brace-extractor` (`type:app`, `platform:worker`), on its own
   origin `extract.brace.to`** — distinct from the blind sync broker on
@@ -644,8 +729,10 @@ it's built it is a **separate app**, not a route in `brace-api`:
   tokens to real logged-in users, `extract.brace.to` verifies validity without
   learning which user — deferred, documented as the direction.
 
-This stays **deferred and off by default**; only the invariants above are
-committed now (separate app, separate origin, anonymous, plaintext-return-only).
+The **app is committed** (a necessary build, see above) and so are the invariants
+(separate app, separate origin, anonymous, plaintext-return-only); what stays
+**off by default** is the _feature_ — server extraction never runs until the user
+takes the second, explicit opt-in.
 
 ### the web-only gap (a conscious stance)
 
@@ -663,10 +750,12 @@ below, realized.) Opted out, the gap is the direct, intended consequence of
 - the link-editor popover's promise that "the title is back-filled later" simply
   doesn't apply to this user — they only ever have the title they entered.
 
-If that gap ever becomes unacceptable, the escape hatch is the deferred
-**server extraction** path — a separate `brace-extractor` app on its own origin
-(see _server extraction (deferred)_) — a separate, explicit opt-in, never the
-default.
+For this user the escape hatch is the **server extraction** path — a separate
+`brace-extractor` app on its own origin (see _server extraction_) — a separate,
+explicit opt-in, never the default. The app itself is a committed build (it's how
+web/desktop users get any enrichment at all now that the extension is
+active-context only); the _gap_ is simply what remains for the user who declines
+that opt-in.
 
 ### deferred / open
 
