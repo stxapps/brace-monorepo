@@ -40,11 +40,27 @@ So even a worst-case whale costs **~$1–2/yr** in infra against $24+/yr revenue
 an 85%+ gross margin. **Cost is never the wall; customer acquisition is.**
 
 The one place cost _does_ leak in is the **`brace-extractor`** server path
-(outbound fetch + compute + egress, and anonymous/abuse-exposed). It's now a
+(outbound fetch + compute, and anonymous/abuse-exposed). It's now a
 **necessary** app to build — once the extension went active-context only it's the
 only bulk-enrichment path for web/desktop users — but its _feature_ stays **opt-in
 and off by default**, which is the right call on cost/abuse grounds too (see
 [link-extraction.md](./link-extraction.md) — _server extraction_).
+
+**The image proxy is part of this path — and deliberately the cheap shape.** A
+web-app save can't fetch the og:image itself (CORS blocks JS from reading
+cross-origin image bytes), so `brace-extractor` **streams** the preview image
+through to the client — inline for a single save, a `GET /image?url=…` proxy for a
+bulk import (see [link-extraction.md](./link-extraction.md) — _the preview image is
+a downloaded blob_ / _server extraction_). The rejected alternative — extractor
+**stores** the image in R2 and hands back a signed URL — would have added a storage
+line item, orphan/TTL cleanup, _and_ a plaintext-at-rest leak. Streaming through
+costs almost nothing on Cloudflare: **Workers don't bill bandwidth and the image is
+never stored**, so the proxy adds only request count + a little streaming CPU
+(streaming is I/O, billed as CPU-ms it barely uses) — ~**$0.01** even for a
+30k-link import (30k × ~$0.30/M requests). It rides the **same opt-in +
+IP-rate-limit** as the HTML fetch, opening no abuse surface that path doesn't
+already carry. Net: a rounding error on top of the already-opt-in `brace-extractor`
+cost, not a new cost category — the storage tables below are unchanged.
 
 ### tiers
 

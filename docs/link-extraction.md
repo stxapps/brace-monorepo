@@ -286,7 +286,13 @@ Extraction discovers the preview image as a **URL** (og:image / lead image). The
 tempting shortcut is to store that URL and render `<img src>` straight from it —
 no download, no `files/{id}.enc`, no quota, faster first paint. **Don't.**
 `extraction.imageId` is a downloaded, encrypted `files/{id}.enc` blob; the URL is
-only an _input to the fetch_, never persisted. Three reasons, heaviest first:
+only an _input to the fetch_, never persisted. **Who runs that fetch splits by
+client:** an extension/mobile save downloads the og:image directly (native /
+no-CORS); a web-app save **can't** — JS can't read cross-origin image bytes, an
+`<img>` would only _render_ the URL (the per-paint leak this section forbids,
+below) — so the bytes come through `brace-extractor`'s image proxy (see _server
+extraction_). Either path ends with the bytes as an encrypted `files/{id}.enc`
+blob, never the remote URL. Three reasons, heaviest first:
 
 - **It would reintroduce the exact leak this whole doc avoids.** A remote URL in
   the always-resident `extractions/` blob means every device that renders the list
@@ -712,13 +718,40 @@ the second opt-in below. It is a **separate app**, not a route in `brace-api`:
   can't reach your private network or cloud IMDS (`169.254.169.254`), which
   neutralizes the classic server-side-fetch SSRF.
 - **Pure function, never a writer.** `brace-extractor` takes
-  `POST { urls } → { title, image, readMode, … }` **plaintext** and returns it to
+  `POST { urls } → [{ url, ok, title?, image?, readMode?, error? }]` — a **per-URL
+  result array** (partial success, never all-or-nothing, so each link's facet records
+  its own `done` / `failed` / `permanent`) — **plaintext**, and returns it to
   the requesting client. The **client** (which holds the data key) does the E2E
   write-back into `links` / `files` / `extraction`. The extractor **holds no key,
   persists nothing, writes no blob** — so what it can leak is transient (a URL it
   saw mid-fetch), not stored. Results it produces carry `extractedBy: 'server'`
   (`tierOf` → server, the lowest quality, above nothing), so any active-page client can
   later **upgrade** them.
+- **The preview image is streamed through, never stored.** The metadata response
+  carries the og:image as a **URL string** (`{ title, image: url, readMode }`), not
+  bytes. That string is enough for an extension/mobile client (it fetches the image
+  itself, no CORS), but **not** for the web app — the same wall that sends it to
+  `brace-extractor` for the HTML also stops JS reading cross-origin image bytes
+  (an `<img>` would _render_ the URL but tainted-canvas / opaque-response block
+  reading it into an encryptable blob — and rendering the remote URL _is_ the
+  per-paint leak _the preview image is a downloaded blob_ forbids). So
+  `brace-extractor` doubles as a **stateless image proxy**: a single interactive
+  save **inlines** the image bytes in the extraction response (one round trip); a
+  bulk import gets URLs only and the client pulls each image from `GET /image?url=…`,
+  which **streams the remote bytes through and buffers/persists nothing**. The
+  client encrypts the streamed bytes into `files/{id}.enc` itself. We deliberately
+  **don't** have the extractor store the image in R2 and return a signed URL: for a
+  one-shot, single-reader download that adds a plaintext-at-rest object, a
+  lifecycle/cleanup burden, and _more_ hops
+  (fetch→store→GET→re-encrypt→re-upload) — strictly worse than streaming it through
+  once (R2's free-egress / CDN benefit needs repeated reads, which this isn't). The
+  image fetch is an arbitrary-URL fetch like the HTML, so it carries the **same SSRF
+  guard + size/time/`content-type: image/*` caps**. The extractor **never resizes or
+  transcodes** — that would force a full-image decode (real CPU + the 128 MB isolate,
+  risking OOM) and kill the streaming-is-free property that makes the proxy cheap; any
+  thumbnailing is a deferred **client** step done before encrypt, which is also where
+  it belongs to bound the storage quota (a capped-dimension re-encode, not the
+  full-res original).
 - **Anonymous, not session-bound.** Requiring a logged-in session id would
   convert the leak from "the server saw this URL" into "the server can tie this
   URL to _this account_" — a **strictly worse** leak than the one this whole doc
@@ -728,9 +761,29 @@ the second opt-in below. It is a **separate app**, not a route in `brace-api`:
   capability tokens (Privacy Pass / VOPRF): `api.brace.to` issues unlinkable
   tokens to real logged-in users, `extract.brace.to` verifies validity without
   learning which user — deferred, documented as the direction.
+- **Abuse caps are load-bearing, not a v2 nicety.** An anonymous endpoint that
+  fetches any URL and streams bytes is an **open proxy / DDoS reflector / bandwidth
+  amplifier** by default, and the binary image proxy widens that surface past the
+  HTML path. So the caps are part of v1, not hardening-later: a hard **per-response
+  byte ceiling** (abort the stream once exceeded — never relay a 4 GB file), a
+  **timeout**, a **`content-type` allowlist** (`text/html` for extraction, `image/*`
+  for the proxy), and a **per-IP egress budget**. IP rate-limiting alone is weak
+  (botnets, shared NAT) — which is the real argument for prioritizing the Privacy
+  Pass token path above, not deferring it forever. And the SSRF guard's teeth are
+  **redirect handling**, not just the sandbox: a public URL can `30x` →
+  `127.0.0.1` / `169.254.169.254`, and decimal/hex-encoded IPs or non-`http(s)`
+  schemes slip naive checks — so fetch with `redirect: 'manual'` and re-validate
+  **every hop**, on both the HTML fetch and the image proxy.
+- **Never log the URL.** The extractor's whole reason to exist is that the URL it
+  sees stays transient — so observability must be **aggregate-only** (counts,
+  latency, error rates), never the URL itself. This is a config footgun, not a code
+  one: the proxy's `?url=` lands in query strings, so default Cloudflare request
+  logs / Logpush would **persist** exactly the URLs the design promises not to
+  retain. Strip them at the edge; if you can't, don't log the request line.
 
 The **app is committed** (a necessary build, see above) and so are the invariants
-(separate app, separate origin, anonymous, plaintext-return-only); what stays
+(separate app, separate origin, anonymous, plaintext-return-only, stream-don't-store,
+never-log-the-URL); what stays
 **off by default** is the _feature_ — server extraction never runs until the user
 takes the second, explicit opt-in.
 
@@ -764,6 +817,14 @@ that opt-in.
   on SPAs. Active-tab/WebView extraction (live DOM) is the high-quality path;
   background is best-effort. No fix beyond the tier model — just don't promise
   read-mode parity across tiers.
+- **Non-HTML & JS-rendered targets (`brace-extractor`).** Saved URLs aren't all
+  server-rendered HTML: PDFs, a direct image (which _is_ the preview), and
+  oEmbed-only sites (YouTube/Twitter) each need their own handling, and a JS-shell
+  SPA may carry no server-side og tags at all (the extractor runs no JS — `server`
+  tier is raw-HTML only). v1 should **detect `content-type` and degrade gracefully**
+  (fall back to `title = host`) rather than return garbage; richer per-type handling
+  (PDF title, oEmbed, eventual Browser-Rendering JS execution) is the open scope
+  call.
 - **Re-extract / upgrade UX.** The derived tier (`tierOf(extractedBy)`) _enables_
   upgrading a low-tier result, but the trigger (automatic on a higher-tier sighting vs. a manual
   "re-extract" button) is an open product call.
