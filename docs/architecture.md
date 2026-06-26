@@ -26,16 +26,21 @@ for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
 - **brace-web** — Next.js web app
 - **brace-extension** — browser extension (wxt)
 - **brace-api** — backend API (hand-written, not nx-generated)
-- **brace-extractor** (planned) — Cloudflare Workers + hono server that fetches
-  link metadata (title/image/read-mode) for clients that can't reach the URL
-  themselves (`brace-web` without an extension, bulk imports). Its **own app on its
-  own origin** `extract.brace.to`, **separate from `brace-api`** (the blind sync
+- **brace-extractor** — Cloudflare Workers + hono server that fetches
+  link metadata (title/image; read-mode deferred) for clients that can't reach the
+  URL themselves (`brace-web` without an extension, bulk imports). Its **own app on
+  its own origin** `extract.brace.to`, **separate from `brace-api`** (the blind sync
   broker) so that "`api.brace.to` only ever sees ciphertext" stays code-provable —
   the extractor is the one component that fetches arbitrary user URLs. A pure
-  function (returns plaintext, holds no key, persists nothing), anonymous,
-  off-by-default and opt-in. Not "someday": the design **needs** it now that the
-  extension is active-context only (no background bg-fetch), so web/desktop users
-  have no other bulk-enrichment path. See
+  function (returns plaintext, holds no key, persists nothing — no D1/R2/DO
+  bindings, only CORS config + rate limiters), anonymous, off-by-default and opt-in.
+  Not "someday": the design **needs** it now that the extension is active-context
+  only (no background bg-fetch), so web/desktop users have no other bulk-enrichment
+  path. Two endpoints, contract-typed in `@stxapps/shared` (`extract/endpoints.ts`):
+  `POST /v1/extract` (per-URL `{ title, image }` metadata) and `GET /v1/image` (a
+  stateless, stream-don't-store image proxy). All arbitrary-URL fetches go through
+  one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
+  per-response byte ceiling, timeout, content-type allowlist. See
   [link-extraction.md](./link-extraction.md) — _server extraction_.
 - **brace-expo** (future) — Expo mobile app
 - **brace-docs** (future) — Next.js docs site
@@ -121,7 +126,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | brace-web        | `type:app`    | `platform:web`      |
 | brace-extension  | `type:app`    | `platform:web`      |
 | brace-api        | `type:app`    | `platform:worker`   |
-| brace-extractor (plan) | `type:app` | `platform:worker` |
+| brace-extractor  | `type:app`    | `platform:worker`   |
 | brace-expo (fut) | `type:app`    | `platform:expo`     |
 
 - **type** enforces the layering: a project may depend only on its own layer

@@ -77,17 +77,40 @@ Fetching a URL is easy wherever there's no CORS; **screenshots and archives are
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                            | title + image | read mode     | screenshot             | archive |
-| ---------------------------------------- | ------------- | ------------- | ---------------------- | ------- |
-| extension — **icon click, active tab**   | ✅ live DOM   | ✅ live DOM   | ✅ `captureVisibleTab` | ✅      |
-| ~~extension — background, queued URL~~    | —             | —             | —                      | —       |
-| mobile — **share sheet (foreground)**    | ✅            | ✅ WebView    | ⚠️ WebView render      | ⚠️      |
-| mobile — **background queue**            | ✅            | ⚠️            | ❌                     | ❌      |
-| `brace-extractor` Worker (**planned**)   | ✅            | ✅ (linkedom) | ❌ needs Browser Rndr. | ❌      |
+| client / mode                          | title + image      | read mode   | screenshot             | archive |
+| -------------------------------------- | ------------------ | ----------- | ---------------------- | ------- |
+| extension — **icon click, active tab** | ✅ live DOM        | ✅ live DOM | ✅ `captureVisibleTab` | ✅      |
+| ~~extension — background, queued URL~~ | —                  | —           | —                      | —       |
+| mobile — **share sheet**               | ⚠️ host-provided   | ❌          | ❌                     | ❌      |
+| mobile — **foreground**                | ✅                 | ✅ WebView  | ✅                     | ✅      |
+| mobile — **background queue**          | ⚠️ best-effort     | ⚠️          | ❌                     | ❌      |
+| `brace-extractor` Worker               | ✅                 | ✅          | ❌ needs Browser Rndr. | ❌      |
+| import                                 | ⚠️ export-provided | ❌          | ❌                     | ❌      |
 
 The struck row is the **decision below**: the extension _could_ bg-fetch queued
 URLs with an `<all_urls>` host grant, but we **don't** — that capability moves to
 `brace-extractor` / mobile background.
+
+The two mobile rows split a real platform seam. The **share sheet** is a
+memory-constrained, short-lived share _extension_ — it can't reliably stand up a
+WebView to render, fetch, or screenshot — so it captures only **host-provided
+metadata** (a title the originating app hands it) as a **provisional
+`extraction.title`** and leaves the actual extraction to the queue; it is a save
+context, not an extractor (the same provisional-seed pattern a bulk import uses —
+see _imported links_ — so it emits **no `extractedBy` tier of its own**, and the
+`extractedBy` enum stays `expo:fg | expo:bg`, no share-sheet value). The
+**foreground** (the full app open) is mobile's true active-context tier: native
+fetch / a controllable WebView give it title+image, read-mode, screenshot, and
+archive — the `expo:fg` active-page tier, peer to the extension's active tab.
+
+The **`import`** row is the same shape one step further out: a bulk import does
+**no fetch of its own** — it seeds a provisional `extraction.title` from the
+export (a title only, never an image, hence `⚠️ export-provided` not
+`best-effort`: nothing is _fetched_, so nothing can be "best effort") and hands
+every link to the queue, later drained by `brace-extractor` / mobile background /
+an active-page client on first open (see _imported links_). So the share sheet and
+`import` are both **save contexts that seed a title, never extractors** — the ✅
+rows are the contexts that actually fetch.
 
 Two consequences baked into the design:
 
@@ -158,8 +181,10 @@ Android has Doze/WorkManager throttling — and that's a reason to cap it at
 background mobile fetch is a trusted, key-holding client doing local E2E work, the
 same privacy profile as the extension's _foreground_ capture — no new party learns
 the URL. So `brace-expo` **keeps** background extraction (`expo:bg`, bg-fetch tier),
-best-effort: the foreground share-sheet is its active-context tier, an opportunistic
-background drain handles the residual, and the bulk-import drain still belongs to
+best-effort: the **foreground** (full app) is its active-context tier — the share
+sheet is only a constrained save context that seeds a host-provided provisional
+title — an opportunistic background drain handles the residual, and the
+bulk-import drain still belongs to
 `brace-extractor` (don't promise mobile-background throughput). One-line contrast:
 **the extension's background is dropped for a permission cost mobile doesn't pay;
 mobile's background stays, capped at best-effort for a reliability limit the
@@ -172,10 +197,10 @@ for a given link. The rule is simple and removes almost all cross-client
 coordination: **the client that performs the save extracts that link, at save
 time, from the best context it has.**
 
-| save happens on…            | extracts title+image via                      | tier        | cost / privacy                                                   |
-| --------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------- |
-| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free      |
-| **mobile / share sheet**    | native fetch (no CORS) / a WebView            | active-page | free, private                                                    |
+| save happens on…            | extracts title+image via                      | tier        | cost / privacy                                                         |
+| --------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
+| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free            |
+| **mobile / foreground**     | native fetch (no CORS) / a WebView            | active-page | free, private                                                          |
 | **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
 
 The third row is the correction to an easy misread of _the stance_: "the web app
@@ -187,6 +212,14 @@ title+image back, encrypt, and write the result into `extractions/`/`files/` its
 the client that drives it. So a web-app save is enriched at save time **if** the
 user has opted into server extraction — otherwise it stays the documented
 _web-only gap_.
+
+A mobile save reaches the active-page row above only from the **foreground** app.
+The mobile **share sheet** is the one save context that **doesn't** extract inline
+— it's a constrained share _extension_, so it captures only host-provided metadata
+as a provisional `extraction.title`, leaves the `titleImage` facet **pending**, and
+lets the foreground/background queue do the real extraction later (the same
+provisional-seed pattern as a bulk import — see _imported links_, _capability
+tiers_).
 
 **Preference order on a web-app save.** `brace-extractor` is the _fallback_, not
 the first choice. When a capable extension is present in the **same browser**, the
@@ -377,6 +410,21 @@ properties fall out for free:
 > stays a bare host on a web-only client — the _web-only gap_). So a user-named link
 > keeps its name forever; an unnamed one upgrades from host → og:title when extraction
 > runs.
+>
+> **A _provided_ title (share-sheet host hint, bulk-import field) is provisional,
+> not sticky.** It seeds `extraction.title` and stays replaceable by a later
+> og:title or a higher tier — it is **not** auto-promoted to `customTitle`,
+> because most provided titles are machine-captured (a browser bookmark's
+> `<title>`, the source app's title), not names the user chose; freezing them
+> would defeat the refresh and over-apply the sticky rule. **Promote a provided
+> title to `customTitle` only when the source marks it user-authored** (e.g. a
+> Pocket/Raindrop user-edited title) — otherwise leave it provisional. The
+> asymmetry that makes this safe: a wrongly-frozen title is one edit away from
+> fixed, whereas overwriting a provisional that lived only in `extraction.title`
+> is **unrecoverable** — so when you _do_ have a user-authored signal, protect it
+> via sticky `customTitle` (preserved + revertable), **never** a "don't-replace"
+> flag on `extraction.title` (which can't tell a seed from a low-tier result and
+> would also block legitimate tier upgrades).
 
 ### the extraction entity
 
@@ -441,6 +489,28 @@ export const extractionSchema = z.looseObject({
 export type Facet = z.infer<typeof facetSchema>;
 export type Extraction = z.infer<typeof extractionSchema>;
 ```
+
+**A present display field never implies its facet ran.** The facet map is the
+**sole** authority for done/pending — never infer "`titleImage` is done" from a
+non-empty `title`. `extraction.title` may legitimately hold a value while
+`titleImage` is **absent** (= pending): a **provisional seed** from a bulk import
+or a share-sheet host hint (see _imported links_, _capability tiers_). This is
+deliberate and load-bearing — the seed is left pending **on purpose** so the
+normal loop fetches the real og:title and replaces it. Two reasons it's a value
+_without_ a facet, not a facet:
+
+- **A facet records an extraction _attempt_** (`extractedBy` = who ran it,
+  `extractedAt` = when, `attempts` = the retry count). A seed involves **no
+  fetch** — nothing was extracted — so there is nothing truthful to put in those
+  fields. Absence is the honest encoding; a `'server'`/`'importer'` `extractedBy`
+  would record an attempt that never happened.
+- **Marking the facet `done` to capture provenance would be doubly wrong:**
+  semantically false (no attempt), and it would move the link off the
+  well-defined **pending** path onto the under-specified **upgrade** path (see
+  _deferred / open_) — `done` facets aren't re-run by the normal loop, only by a
+  higher-tier sighting — which suppresses the very enrichment the import needs.
+  And `extractedBy` has no reader but `tierOf()`, which already ranks a pending
+  (absent) facet below every real tier, so a seed needs no tier of its own.
 
 Each facet answers the same questions independently:
 
@@ -598,7 +668,11 @@ import landed on usually drains it alone (see _the extraction entity_). A title
 carried in the export seeds **`extraction.title` (provisional)**, not
 `customTitle` — the user didn't deliberately name it, so extraction may still
 upgrade it to the real og:title; it's just a better placeholder than a bare host
-meanwhile (see _manual overrides_). This is the one case an import writes an
+meanwhile (see _manual overrides_). The exception: when the export marks a title
+**user-edited** (some Pocket/Raindrop fields do), route _that_ one to sticky
+`customTitle` instead, so a deliberate rename survives re-extraction — the
+default-provisional / sticky-only-with-a-user-authored-signal rule from _manual
+overrides_. This is the one case an import writes an
 `extractions/` file up front — the pending signal then is the **absent `titleImage`
 facet**, not an absent file (the queue query already keys on the facet).
 
