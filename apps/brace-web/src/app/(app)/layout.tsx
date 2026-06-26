@@ -1,9 +1,7 @@
-import { SyncProvider } from '@stxapps/web-react';
-import { ExtractionProvider } from '@stxapps/web-react';
+import { ExtractionProvider, SyncProvider } from '@stxapps/web-react';
 
 import { AuthGuard } from '@/components/auth-guard';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
-
 import { extractClient } from '@/lib/extract-client';
 
 // Guard for the signed-in app (/links, /settings, …). Two gates, in order:
