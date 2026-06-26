@@ -186,7 +186,7 @@
         },
       ],
       // Custom domain (needs a real domain on the staging account):
-      // "routes": [{ "pattern": "<staging-api-domain>", "custom_domain": true }]
+      // "routes": [{ "pattern": "api.staging.brace.to", "custom_domain": true }]
     },
     "production": {
       "account_id": "TODO: production Cloudflare account id",
@@ -255,7 +255,7 @@
           "simple": { "limit": 10, "period": 10 },
         },
       ],
-      // "routes": [{ "pattern": "<prod-api-domain>", "custom_domain": true }]
+      // "routes": [{ "pattern": "api.brace.to", "custom_domain": true }]
     },
   },
 }

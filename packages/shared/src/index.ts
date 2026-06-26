@@ -6,6 +6,7 @@ export * from './crypto/doors';
 export * from './crypto/encoding';
 export * from './crypto/params';
 export * from './crypto/salt';
+export * from './extract/endpoints';
 export * from './sync/endpoints';
 export * from './sync/entities';
 export * from './sync/extraction';

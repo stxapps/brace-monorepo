@@ -5,14 +5,18 @@ import type { ErrorBody } from '@stxapps/shared';
 
 import type { AppEnv } from './env';
 
-// Uniform JSON error handling. Middleware and handlers `throw new ApiError(...)`
-// instead of building ad-hoc `c.json(..., 4xx)` responses; `errorHandler` (wired
-// via `app.onError` in app.ts) turns every thrown error into the same shape:
+// Uniform JSON error handling, identical in shape to brace-api so clients parse one
+// error envelope across both origins. Middleware/handlers `throw new ApiError(...)`;
+// `errorHandler` (wired via `app.onError` in app.ts) turns every thrown error into:
 //
 //   { "error": "<code>", "message"?: "<human readable>" }
 //
-// `code` is a stable, client-parseable string (e.g. 'unauthorized',
-// 'rate_limited'); `message` is optional and for humans/logs only.
+// `code` is a stable, client-parseable string (e.g. 'rate_limited',
+// 'invalid_request'); `message` is optional and for humans/logs only.
+//
+// IMPORTANT — never put the fetched URL in an error `message`. The extractor's whole
+// reason to exist is that the URL it sees stays transient (docs "Never log the URL"),
+// so error bodies and logs must stay aggregate/code-level, never echo the target URL.
 
 export class ApiError extends Error {
   constructor(
@@ -38,8 +42,9 @@ export function errorHandler(err: unknown, c: Context<AppEnv>): Response {
     return c.json({ error: 'http_error', message: err.message }, err.status);
   }
 
-  // Anything else is an unexpected bug. Log it for observability (wrangler tail
-  // / the observability binding) but never leak internals to the client.
+  // Anything else is an unexpected bug. Log it for observability (wrangler tail /
+  // the observability binding) but never leak internals — and never the URL — to
+  // the client.
   console.error('Unhandled error:', err);
   return c.json({ error: 'internal_error' }, 500);
 }

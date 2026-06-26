@@ -28,7 +28,7 @@ export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
 // The counter key. Per-IP + per-path by default: each (caller, endpoint) pair
 // gets its own bucket, so a flood of one endpoint doesn't throttle the others.
 // `cf-connecting-ip` is the real client IP set by Cloudflare's edge.
-export function defaultRateLimitKey(c: Context<AppEnv>): string {
+export function ipRateLimitKey(c: Context<AppEnv>): string {
   const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
   return `${ip}:${c.req.path}`;
 }
@@ -39,7 +39,7 @@ export function defaultRateLimitKey(c: Context<AppEnv>): string {
 export function userRateLimitKey(c: Context<AppEnv>): string {
   const userId = c.get('session')?.userId;
   if (userId) return `user:${userId}:${c.req.path}`;
-  return defaultRateLimitKey(c);
+  return ipRateLimitKey(c);
 }
 
 // Rate-limit middleware backed by Cloudflare's native Workers Rate Limiting
@@ -53,7 +53,7 @@ export function userRateLimitKey(c: Context<AppEnv>): string {
 // userRateLimitKey) for per-user limits on authed routes.
 export function rateLimit(
   tier: RateLimitTier = 'standard',
-  key: (c: Context<AppEnv>) => string = defaultRateLimitKey,
+  key: (c: Context<AppEnv>) => string = ipRateLimitKey,
 ) {
   const bindingName = RATE_LIMIT_TIERS[tier];
 

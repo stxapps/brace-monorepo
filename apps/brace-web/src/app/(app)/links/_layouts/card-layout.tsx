@@ -8,11 +8,12 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { hostFromText } from '@stxapps/shared';
+
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   faviconUrl,
-  hostname,
   type LinkLayoutProps,
   LinkRowMenu,
   PinnedBadge,
@@ -101,11 +102,11 @@ export function CardLayout({
                             loading="lazy"
                           />
                           <span className="truncate text-xs text-muted-foreground">
-                            {hostname(link.url)}
+                            {hostFromText(link.url)}
                           </span>
                         </div>
                         <span className="line-clamp-3 text-sm font-medium">
-                          {link.title || hostname(link.url)}
+                          {link.title || hostFromText(link.url)}
                         </span>
                       </a>
                       <div className="absolute top-1 right-1">

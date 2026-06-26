@@ -11,7 +11,7 @@
     "fix": "npm run lint:fix && npm run format",
     "typecheck": "nx run-many -t typecheck --output-style=stream",
     "test": "nx run-many -t test --output-style=stream",
-    "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web --output-style=stream",
+    "dev": "nx run-many -t dev -p @stxapps/brace-api @stxapps/brace-web @stxapps/brace-extractor --output-style=stream",
     "build": "nx run-many -t build --output-style=stream"
   },
   "private": true,

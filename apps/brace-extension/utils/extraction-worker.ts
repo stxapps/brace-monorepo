@@ -8,12 +8,7 @@ import {
   writeFile,
 } from '@stxapps/web-react';
 
-import {
-  captureArchive,
-  captureReadMode,
-  captureScreenshot,
-  captureTitleImage,
-} from './capture';
+import { captureArchive, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
 
 // `extractedBy` is a `platform:env` string, NOT a device id (entities.ts): quality is
 // DERIVED from it by `tierOf()`, so there's no stored `tier` field. The extension only

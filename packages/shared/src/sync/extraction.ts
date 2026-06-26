@@ -1,5 +1,7 @@
-// The two shared extraction POLICY helpers — quality ranking and retry pacing —
-// that every client must agree on. They operate on the `facetSchema` fields in
+import { LINK_TITLE_MAX } from './entities';
+
+// The shared extraction WRITER helpers — title normalization, quality ranking, and
+// retry pacing — that every client must agree on. They operate on the `facetSchema` fields in
 // entities.ts (`extractedBy`, `attempts`/`extractedAt`) but are kept here, beside
 // each other rather than in the schema file, the same split `rank.ts`/`tree.ts`
 // make: entities.ts is the plaintext SHAPE contract; this is the BEHAVIOR.
@@ -37,4 +39,18 @@ export const EXTRACTION_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000; // capped at 1 day
 export function backoff(attempts: number): number {
   if (attempts <= 0) return 0;
   return Math.min(EXTRACTION_BACKOFF_BASE_MS * 2 ** (attempts - 1), EXTRACTION_BACKOFF_MAX_MS);
+}
+
+// Normalize a discovered title to satisfy `extractionSchema.title`'s `LINK_TITLE_MAX`
+// cap (entities.ts): collapse internal whitespace, trim, drop-if-empty, then cap. The
+// single normalizer every title WRITER runs before the value lands in the schema — the
+// server extractor (raw-HTML og:title/<title>) and the extension (live-DOM og:title/
+// document.title) both feed the same capped field, so a long or whitespace-noisy title
+// can't be valid from one writer but rejected from the other. Returns undefined for an
+// absent/blank title so callers can fall back (`customTitle ?? title ?? host(url)`).
+export function cleanTitle(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const collapsed = raw.replace(/\s+/g, ' ').trim();
+  if (collapsed === '') return undefined;
+  return collapsed.length > LINK_TITLE_MAX ? collapsed.slice(0, LINK_TITLE_MAX) : collapsed;
 }

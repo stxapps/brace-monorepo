@@ -23,6 +23,9 @@
     },
     {
       "path": "./packages/web-react"
+    },
+    {
+      "path": "./apps/brace-extractor"
     }
   ]
 }

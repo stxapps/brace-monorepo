@@ -7,11 +7,12 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { hostFromText } from '@stxapps/shared';
+
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   faviconUrl,
-  hostname,
   type LinkLayoutProps,
   LinkRowMenu,
   PinnedBadge,
@@ -99,9 +100,9 @@ export function TableLayout({
                       className="size-4 shrink-0 rounded"
                       loading="lazy"
                     />
-                    <span className="truncate">{link.title || hostname(link.url)}</span>
+                    <span className="truncate">{link.title || hostFromText(link.url)}</span>
                   </a>
-                  <span className="truncate text-muted-foreground">{hostname(link.url)}</span>
+                  <span className="truncate text-muted-foreground">{hostFromText(link.url)}</span>
                   <span className="text-xs text-muted-foreground">
                     {formatDate(link.updatedAt)}
                   </span>

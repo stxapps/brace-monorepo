@@ -30,8 +30,8 @@ import { z } from 'zod';
 // — split BY WRITER so a background extractor never read-merge-writes this file and so
 // can never clobber a concurrent user edit under LWW (see docs/link-extraction.md "the
 // data model"). Heavy media itself (archive/screenshot/preview bytes, long notes) lives
-// in separate `files/{id}.enc` blobs referenced by id — never inlined. `tagIds`/`listId`
-// hold ids of `tags/{id}.enc` / `lists/{id}.enc` files; a dangling id (tag deleted on
+// in separate `files/{id}.enc` blobs referenced by id — never inlined. `listId`/`tagIds`
+// hold ids of `lists/{id}.enc` / `tags/{id}.enc` files; a dangling id (tag deleted on
 // another device) is NORMAL and the UI skips it, never errors.
 //
 // Reference fields end in `Id`/`Ids` and store the BARE entity id, never a full
@@ -58,10 +58,10 @@ export const linkSchema = z.looseObject({
   // Uncapped on purpose — the link's identity must never be truncated (see the
   // `LINK_TITLE_MAX` note above); the per-user byte quota is the only backstop.
   url: z.string(),
-  // Tag ids (the `{id}` of `tags/{id}.enc`). Order is the user's tag order.
-  tagIds: z.array(z.string()),
   // List id (the `{id}` of `lists/{id}.enc`).
   listId: z.string(),
+  // Tag ids (the `{id}` of `tags/{id}.enc`). Order is the user's tag order.
+  tagIds: z.array(z.string()),
   // The user's DELIBERATE title/image override. The UI resolves the displayed title as
   // `customTitle ?? extraction.title ?? host(url)` and the image as
   // `customImageId ?? extraction.imageId`, so a manual edit always wins over the
@@ -74,7 +74,7 @@ export const linkSchema = z.looseObject({
   // still upgrade — see docs/link-extraction.md.) `customImageId` is a `files/{id}.enc`
   // ref to a user-picked image, the same heavy-media rule as `extraction.imageId`.
   //
-  // These live here in `links/` — one file, one user gesture, beside `tagIds`/`listId`
+  // These live here in `links/` — one file, one user gesture, beside `listId`/`tagIds`
   // — NOT a separate entity/file. A manual override is a low-frequency USER edit, the
   // opposite of the churny automated state that earns `pins/` and `extractions/` their
   // own LWW-isolated files; a shadow override file would only force a single edit to
@@ -96,11 +96,11 @@ export const linkSchema = z.looseObject({
 });
 export type Link = z.infer<typeof linkSchema>;
 
-// The plaintext of `tags/{id}.enc` / `lists/{id}.enc`. One small file per
-// tag/list is what lets two devices rename two DIFFERENT tags concurrently under
+// The plaintext of `lists/{id}.enc` / `tags/{id}.enc`. One small file per
+// list/tag is what lets two devices rename two DIFFERENT tags concurrently under
 // file-level LWW. `id` repeats the path's id so the plaintext is self-contained.
-// `parentId`/`rank` give tags and lists a tree: `parentId` is the BARE id of the
-// parent entity (its `{id}` in `tags/`|`lists/`), or `null` at the root — never
+// `parentId`/`rank` give lists and tags a tree: `parentId` is the BARE id of the
+// parent entity (its `{id}` in `lists/`|`tags/`), or `null` at the root — never
 // `undefined`, so "top-level" is an explicit value a concurrent edit can't be
 // confused about. A dangling/cyclic/forbidden parent is reconciled at read time
 // (buildTree promotes it to root), exactly like a dangling reference elsewhere.
@@ -112,16 +112,6 @@ export type Link = z.infer<typeof linkSchema>;
 // different entities never collide. Required (no legacy entities to back-fill);
 // the system-list defaults seed real keys (system-lists.ts) so user entities can
 // rank against them.
-export const tagSchema = z.looseObject({
-  id: z.string(),
-  name: z.string(),
-  parentId: z.string().nullable(),
-  rank: z.string(),
-  createdAt: z.number().int(),
-  updatedAt: z.number().int(),
-});
-export type Tag = z.infer<typeof tagSchema>;
-
 export const listSchema = z.looseObject({
   id: z.string(),
   name: z.string(),
@@ -132,11 +122,21 @@ export const listSchema = z.looseObject({
 });
 export type List = z.infer<typeof listSchema>;
 
+export const tagSchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  parentId: z.string().nullable(),
+  rank: z.string(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+export type Tag = z.infer<typeof tagSchema>;
+
 // The plaintext of `pins/{id}.enc` — marks a link as pinned ("pin to the top").
 // One file per pinned link, with `id` repeating the link's id (the `{id}` of its
 // `links/{id}.enc`), so a pin is self-contained AND its own last-writer-wins point:
 // pinning, unpinning, or reordering writes ONLY this file, so it never clobbers a
-// concurrent edit to the link's blob (title/tags/list) — the same isolation
+// concurrent edit to the link's blob (title/list/tags) — the same isolation
 // reasoning that gives lists/tags one file each. A flag inside `linkSchema` would
 // instead make every pin/reorder rewrite the link and collide under LWW.
 //
@@ -145,7 +145,7 @@ export type List = z.infer<typeof listSchema>;
 // Deliberately NO `listId`: the link already records its list, so a pin needs no
 // list scoping and survives the link moving lists untouched. A pin whose link is
 // gone (deleted on another device) is a dangling reference the read layer skips,
-// exactly like a dangling `tagId`/`listId`.
+// exactly like a dangling `listId`/`tagId`.
 export const pinSchema = z.looseObject({
   id: z.string(),
   rank: z.string(),
@@ -263,10 +263,11 @@ export const extractionSchema = z.looseObject({
 });
 export type Extraction = z.infer<typeof extractionSchema>;
 
-// The two shared extraction POLICY helpers `tierOf()` (quality rank from
-// `extractedBy`) and `backoff()` (retry pacing from `attempts`/`extractedAt`) operate
-// on the facet fields above, but live in sync/extraction.ts — this file is the
-// plaintext SHAPE contract; those are BEHAVIOR (the rank.ts/tree.ts split).
+// The shared extraction WRITER helpers — `cleanTitle()` (normalize a title to the
+// `LINK_TITLE_MAX` cap above), `tierOf()` (quality rank from `extractedBy`), and
+// `backoff()` (retry pacing from `attempts`/`extractedAt`) — operate on the fields in
+// this file, but live in sync/extraction.ts: this file is the plaintext SHAPE
+// contract; those are BEHAVIOR (the rank.ts/tree.ts split).
 
 // How the links library lays out its rows: `list` (dense default), `card` (a grid
 // of previews), `table` (columnar). A cross-platform contract — not a web-only

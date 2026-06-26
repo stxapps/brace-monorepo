@@ -53,6 +53,29 @@ export function normalizeUrl(value: string): string | null {
   }
 }
 
+// The DISPLAY host for a URL — its hostname with a leading `www.` stripped. The
+// provisional title, secondary line, and favicon domain every surface shows for a
+// link. Centralised here (not copied per app) so web, the extension, and the
+// extractor all render the SAME host string; the extractor's server-side title
+// fallback must match what the clients display. Takes an already-parsed URL so
+// callers that hold one (the extractor's `finalUrl`, `canonicalUrlKey`'s `u`) don't
+// re-parse — see `hostFromText` for the raw-string entry point.
+export function hostFromUrl(url: URL): string {
+  return url.hostname.replace(/^www\./, '');
+}
+
+// `hostFromUrl` for raw, possibly-malformed text: the link `url` we store comes
+// from user input, so when it won't parse we fall back to the raw string rather
+// than throw (better a slightly-off label than a crash). The www-stripping rule
+// itself lives only in `hostFromUrl`; this just adds the parse + fallback.
+export function hostFromText(text: string): string {
+  try {
+    return hostFromUrl(new URL(text));
+  } catch {
+    return text;
+  }
+}
+
 // A canonical DEDUP IDENTITY KEY for a URL — "are these two links the same
 // resource?" — NOT something to display or store as the link's url. Two inputs
 // that a human would call the same page collapse to the same key.
@@ -83,7 +106,7 @@ export function canonicalUrlKey(value: string): string | null {
     return null;
   }
 
-  const host = u.hostname.replace(/^www\./, '');
+  const host = hostFromUrl(u);
   // URL already drops the default port (80/http, 443/https) → u.port is ''.
   const port = u.port ? `:${u.port}` : '';
   const path = u.pathname.replace(/\/+$/, '');

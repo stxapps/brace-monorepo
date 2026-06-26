@@ -11,6 +11,8 @@
 // a dependency) injected as a bundled content-script file and run over the live DOM;
 // kept inline here so the scaffold needs no extra entrypoint.
 
+import { cleanTitle } from '@stxapps/shared';
+
 const encoder = new TextEncoder();
 
 // A `data:`/blob URL → raw bytes. The service worker can fetch `data:` URLs, so this
@@ -21,25 +23,46 @@ async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
 
 // --- titleImage --------------------------------------------------------------
 
-// Read og:title / og:image (+ <title>) from the live DOM, and fetch the og:image
-// bytes IN-PAGE (the page's own context, where the image is most likely fetchable)
-// as a data URL. Returns the discovered title and, when available, the image bytes.
+// Read the title + preview-image from the live DOM, and fetch the image bytes IN-PAGE
+// (the page's own context, where the image is most likely fetchable) as a data URL.
+// Returns the discovered title and, when available, the image bytes.
+//
+// Title and image preference order MIRROR the server extractor (brace-extractor
+// `html.ts`) so a page enriches identically whichever tier reaches it:
+//   title → og:title, else document.title
+//   image → og:image, og:image:url, og:image:secure_url, twitter:image, link[rel=image_src]
+// Relative image URLs need no resolving here — the in-page `fetch` resolves them
+// against the document base automatically (the reason the server's `resolveImage`
+// stays server-only; see capture.ts notes / html.ts).
 export async function captureTitleImage(
   tabId: number,
 ): Promise<{ title: string; image?: Uint8Array }> {
   const [injection] = await browser.scripting.executeScript({
     target: { tabId },
     func: async () => {
+      // `property` (OpenGraph) and `name` (Twitter/legacy) are both checked — sites
+      // use either; trimmed, with empty treated as absent.
       const meta = (key: string): string =>
-        document.querySelector(`meta[property="${key}"]`)?.getAttribute('content') ??
-        document.querySelector(`meta[name="${key}"]`)?.getAttribute('content') ??
-        '';
+        (
+          document.querySelector(`meta[property="${key}"]`)?.getAttribute('content') ??
+          document.querySelector(`meta[name="${key}"]`)?.getAttribute('content') ??
+          ''
+        ).trim();
       const title = meta('og:title') || document.title || '';
-      const ogImage = meta('og:image');
+      const linkImageSrc =
+        document.querySelector('link[rel~="image_src"]')?.getAttribute('href')?.trim() ?? '';
+      const imageUrl =
+        meta('og:image') ||
+        meta('og:image:url') ||
+        meta('og:image:secure_url') ||
+        meta('twitter:image') ||
+        meta('twitter:image:src') ||
+        linkImageSrc;
+
       let image = '';
-      if (ogImage) {
+      if (imageUrl) {
         try {
-          const res = await fetch(ogImage);
+          const res = await fetch(imageUrl);
           if (res.ok) {
             const blob = await res.blob();
             image = await new Promise<string>((resolve) => {
@@ -50,7 +73,7 @@ export async function captureTitleImage(
             });
           }
         } catch {
-          // og:image on a CORS-hostile origin — skip the image, keep the title.
+          // Image on a CORS-hostile origin — skip the image, keep the title.
         }
       }
       return { title, image };
@@ -59,8 +82,12 @@ export async function captureTitleImage(
 
   const data = injection?.result as { title: string; image: string } | undefined;
   if (!data) return { title: '' };
+
   const image = data.image ? await dataUrlToBytes(data.image) : undefined;
-  return { title: data.title, image };
+  // Normalize/cap in the worker context (NOT inside the injected `func`, which runs
+  // in the page and can't reach bundle imports) so the title satisfies the same
+  // `LINK_TITLE_MAX` contract the server extractor enforces. See cleanTitle.
+  return { title: cleanTitle(data.title) ?? '', image };
 }
 
 // --- readMode ----------------------------------------------------------------

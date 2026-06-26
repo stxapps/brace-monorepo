@@ -685,9 +685,7 @@ async function readPinnedOverlay(
   const pins = (await readPins()).sort(compareRank);
   if (pins.length === 0) return { links: [], paths: new Set() };
 
-  const records = await db.items.bulkGet(
-    pins.map((pin) => pathFromId(pin.id, LINKS_PREFIX)),
-  );
+  const records = await db.items.bulkGet(pins.map((pin) => pathFromId(pin.id, LINKS_PREFIX)));
   const hasUrl = !clauseEmpty(query.url);
   const passed: LinkItem[] = [];
   for (const record of records) {

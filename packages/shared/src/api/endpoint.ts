@@ -34,6 +34,17 @@ export interface ApiEndpoint<
   response: TResponse;
 }
 
+// The uniform JSON error envelope every endpoint returns on a non-2xx response.
+// Defined here in `shared` — part of the wire contract, like the endpoint
+// descriptors themselves — so the worker apps (brace-api, brace-extractor) emit
+// one shape and every client parses one shape across both origins. `error` is a
+// stable, client-parseable code (e.g. 'unauthorized', 'rate_limited',
+// 'http_error', 'internal_error'); `message` is optional and for humans/logs only.
+export interface ErrorBody {
+  error: string;
+  message?: string;
+}
+
 // Identity helper that preserves the literal method/path and the schema types,
 // while constraining the object to the `ApiEndpoint` shape. Prefer this over a
 // bare `as const` object so a malformed descriptor fails at the definition site.

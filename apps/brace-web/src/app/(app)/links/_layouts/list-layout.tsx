@@ -8,11 +8,12 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { hostFromText } from '@stxapps/shared';
+
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   faviconUrl,
-  hostname,
   type LinkLayoutProps,
   LinkRowMenu,
   PinnedBadge,
@@ -92,11 +93,11 @@ export function ListLayout({
                     <span className="flex items-center gap-1.5">
                       {pinned && <PinnedBadge />}
                       <span className="truncate text-sm font-medium">
-                        {link.title || hostname(link.url)}
+                        {link.title || hostFromText(link.url)}
                       </span>
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {hostname(link.url)}
+                      {hostFromText(link.url)}
                     </span>
                   </span>
                 </a>

@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDown, ArrowUp, MoreHorizontal, Pin, PinOff, RefreshCw } from 'lucide-react';
 
+import { hostFromText } from '@stxapps/shared';
 import { type LinkItem, type LinkView, usePinMutations } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -37,20 +38,11 @@ export interface LinkLayoutProps {
   applyPending: () => void;
 }
 
-// Best-effort hostname for the secondary line / favicon. URLs come from user
-// input and may be malformed, so fall back to the raw string.
-export function hostname(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
-}
-
 // Google's favicon service — no key, cached at the edge. Swap for a synced
-// `files/` screenshot later if previews move local.
+// `files/` screenshot later if previews move local. The display host comes from
+// `hostFromText` (@stxapps/shared) so it matches the secondary line.
 export function faviconUrl(url: string): string {
-  return `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(hostname(url))}`;
+  return `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(hostFromText(url))}`;
 }
 
 export function EmptyState({ isLoading }: { isLoading: boolean }) {
