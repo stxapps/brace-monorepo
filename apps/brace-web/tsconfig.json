@@ -31,7 +31,8 @@
     "src/**/*.jsx",
     "../../apps/brace-web/.next/types/**/*.ts",
     "../../dist/apps/brace-web/.next/types/**/*.ts",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    "index.d.ts"
   ],
   "exclude": [
     "out-tsc",
