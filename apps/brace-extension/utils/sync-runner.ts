@@ -8,7 +8,7 @@ import {
   type SyncDeps,
 } from '@stxapps/web-react';
 
-import { api } from './api';
+import { apiClient } from './api-client';
 import { INITIAL_SYNC_STATUS, type SyncStatus, writeSyncStatus } from './messages';
 
 // The background's sync runner. Builds the engine's SyncDeps from the persisted
@@ -29,7 +29,12 @@ async function buildDeps(): Promise<SyncDeps | null> {
   // loadSession hydrates the in-memory mirror the api client's authFetch reads.
   const session = (await loadSession()) ?? getSession();
   if (!session) return null;
-  return { username: session.username, encryptionKey: session.encryptionKey, api, pathFilter };
+  return {
+    username: session.username,
+    encryptionKey: session.encryptionKey,
+    api: apiClient,
+    pathFilter,
+  };
 }
 
 // Single-flight at the worker level too: overlapping triggers (alarm + a KICK_SYNC

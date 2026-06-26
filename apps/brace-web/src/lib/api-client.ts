@@ -4,8 +4,8 @@ import { createAuthApiClient } from '@stxapps/web-react';
 // Set NEXT_PUBLIC_API_URL per environment. The auth-fetch logic (bearer token +
 // mid-session 401/expiry handling) lives in web-react's createAuthApiClient,
 // shared with brace-extension; only the env-resolved base URL is app-specific.
-// Call sites use the shared endpoint contracts: `api.call(checkUsernameEndpoint, …)`.
+// Call sites use the shared endpoint contracts: `apiClient.call(checkUsernameEndpoint, …)`.
 const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 if (!baseUrl) throw new Error('NEXT_PUBLIC_API_URL is not set');
 
-export const api = createAuthApiClient({ baseUrl });
+export const apiClient = createAuthApiClient({ baseUrl });

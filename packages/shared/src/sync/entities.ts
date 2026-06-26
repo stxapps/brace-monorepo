@@ -287,8 +287,17 @@ export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 // wrote it still parses — `looseObject` round-trips it for clients that don't
 // model it yet. The device-local alternative ("Device" tab) lives off-sync in the
 // brace-web `localSettings` store, never here.
+//
+// `serverExtraction` is the SECOND, explicit opt-in (see docs/link-extraction.md
+// "server extraction" / "the stance"): the user lets a web/desktop client send a
+// saved link's URL to `brace-extractor` for title/image enrichment. It is a SYNCED
+// account preference (every device honors the same choice), and OFF BY DEFAULT —
+// absent or `false` means no URL ever leaves the browser. `looseObject` round-trips
+// it for clients that don't model it (e.g. the extension, which is active-context
+// only and never calls the extractor).
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.enum(LINKS_LAYOUTS).optional(),
+  serverExtraction: z.boolean().optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

@@ -5,7 +5,7 @@ import { ApiClientProvider } from '@stxapps/react';
 import { AuthProvider, ExternalSyncProvider } from '@stxapps/web-react';
 import { ThemeProvider, type ThemeStorage } from '@stxapps/web-ui/contexts/theme-provider';
 
-import { api } from '@/utils/api';
+import { apiClient } from '@/utils/api-client';
 import { sendMessage } from '@/utils/messages';
 
 // The popup's provider tree — brace-web's inner-layout, minus Serwist and the sync
@@ -29,7 +29,7 @@ export function Providers({
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ApiClientProvider client={api}>
+      <ApiClientProvider client={apiClient}>
         <AuthProvider>
           <ExternalSyncProvider
             requestSync={() => {

@@ -18,7 +18,7 @@ export default defineConfig({
   manifest: ({ browser, mode }) => {
     const isFirefox = browser === 'firefox';
     // brace-api host the extension talks to, per build mode. Single source of
-    // truth: the same WXT_PUBLIC_API_URL that utils/api.ts reads, loaded here at
+    // truth: the same WXT_PUBLIC_API_URL that utils/api-client.ts reads, loaded here at
     // config time from `.env.<mode>` (dev :8787, staging/prod custom domains).
     // `mode` is 'development' for `wxt`/`wxt dev`, 'production' for `wxt build`,
     // and 'staging' when built with `--mode staging`. In the manifest function

@@ -1,7 +1,10 @@
 import { SyncProvider } from '@stxapps/web-react';
+import { ExtractionProvider } from '@stxapps/web-react';
 
 import { AuthGuard } from '@/components/auth-guard';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
+
+import { extractClient } from '@/lib/extract-client';
 
 // Guard for the signed-in app (/links, /settings, …). Two gates, in order:
 //   AuthGuard       — "do you have a session?" (client-side: the session lives
@@ -15,7 +18,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AuthGuard>
       <SyncProvider>
         <InitialSyncGate>
-          <div className="min-h-screen">{children}</div>
+          <ExtractionProvider extractClient={extractClient}>
+            <div className="min-h-screen">{children}</div>
+          </ExtractionProvider>
         </InitialSyncGate>
       </SyncProvider>
     </AuthGuard>

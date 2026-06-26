@@ -235,7 +235,7 @@ export function deletePin(username: string, path: string): Promise<void> {
 // `createdAt` on first write), validates, then writes.
 export async function writeSettingsGeneral(
   username: string,
-  patch: Partial<Pick<SettingsGeneral, 'linksLayout'>>,
+  patch: Partial<Pick<SettingsGeneral, 'linksLayout' | 'serverExtraction'>>,
 ): Promise<void> {
   const now = Date.now();
   const record = await db.items.get(SETTINGS_GENERAL_PATH);

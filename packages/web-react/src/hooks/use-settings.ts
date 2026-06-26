@@ -41,6 +41,10 @@ export interface Settings {
   syncLinksLayout: LinksLayout;
   // This device's own links layout (the Device tab's radio value).
   localLinksLayout: LinksLayout;
+  // The synced server-extraction opt-in (Settings → the second, explicit opt-in).
+  // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
+  // sends a saved URL to `brace-extractor` (see docs/link-extraction.md).
+  serverExtraction: boolean;
 }
 
 export function useSettings(): Settings {
@@ -53,6 +57,14 @@ export function useSettings(): Settings {
   const linksLayoutSource = local?.linksLayoutSource ?? 'sync';
   const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
   const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
+  // Off by default: absent (older client / never toggled) reads as opted-out.
+  const serverExtraction = general?.serverExtraction ?? false;
 
-  return { linksLayout, linksLayoutSource, syncLinksLayout, localLinksLayout };
+  return {
+    linksLayout,
+    linksLayoutSource,
+    syncLinksLayout,
+    localLinksLayout,
+    serverExtraction,
+  };
 }

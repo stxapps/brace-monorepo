@@ -28,6 +28,9 @@ export interface SettingMutations {
   setSyncLinksLayout: (layout: LinksLayout) => Promise<void>;
   // Set THIS device's links layout (the Device tab) — device-local, never synced.
   setLocalLinksLayout: (layout: LinksLayout) => Promise<void>;
+  // Toggle the SYNCED server-extraction opt-in (the second, explicit opt-in); writes
+  // settings/general.enc + syncs, so every device honors the same choice.
+  setServerExtraction: (enabled: boolean) => Promise<void>;
 }
 
 export function useSettingMutations(): SettingMutations {
@@ -53,8 +56,17 @@ export function useSettingMutations(): SettingMutations {
     [username, requestSync],
   );
 
+  const setServerExtraction = useCallback(
+    async (enabled: boolean) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, { serverExtraction: enabled });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
   return useMemo<SettingMutations>(
-    () => ({ setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout }),
-    [setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout],
+    () => ({ setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout, setServerExtraction }),
+    [setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout, setServerExtraction],
   );
 }

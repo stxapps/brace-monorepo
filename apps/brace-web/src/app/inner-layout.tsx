@@ -7,7 +7,7 @@ import { ApiClientProvider } from '@stxapps/react';
 import { AuthProvider } from '@stxapps/web-react';
 import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
-import { api } from '../lib/api';
+import { apiClient } from '../lib/api-client';
 
 // Stable identity across renders (the provider keys effects off it).
 const themeStorage = localStorageThemeStorage();
@@ -65,7 +65,7 @@ function SafeArea({ children }: { children: React.ReactNode }) {
 export function InnerLayout({ children }: { children: React.ReactNode }) {
   // One QueryClient per browser session, created lazily so it isn't shared
   // across requests/renders. ApiClientProvider hands the shared hooks the
-  // env-configured client (api) so they don't hardcode a baseUrl.
+  // env-configured client (apiClient) so they don't hardcode a baseUrl.
   const [queryClient] = useState(() => new QueryClient());
 
   return (
@@ -85,7 +85,7 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
         <Initializer />
       </Suspense>
       <QueryClientProvider client={queryClient}>
-        <ApiClientProvider client={api}>
+        <ApiClientProvider client={apiClient}>
           <AuthProvider>
             <ThemeProvider storage={themeStorage}>
               <SafeArea>{children}</SafeArea>

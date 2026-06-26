@@ -1,7 +1,7 @@
 import { createAuthApiClient } from '@stxapps/web-react';
 
 // The extension's binding of the shared auth-aware API client to brace-api's base
-// URL — the counterpart of brace-web's `lib/api.ts`. The auth-fetch logic lives in
+// URL — the counterpart of brace-web's `lib/api-client.ts`. The auth-fetch logic lives in
 // web-react's createAuthApiClient (shared with brace-web); only the base URL is
 // app-specific, and it comes from `WXT_PUBLIC_API_URL` (baked in per build mode
 // from `.env.<mode>`, the wxt analogue of Next's `NEXT_PUBLIC_API_URL`).
@@ -16,4 +16,4 @@ import { createAuthApiClient } from '@stxapps/web-react';
 const baseUrl = import.meta.env.WXT_PUBLIC_API_URL;
 if (!baseUrl) throw new Error('WXT_PUBLIC_API_URL is not set');
 
-export const api = createAuthApiClient({ baseUrl });
+export const apiClient = createAuthApiClient({ baseUrl });

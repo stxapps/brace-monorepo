@@ -4,6 +4,7 @@
 // brace-extension; the app provides the configured api client via @stxapps/react's
 // ApiClientProvider (the seam these modules read through useApiClient / SyncDeps.api).
 export * from './contexts/auth-provider';
+export * from './contexts/extraction-provider';
 export * from './contexts/sync-provider';
 export * from './data/db';
 export * from './data/decode-cache';
@@ -25,7 +26,9 @@ export * from './hooks/use-sign-in';
 export * from './hooks/use-sign-out';
 export * from './hooks/use-tag-mutations';
 export * from './hooks/use-tags';
-export * from './lib/api';
+export * from './lib/auth-api-client';
+export * from './lib/resize-image';
+export * from './lib/server-extraction';
 export * from './sync/crypto';
 export * from './sync/engine';
 export * from './sync/r2';
