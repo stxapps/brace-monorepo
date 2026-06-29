@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
+import { imageProxyEndpoint } from '@stxapps/shared';
+
 import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
 import { rateLimit } from './middleware/rate-limit';
@@ -39,11 +41,21 @@ app.use(
   }),
 );
 
-// Baseline rate limit on EVERY endpoint; the fetch routes stack the 'tight' tier on
-// top at the route level. No-ops when the binding is absent (tests / unconfigured
-// env). For an anonymous open-fetch service this is load-bearing, not a nicety — see
-// middleware/rate-limit.ts and docs "Abuse caps are load-bearing".
-app.use('*', rateLimit('standard'));
+// Baseline rate limit on every endpoint EXCEPT the image proxy; /v1/extract stacks
+// the 'tight' tier on top at the route level. No-ops when the binding is absent
+// (tests / unconfigured env). For an anonymous open-fetch service this is load-
+// bearing, not a nicety — see middleware/rate-limit.ts and docs "Abuse caps are
+// load-bearing".
+//
+// /v1/image is exempt: it's the per-page fan-out bottleneck (one page → N image
+// fetches), so the 60/60s baseline would throttle honest browsing to ~1 img/s — and
+// since the limiter runs before the edge-cache check, even cache hits would burn the
+// budget. It carries its own wider `image` tier as its sole request cap, with the
+// per-response byte ceiling + timeout (in safeFetch) as the real abuse floor.
+const standardRateLimit = rateLimit('standard');
+app.use('*', (c, next) =>
+  c.req.path === imageProxyEndpoint.path ? next() : standardRateLimit(c, next),
+);
 
 app.get('/', (c) => {
   return c.json({ message: 'Welcome to brace-extractor' });
