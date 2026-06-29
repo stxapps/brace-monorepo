@@ -82,18 +82,6 @@ function writeBytes(username: string, path: string, bytes: Uint8Array): Promise<
   return writeBytesWith(username, path, () => bytes);
 }
 
-// Persist one entity locally and queue it for upload — the JSON-entity path layered
-// over writeBytes. `item` carries its `path` (the app-only store key); everything
-// else is the blob to encrypt, so `path` is stripped before encoding — it's
-// reconstructed from the namespace on read, never stored inside the ciphertext (see
-// entities.ts on reference ids vs. paths). The encoded blob then goes through the
-// shared writeBytes primitive, so the local-put + pending-op atomicity (and the
-// `baseUpdatedAt` base-stamp handling) lives in one place.
-async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
-  const { path, ...entity } = item;
-  await writeBytes(username, path, encoder.encode(JSON.stringify(entity)));
-}
-
 // The merging sibling of writeEntity: produce the entity blob INSIDE the transaction
 // from the path's current record, then encode + put it — the layer the read-merge-write
 // entities (writeSettingsGeneral, writeExtraction) sit on. Keeps the same agnostic/JSON
@@ -109,6 +97,18 @@ async function writeEntityWith<T extends object>(
   await writeBytesWith(username, path, (existing) =>
     encoder.encode(JSON.stringify(produce(existing))),
   );
+}
+
+// Persist one entity locally and queue it for upload — the JSON-entity path layered
+// over writeBytes. `item` carries its `path` (the app-only store key); everything
+// else is the blob to encrypt, so `path` is stripped before encoding — it's
+// reconstructed from the namespace on read, never stored inside the ciphertext (see
+// entities.ts on reference ids vs. paths). The encoded blob then goes through the
+// shared writeBytes primitive, so the local-put + pending-op atomicity (and the
+// `baseUpdatedAt` base-stamp handling) lives in one place.
+async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
+  const { path, ...entity } = item;
+  await writeEntityWith(username, path, () => entity);
 }
 
 // Delete one entity by path: drop the local record and queue the server delete in
