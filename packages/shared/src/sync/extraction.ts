@@ -34,7 +34,7 @@ export function tierOf(extractedBy: string | undefined): number {
 // capped — long enough that a flaky host isn't hammered, bounded so a link isn't
 // stuck forever. A HARD failure is `status: 'permanent'` instead (never retried), so
 // this curve only ever paces transient retries.
-export const EXTRACTION_BACKOFF_BASE_MS = 5 * 60 * 1000; // 5 min after the first failure
+export const EXTRACTION_BACKOFF_BASE_MS = 10 * 60 * 1000; // 10 min after the first failure
 export const EXTRACTION_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000; // capped at 1 day
 export function backoff(attempts: number): number {
   if (attempts <= 0) return 0;

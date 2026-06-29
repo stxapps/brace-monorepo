@@ -353,94 +353,131 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
 // the facet is ABSENT (absence = pending — the writer-split, see entities.ts), or a
 // `failed` facet has cooled past its backoff (`now >= extractedAt + backoff(attempts)`).
 // `done` and `permanent` (404/410, robots) are settled — never eligible, so one device's
-// synced outcome stops every device. The per-link counterpart of `computeBlockedTitleImageIds`
-// below: a direct test on one already-decoded facet, so a caller holding a BOUNDED set of
-// paths checks O(paths) instead of materializing every settled id in the library.
+// synced outcome stops every device. A direct test on one already-decoded facet — both the
+// pending-titleImage reads below test each candidate's own facet inline with this, instead
+// of materializing a settled-id set, so cost tracks the links actually examined.
 function isTitleImageEligible(facet: Facet | undefined, now: number): boolean {
   if (!facet) return true;
   if (facet.status === 'done' || facet.status === 'permanent') return false;
   return now >= (facet.extractedAt ?? 0) + backoff(facet.attempts);
 }
 
-// The set of link ids whose `titleImage` is NOT eligible for (re)extraction right now —
-// the blocked filter for the WHOLE-LIBRARY enrich-all walk (`readLinksPendingTitleImage`).
-// A link id is blocked if its titleImage facet is `done`/`permanent`, or `failed` but still
-// inside its backoff window (`now < extractedAt + backoff(attempts)`) — the same
-// `isTitleImageEligible` test above, but precomputed as a SET because the walk has no
-// per-link facet in hand (it ranges `links/`, not `extractions/`). The displayed-scoped
-// read does NOT use this — it holds a bounded path set and tests each facet directly, so it
-// never pays the global materialization (see `readLinksPendingTitleImageForLinkPaths`).
-//
-// Cost scales with the SETTLED count: `done:titleImage`'s `primaryKeys()` is the whole
-// library once it's mostly enriched, so this is O(done), not "small". Acceptable for the
-// user-initiated enrich-all job (run rarely, off its own probe); the always-on automatic
-// drain deliberately avoids it. The few `failed` extractions are decoded to check backoff.
-async function computeBlockedTitleImageIds(now: number): Promise<Set<string>> {
-  const [donePaths, permanentPaths, failedPaths] = await Promise.all([
-    db.items.where('itemFacetStatuses').equals('done:titleImage').primaryKeys(),
-    db.items.where('itemFacetStatuses').equals('permanent:titleImage').primaryKeys(),
-    db.items.where('itemFacetStatuses').equals('failed:titleImage').primaryKeys(),
-  ]);
-
-  // Link ids whose titleImage is settled (done/permanent) — never re-queued.
-  const blocked = new Set<string>();
-  for (const path of donePaths) blocked.add(idFromPath(path as string, EXTRACTIONS_PREFIX));
-  for (const path of permanentPaths) blocked.add(idFromPath(path as string, EXTRACTIONS_PREFIX));
-
-  // A `failed` facet is pending again only once past its backoff; until then, block it.
-  const failedRecords = await db.items.bulkGet(failedPaths as string[]);
-  for (const record of failedRecords) {
-    if (!record) continue;
-    const facet = decodeCachedExtraction(record)?.facets.titleImage;
-    if (!facet) continue;
-    // Block by the PATH's id, not the blob's `extraction.id` copy — identity comes from the
-    // path (idFromPath / paths.ts), the one authority a round-tripped blob can't drift from.
-    // Still cooling → blocked; cooled → left out so the enrich-all walk re-picks it.
-    if (!isTitleImageEligible(facet, now)) blocked.add(idFromPath(record.path, EXTRACTIONS_PREFIX));
-  }
-  return blocked;
+// A position in the newest-first `links/` walk, used to PAGINATE the whole-library
+// enrich-all drain (extraction-provider) without re-scanning from the top each batch. It
+// names the last link the walk EXAMINED — `(createdAt, path)` — so the next page resumes
+// strictly past it. `path` is the tiebreak, not decoration: the `[itemType+itemCreatedAt]`
+// index orders equal-createdAt rows by primary key (path), and a bulk import can stamp many
+// links the same millisecond (writeLink uses `Date.now()`), so createdAt alone can't pin a
+// resume point — a page boundary mid-collision would skip or repeat links.
+export interface LinkScanCursor {
+  createdAt: number;
+  path: string;
 }
 
-// The residual extraction queue, as a QUERY (there's no queue object — see
-// docs/link-extraction.md "the queue is a query"). Returns up to `limit` links whose
-// `titleImage` facet is PENDING (see `computeBlockedTitleImageIds`). The link blob carries
-// the URL the caller fetches. This is the WHOLE-LIBRARY scan behind the explicit "enrich
-// all" job (extraction-provider `enrichAll`); the automatic drain uses the displayed-scoped
-// read below instead.
-//
-// Cost: the shared blocked-id computation, then a bounded newest-added-first walk of
-// `links/` that stops at `limit` (createdAt order, so a fresh import drains oldest-saved
-// last — newest first, matching how the user sees the list fill in). The full library is
-// never decoded.
-export async function readLinksPendingTitleImage(now: number, limit: number): Promise<LinkItem[]> {
-  const blocked = await computeBlockedTitleImageIds(now);
+// One page of the enrich-all walk: up to `limit` pending+eligible links (newest-first), plus
+// the `cursor` to resume from. `cursor === null` means the library is exhausted (the drain
+// stops); a non-null cursor always pairs with a FULL `links` page (the scan only stops early
+// when it hits `limit`), so the caller keeps paging while it's non-null.
+export interface PendingTitleImagePage {
+  links: LinkItem[];
+  cursor: LinkScanCursor | null;
+}
 
-  const records = await db.items
-    .where('[itemType+itemCreatedAt]')
-    .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
-    .reverse()
-    .filter((record) => !blocked.has(idFromPath(record.path, LINKS_PREFIX)))
-    .limit(limit)
-    .toArray();
-  return decodeLinks(records);
+// How many `links/` records one inner scan step pulls while hunting for the page's `limit`
+// eligible links. Bounds memory per step; a settled-heavy stretch just costs more steps —
+// but each link is still examined at most ONCE across the whole drain, because the cursor
+// only moves forward (the property that makes enrich-all O(library), not O(library²)).
+const SCAN_CHUNK = 200;
+
+// The residual extraction queue for the WHOLE-LIBRARY "enrich all" job (extraction-provider
+// `enrichAll`), as a QUERY (there's no queue object — see docs/link-extraction.md "the queue
+// is a query"), PAGINATED. Returns up to `limit` links whose `titleImage` is pending+eligible,
+// newest-first, plus a `cursor` the caller threads back to resume. The automatic drain uses
+// the displayed-scoped read below instead.
+//
+// Cost: O(examined), and across a full drain O(library) total — NOT the O(settled)-per-batch
+// of a blocked-set rebuild, and NOT the O(library²) of re-scanning from the top every batch.
+// The forward `cursor` is what buys that: each batch resumes where the last left off, so a
+// just-enriched link is behind the cursor and never re-walked. Eligibility is tested INLINE
+// off each link's own co-keyed extraction facet (`isTitleImageEligible`, like the
+// displayed-scoped read) rather than against a precomputed blocked set — so the test stays
+// FRESH: a link a concurrent sync settled mid-drain drops out here instead of costing a
+// redundant (paid) extract. Missing / settled / still-cooling links are skipped; only their
+// position advances the cursor.
+export async function readLinksPendingTitleImagePage(
+  now: number,
+  limit: number,
+  cursor?: LinkScanCursor,
+): Promise<PendingTitleImagePage> {
+  if (limit <= 0) return { links: [], cursor: cursor ?? null };
+
+  const pending: ItemRecord[] = [];
+  // The boundary already consumed: rows at `boundary.createdAt` with `path >= boundary.path`
+  // were examined on a prior page/step, so skip them. Undefined = start at the newest link.
+  let boundary = cursor;
+  let next: LinkScanCursor | null = cursor ?? null;
+
+  for (;;) {
+    const upper = boundary ? boundary.createdAt : Dexie.maxKey;
+    const chunk = await db.items
+      .where('[itemType+itemCreatedAt]')
+      .between(['link', Dexie.minKey], ['link', upper], true, true)
+      .reverse()
+      .limit(SCAN_CHUNK)
+      .toArray();
+    if (chunk.length === 0) return { links: decodeLinks(pending), cursor: null };
+
+    // Co-keyed extractions for the chunk, fetched once — the join the inline eligibility
+    // test reads (the writer-split's `extractions/{id}` shadow of each `links/{id}`).
+    const exRecords = await db.items.bulkGet(chunk.map((r) => extractionPathForLink(r.path)));
+
+    let examined = 0;
+    for (let i = 0; i < chunk.length; i++) {
+      const record = chunk[i];
+      const createdAt = record.itemCreatedAt ?? 0;
+      // Skip the prior boundary's already-examined rows (same createdAt, path at/after it).
+      if (boundary && createdAt === boundary.createdAt && record.path >= boundary.path) continue;
+      examined++;
+      next = { createdAt, path: record.path };
+
+      const exRecord = exRecords[i];
+      const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
+      if (isTitleImageEligible(facet, now)) {
+        pending.push(record);
+        if (pending.length >= limit) return { links: decodeLinks(pending), cursor: next };
+      }
+    }
+
+    // A short chunk means we reached the oldest link — library exhausted.
+    if (chunk.length < SCAN_CHUNK) return { links: decodeLinks(pending), cursor: null };
+
+    // Advance into the next chunk. Normally `next` (the last examined row) is the chunk's
+    // last row, so the boundary moves forward. If `examined === 0` the whole full chunk was
+    // the skipped boundary run (a collision run longer than SCAN_CHUNK sharing one
+    // createdAt) — `next` didn't move, so step the boundary to the chunk's last row to force
+    // progress through the run.
+    boundary = examined === 0 ? toCursor(chunk[chunk.length - 1]) : (next ?? undefined);
+  }
+}
+
+function toCursor(record: ItemRecord): LinkScanCursor {
+  return { createdAt: record.itemCreatedAt ?? 0, path: record.path };
 }
 
 // The pending-titleImage subset of a SPECIFIC set of link paths, in the given order — the
 // read behind brace-web's displayed-driven AUTOMATIC extraction (extraction-provider). Where
-// `readLinksPendingTitleImage` walks the whole library for the conscious "enrich all" job,
+// `readLinksPendingTitleImagePage` walks the whole library for the conscious "enrich all" job,
 // this scopes the automatic drain to what the user is actually looking at: the page of links
 // the main pane has rendered. So a 30k-link bulk import left in an abandoned tab never
 // enriches past what was scrolled into view — work tracks attention, not an arbitrary cap.
 //
-// Cost: O(displayed), NOT O(library). It tests each path's OWN extraction facet directly
-// (`isTitleImageEligible`) instead of building the global blocked-set
-// (`computeBlockedTitleImageIds`) — load-bearing because this read backs the always-on probe
-// liveQuery (extraction-provider), which re-runs on every `db.items` write: materializing
-// every settled id on each of those (O(done) — the whole library once mostly enriched) would
-// make a large-library drain O(n²). Two `bulkGet`s of the given paths (the links + their
-// co-keyed extractions), then an inline per-path test. Order follows `linkPaths` (the display
-// order — newest first), so on-screen links enrich top-down. Missing / non-link / settled /
-// still-cooling paths drop out.
+// Cost: O(displayed), NOT O(library) — load-bearing because this read backs the always-on
+// probe liveQuery (extraction-provider), which re-runs on every `db.items` write. Two
+// `bulkGet`s of the given paths (the links + their co-keyed extractions), then an inline
+// per-path eligibility test (`isTitleImageEligible`) — the same direct facet test the
+// enrich-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
+// display order — newest first), so on-screen links enrich top-down. Missing / non-link /
+// settled / still-cooling paths drop out.
 export async function readLinksPendingTitleImageForLinkPaths(
   linkPaths: string[],
   now: number,
@@ -456,6 +493,7 @@ export async function readLinksPendingTitleImageForLinkPaths(
   for (let i = 0; i < linkPaths.length; i++) {
     const record = records[i];
     if (!record || record.itemType !== 'link') continue;
+
     const exRecord = exRecords[i];
     const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
     if (isTitleImageEligible(facet, now)) pending.push(record);

@@ -9,7 +9,7 @@
 // docs/link-extraction.md ("the queue is a query, not a structure"; "everything is
 // async; nothing blocks the save"), the trigger is OBSERVING pending state, not the
 // save call — which is what makes it cover cross-device saves and bulk imports for
-// free (all just rows the same `readLinksPendingTitleImage` query returns), and keeps
+// free (all just rows the same pending-titleImage queries return), and keeps
 // the save off the network.
 //
 // COST CONTROL — why this isn't a naive "drain everything while the tab is open".
@@ -29,19 +29,20 @@
 //      library in one sitting — past it the drain stops and flips `autoLimitReached`.
 //   3. Explicit "enrich all". Draining the WHOLE library is a CONSCIOUS, user-driven
 //      job: `enrichAll()` switches the source to the full-library scan
-//      (`readLinksPendingTitleImage`) and lifts the auto cap (still visibility-gated),
-//      `pause()` stops it. The bulk import is the opt-in moment the doc names —
+//      (`readLinksPendingTitleImagePage`, cursor-paginated newest-first) and lifts the
+//      auto cap (still visibility-gated), `pause()` stops it. The bulk import is the opt-in moment the doc names —
 //      surfaced via the context below (counts + controls) so the app can show "X of Y
 //      enriched — [Enrich all] / [Pause]" rather than draining behind the user's back.
 //
 // The loop, gated on the opt-in + a ready store + visibility:
-//   liveQuery(pending titleImage) wakes it → drain in paced batches, until the
-//   backlog is empty, the auto budget is spent (auto mode), the tab hides, or the
-//   user pauses. The SOURCE depends on mode: auto drains the displayed page's pending
-//   subset; `enrichAll()` drains the whole library. Per batch:
+//   a wake signal kicks it → drain in paced batches, until the backlog is empty, the
+//   auto budget is spent (auto mode), the tab hides, or the user pauses. The SOURCE
+//   depends on mode: auto re-scans the displayed page's pending subset each batch;
+//   `enrichAll()` pages the whole library newest-first via a forward cursor (no top
+//   re-scan). Per batch:
 //     runServerTitleImageBatch (one extract — server fans out — → titles first, then
 //     images pooled → write `files/` + `extractions/`) → requestSync() to push →
-//     re-scan → repeat.
+//     next page / re-scan → repeat.
 // A `failed` link is marked + backed-off, so it drops out of the scan and the loop
 // always terminates (no tight retry spin).
 //
@@ -64,9 +65,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { type ExtractClient, MAX_EXTRACT_URLS } from '@stxapps/shared';
 
 import {
+  type LinkScanCursor,
   readExtractionFacetCounts,
-  readLinksPendingTitleImage,
   readLinksPendingTitleImageForLinkPaths,
+  readLinksPendingTitleImagePage,
 } from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
 import { runServerTitleImageBatch } from '../lib/server-extraction';
@@ -180,6 +182,13 @@ export function ExtractionProvider({
   const [isActive, setIsActive] = useState(false);
   const [autoLimitReached, setAutoLimitReached] = useState(false);
 
+  // Resume point for the whole-library enrich-all walk (active mode). Held in a ref so the
+  // drain advances it across batches without re-scanning from the top — the property that
+  // keeps enrich-all O(library), not O(library²). `undefined` = start at the newest link;
+  // `enrichAll()` resets it, and the drain resets it again on reaching the end so a later
+  // wake (e.g. a sync landing new links) re-scans from the newest.
+  const activeCursorRef = useRef<LinkScanCursor | undefined>(undefined);
+
   // The link paths the main pane is currently showing, reported by the app via
   // `reportDisplayedLinkPaths`. The AUTOMATIC drain works only this set; `enrichAll()` ignores
   // it for the full-library scan. Mirrored to a ref so the running loop reads the latest
@@ -196,20 +205,23 @@ export function ExtractionProvider({
     );
   }, []);
 
-  // Cheap local wake signal: is there any titleImage pending AND ELIGIBLE right now
-  // (respects backoff — unlike the display `pendingCount`, which excludes `failed`)?
-  // The source matches the drain's: in `enrichAll` mode the whole library, otherwise just
-  // the displayed page. liveQuery re-runs it whenever `db.items` changes — a fresh save,
-  // an import, or a sync landing a cross-device link — and whenever the displayed page
-  // changes (a scroll / "show more" / navigation), so the drain is reactive without a
-  // fixed poll. Both reads are bounded (docs: "the local queue scan is free").
+  // Cheap local wake signal for the AUTO (displayed-scoped) drain: is any titleImage on the
+  // currently-shown page pending AND ELIGIBLE right now (respects backoff — unlike the
+  // display `pendingCount`, which excludes `failed`)? liveQuery re-runs it whenever
+  // `db.items` changes — a fresh save, an import, or a sync landing a cross-device link —
+  // and whenever the displayed page changes (a scroll / "show more" / navigation), so the
+  // drain is reactive without a fixed poll. Bounded to O(displayed). Inert in active mode,
+  // where the wake comes from `counts.pending` below instead (no per-write library scan).
   const probe = useLiveQuery(() => {
-    if (!enabled) return Promise.resolve([]);
-    return isActive
-      ? readLinksPendingTitleImage(Date.now(), 1)
-      : readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now());
+    if (!enabled || isActive) return Promise.resolve([] as unknown[]);
+    return readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now());
   }, [enabled, isActive, displayedLinkPaths]);
-  const hasWork = (probe?.length ?? 0) > 0;
+  // Active (enrich-all) mode wakes off the free index-count `counts.pending` (not-yet-attempted
+  // links) rather than a per-write whole-library eligibility scan: pending > 0 always means
+  // genuine eligible work (an absent facet is always eligible), and any cooled-`failed` links
+  // the walk passes are still retried inline. When pending hits 0 the drain idles; a fresh
+  // import or synced link lifts it again. Auto mode uses the displayed-scoped probe.
+  const hasWork = isActive ? counts.pending > 0 : (probe?.length ?? 0) > 0;
 
   // Single-flight the drain: a wake while one is running sets `rerun` so it loops once
   // more at the end, instead of overlapping.
@@ -219,6 +231,7 @@ export function ExtractionProvider({
 
   const enrichAll = useCallback(() => {
     activeRef.current = true;
+    activeCursorRef.current = undefined; // walk the whole library from the newest link
     setAutoLimitReached(false);
     setIsActive(true);
   }, []);
@@ -246,30 +259,48 @@ export function ExtractionProvider({
       try {
         for (;;) {
           if (cancelled || !visibleRef.current) return;
-          // Auto mode stops at the budget; active mode (enrichAll) ignores it.
-          if (!activeRef.current && budgetRef.current <= 0) {
+
+          if (activeRef.current) {
+            // Active (enrichAll): page the WHOLE library newest-first via a forward cursor —
+            // each batch resumes where the last left off (no top re-scan, no blocked-set
+            // rebuild), so the drain is O(library), not O(library²). A non-null cursor always
+            // pairs with a full page; a null cursor means we hit the oldest link.
+            const page = await readLinksPendingTitleImagePage(
+              Date.now(),
+              BATCH,
+              activeCursorRef.current,
+            );
+            if (page.links.length > 0) {
+              // One batched extract enriches the whole page — the server fans the URLs out,
+              // so titles land together fast and images fill in pooled. Never throws.
+              await runServerTitleImageBatch(username, page.links, extractClient);
+              // Push this batch's `files/` + `extractions/` writes (and pull anything new).
+              requestSync();
+            }
+            if (page.cursor === null) {
+              // End of library reached. Reset so a later wake (a sync landing new links)
+              // re-scans from the newest rather than resuming past the end.
+              activeCursorRef.current = undefined;
+              break;
+            }
+            activeCursorRef.current = page.cursor;
+            continue;
+          }
+
+          // Auto mode: drain the displayed page's pending subset, capped by the session budget.
+          if (budgetRef.current <= 0) {
             setAutoLimitReached(true);
             break;
           }
-          const take = activeRef.current ? BATCH : Math.min(BATCH, budgetRef.current);
-          // Auto mode drains the displayed page's pending subset; enrichAll the whole
-          // library. Both re-scan each batch, so just-settled links drop out next pass.
-          const links = activeRef.current
-            ? await readLinksPendingTitleImage(Date.now(), take)
-            : (
-                await readLinksPendingTitleImageForLinkPaths(
-                  displayedLinkPathsRef.current,
-                  Date.now(),
-                )
-              ).slice(0, take);
+          const take = Math.min(BATCH, budgetRef.current);
+          const links = (
+            await readLinksPendingTitleImageForLinkPaths(displayedLinkPathsRef.current, Date.now())
+          ).slice(0, take);
           if (links.length === 0) break;
-          // One batched extract enriches the whole take — the server fans the URLs out, so
-          // titles land together fast and images fill in pooled. Never throws; returns the
-          // count processed (`take` already bounds it to the auto budget, so no overshoot).
+          // Returns the count processed (`take` already bounds it to the auto budget).
           const processed = await runServerTitleImageBatch(username, links, extractClient);
-          if (!activeRef.current) budgetRef.current -= processed;
-          // Push this batch's `files/` + `extractions/` writes (and pull anything new);
-          // the next iteration re-scans, where the just-settled links are excluded.
+          budgetRef.current -= processed;
+          // Push writes; the next iteration re-scans, where just-settled links drop out.
           requestSync();
         }
       } finally {
