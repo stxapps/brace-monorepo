@@ -1,4 +1,3 @@
-import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { app } from '../app';
@@ -11,16 +10,6 @@ function stubFetch(impl: (url: string) => Response): ReturnType<typeof vi.fn> {
 
 async function getImage(url: string): Promise<Response> {
   return app.request(`/v1/image?url=${encodeURIComponent(url)}`);
-}
-
-// Drive the handler with a real ExecutionContext so the background `cache.put`
-// (waitUntil) can be flushed deterministically with `waitOnExecutionContext`.
-async function getImageWithCtx(url: string): Promise<Response> {
-  const request = new Request(`http://localhost/v1/image?url=${encodeURIComponent(url)}`);
-  const ctx = createExecutionContext();
-  const res = await app.fetch(request, env, ctx);
-  await waitOnExecutionContext(ctx);
-  return res;
 }
 
 afterEach(() => {
@@ -92,7 +81,7 @@ describe('GET /v1/image', () => {
     expect(res.status).toBe(400);
   });
 
-  it('serves a repeat request from the edge cache, fetching upstream only once', async () => {
+  it('has no server-side cache — every request fetches upstream', async () => {
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 8, 7]);
     const mock = stubFetch(
       () =>
@@ -101,37 +90,17 @@ describe('GET /v1/image', () => {
           headers: { 'content-type': 'image/webp', 'content-length': String(bytes.length) },
         }),
     );
-    // Unique per run so a persisted cache entry can't bleed across test runs.
-    const url = `https://cdn.example.com/cache-${crypto.randomUUID()}.webp`;
+    const url = 'https://cdn.example.com/repeat.webp';
 
-    const first = await getImageWithCtx(url);
+    const first = await getImage(url);
     expect(first.status).toBe(200);
     expect(new Uint8Array(await first.arrayBuffer())).toEqual(bytes);
 
-    const second = await getImageWithCtx(url);
+    const second = await getImage(url);
     expect(second.status).toBe(200);
-    expect(second.headers.get('content-type')).toBe('image/webp');
     expect(new Uint8Array(await second.arrayBuffer())).toEqual(bytes);
 
-    // Second hit was served from cache — no second upstream fetch.
-    expect(mock).toHaveBeenCalledTimes(1);
-  });
-
-  it('keys the cache on the full url — a different target is a cache miss', async () => {
-    const mock = stubFetch(
-      (input) =>
-        new Response(new TextEncoder().encode(input), {
-          status: 200,
-          headers: { 'content-type': 'image/png' },
-        }),
-    );
-    const a = `https://cdn.example.com/a-${crypto.randomUUID()}.png`;
-    const b = `https://cdn.example.com/b-${crypto.randomUUID()}.png`;
-
-    await (await getImageWithCtx(a)).arrayBuffer();
-    await (await getImageWithCtx(b)).arrayBuffer();
-
-    // Distinct URLs → distinct cache keys → both fetched (no false hit).
+    // No edge cache: the identical second request hits upstream again.
     expect(mock).toHaveBeenCalledTimes(2);
   });
 });
