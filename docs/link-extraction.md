@@ -611,9 +611,11 @@ The loop: **extract** → **write back** (the result _and_ bookkeeping into
 never touches) → all of it syncs as ordinary encrypted blobs through the existing
 engine. There is no claim step — a rare double-extraction is
 resolved by idempotency + file-level LWW, not prevented by a lease (see _the
-extraction entity_). The **background** drain of this loop belongs to the clients
-that can run headless against a queued URL — the **Expo app** and
-**`brace-extractor`**; the **extension does not run it** (it's active-context only —
+extraction entity_). The **headless background** drain of this loop belongs to the
+clients that can run against a queued URL with no live tab — the **Expo app**
+(an alarm sweep) and, for `brace-web`/desktop, the **`brace-extractor`** server they
+call; **`brace-web` itself drains in-page** (see _the web drains in-page_ below), and
+the **extension does not run a background drain at all** (it's active-context only —
 see _the extension is active-context only_), so its only role in this loop is the
 **active-context** capture on a save / on opening a page. All run against the **same
 contract** — the reason the schema (including the shared `backoff()` curve) lives in
@@ -641,6 +643,39 @@ nothing is on the critical path for it (the saving client already did it), so
 there's no latency for push to remove. (Push only becomes interesting if the
 extension ever becomes the authoritative background worker for a facet — which the
 active-page facets aren't.)
+
+#### the web drains in-page, scoped to what's on screen
+
+`brace-web` has **no background service worker** — its sync engine already runs
+in-page, and so does its drain: the **`ExtractionProvider`** (web-react), the
+counterpart of the Expo alarm sweep and the extension's active-context role. Because
+it's in-page it isn't alarm-paced; it's **`liveQuery`-reactive** — the pending query
+re-runs on every store change (a save, an import, a cross-device link landing) and
+wakes the drain, no fixed tick.
+
+The cost shape is different enough from the headless clients to call out. Each
+pending link is a **paid `brace-extractor` request** (HTML fetch + maybe an image
+proxy), and an open tab can be **abandoned** — so the web drain must never bill the
+server for work no one is watching. Three gates impose that, all of them UX/cost
+**shaping on top of** the extractor's own non-negotiable per-IP caps (see _server
+extraction_), never a substitute for them:
+
+- **Visibility gate.** The drain runs only while the tab is **visible**; a
+  hidden/backgrounded tab spends nothing.
+- **Displayed-scoped automatic drain.** The automatic drain works **only the pending
+  subset of the links currently on screen** — the page the main pane has rendered,
+  reported into the provider — not a blind walk of the whole library. So **work
+  tracks attention**: a 30 000-link bulk import left in an open tab never enriches
+  past what the user actually scrolled into view. This is still _the queue is a
+  query_ — it's the **same `titleImage`-pending facet**, just queried over the
+  displayed paths instead of the full library. A per-session **backstop cap** still
+  trips for a user who deep-scrolls a huge library in one sitting, surfacing
+  "enrich the rest?" rather than draining unbounded.
+- **Explicit "enrich all".** Draining the **whole** library is a conscious,
+  user-driven job — a full-library pending scan, lifted out of the displayed scope
+  and the backstop cap (still visibility-gated, pausable). This is the **opt-in
+  moment** a bulk import names ("enrich my whole library?" — see _imported links_),
+  surfaced with progress + controls rather than running behind the user's back.
 
 ### imported links: the bulk path
 
@@ -684,7 +719,8 @@ is active-context only_), so it can only enrich an imported link if the user
 manually opens it in a tab, which nobody does for thousands of imports. That leaves
 **mobile background** (an `expo:bg` drain, also throttled and unreliable) or
 `brace-extractor`. A bulk import is also the natural **opt-in moment** ("enrich my
-whole library?"). So the honest framing: _interactive saves justify **avoiding**
+whole library?" — in `brace-web` this is the explicit _enrich all_ drain, see _the
+web drains in-page_). So the honest framing: _interactive saves justify **avoiding**
 `brace-extractor`; imports justify **building** it_ — different workloads, different
 answers.
 

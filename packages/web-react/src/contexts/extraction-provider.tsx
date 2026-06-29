@@ -21,21 +21,25 @@
 //
 //   1. Visibility gate. The drain runs only while the tab is VISIBLE; hiding it
 //      pauses, revealing it resumes. An abandoned/backgrounded tab spends nothing.
-//   2. Auto budget. The automatic drain handles only the INCIDENTAL residual —
-//      cross-device saves, small backfills — capped at AUTO_BUDGET links per session.
-//      Past that it stops and flips `autoLimitReached`, so a bulk import can't
-//      silently rack up thousands of requests.
-//   3. Explicit "enrich all". Draining the whole library is a CONSCIOUS, user-driven
-//      job: `enrichAll()` lifts the auto cap (still visibility-gated), `pause()` stops
-//      it. The bulk import is the opt-in moment the doc names — surfaced via the
-//      context below (counts + controls) so the app can show "X of Y enriched —
-//      [Enrich all] / [Pause]" rather than draining behind the user's back.
+//   2. Displayed-scoped auto drain. The automatic drain enriches only the pending
+//      subset of the links the main pane is currently SHOWING (`reportVisiblePaths`
+//      → `readLinksPendingTitleImageForPaths`), so cost tracks ATTENTION: a 30k-link
+//      bulk import never enriches past what the user scrolled into view. A
+//      `AUTO_BUDGET`-per-session backstop still caps a user who deep-scrolls a huge
+//      library in one sitting — past it the drain stops and flips `autoLimitReached`.
+//   3. Explicit "enrich all". Draining the WHOLE library is a CONSCIOUS, user-driven
+//      job: `enrichAll()` switches the source to the full-library scan
+//      (`readLinksPendingTitleImage`) and lifts the auto cap (still visibility-gated),
+//      `pause()` stops it. The bulk import is the opt-in moment the doc names —
+//      surfaced via the context below (counts + controls) so the app can show "X of Y
+//      enriched — [Enrich all] / [Pause]" rather than draining behind the user's back.
 //
 // The loop, gated on the opt-in + a ready store + visibility:
 //   liveQuery(pending titleImage) wakes it → drain in paced batches, until the
 //   backlog is empty, the auto budget is spent (auto mode), the tab hides, or the
-//   user pauses:
-//     for each link: runServerTitleImage (extract → resize → write `files/` +
+//   user pauses. The SOURCE depends on mode: auto drains the displayed page's pending
+//   subset; `enrichAll()` drains the whole library. Per link:
+//     runServerTitleImage (extract → resize → write `files/` +
 //     `extractions/`) → requestSync() to push → re-scan → repeat.
 // A `failed` link is marked + backed-off, so it drops out of the scan and the loop
 // always terminates (no tight retry spin).
@@ -58,7 +62,11 @@ import { useLiveQuery } from 'dexie-react-hooks';
 
 import { type ExtractClient } from '@stxapps/shared';
 
-import { readExtractionFacetCounts, readLinksPendingTitleImage } from '../data/queries';
+import {
+  readExtractionFacetCounts,
+  readLinksPendingTitleImage,
+  readLinksPendingTitleImageForPaths,
+} from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
 import { runServerTitleImage } from '../lib/server-extraction';
 import { useAuth } from './auth-provider';
@@ -70,12 +78,12 @@ import { useSync } from './sync-provider';
 // within a batch rather than fanning out.
 const BATCH = 5;
 
-// The INCIDENTAL ceiling: how many links the AUTOMATIC drain processes per session
-// before it stops and waits for an explicit `enrichAll()`. Sized to cover the genuine
-// residual (a handful to dozens of cross-device saves) while ensuring a bulk import
-// can never auto-bill the server for thousands of requests in an open tab. Resets per
-// mount/session — declining the opt-in or just leaving costs nothing further; a big
-// library enriches a chunk per visit, or all-at-once when the user asks.
+// The backstop ceiling: how many links the AUTOMATIC (displayed-scoped) drain processes
+// per session before it stops and waits for an explicit `enrichAll()`. The displayed
+// scope already bounds normal browsing to a page or three; this only catches a user who
+// deep-scrolls a huge library in one sitting, so a bulk import can't auto-bill the server
+// for thousands of requests even with the tab in front of them. Resets per mount/session —
+// a big library enriches a chunk per visit, or all-at-once when the user asks.
 const AUTO_BUDGET = 100;
 
 interface ExtractionContextValue {
@@ -100,6 +108,12 @@ interface ExtractionContextValue {
   enrichAll: () => void;
   // Stop the active drain; nothing auto-resumes until `enrichAll()` is called again.
   pause: () => void;
+  // Report the link paths currently DISPLAYED in the main pane (the page the user is
+  // browsing). The automatic drain enriches the pending subset of these — and only
+  // these — so work tracks attention: an abandoned bulk import never enriches past
+  // what was scrolled into view. Pass the page's paths whenever they change; pass an
+  // empty array when no links are shown. A no-op while extraction is disabled.
+  reportVisiblePaths: (paths: string[]) => void;
 }
 
 const ExtractionContext = createContext<ExtractionContextValue | null>(null);
@@ -151,25 +165,46 @@ export function ExtractionProvider({
       [enabled],
     ) ?? EMPTY_COUNTS;
 
-  // Cheap local wake signal: is there any titleImage pending AND ELIGIBLE right now
-  // (respects backoff — unlike the display `pendingCount`, which excludes `failed`)?
-  // The scan is a bounded index read (docs: "the local queue scan is free"), and
-  // liveQuery re-runs it whenever `db.items` changes — a fresh save, an import, or a
-  // sync landing a cross-device link — so the drain is reactive without a fixed poll.
-  const probe = useLiveQuery(
-    () => (enabled ? readLinksPendingTitleImage(Date.now(), 1) : Promise.resolve([])),
-    [enabled],
-  );
-  const hasWork = (probe?.length ?? 0) > 0;
-
   // Remaining AUTOMATIC budget for this session — decremented per link in auto mode,
   // ignored in active mode. Held in a ref (not state) so spending it doesn't re-render.
   const budgetRef = useRef(AUTO_BUDGET);
   // User-initiated mode flag the loop reads live; mirrored to `isActive` state for the
-  // UI and to re-trigger the drain effect on toggle.
+  // UI and to re-trigger the drain effect (and the probe source) on toggle.
   const activeRef = useRef(false);
   const [isActive, setIsActive] = useState(false);
   const [autoLimitReached, setAutoLimitReached] = useState(false);
+
+  // The link paths the main pane is currently showing, reported by the app via
+  // `reportVisiblePaths`. The AUTOMATIC drain works only this set; `enrichAll()` ignores
+  // it for the full-library scan. Mirrored to a ref so the running loop reads the latest
+  // page mid-drain without the effect having to restart. Deduped on report so an
+  // unchanged page keeps a stable reference (a stable liveQuery dep / no needless churn).
+  const [visiblePaths, setVisiblePaths] = useState<string[]>([]);
+  const visiblePathsRef = useRef(visiblePaths);
+  visiblePathsRef.current = visiblePaths;
+  const reportVisiblePaths = useCallback((paths: string[]) => {
+    setVisiblePaths((prev) =>
+      prev.length === paths.length && prev.every((path, i) => path === paths[i]) ? prev : paths,
+    );
+  }, []);
+
+  // Cheap local wake signal: is there any titleImage pending AND ELIGIBLE right now
+  // (respects backoff — unlike the display `pendingCount`, which excludes `failed`)?
+  // The source matches the drain's: in `enrichAll` mode the whole library, otherwise just
+  // the displayed page. liveQuery re-runs it whenever `db.items` changes — a fresh save,
+  // an import, or a sync landing a cross-device link — and whenever the displayed page
+  // changes (a scroll / "show more" / navigation), so the drain is reactive without a
+  // fixed poll. Both reads are bounded (docs: "the local queue scan is free").
+  const probe = useLiveQuery(
+    () => {
+      if (!enabled) return Promise.resolve([]);
+      return isActive
+        ? readLinksPendingTitleImage(Date.now(), 1)
+        : readLinksPendingTitleImageForPaths(visiblePaths, Date.now());
+    },
+    [enabled, isActive, visiblePaths],
+  );
+  const hasWork = (probe?.length ?? 0) > 0;
 
   // Single-flight the drain: a wake while one is running sets `rerun` so it loops once
   // more at the end, instead of overlapping.
@@ -214,7 +249,14 @@ export function ExtractionProvider({
           const take = activeRef.current
             ? BATCH
             : Math.min(BATCH, budgetRef.current);
-          const links = await readLinksPendingTitleImage(Date.now(), take);
+          // Auto mode drains the displayed page's pending subset; enrichAll the whole
+          // library. Both re-scan each batch, so just-settled links drop out next pass.
+          const links = activeRef.current
+            ? await readLinksPendingTitleImage(Date.now(), take)
+            : (await readLinksPendingTitleImageForPaths(visiblePathsRef.current, Date.now())).slice(
+                0,
+                take,
+              );
           if (links.length === 0) break;
           for (const link of links) {
             if (cancelled || !visibleRef.current) return;
@@ -254,6 +296,7 @@ export function ExtractionProvider({
       autoLimitReached,
       enrichAll,
       pause,
+      reportVisiblePaths,
     }),
     [
       enabled,
@@ -265,6 +308,7 @@ export function ExtractionProvider({
       autoLimitReached,
       enrichAll,
       pause,
+      reportVisiblePaths,
     ],
   );
 

@@ -5,7 +5,9 @@
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
 // place the data hook meets the layouts.
 
-import { useSettings } from '@stxapps/web-react';
+import { useEffect } from 'react';
+
+import { useExtraction, useSettings } from '@stxapps/web-react';
 
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
@@ -22,6 +24,14 @@ const LAYOUTS: Record<string, (props: LinkLayoutProps) => React.ReactNode> = {
 export function Main() {
   const { linksLayout } = useSettings();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
+
+  // Drive automatic server extraction off what's on screen: report this page's link paths
+  // so the ExtractionProvider enriches only their pending subset (see extraction-provider).
+  // This is the single place the link page meets that loop, the same way it meets layouts.
+  const { reportVisiblePaths } = useExtraction();
+  useEffect(() => {
+    reportVisiblePaths(links.map((link) => link.path));
+  }, [links, reportVisiblePaths]);
 
   const Layout = LAYOUTS[linksLayout];
 

@@ -348,26 +348,22 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
 }
 
-// The residual extraction queue, as a QUERY (there's no queue object — see
-// docs/link-extraction.md "the queue is a query"). Returns up to `limit` links whose
-// `titleImage` facet is PENDING for this client to fill at bg-fetch tier: a link with
-// no `done`/`permanent` titleImage facet, where any prior `failed` attempt is past its
-// backoff (`now >= extractedAt + backoff(attempts)`). `permanent` (404/410, robots) and
-// still-cooling-down `failed` facets are skipped — one device's outcome, synced, stops
-// every device. The link blob carries the URL the caller fetches.
-//
-// Cost: three index range-reads of the small `*itemFacetStatuses` token set to build the
-// "blocked" id set, a decode of only the (few) `failed` extractions to check backoff, then
-// a bounded newest-first walk of `links/` that stops at `limit`. The full library is never
-// decoded — the deliberate "local queue scan is free" property the doc relies on.
-export async function readLinksPendingTitleImage(now: number, limit: number): Promise<LinkItem[]> {
+// The set of link ids whose `titleImage` is NOT eligible for (re)extraction right now —
+// the shared core of both pending reads below. A link id is blocked if its titleImage
+// facet is `done`/`permanent`, or `failed` but still inside its backoff window
+// (`now < extractedAt + backoff(attempts)`). `permanent` (404/410, robots) and
+// still-cooling `failed` outcomes are skipped — one device's outcome, synced, stops every
+// device. Cost: three index range-reads of the small `*itemFacetStatuses` token set, plus
+// a decode of only the (few) `failed` extractions to check backoff. The link total is
+// never decoded — the "local queue scan is free" property the doc relies on.
+async function computeBlockedTitleImageIds(now: number): Promise<Set<string>> {
   const [donePaths, permanentPaths, failedPaths] = await Promise.all([
     db.items.where('itemFacetStatuses').equals('done:titleImage').primaryKeys(),
     db.items.where('itemFacetStatuses').equals('permanent:titleImage').primaryKeys(),
     db.items.where('itemFacetStatuses').equals('failed:titleImage').primaryKeys(),
   ]);
 
-  // Link ids whose titleImage is settled (done/permanent) — never re-queued here.
+  // Link ids whose titleImage is settled (done/permanent) — never re-queued.
   const blocked = new Set<string>();
   for (const path of donePaths) blocked.add(idFromPath(path as string, EXTRACTIONS_PREFIX));
   for (const path of permanentPaths) blocked.add(idFromPath(path as string, EXTRACTIONS_PREFIX));
@@ -384,12 +380,25 @@ export async function readLinksPendingTitleImage(now: number, limit: number): Pr
     // from the path (idFromPath / paths.ts), the one authority a round-tripped blob
     // can't drift from.
     if (now < eligibleAt) blocked.add(idFromPath(record.path, EXTRACTIONS_PREFIX)); // still cooling down
-    // else: leave unblocked — it's pending again and the walk below picks it up.
+    // else: leave unblocked — it's pending again and the walks below pick it up.
   }
+  return blocked;
+}
 
-  // Walk links newest-added first, skipping blocked ids; `filter` then `limit` touches a
-  // bounded slice, not the library. createdAt order so a fresh import drains oldest-saved
-  // last (newest first), matching how the user sees the list fill in.
+// The residual extraction queue, as a QUERY (there's no queue object — see
+// docs/link-extraction.md "the queue is a query"). Returns up to `limit` links whose
+// `titleImage` facet is PENDING (see `computeBlockedTitleImageIds`). The link blob carries
+// the URL the caller fetches. This is the WHOLE-LIBRARY scan behind the explicit "enrich
+// all" job (extraction-provider `enrichAll`); the automatic drain uses the displayed-scoped
+// read below instead.
+//
+// Cost: the shared blocked-id computation, then a bounded newest-added-first walk of
+// `links/` that stops at `limit` (createdAt order, so a fresh import drains oldest-saved
+// last — newest first, matching how the user sees the list fill in). The full library is
+// never decoded.
+export async function readLinksPendingTitleImage(now: number, limit: number): Promise<LinkItem[]> {
+  const blocked = await computeBlockedTitleImageIds(now);
+
   const records = await db.items
     .where('[itemType+itemCreatedAt]')
     .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
@@ -398,6 +407,32 @@ export async function readLinksPendingTitleImage(now: number, limit: number): Pr
     .limit(limit)
     .toArray();
   return decodeLinks(records);
+}
+
+// The pending-titleImage subset of a SPECIFIC set of link paths, in the given order — the
+// read behind brace-web's displayed-driven AUTOMATIC extraction (extraction-provider). Where
+// `readLinksPendingTitleImage` walks the whole library for the conscious "enrich all" job,
+// this scopes the automatic drain to what the user is actually looking at: the page of links
+// the main pane has rendered. So a 30k-link bulk import left in an abandoned tab never
+// enriches past what was scrolled into view — work tracks attention, not an arbitrary cap.
+//
+// Cost: the shared blocked-id computation plus one `bulkGet` of the given paths — no library
+// walk. Order follows `paths` (the display order — newest first), so on-screen links enrich
+// top-down. Missing / non-link / blocked paths drop out.
+export async function readLinksPendingTitleImageForPaths(
+  paths: string[],
+  now: number,
+): Promise<LinkItem[]> {
+  if (paths.length === 0) return [];
+  const blocked = await computeBlockedTitleImageIds(now);
+  const records = await db.items.bulkGet(paths);
+  const pending = records.filter(
+    (record): record is ItemRecord =>
+      record !== undefined &&
+      record.itemType === 'link' &&
+      !blocked.has(idFromPath(record.path, LINKS_PREFIX)),
+  );
+  return decodeLinks(pending);
 }
 
 // The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /
