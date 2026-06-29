@@ -34,32 +34,52 @@ import {
   tagSchema,
 } from '@stxapps/shared';
 
-import { db } from './db';
+import { db, type ItemRecord } from './db';
 import { enqueueDelete } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import type { WithPath } from './queries';
 
 const encoder = new TextEncoder();
 
-// Persist one path's RAW bytes locally and queue the upload — the base primitive
-// the JSON-entity path (writeEntity) and the opaque-media path (writeFile) both
-// share: a `files/{id}.enc` content blob (screenshots, archives, read-mode) stores
-// its bytes verbatim, a JSON entity stores its encoded blob, but both do the same
-// local-put + pending-op in one transaction. The sync engine encrypts + PUTs the
-// bytes downstream like any other op.
+// Persist one path's bytes locally and queue the upload, producing the bytes INSIDE
+// the transaction from the path's current record — the base primitive the JSON-entity
+// paths (writeEntity, and its merging sibling writeEntityWith) and the opaque-media path
+// (writeFile) all share. A `files/{id}.enc` content blob stores its bytes verbatim, a
+// JSON entity stores its encoded blob, but both do the same local-put + pending-op in
+// one transaction; the sync engine encrypts + PUTs downstream like any other op.
+//
+// `produce` runs under the SAME rw lock that does the put and sees the existing record
+// (or `undefined`). That's what closes the lost-update window for read-merge writers:
+// IndexedDB serializes overlapping rw transactions on `db.items`, so no concurrent
+// write can land between the producer's read of the prior blob and its put. A merge can
+// therefore read-modify-write a single shared path (`settings/general.enc`, one
+// `extractions/{id}.enc` racing two facet completions) without losing the other side's
+// fields/facets.
 //
 // `baseUpdatedAt` is the path's current server stamp (0 if it has no record yet —
 // a fresh create, including the first edit of an untouched system-list default):
 // the base reconcile diffs the next pulled stamp against to tell our own echo
 // from a real conflict. The local `items.updatedAt` is left at that base until
 // the commit restamps it.
-async function writeBytes(username: string, path: string, bytes: Uint8Array): Promise<void> {
+async function writeBytesWith(
+  username: string,
+  path: string,
+  produce: (existing: ItemRecord | undefined) => Uint8Array,
+): Promise<void> {
   await db.transaction('rw', db.items, db.pendingOps, async () => {
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
+    const bytes = produce(existing);
     await db.items.put(toItemRecord(path, baseUpdatedAt, bytes));
     await db.pendingOps.put({ username, path, op: 'put', baseUpdatedAt });
   });
+}
+
+// Persist already-formed bytes — the non-merging fast path (writeEntity, writeFile),
+// where the bytes don't depend on the path's current record. Thin over writeBytesWith
+// with a producer that ignores the existing record.
+function writeBytes(username: string, path: string, bytes: Uint8Array): Promise<void> {
+  return writeBytesWith(username, path, () => bytes);
 }
 
 // Persist one entity locally and queue it for upload — the JSON-entity path layered
@@ -72,6 +92,23 @@ async function writeBytes(username: string, path: string, bytes: Uint8Array): Pr
 async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
   const { path, ...entity } = item;
   await writeBytes(username, path, encoder.encode(JSON.stringify(entity)));
+}
+
+// The merging sibling of writeEntity: produce the entity blob INSIDE the transaction
+// from the path's current record, then encode + put it — the layer the read-merge-write
+// entities (writeSettingsGeneral, writeExtraction) sit on. Keeps the same agnostic/JSON
+// split: writeBytesWith stays byte-opaque (it also carries writeFile's verbatim media),
+// the JSON encode lives here in one place. `produce` returns the PATHLESS blob — `path`
+// is the store key, reconstructed from the namespace on read, never inside the ciphertext
+// (entities.ts) — so there's nothing to strip before encoding.
+async function writeEntityWith<T extends object>(
+  username: string,
+  path: string,
+  produce: (existing: ItemRecord | undefined) => T,
+): Promise<void> {
+  await writeBytesWith(username, path, (existing) =>
+    encoder.encode(JSON.stringify(produce(existing))),
+  );
 }
 
 // Delete one entity by path: drop the local record and queue the server delete in
@@ -226,35 +263,36 @@ export function deletePin(username: string, path: string): Promise<void> {
 
 // Patch the synced general-settings blob (`settings/general.enc`) and write it —
 // the SYNCED side of a setting (the "Sync" tab), so it rides the same
-// writeEntity → pending-op → R2 path as every other entity. Unlike the others
-// this is a single well-known path, not a per-id create, so it READS the current
-// blob first and merges: the schema is `looseObject`, so an unknown field a newer
-// client wrote (or another general setting) is round-tripped, not stripped (see
-// entities.ts). An absent blob starts from `createdAt: 0`, exactly like the first
-// edit of an untouched system-list default. Stamps `updatedAt` now (and
-// `createdAt` on first write), validates, then writes.
+// pending-op → R2 path as every other entity. Unlike the others this is a single
+// well-known path, not a per-id create, so it READS the current blob and merges —
+// and that read-merge runs INSIDE the write transaction (via writeBytesWith) so a
+// concurrent write to the same path can't slip between the read and the put. The
+// schema is `looseObject`, so an unknown field a newer client wrote (or another
+// general setting) is round-tripped, not stripped (see entities.ts). An absent blob
+// starts from `createdAt: 0`, exactly like the first edit of an untouched
+// system-list default. Stamps `updatedAt` now (and `createdAt` on first write),
+// validates, then writes.
 export async function writeSettingsGeneral(
   username: string,
   patch: Partial<Pick<SettingsGeneral, 'linksLayout' | 'serverExtraction'>>,
 ): Promise<void> {
   const now = Date.now();
-  const record = await db.items.get(SETTINGS_GENERAL_PATH);
-  const current: SettingsGeneral = parseBlob(record?.data, settingsGeneralSchema) ?? {
-    createdAt: 0,
-    updatedAt: 0,
-  };
-  const next: WithPath<SettingsGeneral> = {
-    ...current,
-    ...patch,
-    createdAt: current.createdAt === 0 ? now : current.createdAt,
-    updatedAt: now,
-    path: SETTINGS_GENERAL_PATH,
-  };
-  const { path: _path, ...blob } = next;
-  if (!settingsGeneralSchema.safeParse(blob).success) {
-    throw new Error('writeSettingsGeneral: invalid settings');
-  }
-  await writeEntity(username, next);
+  await writeEntityWith(username, SETTINGS_GENERAL_PATH, (existing) => {
+    const current: SettingsGeneral = parseBlob(existing?.data, settingsGeneralSchema) ?? {
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const next: SettingsGeneral = {
+      ...current,
+      ...patch,
+      createdAt: current.createdAt === 0 ? now : current.createdAt,
+      updatedAt: now,
+    };
+    if (!settingsGeneralSchema.safeParse(next).success) {
+      throw new Error('writeSettingsGeneral: invalid settings');
+    }
+    return next;
+  });
 }
 
 // One extraction facet name (`titleImage` | `screenshot` | …) — the keys of an
@@ -282,10 +320,12 @@ export interface ExtractionPatch {
 // (entities.ts): the extracted display result (title/imageId/pageArchiveId/
 // screenshotId) AND the per-facet who/when/quality/retry bookkeeping. The extractor
 // writes ONLY this file, never `links/{id}.enc`, so it can never clobber a concurrent
-// user edit (the writer-split — docs/link-extraction.md). Read-merge-`put` (like
-// writeSettingsGeneral) so an update keeps the other fields/facets, and `looseObject`
-// round-trips anything a newer client wrote. `linkId` is the link's id (the `{id}` of
-// its `links/{id}.enc`), which is also this entity's id and path id.
+// user edit (the writer-split — docs/link-extraction.md). The read-merge-`put` runs
+// INSIDE the write transaction (via writeBytesWith) so two facet completions racing on
+// the SAME `extractions/{id}.enc` can't lose each other's fields/facets — IndexedDB
+// serializes the overlapping rw transactions, so the second sees the first's merged
+// blob. `looseObject` round-trips anything a newer client wrote. `linkId` is the link's
+// id (the `{id}` of its `links/{id}.enc`), which is also this entity's id and path id.
 export async function writeExtraction(
   username: string,
   linkId: string,
@@ -293,48 +333,46 @@ export async function writeExtraction(
 ): Promise<void> {
   const now = Date.now();
   const path = pathFromId(linkId, EXTRACTIONS_PREFIX);
-  const record = await db.items.get(path);
-  const current: Extraction = parseBlob(record?.data, extractionSchema) ?? {
-    id: linkId,
-    facets: {},
-    createdAt: 0,
-    updatedAt: 0,
-  };
+  await writeEntityWith(username, path, (existing) => {
+    const current: Extraction = parseBlob(existing?.data, extractionSchema) ?? {
+      id: linkId,
+      facets: {},
+      createdAt: 0,
+      updatedAt: 0,
+    };
 
-  // A `failed` write is one consumed retry: derive `attempts` from the prior facet just
-  // read (prior + 1, the real cross-cycle counter) rather than trusting the caller's blind
-  // `state.attempts`, so `backoff(attempts)` escalates across repeated failures (each retry
-  // waits longer, up to the cap) instead of staying flat. The WRITER owns the number because
-  // only this read-merge sees the prior value; on a `failed` write `state.attempts` is a
-  // placeholder that's overridden. Keying off `status` (not a separate flag) makes the
-  // increment impossible to set inconsistently — a `failed` write can't forget to count, and
-  // `done`/`permanent` (terminal — `done` carries `attempts: 0`) never wrongly bump. Best-
-  // effort (the prior read is outside the put transaction, same as the rest of the merge): a
-  // rare lost increment under concurrency just means one slightly-early retry, which backoff
-  // + LWW absorb — it's pacing, not an invariant.
-  const facets =
-    patch.facet && patch.state
-      ? {
-          ...current.facets,
-          [patch.facet]:
-            patch.state.status === 'failed'
-              ? { ...patch.state, attempts: (current.facets[patch.facet]?.attempts ?? 0) + 1 }
-              : patch.state,
-        }
-      : current.facets;
-  const next: WithPath<Extraction> = {
-    ...current,
-    ...patch.fields,
-    facets,
-    createdAt: current.createdAt === 0 ? now : current.createdAt,
-    updatedAt: now,
-    path,
-  };
-  const { path: _path, ...blob } = next;
-  if (!extractionSchema.safeParse(blob).success) {
-    throw new Error(`writeExtraction: invalid extraction ${linkId}`);
-  }
-  await writeEntity(username, next);
+    // A `failed` write is one consumed retry: derive `attempts` from the prior facet just
+    // read (prior + 1, the real cross-cycle counter) rather than trusting the caller's blind
+    // `state.attempts`, so `backoff(attempts)` escalates across repeated failures (each retry
+    // waits longer, up to the cap) instead of staying flat. The WRITER owns the number because
+    // only this read-merge sees the prior value; on a `failed` write `state.attempts` is a
+    // placeholder that's overridden. Keying off `status` (not a separate flag) makes the
+    // increment impossible to set inconsistently — a `failed` write can't forget to count, and
+    // `done`/`permanent` (terminal — `done` carries `attempts: 0`) never wrongly bump. The
+    // prior read shares the put's transaction, so the count is exact even under concurrent
+    // facet completions — no lost increment to absorb.
+    const facets =
+      patch.facet && patch.state
+        ? {
+            ...current.facets,
+            [patch.facet]:
+              patch.state.status === 'failed'
+                ? { ...patch.state, attempts: (current.facets[patch.facet]?.attempts ?? 0) + 1 }
+                : patch.state,
+          }
+        : current.facets;
+    const next: Extraction = {
+      ...current,
+      ...patch.fields,
+      facets,
+      createdAt: current.createdAt === 0 ? now : current.createdAt,
+      updatedAt: now,
+    };
+    if (!extractionSchema.safeParse(next).success) {
+      throw new Error(`writeExtraction: invalid extraction ${linkId}`);
+    }
+    return next;
+  });
 }
 
 // Write a `files/{id}.enc` content blob (a captured screenshot/archive/read-mode
