@@ -1,4 +1,5 @@
 import {
+  base64ToBytes,
   cleanTitle,
   type ExtractClient,
   type ExtractError,
@@ -114,11 +115,4 @@ function doneState(): Facet {
 // there; backoff(1) still cools the first retry, and the per-cycle cap bounds it.
 function failedState(status: 'failed' | 'permanent'): Facet {
   return { status, extractedBy: EXTRACTED_BY, extractedAt: Date.now(), attempts: 1 };
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
 }

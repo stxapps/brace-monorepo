@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import {
+  bytesToBase64,
   extractEndpoint,
   type ExtractResponse,
   type ExtractResult,
@@ -11,7 +12,6 @@ import {
 import type { AppEnv } from '../lib/env';
 import { extractTitleImage } from '../lib/html';
 import {
-  bytesToBase64,
   MAX_HTML_BYTES,
   MAX_INLINE_IMAGE_BYTES,
   readAllWithLimit,

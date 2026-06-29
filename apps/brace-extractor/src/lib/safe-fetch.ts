@@ -197,18 +197,6 @@ export async function readAllWithLimit(
   return out;
 }
 
-// Base64-encode bytes for the inline image field. Chunked through String.fromCharCode
-// so a multi-hundred-KB image doesn't blow the argument-spread stack limit; `btoa` is
-// available in the Workers runtime.
-export function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
 // A pass-through TransformStream that HARD-ABORTS once more than `maxBytes` have
 // flowed — for the image proxy, where we stream bytes to the client but must never
 // relay an oversized body (docs "abort the stream once exceeded — never relay a 4 GB
