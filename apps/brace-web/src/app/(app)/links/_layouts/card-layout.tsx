@@ -19,6 +19,7 @@ import {
   PinnedBadge,
   RefreshPill,
   ShowMore,
+  useReportDisplayedLinkPaths,
 } from './shared';
 
 const COLUMNS = 3;
@@ -55,6 +56,15 @@ export function CardLayout({
     overscan: 4,
   });
 
+  // Virtual items are ROWS of COLUMNS cards, so the displayed LINK range is the first row's
+  // first card through the last row's last card (the hook clamps the tail to `links.length`).
+  const rows = virtualizer.getVirtualItems();
+  useReportDisplayedLinkPaths(
+    links,
+    rows.length ? rows[0].index * COLUMNS : 0,
+    rows.length ? rows[rows.length - 1].index * COLUMNS + COLUMNS - 1 : -1,
+  );
+
   if (links.length === 0) return <EmptyState isLoading={isLoading} />;
 
   return (
@@ -66,7 +76,7 @@ export function CardLayout({
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
-          {virtualizer.getVirtualItems().map((virtualRow) => {
+          {rows.map((virtualRow) => {
             const start = virtualRow.index * COLUMNS;
             const rowLinks = links.slice(start, start + COLUMNS);
             return (

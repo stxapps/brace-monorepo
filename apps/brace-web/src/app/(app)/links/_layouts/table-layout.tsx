@@ -18,6 +18,7 @@ import {
   PinnedBadge,
   RefreshPill,
   ShowMore,
+  useReportDisplayedLinkPaths,
 } from './shared';
 
 const ROW_HEIGHT = 44;
@@ -57,6 +58,14 @@ export function TableLayout({
     overscan: 12,
   });
 
+  // Report only the displayed rows (index maps 1:1 to `links`) so extraction tracks the window.
+  const rows = virtualizer.getVirtualItems();
+  useReportDisplayedLinkPaths(
+    links,
+    rows.length ? rows[0].index : 0,
+    rows.length ? rows[rows.length - 1].index : -1,
+  );
+
   if (links.length === 0) return <EmptyState isLoading={isLoading} />;
 
   return (
@@ -78,7 +87,7 @@ export function TableLayout({
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
         >
           <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
-            {virtualizer.getVirtualItems().map((row) => {
+            {rows.map((row) => {
               const link = links[row.index];
               const pinned = row.index < pinnedCount;
               return (
