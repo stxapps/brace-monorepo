@@ -15,11 +15,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
       <SyncProvider>
-        <InitialSyncGate>
-          <ExtractionProvider extractClient={extractClient}>
+        <ExtractionProvider extractClient={extractClient}>
+          <InitialSyncGate>
             <div className="min-h-screen">{children}</div>
-          </ExtractionProvider>
-        </InitialSyncGate>
+          </InitialSyncGate>
+        </ExtractionProvider>
       </SyncProvider>
     </AuthGuard>
   );

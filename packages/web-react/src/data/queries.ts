@@ -303,12 +303,13 @@ export async function readLinkByUrl(url: string): Promise<LinkItem | undefined> 
 }
 
 // One link by its id (the `{id}` of its `links/{id}.enc`), or undefined — the
-// direct-path counterpart of readLinkByUrl, used by the background extraction worker
-// (which holds a link id from the EXTRACT message and needs the entity to patch).
+// direct-path counterpart of readLinkByUrl, used by the extraction worker to confirm
+// the link still exists locally before capturing (it holds a link id from the EXTRACT
+// message; active-tab capture reads the live DOM, so it needs existence, not the blob).
 export async function readLinkById(linkId: string): Promise<LinkItem | undefined> {
   const record = await db.items.get(pathFromId(linkId, LINKS_PREFIX));
   if (!record) return undefined;
-  return decode(record, linkSchema);
+  return decodeCachedLink(record);
 }
 
 // The extraction bookkeeping entity for one link id (the `{id}` of its
@@ -317,7 +318,7 @@ export async function readLinkById(linkId: string): Promise<LinkItem | undefined
 export async function readExtraction(linkId: string): Promise<ExtractionItem | undefined> {
   const record = await db.items.get(pathFromId(linkId, EXTRACTIONS_PREFIX));
   if (!record) return undefined;
-  return decode(record, extractionSchema);
+  return decodeCachedExtraction(record);
 }
 
 // The options/status page's enrichment tally, headlined on the `titleImage` facet (the
@@ -417,15 +418,15 @@ export async function readLinksPendingTitleImage(now: number, limit: number): Pr
 // enriches past what was scrolled into view — work tracks attention, not an arbitrary cap.
 //
 // Cost: the shared blocked-id computation plus one `bulkGet` of the given paths — no library
-// walk. Order follows `paths` (the display order — newest first), so on-screen links enrich
-// top-down. Missing / non-link / blocked paths drop out.
-export async function readLinksPendingTitleImageForPaths(
-  paths: string[],
+// walk. Order follows `linkPaths` (the display order — newest first), so on-screen links
+// enrich top-down. Missing / non-link / blocked paths drop out.
+export async function readLinksPendingTitleImageForLinkPaths(
+  linkPaths: string[],
   now: number,
 ): Promise<LinkItem[]> {
-  if (paths.length === 0) return [];
+  if (linkPaths.length === 0) return [];
   const blocked = await computeBlockedTitleImageIds(now);
-  const records = await db.items.bulkGet(paths);
+  const records = await db.items.bulkGet(linkPaths);
   const pending = records.filter(
     (record): record is ItemRecord =>
       record !== undefined &&

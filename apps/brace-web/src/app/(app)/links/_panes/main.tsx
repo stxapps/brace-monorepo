@@ -28,10 +28,10 @@ export function Main() {
   // Drive automatic server extraction off what's on screen: report this page's link paths
   // so the ExtractionProvider enriches only their pending subset (see extraction-provider).
   // This is the single place the link page meets that loop, the same way it meets layouts.
-  const { reportVisiblePaths } = useExtraction();
+  const { reportDisplayedLinkPaths } = useExtraction();
   useEffect(() => {
-    reportVisiblePaths(links.map((link) => link.path));
-  }, [links, reportVisiblePaths]);
+    reportDisplayedLinkPaths(links.map((link) => link.path));
+  }, [links, reportDisplayedLinkPaths]);
 
   const Layout = LAYOUTS[linksLayout];
 

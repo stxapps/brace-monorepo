@@ -22,8 +22,8 @@
 //   1. Visibility gate. The drain runs only while the tab is VISIBLE; hiding it
 //      pauses, revealing it resumes. An abandoned/backgrounded tab spends nothing.
 //   2. Displayed-scoped auto drain. The automatic drain enriches only the pending
-//      subset of the links the main pane is currently SHOWING (`reportVisiblePaths`
-//      → `readLinksPendingTitleImageForPaths`), so cost tracks ATTENTION: a 30k-link
+//      subset of the links the main pane is currently SHOWING (`reportDisplayedLinkPaths`
+//      → `readLinksPendingTitleImageForLinkPaths`), so cost tracks ATTENTION: a 30k-link
 //      bulk import never enriches past what the user scrolled into view. A
 //      `AUTO_BUDGET`-per-session backstop still caps a user who deep-scrolls a huge
 //      library in one sitting — past it the drain stops and flips `autoLimitReached`.
@@ -65,7 +65,7 @@ import { type ExtractClient } from '@stxapps/shared';
 import {
   readExtractionFacetCounts,
   readLinksPendingTitleImage,
-  readLinksPendingTitleImageForPaths,
+  readLinksPendingTitleImageForLinkPaths,
 } from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
 import { runServerTitleImage } from '../lib/server-extraction';
@@ -82,8 +82,11 @@ const BATCH = 5;
 // per session before it stops and waits for an explicit `enrichAll()`. The displayed
 // scope already bounds normal browsing to a page or three; this only catches a user who
 // deep-scrolls a huge library in one sitting, so a bulk import can't auto-bill the server
-// for thousands of requests even with the tab in front of them. Resets per mount/session —
-// a big library enriches a chunk per visit, or all-at-once when the user asks.
+// for thousands of requests even with the tab in front of them. Resets when the provider
+// remounts — i.e. per fresh entry into the signed-in app (the provider sits above the
+// initial-sync gate, so it survives that gate's loading/error/ready content swaps and is
+// NOT torn down on a sync retry) — so a big library enriches a chunk per visit, or
+// all-at-once when the user asks.
 const AUTO_BUDGET = 100;
 
 interface ExtractionContextValue {
@@ -111,9 +114,9 @@ interface ExtractionContextValue {
   // Report the link paths currently DISPLAYED in the main pane (the page the user is
   // browsing). The automatic drain enriches the pending subset of these — and only
   // these — so work tracks attention: an abandoned bulk import never enriches past
-  // what was scrolled into view. Pass the page's paths whenever they change; pass an
+  // what was scrolled into view. Pass the page's link paths whenever they change; pass an
   // empty array when no links are shown. A no-op while extraction is disabled.
-  reportVisiblePaths: (paths: string[]) => void;
+  reportDisplayedLinkPaths: (linkPaths: string[]) => void;
 }
 
 const ExtractionContext = createContext<ExtractionContextValue | null>(null);
@@ -175,16 +178,18 @@ export function ExtractionProvider({
   const [autoLimitReached, setAutoLimitReached] = useState(false);
 
   // The link paths the main pane is currently showing, reported by the app via
-  // `reportVisiblePaths`. The AUTOMATIC drain works only this set; `enrichAll()` ignores
+  // `reportDisplayedLinkPaths`. The AUTOMATIC drain works only this set; `enrichAll()` ignores
   // it for the full-library scan. Mirrored to a ref so the running loop reads the latest
   // page mid-drain without the effect having to restart. Deduped on report so an
   // unchanged page keeps a stable reference (a stable liveQuery dep / no needless churn).
-  const [visiblePaths, setVisiblePaths] = useState<string[]>([]);
-  const visiblePathsRef = useRef(visiblePaths);
-  visiblePathsRef.current = visiblePaths;
-  const reportVisiblePaths = useCallback((paths: string[]) => {
-    setVisiblePaths((prev) =>
-      prev.length === paths.length && prev.every((path, i) => path === paths[i]) ? prev : paths,
+  const [displayedLinkPaths, setDisplayedLinkPaths] = useState<string[]>([]);
+  const displayedLinkPathsRef = useRef(displayedLinkPaths);
+  displayedLinkPathsRef.current = displayedLinkPaths;
+  const reportDisplayedLinkPaths = useCallback((linkPaths: string[]) => {
+    setDisplayedLinkPaths((prev) =>
+      prev.length === linkPaths.length && prev.every((path, i) => path === linkPaths[i])
+        ? prev
+        : linkPaths,
     );
   }, []);
 
@@ -195,15 +200,12 @@ export function ExtractionProvider({
   // an import, or a sync landing a cross-device link — and whenever the displayed page
   // changes (a scroll / "show more" / navigation), so the drain is reactive without a
   // fixed poll. Both reads are bounded (docs: "the local queue scan is free").
-  const probe = useLiveQuery(
-    () => {
-      if (!enabled) return Promise.resolve([]);
-      return isActive
-        ? readLinksPendingTitleImage(Date.now(), 1)
-        : readLinksPendingTitleImageForPaths(visiblePaths, Date.now());
-    },
-    [enabled, isActive, visiblePaths],
-  );
+  const probe = useLiveQuery(() => {
+    if (!enabled) return Promise.resolve([]);
+    return isActive
+      ? readLinksPendingTitleImage(Date.now(), 1)
+      : readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now());
+  }, [enabled, isActive, displayedLinkPaths]);
   const hasWork = (probe?.length ?? 0) > 0;
 
   // Single-flight the drain: a wake while one is running sets `rerun` so it loops once
@@ -246,17 +248,17 @@ export function ExtractionProvider({
             setAutoLimitReached(true);
             break;
           }
-          const take = activeRef.current
-            ? BATCH
-            : Math.min(BATCH, budgetRef.current);
+          const take = activeRef.current ? BATCH : Math.min(BATCH, budgetRef.current);
           // Auto mode drains the displayed page's pending subset; enrichAll the whole
           // library. Both re-scan each batch, so just-settled links drop out next pass.
           const links = activeRef.current
             ? await readLinksPendingTitleImage(Date.now(), take)
-            : (await readLinksPendingTitleImageForPaths(visiblePathsRef.current, Date.now())).slice(
-                0,
-                take,
-              );
+            : (
+                await readLinksPendingTitleImageForLinkPaths(
+                  displayedLinkPathsRef.current,
+                  Date.now(),
+                )
+              ).slice(0, take);
           if (links.length === 0) break;
           for (const link of links) {
             if (cancelled || !visibleRef.current) return;
@@ -296,7 +298,7 @@ export function ExtractionProvider({
       autoLimitReached,
       enrichAll,
       pause,
-      reportVisiblePaths,
+      reportDisplayedLinkPaths,
     }),
     [
       enabled,
@@ -308,7 +310,7 @@ export function ExtractionProvider({
       autoLimitReached,
       enrichAll,
       pause,
-      reportVisiblePaths,
+      reportDisplayedLinkPaths,
     ],
   );
 

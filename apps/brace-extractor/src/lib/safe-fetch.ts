@@ -134,7 +134,7 @@ export async function readCappedBytes(
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
-    for (; ;) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
@@ -175,7 +175,7 @@ export async function readAllWithLimit(
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
-    for (; ;) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
