@@ -38,9 +38,10 @@
 //   liveQuery(pending titleImage) wakes it → drain in paced batches, until the
 //   backlog is empty, the auto budget is spent (auto mode), the tab hides, or the
 //   user pauses. The SOURCE depends on mode: auto drains the displayed page's pending
-//   subset; `enrichAll()` drains the whole library. Per link:
-//     runServerTitleImage (extract → resize → write `files/` +
-//     `extractions/`) → requestSync() to push → re-scan → repeat.
+//   subset; `enrichAll()` drains the whole library. Per batch:
+//     runServerTitleImageBatch (one extract — server fans out — → titles first, then
+//     images pooled → write `files/` + `extractions/`) → requestSync() to push →
+//     re-scan → repeat.
 // A `failed` link is marked + backed-off, so it drops out of the scan and the loop
 // always terminates (no tight retry spin).
 //
@@ -60,7 +61,7 @@ import {
 } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { type ExtractClient } from '@stxapps/shared';
+import { type ExtractClient, MAX_EXTRACT_URLS } from '@stxapps/shared';
 
 import {
   readExtractionFacetCounts,
@@ -68,15 +69,17 @@ import {
   readLinksPendingTitleImageForLinkPaths,
 } from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
-import { runServerTitleImage } from '../lib/server-extraction';
+import { runServerTitleImageBatch } from '../lib/server-extraction';
 import { useAuth } from './auth-provider';
 import { useSync } from './sync-provider';
 
-// How many links one drain step processes before pushing and re-scanning. Small so
-// the work is visibly incremental (each batch syncs, the list fills in) and naturally
-// paced — `brace-extractor` is single-URL + IP-rate-limited, so we stay sequential
-// within a batch rather than fanning out.
-const BATCH = 5;
+// How many links one drain step processes before pushing and re-scanning. One step is a
+// SINGLE batched `extract` request — the server fans the URLs out concurrently — so we
+// take the contract's full per-request cap (`MAX_EXTRACT_URLS`): a page's titles land
+// together in ~one round trip instead of trickling one-by-one. Each step still re-scans
+// and syncs, so the list keeps filling in incrementally, just a page at a time. The cap
+// also bounds how much a visibility-hide can over-commit (a step doesn't check mid-batch).
+const BATCH = MAX_EXTRACT_URLS;
 
 // The backstop ceiling: how many links the AUTOMATIC (displayed-scoped) drain processes
 // per session before it stops and waits for an explicit `enrichAll()`. The displayed
@@ -260,13 +263,11 @@ export function ExtractionProvider({
                 )
               ).slice(0, take);
           if (links.length === 0) break;
-          for (const link of links) {
-            if (cancelled || !visibleRef.current) return;
-            if (!activeRef.current && budgetRef.current <= 0) break;
-            // Never throws — it records every outcome as a facet write.
-            await runServerTitleImage(username, link, extractClient);
-            if (!activeRef.current) budgetRef.current -= 1;
-          }
+          // One batched extract enriches the whole take — the server fans the URLs out, so
+          // titles land together fast and images fill in pooled. Never throws; returns the
+          // count processed (`take` already bounds it to the auto budget, so no overshoot).
+          const processed = await runServerTitleImageBatch(username, links, extractClient);
+          if (!activeRef.current) budgetRef.current -= processed;
           // Push this batch's `files/` + `extractions/` writes (and pull anything new);
           // the next iteration re-scans, where the just-settled links are excluded.
           requestSync();

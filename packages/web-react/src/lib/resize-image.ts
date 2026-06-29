@@ -5,7 +5,7 @@
 // and it belongs on the client anyway, to bound the per-user storage quota). It runs
 // at the byte-producing boundary of EVERY capture source so what lands in
 // `files/{id}.enc` is already capped: the brace-web server-extraction path
-// (`runServerTitleImage`) and — once factored the same way — the extension's
+// (`runServerTitleImageBatch`) and — once factored the same way — the extension's
 // active-tab capture.
 //
 // Implemented on `createImageBitmap` + `OffscreenCanvas`, NOT a DOM `<canvas>` /

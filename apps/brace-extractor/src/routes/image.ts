@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
 
 import { imageProxyEndpoint } from '@stxapps/shared';
@@ -20,6 +21,19 @@ import { rateLimit } from '../middleware/rate-limit';
 // transcodes — that would force a full decode (real CPU + OOM risk on the 128 MB
 // isolate) and kill the streaming-is-free property; thumbnailing is a deferred
 // CLIENT step before encrypt.
+
+// Write the proxied response into the edge cache off the response path. The clone tees
+// the streaming body, so the client isn't blocked on the cache write; `waitUntil` keeps
+// the put alive past the response when an execution context is present (always, on
+// Workers — absent only under `app.request()` in a test, where we just let it run).
+function cacheInBackground(c: Context<AppEnv>, cache: Cache, key: Request, res: Response): void {
+  const put = cache.put(key, res).catch(() => undefined);
+  try {
+    c.executionCtx.waitUntil(put);
+  } catch {
+    void put;
+  }
+}
 
 // Map an internal fetch failure to a clean HTTP status for this single-resource GET
 // (unlike /extract, which records per-URL errors in a 200 body).
@@ -43,10 +57,32 @@ function statusForError(code: SafeFetchError['code']): number {
 
 export const imageRoutes = new Hono<AppEnv>().get(
   imageProxyEndpoint.path,
-  rateLimit('tight'),
+  rateLimit('image'),
   zValidator('query', imageProxyEndpoint.request),
   async (c) => {
     const { url } = c.req.valid('query');
+
+    // Edge cache. The proxied bytes are PLAINTEXT and IDENTICAL for every client (each
+    // client encrypts locally, AFTER), so a popular image — one many users saved — is
+    // fetched upstream once and served from the shared cache thereafter. The cache saves
+    // the upstream fetch + SSRF/parse work + latency (and softens the re-extract churn a
+    // flaky image causes), but it does NOT bypass the rate limiter (already run above): a
+    // hit still streams bytes to the client, which is the egress the limiter bounds. The
+    // key is the full request URL (it carries ?url=), so one target's bytes can never be
+    // served for another; CORS is layered on by the global cors() middleware for hits and
+    // misses alike, so the cached entry stays CORS-free and origin-agnostic. A hit can
+    // skip safeFetch safely — only a validated public 200 was ever cached (every reject
+    // throws before the put), so re-serving those bytes exposes nothing new.
+    // `caches.default` is the Workers global cache. `@types/node` (pulled into the spec
+    // typecheck only) also declares a `caches` whose `CacheStorage` has no `.default`, so
+    // reach it through a narrow cast — correct on the Workers runtime where this runs.
+    const cache =
+      typeof caches !== 'undefined' ? (caches as unknown as { default: Cache }).default : undefined;
+    const cacheKey = new Request(c.req.url, { method: 'GET' });
+    if (cache) {
+      const hit = await cache.match(cacheKey);
+      if (hit) return hit;
+    }
 
     let response: Response;
     try {
@@ -86,6 +122,11 @@ export const imageRoutes = new Hono<AppEnv>().get(
       'cache-control': 'public, max-age=86400, immutable',
       'x-content-type-options': 'nosniff',
     });
-    return new Response(limited, { status: 200, headers });
+    const proxied = new Response(limited, { status: 200, headers });
+
+    // Populate the edge cache off the response path (the clone tees the stream). Only
+    // this validated 200 is ever cached — every reject threw above and never reaches here.
+    if (cache) cacheInBackground(c, cache, cacheKey, proxied.clone());
+    return proxied;
   },
 );

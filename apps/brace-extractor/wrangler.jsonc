@@ -45,11 +45,14 @@
       },
       // Native rate-limit bindings, one per volume tier (middleware/rate-limit.ts).
       // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
-      // native binding allows. Both extractor endpoints fetch arbitrary URLs, so
-      // they run on the 'tight' tier — an anonymous open-fetch endpoint is an open
-      // proxy / DDoS reflector by default, so the IP rate limit is load-bearing,
-      // not a nicety (the per-response byte ceiling + timeout in the fetch path are
-      // the other half). namespace_id is any unique positive integer.
+      // native binding allows. Both fetch endpoints fetch arbitrary URLs — an
+      // anonymous open-fetch endpoint is an open proxy / DDoS reflector by default,
+      // so the IP rate limit is load-bearing, not a nicety (the per-response byte
+      // ceiling + timeout in the fetch path are the other half). /v1/extract runs on
+      // 'tight' (one batched request per page); /v1/image runs on the higher-burst
+      // 'image' tier (30/10s) because a page fans out to one image fetch per link —
+      // but 'standard' (60/60s) on the same path still governs its sustained egress.
+      // namespace_id is any unique positive integer.
       "ratelimits": [
         {
           "name": "API_RATE_LIMIT",
@@ -60,6 +63,11 @@
           "name": "API_RATE_LIMIT_TIGHT",
           "namespace_id": "2002",
           "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          "name": "API_RATE_LIMIT_IMAGE",
+          "namespace_id": "2003",
+          "simple": { "limit": 30, "period": 10 },
         },
       ],
     },
@@ -79,6 +87,11 @@
           "name": "API_RATE_LIMIT_TIGHT",
           "namespace_id": "2002",
           "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          "name": "API_RATE_LIMIT_IMAGE",
+          "namespace_id": "2003",
+          "simple": { "limit": 30, "period": 10 },
         },
       ],
       // The extractor's own origin — its whole point is to be SEPARATE from
@@ -107,6 +120,11 @@
           "name": "API_RATE_LIMIT_TIGHT",
           "namespace_id": "2002",
           "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          "name": "API_RATE_LIMIT_IMAGE",
+          "namespace_id": "2003",
+          "simple": { "limit": 30, "period": 10 },
         },
       ],
       // "routes": [{ "pattern": "extract.brace.to", "custom_domain": true }]

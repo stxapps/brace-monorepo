@@ -20,8 +20,15 @@ import { ApiError } from '../lib/errors';
 export const RATE_LIMIT_TIERS = {
   // Baseline (configured ~60 req / 60s).
   standard: 'API_RATE_LIMIT',
-  // Stricter tier for the arbitrary-URL fetch endpoints (~10 req / 10s ≈ 1/s).
+  // Stricter tier for the HTML-fetch endpoint /v1/extract (~10 req / 10s ≈ 1/s).
   tight: 'API_RATE_LIMIT_TIGHT',
+  // Burst tier for /v1/image (configured ~30 req / 10s). The image proxy is the
+  // PER-PAGE bottleneck — one page of N links fans out to N image fetches — so it
+  // needs a higher burst than /v1/extract (one batched request) to fill a page
+  // without 429ing honest browsing. Sustained egress is still governed by the
+  // `standard` 60/60s tier on the same path; this only widens the burst, and the
+  // per-response byte ceiling + timeout remain the real abuse floor.
+  image: 'API_RATE_LIMIT_IMAGE',
 } as const satisfies Record<string, keyof Bindings>;
 
 export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;

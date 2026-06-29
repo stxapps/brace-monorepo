@@ -26,6 +26,17 @@ export interface ExtractClient {
   // second GET /v1/image round trip when the image fetch succeeds). Returns that
   // URL's own per-URL result (partial success, never all-or-nothing).
   extract(url: string, signal?: AbortSignal): Promise<ExtractResult>;
+  // Batch extract — POST /v1/extract with the full `urls` array (no inline: the
+  // contract honors `inlineImage` only for a single URL, and a batch deliberately
+  // returns `imageUrl` strings so the response stays small and memory-flat — the
+  // image bytes come later through the streaming proxy). The SERVER resolves the
+  // URLs CONCURRENTLY (its own bounded `Promise.all`), so a page of N pending links
+  // gets all N titles/imageUrls back in ~one round trip instead of N sequential
+  // ones — the latency win the displayed-scoped / enrich-all drains are built on.
+  // Returns the per-URL result array verbatim; the caller correlates by `result.url`
+  // (partial success, order not guaranteed). De-dupe URLs before calling — the server
+  // fetches each entry it's given.
+  extractMany(urls: string[], signal?: AbortSignal): Promise<ExtractResult[]>;
   // Pull the discovered og:image's bytes through the streaming image proxy — GET
   // /v1/image — for the case the extract response carried only `imageUrl` (no inline
   // bytes). The web app can't read cross-origin image bytes itself (CORS), so the
@@ -48,11 +59,24 @@ export function createExtractClient({
         { urls: [url], inlineImage: true },
         { signal },
       );
-      // Single-URL request → a single result; `url` echoes the input, so correlate by
-      // it rather than relying on array position.
-      const result = results.find((r) => r.url === url) ?? results[0];
+      // Single-URL request → exactly one result (the server maps one input URL to one
+      // entry), so it's just `results[0]`. No `url`-correlation needed — that matters
+      // only for the N-result `extractMany`, where order isn't guaranteed.
+      const result = results[0];
       if (!result) throw new Error('extract: empty result array');
       return result;
+    },
+
+    async extractMany(urls, signal) {
+      // No `inlineImage`: the server ignores it for N > 1 anyway, and a batch wants the
+      // small metadata-only response (imageUrl strings) — images stream via the proxy.
+      const { results } = await callEndpoint(
+        { baseUrl, fetch: fetchImpl },
+        extractEndpoint,
+        { urls },
+        { signal },
+      );
+      return results;
     },
 
     async fetchImage(url, signal) {
