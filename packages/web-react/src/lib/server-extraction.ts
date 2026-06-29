@@ -5,9 +5,9 @@ import {
   type ExtractClient,
   type ExtractError,
   type ExtractResult,
-  type Facet,
   idFromPath,
   LINKS_PREFIX,
+  newFacet,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
@@ -81,7 +81,7 @@ export async function runServerTitleImageBatch(
   } catch {
     // The whole extract call failed (network/abort/non-2xx). Record a transient failure
     // for every link so backoff paces the retry; the drain continues.
-    await writeAll(username, links, { facet: 'titleImage', state: failedState('failed') });
+    await writeAll(username, links, { facet: 'titleImage', state: newFacet('failed', EXTRACTED_BY) });
     return links.length;
   }
 
@@ -99,7 +99,7 @@ export async function runServerTitleImageBatch(
       if (!result) return; // server omitted this URL — leave pending for a later scan.
       if (!result.ok) {
         const status = isPermanent(result.error) ? 'permanent' : 'failed';
-        await writeAll(username, targets, { facet: 'titleImage', state: failedState(status) });
+        await writeAll(username, targets, { facet: 'titleImage', state: newFacet(status, EXTRACTED_BY) });
         return;
       }
       // cleanTitle caps to LINK_TITLE_MAX (the same normalizer the extension + the server
@@ -131,12 +131,12 @@ export async function runServerTitleImageBatch(
       // A transient image failure leaves the facet `failed` so backoff retries it (the
       // image isn't lost to a passing throttle); otherwise the facet settles `done`. The
       // writer bumps the retry counter only on a `failed` state (done resets to attempts: 0).
-      const state = image.kind === 'transient' ? failedState('failed') : doneState();
+      const state = newFacet(image.kind === 'transient' ? 'failed' : 'done', EXTRACTED_BY);
       await writeAll(username, targets, { fields, facet: 'titleImage', state });
     } catch {
       // resize/write threw — record a transient failure so the link is retried, the
       // title from pass 1 intact.
-      await writeAll(username, targets, { facet: 'titleImage', state: failedState('failed') });
+      await writeAll(username, targets, { facet: 'titleImage', state: newFacet('failed', EXTRACTED_BY) });
     }
   });
 
@@ -202,18 +202,4 @@ async function mapPool<T>(
 // bounds the retries either way.)
 function isPermanent(error: ExtractError | undefined): boolean {
   return error === 'blocked' || error === 'unsupported_type' || error === 'too_large';
-}
-
-function doneState(): Facet {
-  return { status: 'done', extractedBy: EXTRACTED_BY, extractedAt: Date.now(), attempts: 0 };
-}
-
-// A failure facet. On a `failed` write `attempts` here is a base placeholder: `writeExtraction`
-// OVERRIDES it with the prior facet's `attempts` + 1 (the real cross-cycle counter, keyed off
-// `status === 'failed'` — see writeExtraction), so `backoff(attempts)` escalates across repeated
-// failures (each retry waits longer, up to the backoff cap) rather than staying at the first-retry
-// interval forever. The writer owns the number because only its read-merge sees the prior value.
-// (`permanent` is terminal and never retried, so its `attempts` is irrelevant.)
-function failedState(status: 'failed' | 'permanent'): Facet {
-  return { status, extractedBy: EXTRACTED_BY, extractedAt: Date.now(), attempts: 0 };
 }

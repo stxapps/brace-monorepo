@@ -1,4 +1,4 @@
-import { type Facet, LINK_TITLE_MAX } from '@stxapps/shared';
+import { LINK_TITLE_MAX, newFacet } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
   type ExtractionFacet,
@@ -88,18 +88,10 @@ export async function runExtraction(
     }
   } catch (err) {
     // Transient failure: record it so the UI can show "retry" and the pending query backs
-    // it off. `extractedAt` is required for that backoff to mean anything (eligibility is
-    // `extractedAt + backoff(attempts)`; omitting it keys off epoch 0 → instantly eligible
-    // → no cooldown). On a `failed` state `writeExtraction` derives `attempts` as prior + 1
-    // (the real cross-cycle counter), so repeated failures escalate backoff; the placeholder
-    // here is overridden.
-    const failed: Facet = {
-      status: 'failed',
-      attempts: 0,
-      extractedBy: EXTRACTED_BY,
-      extractedAt: Date.now(),
-    };
-    await writeExtraction(username, linkId, { facet, state: failed });
+    // it off. `newFacet` stamps the shared base fields (`extractedAt` for backoff eligibility,
+    // the `attempts: 0` placeholder `writeExtraction` overrides with prior + 1 on a `failed`
+    // write so repeated failures escalate) — see its doc in shared/sync/extraction.ts.
+    await writeExtraction(username, linkId, { facet, state: newFacet('failed', EXTRACTED_BY) });
     throw err;
   }
 }
@@ -110,12 +102,6 @@ function markDone(
   facet: ExtractionFacet,
   opts: { fields?: ExtractionFields; extra?: Record<string, unknown> } = {},
 ): Promise<void> {
-  const state: Facet = {
-    status: 'done',
-    extractedBy: EXTRACTED_BY,
-    extractedAt: Date.now(),
-    attempts: 0,
-    ...opts.extra,
-  };
+  const state = newFacet('done', EXTRACTED_BY, opts.extra);
   return writeExtraction(username, linkId, { fields: opts.fields, facet, state });
 }

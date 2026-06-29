@@ -1,4 +1,4 @@
-import { LINK_TITLE_MAX } from './entities';
+import { type Facet, LINK_TITLE_MAX } from './entities';
 
 // The shared extraction WRITER helpers — title normalization, quality ranking, and
 // retry pacing — that every client must agree on. They operate on the `facetSchema` fields in
@@ -53,4 +53,26 @@ export function cleanTitle(raw: string | undefined): string | undefined {
   const collapsed = raw.replace(/\s+/g, ' ').trim();
   if (collapsed === '') return undefined;
   return collapsed.length > LINK_TITLE_MAX ? collapsed.slice(0, LINK_TITLE_MAX) : collapsed;
+}
+
+// Build a facet-state write — the single constructor every extraction WRITER uses to
+// stamp an outcome, so the four base fields are filled the same way by every tier
+// (server `brace-extractor`, `extension:fg`, and any future Expo client) instead of each
+// re-spelling the literal:
+//   - `extractedAt: Date.now()` is ALWAYS set — eligibility is `extractedAt + backoff(attempts)`,
+//     so omitting it would key off epoch 0 (instantly eligible → no cooldown). Centralizing
+//     it here means no client can forget it.
+//   - `attempts: 0` is a PLACEHOLDER: on a `failed` write `writeExtraction` overrides it with
+//     the prior facet's `attempts + 1` (the real cross-cycle counter, so `backoff` escalates
+//     across repeated failures); a `done` write resets to 0; `permanent` never retries so it's
+//     irrelevant. The writer owns the number because only its read-merge sees the prior value.
+// `extractedBy` is the caller's `platform:env` tier string (`tierOf` ranks quality from it).
+// `extra` carries any tier-specific looseObject passthrough (e.g. the extension's read-mode
+// `fileId`) — round-tripped by `facetSchema`'s `looseObject`.
+export function newFacet(
+  status: Facet['status'],
+  extractedBy: string,
+  extra?: Record<string, unknown>,
+): Facet {
+  return { status, extractedBy, extractedAt: Date.now(), attempts: 0, ...extra };
 }
