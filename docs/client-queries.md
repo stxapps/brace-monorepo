@@ -97,6 +97,20 @@ query kind**:
   paginated) followed by the page of the rest, with pins excluded from the rest
   so nothing double-shows.
 
+**Why a growing count and not a cursor.** A forward cursor that fetches each page
+once and never re-reads it would be cheaper — but it's incompatible with this UI,
+not merely unattractive. `useLiveQuery` runs `readLinks` as a **pure function of
+the DB**, re-executed in full on every `items` write, because every
+already-loaded row must stay live (a local edit or incoming sync can change row 3
+while you're scrolled to row 400). A cursor is stateful — it assumes earlier pages
+are fixed and won't be re-fetched — so there's nowhere to thread its resume token
+through a liveQuery, and the rows behind it would go stale. A growing `limit`
+re-runs cleanly as one query and yields a single contiguous `links[0..limit]`
+array, exactly what the virtualizer indexes by position. So the forcing chain is:
+**live updates on already-loaded rows ⟹ re-execute the whole query each tick ⟹
+growing-`limit`, not a cursor ⟹ a decode cache to keep that re-execution
+affordable.**
+
 The one optimization on top is the **decode cache** (`data/decode-cache.ts`).
 Because `useLiveQuery` re-reads the whole loaded prefix on every write, and
 decoding a link (`parseBlob` → `JSON.parse` + zod) is the costliest step of a
@@ -205,6 +219,38 @@ The residual cost therefore only surfaces in a specific corner: the user has
 then re-reads the whole expanded prefix. That combination is rare enough that
 windowing (below) isn't worth its complexity yet; if profiling on real libraries
 shows it biting, that's the trigger to revisit.
+
+### the extraction-queue reads: cursor vs. bulkGet
+
+A separate pair of reads feeds title/image extraction (the queue is a query —
+see [link-extraction.md](./link-extraction.md)), and they make the **opposite**
+primitive choices from the link-library reads above. That's not inconsistency —
+it's the liveQuery rule from §pagination playing out twice, in opposite
+directions.
+
+- **`readLinksPendingTitleImagePage`** backs the whole-library "enrich all"
+  drain. It is **not** liveQuery-backed — it's an imperative, on-demand paged
+  walk — so a forward `cursor` is legal here, the very thing the link views
+  can't use. It returns up to `limit` links whose `titleImage` facet is **pending
+  and eligible** (facet absent, or a `failed` facet cooled past
+  `backoff(attempts)`; `done`/`permanent` are settled and skipped), newest-first,
+  plus the cursor to resume. The forward cursor buys O(library) total across the
+  drain instead of the O(library²) of re-scanning from the top each batch, with
+  memory bounded to one `SCAN_CHUNK`. It also keeps eligibility **fresh**: a link
+  a concurrent sync settles mid-drain falls behind the cursor and never costs a
+  redundant (paid) extract.
+- **`readLinksPendingTitleImageForLinkPaths`** backs the always-on automatic
+  probe, scoped to the links currently rendered on screen. This one **is**
+  liveQuery-backed (re-runs on every `items` write), so it must be O(displayed),
+  never O(library): it `bulkGet`s the known finite set of displayed paths (the
+  links plus their co-keyed extractions) and applies the same inline eligibility
+  test. Because the key set is finite and already known, `bulkGet` is the right
+  primitive — no scan, no cursor.
+
+The pairing is each other's inverse, and the liveQuery rule is what decides it:
+the enrich-all read is **unbounded but not reactive**, so it can carry a cursor;
+the displayed-scoped read is **reactive but bounded**, so it must stay small and
+uses `bulkGet`. Same store, opposite constraints, opposite primitives.
 
 ### alternatives deliberately not built (yet)
 
