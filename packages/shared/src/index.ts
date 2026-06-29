@@ -1,5 +1,6 @@
 export * from './api/client';
 export * from './api/endpoint';
+export * from './async/pool';
 export * from './auth/credentials';
 export * from './auth/endpoints';
 export * from './crypto/doors';
@@ -8,6 +9,7 @@ export * from './crypto/params';
 export * from './crypto/salt';
 export * from './extract/client';
 export * from './extract/endpoints';
+export * from './extract/retry';
 export * from './sync/endpoints';
 export * from './sync/entities';
 export * from './sync/extraction';

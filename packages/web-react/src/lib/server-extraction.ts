@@ -3,10 +3,11 @@ import {
   base64ToBytes,
   cleanTitle,
   type ExtractClient,
-  type ExtractError,
   type ExtractResult,
   idFromPath,
+  isPermanent,
   LINKS_PREFIX,
+  mapLimit,
   newFacet,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
@@ -115,7 +116,7 @@ export async function runServerTitleImageBatch(
   // when the image fetch was a retryable throttle/5xx — the title is already visible
   // either way. Per-item failures are swallowed into a transient facet write so the
   // pool (and the whole function) never throws.
-  await mapPool(pending, IMAGE_CONCURRENCY, async ({ result, targets }) => {
+  await mapLimit(pending, IMAGE_CONCURRENCY, async ({ result, targets }) => {
     try {
       const image = await loadImage(result, client);
       const fields: ExtractionFields = {};
@@ -176,30 +177,4 @@ async function loadImage(result: ExtractResult, client: ExtractClient): Promise<
     }
     return { kind: 'transient' };
   }
-}
-
-// Run `fn` over `items` at most `width` at a time — a minimal concurrency pool (no dep).
-// `fn` swallows its own per-item failures, so the workers just drain the shared cursor.
-async function mapPool<T>(
-  items: T[],
-  width: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < items.length) {
-      await fn(items[cursor++]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(width, items.length) }, worker));
-}
-
-// Which extract errors are PERMANENT (never retry — record `status: 'permanent'`) vs.
-// transient (`failed`, retried after backoff). `blocked` (SSRF reject) and the content
-// caps (`unsupported_type`, `too_large`) won't change on a retry; a bad status / timeout /
-// fetch failure might, so those stay transient. (The contract's `bad_status` doesn't carry
-// the code, so a 404 is paced by backoff rather than marked permanent up front — the cap
-// bounds the retries either way.)
-function isPermanent(error: ExtractError | undefined): boolean {
-  return error === 'blocked' || error === 'unsupported_type' || error === 'too_large';
 }

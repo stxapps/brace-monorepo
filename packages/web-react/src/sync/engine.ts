@@ -19,6 +19,7 @@ import {
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
+  mapLimit,
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
   MAX_SIGN_PATHS,
@@ -586,20 +587,4 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
-}
-
-// Run `fn` over `items` with at most `limit` in flight — bounds the socket count on
-// a large first sync without serializing everything.
-async function mapLimit<T>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  const queue = [...items];
-  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
-    for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
-      await fn(item);
-    }
-  });
-  await Promise.all(workers);
 }
