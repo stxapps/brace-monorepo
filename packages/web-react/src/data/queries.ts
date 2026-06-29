@@ -446,10 +446,12 @@ export async function readLinksPendingTitleImageForLinkPaths(
   now: number,
 ): Promise<LinkItem[]> {
   if (linkPaths.length === 0) return [];
+
   const [records, exRecords] = await Promise.all([
     db.items.bulkGet(linkPaths),
     db.items.bulkGet(linkPaths.map(extractionPathForLink)),
   ]);
+
   const pending: ItemRecord[] = [];
   for (let i = 0; i < linkPaths.length; i++) {
     const record = records[i];

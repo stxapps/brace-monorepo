@@ -87,13 +87,17 @@ export async function runExtraction(
         throw new Error(`runExtraction: facet "${facet}" is not an active-page capture`);
     }
   } catch (err) {
-    // Transient failure: record it so the UI can show "retry". A real retry/backoff
-    // policy (attempt counting across cycles, the eligibility computed from
-    // extractedAt + backoff(attempts)) is a later enhancement.
+    // Transient failure: record it so the UI can show "retry" and the pending query backs
+    // it off. `extractedAt` is required for that backoff to mean anything (eligibility is
+    // `extractedAt + backoff(attempts)`; omitting it keys off epoch 0 → instantly eligible
+    // → no cooldown). On a `failed` state `writeExtraction` derives `attempts` as prior + 1
+    // (the real cross-cycle counter), so repeated failures escalate backoff; the placeholder
+    // here is overridden.
     const failed: Facet = {
       status: 'failed',
+      attempts: 0,
       extractedBy: EXTRACTED_BY,
-      attempts: 1,
+      extractedAt: Date.now(),
     };
     await writeExtraction(username, linkId, { facet, state: failed });
     throw err;

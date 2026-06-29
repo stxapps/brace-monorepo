@@ -129,7 +129,8 @@ export async function runServerTitleImageBatch(
         fields.imageId = imageId;
       }
       // A transient image failure leaves the facet `failed` so backoff retries it (the
-      // image isn't lost to a passing throttle); otherwise the facet settles `done`.
+      // image isn't lost to a passing throttle); otherwise the facet settles `done`. The
+      // writer bumps the retry counter only on a `failed` state (done resets to attempts: 0).
       const state = image.kind === 'transient' ? failedState('failed') : doneState();
       await writeAll(username, targets, { fields, facet: 'titleImage', state });
     } catch {
@@ -207,9 +208,12 @@ function doneState(): Facet {
   return { status: 'done', extractedBy: EXTRACTED_BY, extractedAt: Date.now(), attempts: 0 };
 }
 
-// attempts: 1 mirrors the extension worker's scaffold — a real cross-cycle attempt counter
-// (read prior `attempts`, increment) is the same deferred enhancement noted there;
-// backoff(1) still cools the first retry, and the per-cycle cap bounds it.
+// A failure facet. On a `failed` write `attempts` here is a base placeholder: `writeExtraction`
+// OVERRIDES it with the prior facet's `attempts` + 1 (the real cross-cycle counter, keyed off
+// `status === 'failed'` — see writeExtraction), so `backoff(attempts)` escalates across repeated
+// failures (each retry waits longer, up to the backoff cap) rather than staying at the first-retry
+// interval forever. The writer owns the number because only its read-merge sees the prior value.
+// (`permanent` is terminal and never retried, so its `attempts` is irrelevant.)
 function failedState(status: 'failed' | 'permanent'): Facet {
-  return { status, extractedBy: EXTRACTED_BY, extractedAt: Date.now(), attempts: 1 };
+  return { status, extractedBy: EXTRACTED_BY, extractedAt: Date.now(), attempts: 0 };
 }

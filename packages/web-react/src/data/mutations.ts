@@ -300,13 +300,32 @@ export async function writeExtraction(
     createdAt: 0,
     updatedAt: 0,
   };
+
+  // A `failed` write is one consumed retry: derive `attempts` from the prior facet just
+  // read (prior + 1, the real cross-cycle counter) rather than trusting the caller's blind
+  // `state.attempts`, so `backoff(attempts)` escalates across repeated failures (each retry
+  // waits longer, up to the cap) instead of staying flat. The WRITER owns the number because
+  // only this read-merge sees the prior value; on a `failed` write `state.attempts` is a
+  // placeholder that's overridden. Keying off `status` (not a separate flag) makes the
+  // increment impossible to set inconsistently — a `failed` write can't forget to count, and
+  // `done`/`permanent` (terminal — `done` carries `attempts: 0`) never wrongly bump. Best-
+  // effort (the prior read is outside the put transaction, same as the rest of the merge): a
+  // rare lost increment under concurrency just means one slightly-early retry, which backoff
+  // + LWW absorb — it's pacing, not an invariant.
+  const facets =
+    patch.facet && patch.state
+      ? {
+          ...current.facets,
+          [patch.facet]:
+            patch.state.status === 'failed'
+              ? { ...patch.state, attempts: (current.facets[patch.facet]?.attempts ?? 0) + 1 }
+              : patch.state,
+        }
+      : current.facets;
   const next: WithPath<Extraction> = {
     ...current,
     ...patch.fields,
-    facets:
-      patch.facet && patch.state
-        ? { ...current.facets, [patch.facet]: patch.state }
-        : current.facets,
+    facets,
     createdAt: current.createdAt === 0 ? now : current.createdAt,
     updatedAt: now,
     path,
