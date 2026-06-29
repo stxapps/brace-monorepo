@@ -14,7 +14,7 @@
 import Dexie from 'dexie';
 import type { z } from 'zod';
 
-import type { Extraction, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
+import type { Extraction, Facet, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
 import {
   backoff,
   compareRank,
@@ -349,14 +349,32 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
 }
 
+// Is one link's `titleImage` facet eligible for (re)extraction right now? Pending when
+// the facet is ABSENT (absence = pending — the writer-split, see entities.ts), or a
+// `failed` facet has cooled past its backoff (`now >= extractedAt + backoff(attempts)`).
+// `done` and `permanent` (404/410, robots) are settled — never eligible, so one device's
+// synced outcome stops every device. The per-link counterpart of `computeBlockedTitleImageIds`
+// below: a direct test on one already-decoded facet, so a caller holding a BOUNDED set of
+// paths checks O(paths) instead of materializing every settled id in the library.
+function isTitleImageEligible(facet: Facet | undefined, now: number): boolean {
+  if (!facet) return true;
+  if (facet.status === 'done' || facet.status === 'permanent') return false;
+  return now >= (facet.extractedAt ?? 0) + backoff(facet.attempts);
+}
+
 // The set of link ids whose `titleImage` is NOT eligible for (re)extraction right now —
-// the shared core of both pending reads below. A link id is blocked if its titleImage
-// facet is `done`/`permanent`, or `failed` but still inside its backoff window
-// (`now < extractedAt + backoff(attempts)`). `permanent` (404/410, robots) and
-// still-cooling `failed` outcomes are skipped — one device's outcome, synced, stops every
-// device. Cost: three index range-reads of the small `*itemFacetStatuses` token set, plus
-// a decode of only the (few) `failed` extractions to check backoff. The link total is
-// never decoded — the "local queue scan is free" property the doc relies on.
+// the blocked filter for the WHOLE-LIBRARY enrich-all walk (`readLinksPendingTitleImage`).
+// A link id is blocked if its titleImage facet is `done`/`permanent`, or `failed` but still
+// inside its backoff window (`now < extractedAt + backoff(attempts)`) — the same
+// `isTitleImageEligible` test above, but precomputed as a SET because the walk has no
+// per-link facet in hand (it ranges `links/`, not `extractions/`). The displayed-scoped
+// read does NOT use this — it holds a bounded path set and tests each facet directly, so it
+// never pays the global materialization (see `readLinksPendingTitleImageForLinkPaths`).
+//
+// Cost scales with the SETTLED count: `done:titleImage`'s `primaryKeys()` is the whole
+// library once it's mostly enriched, so this is O(done), not "small". Acceptable for the
+// user-initiated enrich-all job (run rarely, off its own probe); the always-on automatic
+// drain deliberately avoids it. The few `failed` extractions are decoded to check backoff.
 async function computeBlockedTitleImageIds(now: number): Promise<Set<string>> {
   const [donePaths, permanentPaths, failedPaths] = await Promise.all([
     db.items.where('itemFacetStatuses').equals('done:titleImage').primaryKeys(),
@@ -373,15 +391,12 @@ async function computeBlockedTitleImageIds(now: number): Promise<Set<string>> {
   const failedRecords = await db.items.bulkGet(failedPaths as string[]);
   for (const record of failedRecords) {
     if (!record) continue;
-    const extraction = decodeCachedExtraction(record);
-    const facet = extraction?.facets.titleImage;
-    if (!extraction || !facet) continue;
-    const eligibleAt = (facet.extractedAt ?? 0) + backoff(facet.attempts);
-    // Block by the PATH's id, not the blob's `extraction.id` copy — identity comes
-    // from the path (idFromPath / paths.ts), the one authority a round-tripped blob
-    // can't drift from.
-    if (now < eligibleAt) blocked.add(idFromPath(record.path, EXTRACTIONS_PREFIX)); // still cooling down
-    // else: leave unblocked — it's pending again and the walks below pick it up.
+    const facet = decodeCachedExtraction(record)?.facets.titleImage;
+    if (!facet) continue;
+    // Block by the PATH's id, not the blob's `extraction.id` copy — identity comes from the
+    // path (idFromPath / paths.ts), the one authority a round-tripped blob can't drift from.
+    // Still cooling → blocked; cooled → left out so the enrich-all walk re-picks it.
+    if (!isTitleImageEligible(facet, now)) blocked.add(idFromPath(record.path, EXTRACTIONS_PREFIX));
   }
   return blocked;
 }
@@ -417,22 +432,32 @@ export async function readLinksPendingTitleImage(now: number, limit: number): Pr
 // the main pane has rendered. So a 30k-link bulk import left in an abandoned tab never
 // enriches past what was scrolled into view — work tracks attention, not an arbitrary cap.
 //
-// Cost: the shared blocked-id computation plus one `bulkGet` of the given paths — no library
-// walk. Order follows `linkPaths` (the display order — newest first), so on-screen links
-// enrich top-down. Missing / non-link / blocked paths drop out.
+// Cost: O(displayed), NOT O(library). It tests each path's OWN extraction facet directly
+// (`isTitleImageEligible`) instead of building the global blocked-set
+// (`computeBlockedTitleImageIds`) — load-bearing because this read backs the always-on probe
+// liveQuery (extraction-provider), which re-runs on every `db.items` write: materializing
+// every settled id on each of those (O(done) — the whole library once mostly enriched) would
+// make a large-library drain O(n²). Two `bulkGet`s of the given paths (the links + their
+// co-keyed extractions), then an inline per-path test. Order follows `linkPaths` (the display
+// order — newest first), so on-screen links enrich top-down. Missing / non-link / settled /
+// still-cooling paths drop out.
 export async function readLinksPendingTitleImageForLinkPaths(
   linkPaths: string[],
   now: number,
 ): Promise<LinkItem[]> {
   if (linkPaths.length === 0) return [];
-  const blocked = await computeBlockedTitleImageIds(now);
-  const records = await db.items.bulkGet(linkPaths);
-  const pending = records.filter(
-    (record): record is ItemRecord =>
-      record !== undefined &&
-      record.itemType === 'link' &&
-      !blocked.has(idFromPath(record.path, LINKS_PREFIX)),
-  );
+  const [records, exRecords] = await Promise.all([
+    db.items.bulkGet(linkPaths),
+    db.items.bulkGet(linkPaths.map(extractionPathForLink)),
+  ]);
+  const pending: ItemRecord[] = [];
+  for (let i = 0; i < linkPaths.length; i++) {
+    const record = records[i];
+    if (!record || record.itemType !== 'link') continue;
+    const exRecord = exRecords[i];
+    const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
+    if (isTitleImageEligible(facet, now)) pending.push(record);
+  }
   return decodeLinks(pending);
 }
 
