@@ -30,9 +30,9 @@ import { rateLimit } from '../middleware/rate-limit';
 // `imageUrl` is the discovered og:image as a URL STRING — an extension/mobile client
 // fetches it directly; the web app normally pulls it through GET /v1/image (the
 // proxy). With `inlineImage` on a SINGLE-URL request, the server also fetches that
-// image and returns it base64-inlined (`imageBase64` + `imageContentType`), saving the
-// web app the second round trip. The extractor still STORES nothing — inline is a
-// one-shot buffer of one small preview, gated + size-capped below.
+// image and returns it base64-inlined (`imageBase64`), saving the web app the second
+// round trip. The extractor still STORES nothing — inline is a one-shot buffer of one
+// small preview, gated + size-capped below.
 
 // `text/html` types we parse. Anything else degrades gracefully to a host fallback
 // (docs "detect content-type and degrade gracefully") rather than returning garbage.
@@ -51,9 +51,9 @@ function contentTypeOf(res: Response): string {
 // the proxy. The image fetch reuses safeFetch, so it carries the SAME SSRF guard +
 // redirect re-validation + timeout as every other fetch; the inline byte cap is
 // tighter than the streamed proxy's (the bytes are buffered + base64-inflated here).
-async function fetchInlineImage(
-  imageUrl: string,
-): Promise<{ imageBase64: string; imageContentType: string } | null> {
+// The content-type gates the fetch (image/* only) but isn't returned — the client
+// sniffs the bytes to resize/render, so no MIME label travels with them.
+async function fetchInlineImage(imageUrl: string): Promise<{ imageBase64: string } | null> {
   try {
     const { response } = await safeFetch(imageUrl, 'image/*');
     const contentType = contentTypeOf(response);
@@ -63,7 +63,7 @@ async function fetchInlineImage(
     }
 
     const bytes = await readAllWithLimit(response, MAX_INLINE_IMAGE_BYTES);
-    return { imageBase64: bytesToBase64(bytes), imageContentType: contentType };
+    return { imageBase64: bytesToBase64(bytes) };
   } catch {
     return null;
   }
@@ -106,7 +106,6 @@ async function extractOne(requestedUrl: string, inline: boolean): Promise<Extrac
       const inlined = await fetchInlineImage(result.imageUrl);
       if (inlined) {
         result.imageBase64 = inlined.imageBase64;
-        result.imageContentType = inlined.imageContentType;
       }
     }
     return result;

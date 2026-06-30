@@ -37,9 +37,13 @@ const DEFAULT_QUALITY = 0.82;
 // for an undecodable/unsupported input (SVG, a corrupt or non-image blob, or a
 // runtime without `createImageBitmap`): it falls back to the original bytes, so a
 // resize hiccup can only cost a slightly larger stored blob, never the image itself.
+//
+// No content-type is needed: `createImageBitmap` determines the format by SNIFFING the
+// bytes (the `Blob` type is only a hint it overrides for every raster format), so the
+// callers don't track a MIME — the same reason `<img>` renders an object URL built from
+// typeless bytes.
 export async function resizeImage(
   bytes: Uint8Array,
-  contentType?: string,
   options: ResizeImageOptions = {},
 ): Promise<Uint8Array> {
   const {
@@ -57,7 +61,7 @@ export async function resizeImage(
   // `as BlobPart`: a generic `Uint8Array<ArrayBufferLike>` isn't assignable to the
   // lib's `ArrayBufferView<ArrayBuffer>` BlobPart (the SharedArrayBuffer case) — the
   // same cast the extension's Complete.tsx uses to build a Blob from captured bytes.
-  const blob = new Blob([bytes as BlobPart], contentType ? { type: contentType } : undefined);
+  const blob = new Blob([bytes as BlobPart]);
 
   let bitmap: ImageBitmap;
   try {

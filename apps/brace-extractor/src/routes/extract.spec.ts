@@ -150,7 +150,6 @@ describe('POST /v1/extract', () => {
     expect(result.ok).toBe(true);
     // imageUrl is still populated alongside the inlined bytes (the fallback).
     expect(result.imageUrl).toBe('https://cdn.example.com/i.png');
-    expect(result.imageContentType).toBe('image/png');
     // imageBase64 round-trips back to the original image bytes.
     const decoded = Uint8Array.from(atob(result.imageBase64 ?? ''), (c) => c.charCodeAt(0));
     expect(decoded).toEqual(PNG);
@@ -165,7 +164,6 @@ describe('POST /v1/extract', () => {
     for (const result of body.results) {
       expect(result.imageUrl).toBe('https://cdn.example.com/i.png');
       expect(result.imageBase64).toBeUndefined();
-      expect(result.imageContentType).toBeUndefined();
     }
     // Only the two page fetches happened — the image was never fetched for inlining.
     expect(mock).toHaveBeenCalledTimes(2);

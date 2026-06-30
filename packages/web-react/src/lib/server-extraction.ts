@@ -138,7 +138,7 @@ export async function runServerTitleImageBatch(
         // Cap dimensions + re-encode before storing, to bound the quota (the deferred
         // client thumbnailing step — the extractor never resizes). Content before
         // metadata: write the `files/` blob, then reference it from `extractions/`.
-        const resized = await resizeImage(image.bytes, result.imageContentType);
+        const resized = await resizeImage(image.bytes);
         const imageId = newId();
         await writeFile(username, imageId, resized);
         fields.imageId = imageId;
