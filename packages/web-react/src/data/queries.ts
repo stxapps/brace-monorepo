@@ -312,6 +312,31 @@ export async function readLinkById(linkId: string): Promise<LinkItem | undefined
   return decodeCachedLink(record);
 }
 
+// How many links currently belong to `listId`, counted straight off the
+// `[itemListId+itemUpdatedAt]` index — an index range count, no blob decode (the
+// same column the list views range over). The "is this list empty?" gate for
+// deleting a list: a list with links can't be removed (see useListMutations),
+// since deleting it would orphan them.
+export function countLinksInList(listId: string): Promise<number> {
+  return db.items
+    .where('[itemListId+itemUpdatedAt]')
+    .between([listId, Dexie.minKey], [listId, Dexie.maxKey], true, true)
+    .count();
+}
+
+// The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /
+// not yet materialized. Reads straight from the store with NO network and NO crypto:
+// `data` holds the already-decrypted blob (an image/screenshot/archive the extractor
+// just wrote, or one a prior sync decrypted). Used by the popup's complete page to
+// preview a captured image without round-tripping R2 — the lazy network fetch
+// (loadEntityContent) is the sync engine's job, not the UI's.
+export async function readFileBytes(fileId: string): Promise<Uint8Array | undefined> {
+  const record = await db.items.get(pathFromId(fileId, FILES_PREFIX));
+  return record?.data;
+}
+
+// --- extraction queries ------------------------------------------------------
+
 // The extraction bookkeeping entity for one link id (the `{id}` of its
 // `links/{id}.enc`), or undefined if none has synced/been written yet. A direct
 // exact-path read + decode — the path is derived from the id, no scan.
@@ -417,7 +442,7 @@ export async function readLinksPendingTitleImagePage(
   let boundary = cursor;
   let next: LinkScanCursor | null = cursor ?? null;
 
-  for (;;) {
+  for (; ;) {
     const upper = boundary ? boundary.createdAt : Dexie.maxKey;
     const chunk = await db.items
       .where('[itemType+itemCreatedAt]')
@@ -499,29 +524,6 @@ export async function readLinksPendingTitleImageForLinkPaths(
     if (isTitleImageEligible(facet, now)) pending.push(record);
   }
   return decodeLinks(pending);
-}
-
-// The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /
-// not yet materialized. Reads straight from the store with NO network and NO crypto:
-// `data` holds the already-decrypted blob (an image/screenshot/archive the extractor
-// just wrote, or one a prior sync decrypted). Used by the popup's complete page to
-// preview a captured image without round-tripping R2 — the lazy network fetch
-// (loadEntityContent) is the sync engine's job, not the UI's.
-export async function readFileBytes(fileId: string): Promise<Uint8Array | undefined> {
-  const record = await db.items.get(pathFromId(fileId, FILES_PREFIX));
-  return record?.data;
-}
-
-// How many links currently belong to `listId`, counted straight off the
-// `[itemListId+itemUpdatedAt]` index — an index range count, no blob decode (the
-// same column the list views range over). The "is this list empty?" gate for
-// deleting a list: a list with links can't be removed (see useListMutations),
-// since deleting it would orphan them.
-export function countLinksInList(listId: string): Promise<number> {
-  return db.items
-    .where('[itemListId+itemUpdatedAt]')
-    .between([listId, Dexie.minKey], [listId, Dexie.maxKey], true, true)
-    .count();
 }
 
 // --- link query --------------------------------------------------------------
