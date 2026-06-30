@@ -82,7 +82,10 @@ export async function runServerTitleImageBatch(
   } catch {
     // The whole extract call failed (network/abort/non-2xx). Record a transient failure
     // for every link so backoff paces the retry; the drain continues.
-    await writeAll(username, links, { facet: 'titleImage', state: newFacet('failed', EXTRACTED_BY) });
+    await writeAll(username, links, {
+      facet: 'titleImage',
+      state: newFacet('failed', EXTRACTED_BY),
+    });
     return links.length;
   }
 
@@ -100,7 +103,10 @@ export async function runServerTitleImageBatch(
       if (!result) return; // server omitted this URL — leave pending for a later scan.
       if (!result.ok) {
         const status = isPermanent(result.error) ? 'permanent' : 'failed';
-        await writeAll(username, targets, { facet: 'titleImage', state: newFacet(status, EXTRACTED_BY) });
+        await writeAll(username, targets, {
+          facet: 'titleImage',
+          state: newFacet(status, EXTRACTED_BY),
+        });
         return;
       }
       // cleanTitle caps to LINK_TITLE_MAX (the same normalizer the extension + the server
@@ -137,7 +143,10 @@ export async function runServerTitleImageBatch(
     } catch {
       // resize/write threw — record a transient failure so the link is retried, the
       // title from pass 1 intact.
-      await writeAll(username, targets, { facet: 'titleImage', state: newFacet('failed', EXTRACTED_BY) });
+      await writeAll(username, targets, {
+        facet: 'titleImage',
+        state: newFacet('failed', EXTRACTED_BY),
+      });
     }
   });
 

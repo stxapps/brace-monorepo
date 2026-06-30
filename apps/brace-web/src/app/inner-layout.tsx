@@ -3,11 +3,12 @@ import { Suspense, useEffect, useState } from 'react';
 import { SerwistProvider } from '@serwist/next/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { ApiClientProvider } from '@stxapps/react';
+import { ApiClientProvider, ExtractClientProvider } from '@stxapps/react';
 import { AuthProvider } from '@stxapps/web-react';
 import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { apiClient } from '../lib/api-client';
+import { extractClient } from '../lib/extract-client';
 
 // Stable identity across renders (the provider keys effects off it).
 const themeStorage = localStorageThemeStorage();
@@ -86,11 +87,13 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
       </Suspense>
       <QueryClientProvider client={queryClient}>
         <ApiClientProvider client={apiClient}>
-          <AuthProvider>
-            <ThemeProvider storage={themeStorage}>
-              <SafeArea>{children}</SafeArea>
-            </ThemeProvider>
-          </AuthProvider>
+          <ExtractClientProvider client={extractClient}>
+            <AuthProvider>
+              <ThemeProvider storage={themeStorage}>
+                <SafeArea>{children}</SafeArea>
+              </ThemeProvider>
+            </AuthProvider>
+          </ExtractClientProvider>
         </ApiClientProvider>
       </QueryClientProvider>
     </SerwistProvider>

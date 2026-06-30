@@ -442,7 +442,7 @@ export async function readLinksPendingTitleImagePage(
   let boundary = cursor;
   let next: LinkScanCursor | null = cursor ?? null;
 
-  for (; ;) {
+  for (;;) {
     const upper = boundary ? boundary.createdAt : Dexie.maxKey;
     const chunk = await db.items
       .where('[itemType+itemCreatedAt]')

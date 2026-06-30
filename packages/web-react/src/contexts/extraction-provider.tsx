@@ -62,7 +62,8 @@ import {
 } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { type ExtractClient, MAX_EXTRACT_URLS } from '@stxapps/shared';
+import { useExtractClient } from '@stxapps/react';
+import { MAX_EXTRACT_URLS } from '@stxapps/shared';
 
 import {
   type LinkScanCursor,
@@ -133,15 +134,13 @@ function isDocumentVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState === 'visible';
 }
 
-export function ExtractionProvider({
-  children,
-  extractClient,
-}: {
-  children: ReactNode;
+export function ExtractionProvider({ children }: { children: ReactNode }) {
   // The app's env-bound `brace-extractor` client, or null when no extractor origin is
   // configured — in which case the loop is permanently inert (server extraction off).
-  extractClient: ExtractClient | null;
-}) {
+  // Read from the ExtractClientProvider seam rather than a prop: it's a function-bearing
+  // object, so passing it from the Server-Component app layout would fail to serialize
+  // across the server→client boundary (mirrors how SyncProvider gets `api` via useApiClient).
+  const extractClient = useExtractClient();
   const { username } = useAuth();
   const { storeStatus, requestSync } = useSync();
   const { serverExtraction } = useSettings();
