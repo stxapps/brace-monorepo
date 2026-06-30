@@ -100,8 +100,9 @@ const BATCH = MAX_EXTRACT_URLS;
 // remounts — i.e. per fresh entry into the signed-in app (the provider sits above the
 // initial-sync gate, so it survives that gate's loading/error/ready content swaps and is
 // NOT torn down on a sync retry) — so a big library extracts a chunk per visit, or
-// all-at-once when the user asks.
-const AUTO_BUDGET = 100;
+// all-at-once when the user asks. Expressed as a whole number of batched extract requests
+// (`BATCH`) so the per-session ceiling is always a round number of round trips.
+const AUTO_BUDGET = 10 * BATCH;
 
 interface ExtractionContextValue {
   // Is server extraction live at all (opted in, store ready, extractor configured)?
@@ -282,11 +283,6 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       try {
         for (; ;) {
           if (cancelled) return;
-          // Visibility gate (layer 1) applies to AUTO mode only: an abandoned tab must spend
-          // nothing on incidental extraction. EXTRACT-ALL keeps running while hidden — it's the
-          // explicit, finite job the user asked for, bounded by the cursor walk reaching the
-          // library's end (below) plus the server's per-IP caps, so it doesn't need this gate.
-          if (!extractingAllRef.current && !visibleRef.current) return;
 
           if (extractingAllRef.current) {
             // Extract-all: page the WHOLE library newest-first via a forward cursor —
@@ -323,6 +319,12 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           }
 
           // Auto mode: drain the displayed page's pending subset, capped by the session budget.
+          // Visibility gate (layer 1), auto-only: an abandoned tab must spend nothing on
+          // incidental extraction. We only reach here when not extracting-all (that branch always
+          // continues/breaks above), so no mode check is needed — EXTRACT-ALL keeps running while
+          // hidden, bounded instead by the cursor walk reaching the library's end plus the
+          // server's per-IP caps.
+          if (!visibleRef.current) return;
           if (budgetRef.current <= 0) {
             setAutoLimitReached(true);
             break;
