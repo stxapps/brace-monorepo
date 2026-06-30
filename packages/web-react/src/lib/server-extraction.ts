@@ -8,6 +8,7 @@ import {
   isPermanent,
   LINKS_PREFIX,
   mapLimit,
+  MAX_EXTRACT_URLS,
   newFacet,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
@@ -42,10 +43,18 @@ import { resizeImage } from './resize-image';
 // screenshot/archive (no renderer) and read-mode parity isn't promised, so those facets
 // stay active-context only.
 //
-// NEVER throws: every outcome (success, transient failure, permanent failure) is RECORDED
-// as a facet write, so the caller's drain loop always makes progress — a processed link
-// becomes settled (`done`, or `failed`/`permanent` which the pending query then skips via
-// backoff) and is never re-picked on the next scan.
+// Throws on a wholesale TRANSPORT failure of the extract request itself
+// (network/abort/non-2xx) — plus a fail-fast guard if handed more than MAX_EXTRACT_URLS
+// links (a caller-contract violation; the drains bound a page to that cap). A transport
+// failure isn't a per-link outcome — it tells us nothing about any link — so it propagates
+// and the caller stops the drain to retry on the next wake, rather
+// than mislabeling every link `failed` (which would burn each link's backoff, flood sync
+// with no-op writes, and — in enrichAll — march the cursor through the whole library
+// writing failures). Every PER-LINK outcome (success, transient failure, permanent failure)
+// is instead RECORDED as a facet write and never re-throws, so once the request succeeds the
+// drain always makes progress — a processed link becomes settled (`done`, or
+// `failed`/`permanent` which the pending query then skips via backoff) and is never
+// re-picked on the next scan.
 const EXTRACTED_BY = 'server';
 
 // How many image-proxy fetches run at once during a batch's image pass. The extract call
@@ -57,13 +66,17 @@ const IMAGE_CONCURRENCY = 3;
 
 // Enrich a batch of links' `titleImage` facet in one shot — the path behind the
 // displayed-scoped / enrich-all drains (extraction-provider). Returns the number of links
-// processed (for the caller's auto-budget). Never throws.
+// processed (for the caller's auto-budget). Throws only on a transport failure or an
+// oversized batch (see above); per-link outcomes are recorded, never thrown.
 export async function runServerTitleImageBatch(
   username: string,
   links: LinkItem[],
   client: ExtractClient,
 ): Promise<number> {
   if (links.length === 0) return 0;
+  if (links.length > MAX_EXTRACT_URLS) {
+    throw new Error(`runServerTitleImageBatch: ${links.length} links exceeds MAX_EXTRACT_URLS`);
+  }
 
   // De-dupe URLs (the same article saved twice shares one fetch) and map each URL back to
   // every link that carries it, so one result enriches them all.
@@ -75,21 +88,16 @@ export async function runServerTitleImageBatch(
   }
   const urls = [...linksByUrl.keys()];
 
-  let results: ExtractResult[];
-  try {
-    // N === 1 keeps inline (the human-waiting single save); N > 1 batches metadata.
-    results = urls.length === 1 ? [await client.extract(urls[0])] : await client.extractMany(urls);
-  } catch {
-    // The whole extract call failed (network/abort/non-2xx). Record a transient failure
-    // for every link so backoff paces the retry; the drain continues.
-    await writeAll(username, links, {
-      facet: 'titleImage',
-      state: newFacet('failed', EXTRACTED_BY),
-    });
-    return links.length;
-  }
+  // N === 1 keeps inline (the human-waiting single save); N > 1 batches metadata. A
+  // wholesale failure here (network/abort/non-2xx) is a TRANSPORT error, not a per-link
+  // outcome, so we let it propagate: the caller's drain stops and retries on the next wake
+  // instead of recording a bogus `failed` on every link. Per-link failures are still
+  // recorded below, in passes 1–2.
+  const results: ExtractResult[] = urls.length === 1
+    ? [await client.extract(urls[0])]
+    : await client.extractMany(urls);
 
-  const byUrl = new Map(results.map((result) => [result.url, result]));
+  const resultsByUrl = new Map(results.map((result) => [result.url, result]));
 
   // PASS 1 — titles, written immediately so the page fills with real titles before any
   // image is fetched. An ok result writes its title FIELDS-ONLY (facet left pending) so
@@ -97,9 +105,8 @@ export async function runServerTitleImageBatch(
   // (the pending query then skips it via backoff). Carry the ok results into pass 2.
   const pending: { result: ExtractResult; targets: LinkItem[] }[] = [];
   await Promise.all(
-    urls.map(async (url) => {
-      const targets = linksByUrl.get(url) ?? [];
-      const result = byUrl.get(url);
+    [...linksByUrl].map(async ([url, targets]) => {
+      const result = resultsByUrl.get(url);
       if (!result) return; // server omitted this URL — leave pending for a later scan.
       if (!result.ok) {
         const status = isPermanent(result.error) ? 'permanent' : 'failed';
@@ -109,6 +116,7 @@ export async function runServerTitleImageBatch(
         });
         return;
       }
+
       // cleanTitle caps to LINK_TITLE_MAX (the same normalizer the extension + the server
       // run), so the value satisfies `extractionSchema.title`.
       const title = cleanTitle(result.title);
@@ -124,8 +132,9 @@ export async function runServerTitleImageBatch(
   // pool (and the whole function) never throws.
   await mapLimit(pending, IMAGE_CONCURRENCY, async ({ result, targets }) => {
     try {
-      const image = await loadImage(result, client);
       const fields: ExtractionFields = {};
+
+      const image = await loadImage(result, client);
       if (image.kind === 'bytes') {
         // Cap dimensions + re-encode before storing, to bound the quota (the deferred
         // client thumbnailing step — the extractor never resizes). Content before

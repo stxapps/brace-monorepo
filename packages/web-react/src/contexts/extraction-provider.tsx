@@ -271,7 +271,8 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
             );
             if (page.links.length > 0) {
               // One batched extract enriches the whole page — the server fans the URLs out,
-              // so titles land together fast and images fill in pooled. Never throws.
+              // so titles land together fast and images fill in pooled. Throws only on a
+              // wholesale transport failure (caught below to stop the drain).
               await runServerTitleImageBatch(username, page.links, extractClient);
               // Push this batch's `files/` + `extractions/` writes (and pull anything new).
               requestSync();
@@ -296,12 +297,22 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
             await readLinksPendingTitleImageForLinkPaths(displayedLinkPathsRef.current, Date.now())
           ).slice(0, take);
           if (links.length === 0) break;
-          // Returns the count processed (`take` already bounds it to the auto budget).
+          // Returns the count processed (`take` already bounds it to the auto budget), or
+          // throws on a wholesale transport failure (caught below — budget is left intact).
           const processed = await runServerTitleImageBatch(username, links, extractClient);
           budgetRef.current -= processed;
           // Push writes; the next iteration re-scans, where just-settled links drop out.
           requestSync();
         }
+      } catch {
+        // A wholesale transport failure from runServerTitleImageBatch (network/abort/non-2xx)
+        // — nothing was learned about this page's links, and the next page would just fail
+        // too. Stop the drain and wait for the next natural wake (a sync landing new links, a
+        // visibility flip, enrichAll) rather than hot-looping or recording bogus per-link
+        // failures. The unprocessed page stays pending (no facet writes, cursor/budget
+        // untouched), so a later wake re-picks it. Clear any queued rerun so a trigger that
+        // fired mid-drain doesn't restart us straight back into the same outage.
+        rerunRef.current = false;
       } finally {
         runningRef.current = false;
         setIsRunning(false);
