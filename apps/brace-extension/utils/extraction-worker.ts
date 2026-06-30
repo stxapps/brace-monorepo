@@ -1,9 +1,10 @@
-import { LINK_TITLE_MAX, newFacet } from '@stxapps/shared';
+import { cleanTitle, newFacet } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
   type ExtractionFacet,
   type ExtractionFields,
   readLinkById,
+  resizeImage,
   writeExtraction,
   writeFile,
 } from '@stxapps/web-react';
@@ -49,12 +50,17 @@ export async function runExtraction(
   try {
     switch (facet) {
       case 'titleImage': {
+        // capture.ts is a pure extractor; this consumer normalizes — cleanTitle caps to
+        // LINK_TITLE_MAX (satisfies `extractionSchema.title`) and resizeImage bounds the
+        // stored blob — the same split the server tier uses (server-extraction.ts).
         const { title, image } = await captureTitleImage(tabId);
         const fields: ExtractionFields = {};
-        if (title) fields.title = title.slice(0, LINK_TITLE_MAX);
+        const cleaned = cleanTitle(title);
+        if (cleaned) fields.title = cleaned;
         if (image) {
+          const resized = await resizeImage(image);
           const imageId = newId();
-          await writeFile(username, imageId, image); // content before metadata
+          await writeFile(username, imageId, resized); // content before metadata
           fields.imageId = imageId;
         }
         await markDone(username, linkId, facet, { fields });

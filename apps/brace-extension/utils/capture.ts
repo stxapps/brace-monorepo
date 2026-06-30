@@ -11,8 +11,6 @@
 // a dependency) injected as a bundled content-script file and run over the live DOM;
 // kept inline here so the scaffold needs no extra entrypoint.
 
-import { cleanTitle } from '@stxapps/shared';
-
 const encoder = new TextEncoder();
 
 // A `data:`/blob URL → raw bytes. The service worker can fetch `data:` URLs, so this
@@ -25,7 +23,12 @@ async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
 
 // Read the title + preview-image from the live DOM, and fetch the image bytes IN-PAGE
 // (the page's own context, where the image is most likely fetchable) as a data URL.
-// Returns the discovered title and, when available, the image bytes.
+// Returns the RAW discovered title and, when available, the raw image bytes; the
+// consumer (`extraction-worker.ts`) runs cleanTitle + resizeImage. The split is a
+// PLATFORM constraint, not a mirror of the server: the page-injected `func` below runs
+// in the page's world and can't reach bundle code (cleanTitle/resizeImage), so the
+// normalization has to wait for the worker context. The server's `html.ts`, being
+// ordinary bundle code, normalizes in place — there's no equivalent split there.
 //
 // Title and image preference order MIRROR the server extractor (brace-extractor
 // `html.ts`) so a page extracts identically whichever tier reaches it:
@@ -84,10 +87,10 @@ export async function captureTitleImage(
   if (!data) return { title: '' };
 
   const image = data.image ? await dataUrlToBytes(data.image) : undefined;
-  // Normalize/cap in the worker context (NOT inside the injected `func`, which runs
-  // in the page and can't reach bundle imports) so the title satisfies the same
-  // `LINK_TITLE_MAX` contract the server extractor enforces. See cleanTitle.
-  return { title: cleanTitle(data.title) ?? '', image };
+  // Raw title + raw bytes — normalization (cleanTitle + resizeImage) is deferred to the
+  // consumer (`extraction-worker.ts`) because the in-page `func` can't reach the bundle,
+  // not to mirror the server (html.ts normalizes in place; see the function header).
+  return { title: data.title, image };
 }
 
 // --- readMode ----------------------------------------------------------------

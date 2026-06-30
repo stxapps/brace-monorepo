@@ -112,7 +112,11 @@ export async function extractTitleImage(
   await transformed.arrayBuffer();
   collected.docTitle = titleBuffer;
 
-  const title = cleanTitle(collected.ogTitle) ?? cleanTitle(collected.docTitle);
+  // Select first, clean once — the same shape as the extension (capture.ts selects
+  // `og:title || document.title` in-page, then the consumer runs cleanTitle). `ogTitle`
+  // is undefined unless a non-blank og:title was seen (setMeta drops empties), so this
+  // picks og:title when present and falls back to <title> otherwise, identically.
+  const title = cleanTitle(collected.ogTitle ?? collected.docTitle);
   const rawImage =
     collected.ogImage ??
     collected.ogImageUrl ??
