@@ -1,8 +1,8 @@
 import { type Facet, LINK_TITLE_MAX } from './entities';
 
-// The shared extraction WRITER helpers — title normalization, quality ranking, and
-// retry pacing — that every client must agree on. They operate on the `facetSchema` fields in
-// entities.ts (`extractedBy`, `attempts`/`extractedAt`) but are kept here, beside
+// The shared extraction OUTCOME rules — title normalization, quality ranking, retry pacing,
+// and (re)extraction eligibility — that every client must agree on. They operate on the
+// `facetSchema` fields in entities.ts (`extractedBy`, `attempts`/`extractedAt`) but are kept here, beside
 // each other rather than in the schema file, the same split `rank.ts`/`tree.ts`
 // make: entities.ts is the plaintext SHAPE contract; this is the BEHAVIOR.
 //
@@ -39,6 +39,21 @@ export const EXTRACTION_BACKOFF_MAX_MS = 24 * 60 * 60 * 1000; // capped at 1 day
 export function backoff(attempts: number): number {
   if (attempts <= 0) return 0;
   return Math.min(EXTRACTION_BACKOFF_BASE_MS * 2 ** (attempts - 1), EXTRACTION_BACKOFF_MAX_MS);
+}
+
+// Is a facet eligible for (re)extraction right now? The READ-side pacing rule paired with the
+// writers here: `newFacet` stamps `extractedAt`/`attempts`, this consumes them via `backoff`.
+// Pending when the facet is ABSENT (absence = pending — the writer-split, see entities.ts), or
+// when a transient `failed` facet has cooled past its backoff (`now >= extractedAt +
+// backoff(attempts)`). `done` and `permanent` (404/410, robots) are settled — never eligible,
+// so one device's synced outcome stops every device. Facet-agnostic: the rule is identical for
+// `titleImage`, `screenshot`, etc., so callers pull the facet they care about and pass it in.
+// Shared for the same reason as `backoff`/`tierOf`: every client (brace-web, the future Expo
+// app) must decide eligibility by identical rules.
+export function isFacetEligible(facet: Facet | undefined, now: number): boolean {
+  if (!facet) return true;
+  if (facet.status === 'done' || facet.status === 'permanent') return false;
+  return now >= (facet.extractedAt ?? 0) + backoff(facet.attempts);
 }
 
 // Normalize a discovered title to satisfy `extractionSchema.title`'s `LINK_TITLE_MAX`

@@ -1,6 +1,14 @@
 import { syncPathSchema } from './endpoints';
 import * as paths from './paths';
-import { ENC_SUFFIX, ID_KEYED_PREFIXES, SETTINGS_PREFIX } from './paths';
+import {
+  ENC_SUFFIX,
+  EXTRACTIONS_PREFIX,
+  ID_KEYED_PREFIXES,
+  LINKS_PREFIX,
+  PINS_PREFIX,
+  rekey,
+  SETTINGS_PREFIX,
+} from './paths';
 
 // Backstop for the easy-to-forget case (see paths.ts ID_KEYED_PREFIXES): add a
 // `*_PREFIX` const but forget to wire it into validation, and this fails at test
@@ -38,5 +46,18 @@ describe('syncPathSchema covers the whole path contract', () => {
     for (const path of bad) {
       expect(syncPathSchema.safeParse(path).success).toBe(false);
     }
+  });
+});
+
+describe('rekey maps a path to its co-keyed shadow', () => {
+  it('swaps the prefix while preserving the {id}', () => {
+    expect(rekey('links/abc.enc', LINKS_PREFIX, EXTRACTIONS_PREFIX)).toBe('extractions/abc.enc');
+    expect(rekey('links/abc.enc', LINKS_PREFIX, PINS_PREFIX)).toBe('pins/abc.enc');
+  });
+
+  it('round-trips back to the original path', () => {
+    const original = 'links/aZ09_-.enc';
+    const shadow = rekey(original, LINKS_PREFIX, EXTRACTIONS_PREFIX);
+    expect(rekey(shadow, EXTRACTIONS_PREFIX, LINKS_PREFIX)).toBe(original);
   });
 });

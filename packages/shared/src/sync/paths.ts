@@ -58,6 +58,18 @@ export function pathFromId(id: string, prefix: string): string {
   return `${prefix}${id}${ENC_SUFFIX}`;
 }
 
+// Rekey a path from one id-keyed namespace to its CO-KEYED shadow in another —
+// `rekey('links/abc.enc', LINKS_PREFIX, EXTRACTIONS_PREFIX)` → `'extractions/abc.enc'`.
+// The writer-split family of namespaces shares one `{id}` across prefixes
+// (`extractions/{id}` and `pins/{id}` both shadow `links/{id}`), so mapping between
+// the shadows is a pure prefix swap: strip `from`'s prefix to recover the `{id}`,
+// then rebuild under `to`. Composes `idFromPath` + `pathFromId` so the swap can't
+// drift from the `{prefix}{id}.enc` shape either half builds. `path` is assumed to
+// be under `from` — the caller names both namespaces.
+export function rekey(path: string, from: string, to: string): string {
+  return pathFromId(idFromPath(path, from), to);
+}
+
 // The well-known path of the general settings file (`settingsGeneralSchema`). The
 // `settings/` family is keyed by a fixed concern name, not a random id, so its
 // paths are baked into client code rather than generated — one source of truth so

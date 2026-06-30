@@ -14,14 +14,13 @@
 import Dexie from 'dexie';
 import type { z } from 'zod';
 
-import type { Extraction, Facet, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
+import type { Extraction, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
 import {
-  backoff,
   compareRank,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
-  idFromPath,
+  isFacetEligible,
   LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
@@ -29,6 +28,7 @@ import {
   pathFromId,
   PINS_PREFIX,
   pinSchema,
+  rekey,
   SETTINGS_GENERAL_PATH,
   settingsGeneralSchema,
   SYSTEM_LIST_DEFAULTS,
@@ -198,7 +198,7 @@ function decodeCachedExtraction(record: ItemRecord): ExtractionItem | undefined 
 // the writer-split's co-key (entities.ts). Both are id-keyed namespaces, so this is a
 // prefix swap.
 function extractionPathForLink(linkPath: string): string {
-  return pathFromId(idFromPath(linkPath, LINKS_PREFIX), EXTRACTIONS_PREFIX);
+  return rekey(linkPath, LINKS_PREFIX, EXTRACTIONS_PREFIX);
 }
 
 // Resolve one link + its (optional) extraction into the display row the UI renders —
@@ -374,19 +374,6 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
 }
 
-// Is one link's `titleImage` facet eligible for (re)extraction right now? Pending when
-// the facet is ABSENT (absence = pending — the writer-split, see entities.ts), or a
-// `failed` facet has cooled past its backoff (`now >= extractedAt + backoff(attempts)`).
-// `done` and `permanent` (404/410, robots) are settled — never eligible, so one device's
-// synced outcome stops every device. A direct test on one already-decoded facet — both the
-// pending-titleImage reads below test each candidate's own facet inline with this, instead
-// of materializing a settled-id set, so cost tracks the links actually examined.
-function isTitleImageEligible(facet: Facet | undefined, now: number): boolean {
-  if (!facet) return true;
-  if (facet.status === 'done' || facet.status === 'permanent') return false;
-  return now >= (facet.extractedAt ?? 0) + backoff(facet.attempts);
-}
-
 // A position in the newest-first `links/` walk, used to PAGINATE the whole-library
 // enrich-all drain (extraction-provider) without re-scanning from the top each batch. It
 // names the last link the walk EXAMINED — `(createdAt, path)` — so the next page resumes
@@ -414,6 +401,10 @@ export interface PendingTitleImagePage {
 // only moves forward (the property that makes enrich-all O(library), not O(library²)).
 const SCAN_CHUNK = 200;
 
+function toCursor(record: ItemRecord): LinkScanCursor {
+  return { createdAt: record.itemCreatedAt ?? 0, path: record.path };
+}
+
 // The residual extraction queue for the WHOLE-LIBRARY "enrich all" job (extraction-provider
 // `enrichAll`), as a QUERY (there's no queue object — see docs/link-extraction.md "the queue
 // is a query"), PAGINATED. Returns up to `limit` links whose `titleImage` is pending+eligible,
@@ -424,7 +415,7 @@ const SCAN_CHUNK = 200;
 // of a blocked-set rebuild, and NOT the O(library²) of re-scanning from the top every batch.
 // The forward `cursor` is what buys that: each batch resumes where the last left off, so a
 // just-enriched link is behind the cursor and never re-walked. Eligibility is tested INLINE
-// off each link's own co-keyed extraction facet (`isTitleImageEligible`, like the
+// off each link's own co-keyed extraction facet (`isFacetEligible`, like the
 // displayed-scoped read) rather than against a precomputed blocked set — so the test stays
 // FRESH: a link a concurrent sync settled mid-drain drops out here instead of costing a
 // redundant (paid) extract. Missing / settled / still-cooling links are skipped; only their
@@ -437,13 +428,13 @@ export async function readLinksPendingTitleImagePage(
   if (limit <= 0) return { links: [], cursor: cursor ?? null };
 
   const pending: ItemRecord[] = [];
-  // The boundary already consumed: rows at `boundary.createdAt` with `path >= boundary.path`
+  // The window already consumed: rows at `scannedFrom.createdAt` with `path >= scannedFrom.path`
   // were examined on a prior page/step, so skip them. Undefined = start at the newest link.
-  let boundary = cursor;
-  let next: LinkScanCursor | null = cursor ?? null;
+  let scannedFrom = cursor;
+  let scannedTo: LinkScanCursor | null = cursor ?? null;
 
-  for (;;) {
-    const upper = boundary ? boundary.createdAt : Dexie.maxKey;
+  for (; ;) {
+    const upper = scannedFrom ? scannedFrom.createdAt : Dexie.maxKey;
     const chunk = await db.items
       .where('[itemType+itemCreatedAt]')
       .between(['link', Dexie.minKey], ['link', upper], true, true)
@@ -460,33 +451,30 @@ export async function readLinksPendingTitleImagePage(
     for (let i = 0; i < chunk.length; i++) {
       const record = chunk[i];
       const createdAt = record.itemCreatedAt ?? 0;
-      // Skip the prior boundary's already-examined rows (same createdAt, path at/after it).
-      if (boundary && createdAt === boundary.createdAt && record.path >= boundary.path) continue;
+      // Skip the prior window's already-examined rows (same createdAt, path at/after it).
+      if (scannedFrom && createdAt === scannedFrom.createdAt && record.path >= scannedFrom.path)
+        continue;
       examined++;
-      next = { createdAt, path: record.path };
+      scannedTo = { createdAt, path: record.path };
 
       const exRecord = exRecords[i];
       const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
-      if (isTitleImageEligible(facet, now)) {
+      if (isFacetEligible(facet, now)) {
         pending.push(record);
-        if (pending.length >= limit) return { links: decodeLinks(pending), cursor: next };
+        if (pending.length >= limit) return { links: decodeLinks(pending), cursor: scannedTo };
       }
     }
 
     // A short chunk means we reached the oldest link — library exhausted.
     if (chunk.length < SCAN_CHUNK) return { links: decodeLinks(pending), cursor: null };
 
-    // Advance into the next chunk. Normally `next` (the last examined row) is the chunk's
-    // last row, so the boundary moves forward. If `examined === 0` the whole full chunk was
+    // Advance into the next chunk. Normally `scannedTo` (the last examined row) is the chunk's
+    // last row, so the window moves forward. If `examined === 0` the whole full chunk was
     // the skipped boundary run (a collision run longer than SCAN_CHUNK sharing one
-    // createdAt) — `next` didn't move, so step the boundary to the chunk's last row to force
-    // progress through the run.
-    boundary = examined === 0 ? toCursor(chunk[chunk.length - 1]) : (next ?? undefined);
+    // createdAt) — `scannedTo` didn't move, so step `scannedFrom` to the chunk's last row to
+    // force progress through the run.
+    scannedFrom = examined === 0 ? toCursor(chunk[chunk.length - 1]) : (scannedTo ?? undefined);
   }
-}
-
-function toCursor(record: ItemRecord): LinkScanCursor {
-  return { createdAt: record.itemCreatedAt ?? 0, path: record.path };
 }
 
 // The pending-titleImage subset of a SPECIFIC set of link paths, in the given order — the
@@ -499,7 +487,7 @@ function toCursor(record: ItemRecord): LinkScanCursor {
 // Cost: O(displayed), NOT O(library) — load-bearing because this read backs the always-on
 // probe liveQuery (extraction-provider), which re-runs on every `db.items` write. Two
 // `bulkGet`s of the given paths (the links + their co-keyed extractions), then an inline
-// per-path eligibility test (`isTitleImageEligible`) — the same direct facet test the
+// per-path eligibility test (`isFacetEligible`) — the same direct facet test the
 // enrich-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
 // display order — newest first), so on-screen links enrich top-down. Missing / non-link /
 // settled / still-cooling paths drop out.
@@ -521,7 +509,7 @@ export async function readLinksPendingTitleImageForLinkPaths(
 
     const exRecord = exRecords[i];
     const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
-    if (isTitleImageEligible(facet, now)) pending.push(record);
+    if (isFacetEligible(facet, now)) pending.push(record);
   }
   return decodeLinks(pending);
 }

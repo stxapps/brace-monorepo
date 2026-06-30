@@ -178,6 +178,7 @@ type ImageOutcome =
 async function loadImage(result: ExtractResult, client: ExtractClient): Promise<ImageOutcome> {
   if (result.imageBytes) return { kind: 'bytes', bytes: base64ToBytes(result.imageBytes) };
   if (!result.imageUrl) return { kind: 'none' };
+
   try {
     return { kind: 'bytes', bytes: await client.fetchImage(result.imageUrl) };
   } catch (err) {
