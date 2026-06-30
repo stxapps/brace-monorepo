@@ -93,9 +93,8 @@ export async function runServerTitleImageBatch(
   // outcome, so we let it propagate: the caller's drain stops and retries on the next wake
   // instead of recording a bogus `failed` on every link. Per-link failures are still
   // recorded below, in passes 1–2.
-  const results: ExtractResult[] = urls.length === 1
-    ? [await client.extract(urls[0])]
-    : await client.extractMany(urls);
+  const results: ExtractResult[] =
+    urls.length === 1 ? [await client.extract(urls[0])] : await client.extractMany(urls);
 
   const resultsByUrl = new Map(results.map((result) => [result.url, result]));
 

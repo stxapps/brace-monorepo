@@ -269,7 +269,8 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     // displayed-scoped drain while the tab is hidden. EXTRACT-ALL is exempt — it's an
     // explicit, finite, consented job, so it may start/continue while hidden (the user clicked
     // once and walked away). `visible` stays a dep so revealing the tab re-wakes auto mode.
-    if (!enabled || !username || !extractClient || !hasWork || (!visible && !isExtractingAll)) return;
+    if (!enabled || !username || !extractClient || !hasWork || (!visible && !isExtractingAll))
+      return;
 
     let cancelled = false;
 
@@ -281,7 +282,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       runningRef.current = true;
       setIsRunning(true);
       try {
-        for (; ;) {
+        for (;;) {
           if (cancelled) return;
 
           if (extractingAllRef.current) {
@@ -354,7 +355,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       } finally {
         runningRef.current = false;
         setIsRunning(false);
-        if (rerunRef.current && !cancelled && (extractingAllRef.current || visibleRef.current)) {
+        if (rerunRef.current && !cancelled && (visibleRef.current || extractingAllRef.current)) {
           rerunRef.current = false;
           void drain();
         }
