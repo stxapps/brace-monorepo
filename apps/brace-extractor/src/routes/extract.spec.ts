@@ -151,8 +151,8 @@ describe('POST /v1/extract', () => {
     // imageUrl is still populated alongside the inlined bytes (the fallback).
     expect(result.imageUrl).toBe('https://cdn.example.com/i.png');
     expect(result.imageContentType).toBe('image/png');
-    // imageBytes round-trips back to the original image bytes.
-    const decoded = Uint8Array.from(atob(result.imageBytes ?? ''), (c) => c.charCodeAt(0));
+    // imageBase64 round-trips back to the original image bytes.
+    const decoded = Uint8Array.from(atob(result.imageBase64 ?? ''), (c) => c.charCodeAt(0));
     expect(decoded).toEqual(PNG);
   });
 
@@ -164,7 +164,7 @@ describe('POST /v1/extract', () => {
     });
     for (const result of body.results) {
       expect(result.imageUrl).toBe('https://cdn.example.com/i.png');
-      expect(result.imageBytes).toBeUndefined();
+      expect(result.imageBase64).toBeUndefined();
       expect(result.imageContentType).toBeUndefined();
     }
     // Only the two page fetches happened — the image was never fetched for inlining.
@@ -178,7 +178,7 @@ describe('POST /v1/extract', () => {
     const result = body.results[0];
     expect(result.ok).toBe(true);
     expect(result.imageUrl).toBe('https://cdn.example.com/i.png');
-    expect(result.imageBytes).toBeUndefined();
+    expect(result.imageBase64).toBeUndefined();
   });
 
   it('does not inline when no inlineImage flag is sent', async () => {
@@ -186,6 +186,6 @@ describe('POST /v1/extract', () => {
 
     const { body } = await postExtract(['https://example.com/post']);
     expect(body.results[0].imageUrl).toBe('https://cdn.example.com/i.png');
-    expect(body.results[0].imageBytes).toBeUndefined();
+    expect(body.results[0].imageBase64).toBeUndefined();
   });
 });

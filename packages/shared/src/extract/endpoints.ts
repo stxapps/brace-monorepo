@@ -78,13 +78,13 @@ export type ExtractError = z.infer<typeof extractErrorSchema>;
 //     found. Enough for an extension/mobile client (it fetches the image itself, no
 //     CORS); the web app, which can't read cross-origin image bytes, normally pulls
 //     it through the image proxy (GET /v1/image) in a second round trip.
-//   - `imageBytes` / `imageContentType` — the og:image fetched + base64-inlined, set
+//   - `imageBase64` / `imageContentType` — the og:image fetched + base64-inlined, set
 //     ONLY when the client asked for `inlineImage` on a SINGLE-URL request and the
 //     fetch succeeded. Saves an interactive web-app save that second round trip; the
 //     client base64-decodes, encrypts, and writes `files/{id}.enc` itself. The
 //     extractor still STORES nothing (docs "stream-don't-store"); the inline path is
 //     a one-shot buffer of one small preview, never the bulk/proxy path.
-// `imageUrl` stays populated even when `imageBytes` is, so a client whose inline
+// `imageUrl` stays populated even when `imageBase64` is, so a client whose inline
 // fetch the server omitted (too large / failed) can still fall back to GET /v1/image.
 export const extractResultSchema = z.object({
   url: z.string(),
@@ -100,10 +100,10 @@ export const extractResultSchema = z.object({
   // `inlineImage` request whose image fetch succeeded (under the SSRF guard + a
   // dedicated inline byte cap). Paired with `imageContentType`; absent otherwise,
   // in which case the client uses `imageUrl` + the proxy.
-  imageBytes: z.base64().optional(),
+  imageBase64: z.base64().optional(),
   // The inlined image's content-type (e.g. `image/jpeg`) — the proxy reads this off
   // the upstream response header, but an inline client has none, so it's returned
-  // explicitly so the client can label/store the blob. Present iff `imageBytes` is.
+  // explicitly so the client can label/store the blob. Present iff `imageBase64` is.
   imageContentType: z.string().optional(),
   // Present iff `ok === false`.
   error: extractErrorSchema.optional(),
@@ -129,7 +129,7 @@ export const extractResponseSchema = z.object({
 export type ExtractResponse = z.infer<typeof extractResponseSchema>;
 
 // POST /v1/extract { urls, inlineImage? }
-//   → { results: [{ url, ok, title?, imageUrl?, imageBytes?, imageContentType?, error? }] }
+//   → { results: [{ url, ok, title?, imageUrl?, imageBase64?, imageContentType?, error? }] }
 export const extractEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/extract`,

@@ -30,7 +30,7 @@ import { rateLimit } from '../middleware/rate-limit';
 // `imageUrl` is the discovered og:image as a URL STRING — an extension/mobile client
 // fetches it directly; the web app normally pulls it through GET /v1/image (the
 // proxy). With `inlineImage` on a SINGLE-URL request, the server also fetches that
-// image and returns it base64-inlined (`imageBytes` + `imageContentType`), saving the
+// image and returns it base64-inlined (`imageBase64` + `imageContentType`), saving the
 // web app the second round trip. The extractor still STORES nothing — inline is a
 // one-shot buffer of one small preview, gated + size-capped below.
 
@@ -53,7 +53,7 @@ function contentTypeOf(res: Response): string {
 // tighter than the streamed proxy's (the bytes are buffered + base64-inflated here).
 async function fetchInlineImage(
   imageUrl: string,
-): Promise<{ imageBytes: string; imageContentType: string } | null> {
+): Promise<{ imageBase64: string; imageContentType: string } | null> {
   try {
     const { response } = await safeFetch(imageUrl, 'image/*');
     const contentType = contentTypeOf(response);
@@ -63,7 +63,7 @@ async function fetchInlineImage(
     }
 
     const bytes = await readAllWithLimit(response, MAX_INLINE_IMAGE_BYTES);
-    return { imageBytes: bytesToBase64(bytes), imageContentType: contentType };
+    return { imageBase64: bytesToBase64(bytes), imageContentType: contentType };
   } catch {
     return null;
   }
@@ -105,7 +105,7 @@ async function extractOne(requestedUrl: string, inline: boolean): Promise<Extrac
     if (inline && result.imageUrl) {
       const inlined = await fetchInlineImage(result.imageUrl);
       if (inlined) {
-        result.imageBytes = inlined.imageBytes;
+        result.imageBase64 = inlined.imageBase64;
         result.imageContentType = inlined.imageContentType;
       }
     }

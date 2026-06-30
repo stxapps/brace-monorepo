@@ -176,7 +176,7 @@ type ImageOutcome =
 // 4xx is permanent (settle `done` with the title, no image — the `web-only gap` behavior:
 // no preview rather than a leaky remote <img src>). No `imageUrl` at all → nothing to fetch.
 async function loadImage(result: ExtractResult, client: ExtractClient): Promise<ImageOutcome> {
-  if (result.imageBytes) return { kind: 'bytes', bytes: base64ToBytes(result.imageBytes) };
+  if (result.imageBase64) return { kind: 'bytes', bytes: base64ToBytes(result.imageBase64) };
   if (!result.imageUrl) return { kind: 'none' };
 
   try {
