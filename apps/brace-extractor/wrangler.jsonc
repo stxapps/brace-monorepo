@@ -22,9 +22,13 @@
     "enabled": true,
   },
   // Pin a distinct local port so it can run alongside brace-api (8787) under
-  // `wrangler dev` without colliding / silently drifting to a random port.
+  // `wrangler dev` without colliding / silently drifting to a random port. The
+  // V8 `inspector_port` (default 9229) is a SEPARATE socket not covered by
+  // `port`, so pin a distinct one too — otherwise it collides with brace-api's
+  // 9229 ("Address already in use (127.0.0.1:9229)").
   "dev": {
     "port": 8788,
+    "inspector_port": 9230,
   },
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `ratelimits`) are NOT inherited from the top level — each

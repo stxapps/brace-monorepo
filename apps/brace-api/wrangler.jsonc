@@ -21,8 +21,15 @@
   // http://localhost:8787 (see apps/brace-web/.env.development), so any drift
   // makes the API "unreachable". Setting `port` explicitly makes wrangler bind
   // 8787 or fail loudly (EADDRINUSE) instead of drifting.
+  //
+  // `inspector_port` (the V8 debugger socket) ALSO defaults to a fixed value —
+  // 9229 — and is NOT covered by `port`, so two `wrangler dev`s collide on it
+  // even with distinct HTTP ports. Under `npm run dev` brace-api + brace-extractor
+  // run side by side, so pin a distinct inspector_port per app too (9229/9230,
+  // mirroring 8787/8788) to avoid "Address already in use (127.0.0.1:9229)".
   "dev": {
     "port": 8787,
+    "inspector_port": 9229,
   },
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
