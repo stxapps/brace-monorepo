@@ -17,7 +17,7 @@ import { useSync } from '@stxapps/web-react';
 //
 // Named for what it gates: only the FIRST (initial) sync blocks here. By design,
 // subsequent incremental/background syncs never gate the UI — they report on the
-// separate bgSync dimension instead (see sync-provider).
+// separate bgSyncStatus dimension instead (see sync-provider).
 
 // How long the first-sync screen stays up once shown, so a fast pull can't flash
 // it. Only relevant to 'syncing-initial' (a network pull); 'checking' never shows
@@ -58,7 +58,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   }
 
   // Only the blocking initial sync can land here: background syncs report on
-  // bgSync and never set the gate's 'error'.
+  // bgSyncStatus and never set the gate's 'error'.
   if (storeStatus === 'error') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">

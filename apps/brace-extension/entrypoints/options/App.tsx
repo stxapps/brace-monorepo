@@ -83,7 +83,7 @@ function Status({ username }: { username: string | null }) {
         </div>
         <div className="status-row">
           <span>Last cycle</span>
-          <span>{sync.bgSync}</span>
+          <span>{sync.bgSyncStatus}</span>
         </div>
         <div className="status-row">
           <span>Last sync</span>

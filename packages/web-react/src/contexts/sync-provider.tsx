@@ -32,11 +32,11 @@ import { useAuth } from './auth-provider';
 // with no network round-trip.
 //
 // Sync state itself is TWO dimensions, kept as two fields rather than one enum:
-//   storeStatus — the gate: can the app render local data at all? Durable; once
-//                 'ready' it stays 'ready' while cycles come and go.
-//   bgSync      — the indicator: health of the current/last background cycle. A
-//                 failed background cycle coexists with a usable store (that's
-//                 the point of local-first), so it must not leave 'ready'.
+//   storeStatus  — the gate: can the app render local data at all? Durable; once
+//                  'ready' it stays 'ready' while cycles come and go.
+//   bgSyncStatus — the indicator: health of the current/last background cycle. A
+//                  failed background cycle coexists with a usable store (that's
+//                  the point of local-first), so it must not leave 'ready'.
 
 // The gate's phases — named for the LOCAL STORE, not the sync runs: on a
 // returning visit no initial sync runs at all, yet the store is 'ready'.
@@ -48,14 +48,14 @@ export type StoreStatus =
 
 // The indicator's phases. Only post-'ready' cycles report here — while the gate
 // blocks, the decrypting screen IS the progress UI.
-export type BgSyncState =
+export type BgSyncStatus =
   | 'idle' // no cycle in flight; the last one (if any) succeeded
   | 'syncing' // a background cycle is in flight
   | 'error'; // the last cycle failed; requestSync retries (flips back to 'syncing')
 
 interface SyncContextValue {
   storeStatus: StoreStatus;
-  bgSync: BgSyncState;
+  bgSyncStatus: BgSyncStatus;
   // Bumped each time requestSync() runs — i.e. on every local edit on THIS
   // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
   // read edge (useLinks) keys on it to apply the user's own change immediately
@@ -66,7 +66,7 @@ interface SyncContextValue {
   retryInitialSync: () => void;
   // Kick a background incremental cycle now — e.g. right after a local edit
   // enqueues a pending op. Doubles as the retry when a background cycle fails
-  // (bgSync 'error'): retrying a failed cycle and running a fresh one are the
+  // (bgSyncStatus 'error'): retrying a failed cycle and running a fresh one are the
   // same operation, so there's no separate retryBgSync. Safe to call eagerly:
   // the engine single-flights per account (overlapping calls coalesce into one
   // trailing rerun). No-op until a session is usable.
@@ -79,7 +79,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const { username, status: authStatus } = useAuth();
   const api = useApiClient();
   const [storeStatus, setStoreStatus] = useState<StoreStatus>('checking');
-  const [bgSync, setBgSync] = useState<BgSyncState>('idle');
+  const [bgSyncStatus, setBgSyncStatus] = useState<BgSyncStatus>('idle');
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
@@ -118,19 +118,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
     // Fresh slate for the indicator — a stale 'error' from a previous account
     // (or a pre-retry run) must not bleed into this one.
-    setBgSync('idle');
+    setBgSyncStatus('idle');
 
     // Returning visit → render local data now, refresh in the background. The
-    // outcome lands on the INDICATOR (bgSync), never the gate: a failed
+    // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
     // background cycle coexists with a usable store, so storeStatus stays put.
     const backgroundSync = () => {
-      setBgSync('syncing');
+      setBgSyncStatus('syncing');
       void runIncrementalSync(deps).then(
         () => {
-          if (activeRef.current) setBgSync('idle');
+          if (activeRef.current) setBgSyncStatus('idle');
         },
         () => {
-          if (activeRef.current) setBgSync('error');
+          if (activeRef.current) setBgSyncStatus('error');
         },
       );
     };
@@ -171,8 +171,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [username, authStatus, attempt, api]);
 
   const value = useMemo<SyncContextValue>(
-    () => ({ storeStatus, bgSync, localWriteNonce, retryInitialSync, requestSync }),
-    [storeStatus, bgSync, localWriteNonce, retryInitialSync, requestSync],
+    () => ({ storeStatus, bgSyncStatus, localWriteNonce, retryInitialSync, requestSync }),
+    [storeStatus, bgSyncStatus, localWriteNonce, retryInitialSync, requestSync],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
@@ -193,12 +193,12 @@ export function ExternalSyncProvider({
   children,
   requestSync,
   storeStatus = 'ready',
-  bgSync = 'idle',
+  bgSyncStatus = 'idle',
 }: {
   children: ReactNode;
   requestSync: () => void;
   storeStatus?: StoreStatus;
-  bgSync?: BgSyncState;
+  bgSyncStatus?: BgSyncStatus;
 }) {
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
   const requestSyncWithNonce = useCallback(() => {
@@ -209,12 +209,12 @@ export function ExternalSyncProvider({
   const value = useMemo<SyncContextValue>(
     () => ({
       storeStatus,
-      bgSync,
+      bgSyncStatus,
       localWriteNonce,
       retryInitialSync: () => undefined,
       requestSync: requestSyncWithNonce,
     }),
-    [storeStatus, bgSync, localWriteNonce, requestSyncWithNonce],
+    [storeStatus, bgSyncStatus, localWriteNonce, requestSyncWithNonce],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

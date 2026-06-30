@@ -55,10 +55,10 @@ export function runSync(): Promise<void> {
       const deps = await buildDeps();
       if (!deps) {
         // Signed out: nothing to sync; present a ready, idle store.
-        await setStatus({ storeStatus: 'ready', bgSync: 'idle' });
+        await setStatus({ storeStatus: 'ready', bgSyncStatus: 'idle' });
         return;
       }
-      await setStatus({ bgSync: 'syncing' });
+      await setStatus({ bgSyncStatus: 'syncing' });
       if (await isFirstSyncDone(deps.username)) {
         await runIncrementalSync(deps);
       } else {
@@ -67,13 +67,13 @@ export function runSync(): Promise<void> {
       }
       await setStatus({
         storeStatus: 'ready',
-        bgSync: 'idle',
+        bgSyncStatus: 'idle',
         lastSyncAt: Date.now(),
         lastError: null,
       });
     } catch (err) {
       await setStatus({
-        bgSync: 'error',
+        bgSyncStatus: 'error',
         lastSyncAt: Date.now(),
         lastError: err instanceof Error ? err.message : String(err),
       });

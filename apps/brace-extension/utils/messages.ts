@@ -1,4 +1,4 @@
-import type { BgSyncState, ExtractionFacet, StoreStatus } from '@stxapps/web-react';
+import type { BgSyncStatus, ExtractionFacet, StoreStatus } from '@stxapps/web-react';
 
 // The typed popup → background message protocol (replaces the starter's single
 // `SAVE_PAGE`). The background owns ALL privileged / CORS-exempt work — the sync
@@ -19,12 +19,12 @@ export interface MessageResponses {
 
 // The background mirrors its sync health here (browser.storage.local) every cycle,
 // so the popup and the options/status page can render it WITHOUT mounting the sync
-// engine (SyncProvider). `storeStatus` reuses web-react's gate phases; `bgSync` its
+// engine (SyncProvider). `storeStatus` reuses web-react's gate phases; `bgSyncStatus` its
 // indicator phases. `lastSyncAt` is the epoch ms the last cycle finished (success or
 // fail); `lastError` is the last cycle's error message, or null.
 export interface SyncStatus {
   storeStatus: StoreStatus;
-  bgSync: BgSyncState;
+  bgSyncStatus: BgSyncStatus;
   lastSyncAt: number | null;
   lastError: string | null;
 }
@@ -33,7 +33,7 @@ export const SYNC_STATUS_KEY = 'syncStatus';
 
 export const INITIAL_SYNC_STATUS: SyncStatus = {
   storeStatus: 'checking',
-  bgSync: 'idle',
+  bgSyncStatus: 'idle',
   lastSyncAt: null,
   lastError: null,
 };
