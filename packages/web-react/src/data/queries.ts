@@ -346,14 +346,14 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   return decodeCachedExtraction(record);
 }
 
-// The options/status page's enrichment tally, headlined on the `titleImage` facet (the
+// The options/status page's extraction tally, headlined on the `titleImage` facet (the
 // primary "fill in title + image" job). `done`/`failed` are exact index range-counts off
 // the `*itemFacetStatuses` multiEntry index (projection.ts) — one token per facet, so a
 // status:facet equals-count is the exact per-link count, no decode. `pending` can't be a
 // token: the writer-split makes pending = ABSENCE (a link with no `done`/`failed`/
 // `permanent` titleImage facet — often no extractions file at all — see
 // docs/link-extraction.md), so it's the link total minus the recorded outcomes. `failed`
-// folds in `permanent` (both are "not enriched, won't auto-retry without help").
+// folds in `permanent` (both are "not extracted, won't auto-retry without help").
 export interface ExtractionFacetCounts {
   done: number;
   pending: number;
@@ -375,7 +375,7 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
 }
 
 // A position in the newest-first `links/` walk, used to PAGINATE the whole-library
-// enrich-all drain (extraction-provider) without re-scanning from the top each batch. It
+// extract-all drain (extraction-provider) without re-scanning from the top each batch. It
 // names the last link the walk EXAMINED — `(createdAt, path)` — so the next page resumes
 // strictly past it. `path` is the tiebreak, not decoration: the `[itemType+itemCreatedAt]`
 // index orders equal-createdAt rows by primary key (path), and a bulk import can stamp many
@@ -386,7 +386,7 @@ export interface LinkScanCursor {
   path: string;
 }
 
-// One page of the enrich-all walk: up to `limit` pending+eligible links (newest-first), plus
+// One page of the extract-all walk: up to `limit` pending+eligible links (newest-first), plus
 // the `cursor` to resume from. `cursor === null` means the library is exhausted (the drain
 // stops); a non-null cursor always pairs with a FULL `links` page (the scan only stops early
 // when it hits `limit`), so the caller keeps paging while it's non-null.
@@ -398,15 +398,15 @@ export interface PendingTitleImagePage {
 // How many `links/` records one inner scan step pulls while hunting for the page's `limit`
 // eligible links. Bounds memory per step; a settled-heavy stretch just costs more steps —
 // but each link is still examined at most ONCE across the whole drain, because the cursor
-// only moves forward (the property that makes enrich-all O(library), not O(library²)).
+// only moves forward (the property that makes extract-all O(library), not O(library²)).
 const SCAN_CHUNK = 200;
 
 function toCursor(record: ItemRecord): LinkScanCursor {
   return { createdAt: record.itemCreatedAt ?? 0, path: record.path };
 }
 
-// The residual extraction queue for the WHOLE-LIBRARY "enrich all" job (extraction-provider
-// `enrichAll`), as a QUERY (there's no queue object — see docs/link-extraction.md "the queue
+// The residual extraction queue for the WHOLE-LIBRARY "extract all" job (extraction-provider
+// `extractAll`), as a QUERY (there's no queue object — see docs/link-extraction.md "the queue
 // is a query"), PAGINATED. Returns up to `limit` links whose `titleImage` is pending+eligible,
 // newest-first, plus a `cursor` the caller threads back to resume. The automatic drain uses
 // the displayed-scoped read below instead.
@@ -414,7 +414,7 @@ function toCursor(record: ItemRecord): LinkScanCursor {
 // Cost: O(examined), and across a full drain O(library) total — NOT the O(settled)-per-batch
 // of a blocked-set rebuild, and NOT the O(library²) of re-scanning from the top every batch.
 // The forward `cursor` is what buys that: each batch resumes where the last left off, so a
-// just-enriched link is behind the cursor and never re-walked. Eligibility is tested INLINE
+// just-extracted link is behind the cursor and never re-walked. Eligibility is tested INLINE
 // off each link's own co-keyed extraction facet (`isFacetEligible`, like the
 // displayed-scoped read) rather than against a precomputed blocked set — so the test stays
 // FRESH: a link a concurrent sync settled mid-drain drops out here instead of costing a
@@ -479,17 +479,17 @@ export async function readLinksPendingTitleImagePage(
 
 // The pending-titleImage subset of a SPECIFIC set of link paths, in the given order — the
 // read behind brace-web's displayed-driven AUTOMATIC extraction (extraction-provider). Where
-// `readLinksPendingTitleImagePage` walks the whole library for the conscious "enrich all" job,
+// `readLinksPendingTitleImagePage` walks the whole library for the conscious "extract all" job,
 // this scopes the automatic drain to what the user is actually looking at: the page of links
 // the main pane has rendered. So a 30k-link bulk import left in an abandoned tab never
-// enriches past what was scrolled into view — work tracks attention, not an arbitrary cap.
+// extracts past what was scrolled into view — work tracks attention, not an arbitrary cap.
 //
 // Cost: O(displayed), NOT O(library) — load-bearing because this read backs the always-on
 // probe liveQuery (extraction-provider), which re-runs on every `db.items` write. Two
 // `bulkGet`s of the given paths (the links + their co-keyed extractions), then an inline
 // per-path eligibility test (`isFacetEligible`) — the same direct facet test the
-// enrich-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
-// display order — newest first), so on-screen links enrich top-down. Missing / non-link /
+// extract-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
+// display order — newest first), so on-screen links extract top-down. Missing / non-link /
 // settled / still-cooling paths drop out.
 export async function readLinksPendingTitleImageForLinkPaths(
   linkPaths: string[],

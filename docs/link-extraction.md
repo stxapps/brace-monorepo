@@ -660,8 +660,9 @@ server for work no one is watching. Three gates impose that, all of them UX/cost
 **shaping on top of** the extractor's own non-negotiable per-IP caps (see _server
 extraction_), never a substitute for them:
 
-- **Visibility gate.** The drain runs only while the tab is **visible**; a
-  hidden/backgrounded tab spends nothing.
+- **Visibility gate (automatic drain).** The _incidental_ drain runs only while the
+  tab is **visible**; a hidden/backgrounded tab spends nothing on enrichment the user
+  never asked for. **"Enrich all" is exempt** — it's explicit and finite (see below).
 - **Displayed-scoped automatic drain.** The automatic drain works **only the pending
   subset of the links currently on screen** — the page the main pane has rendered,
   reported into the provider — not a blind walk of the whole library. So **work
@@ -673,9 +674,15 @@ extraction_), never a substitute for them:
   "enrich the rest?" rather than draining unbounded.
 - **Explicit "enrich all".** Draining the **whole** library is a conscious,
   user-driven job — a full-library pending scan, lifted out of the displayed scope
-  and the backstop cap (still visibility-gated, pausable). This is the **opt-in
-  moment** a bulk import names ("enrich my whole library?" — see _imported links_),
-  surfaced with progress + controls rather than running behind the user's back.
+  and the backstop cap. Unlike the automatic drain it **keeps running while the tab is
+  hidden**, so the user clicks once and walks away instead of babysitting the tab. It
+  isn't visibility-bounded because it's bounded by being **finite**: the cursor walk
+  drains to the end of the library and then **ends the job** (it does _not_ stay armed
+  to re-fire on later synced/imported links), with the extractor's per-IP caps as the
+  hard floor; `pause()` stops it early. This is the **opt-in moment** a bulk import
+  names ("enrich my whole library?" — see _imported links_), so the app **confirms at
+  the button** ("Enrich all _X_ links?") and surfaces progress + controls rather than
+  running behind the user's back.
 
 ### imported links: the bulk path
 

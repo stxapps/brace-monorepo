@@ -22,7 +22,7 @@ import {
 import { type LinkItem } from '../data/queries';
 import { resizeImage } from './resize-image';
 
-// The SERVER-tier extraction worker: enrich a PAGE of links' `titleImage` facet via
+// The SERVER-tier extraction worker: extract a PAGE of links' `titleImage` facet via
 // `brace-extractor`, then write back — each (resized) image into `files/`, the
 // title/imageId display fields + the facet's done/failed bookkeeping into
 // `extractions/{id}.enc`. The shared counterpart of the extension's `runExtraction`
@@ -49,7 +49,7 @@ import { resizeImage } from './resize-image';
 // failure isn't a per-link outcome — it tells us nothing about any link — so it propagates
 // and the caller stops the drain to retry on the next wake, rather
 // than mislabeling every link `failed` (which would burn each link's backoff, flood sync
-// with no-op writes, and — in enrichAll — march the cursor through the whole library
+// with no-op writes, and — in extractAll — march the cursor through the whole library
 // writing failures). Every PER-LINK outcome (success, transient failure, permanent failure)
 // is instead RECORDED as a facet write and never re-throws, so once the request succeeds the
 // drain always makes progress — a processed link becomes settled (`done`, or
@@ -64,8 +64,8 @@ const EXTRACTED_BY = 'server';
 // enough not to trip the limiter into 429s.
 const IMAGE_CONCURRENCY = 3;
 
-// Enrich a batch of links' `titleImage` facet in one shot — the path behind the
-// displayed-scoped / enrich-all drains (extraction-provider). Returns the number of links
+// Extract a batch of links' `titleImage` facet in one shot — the path behind the
+// displayed-scoped / extract-all drains (extraction-provider). Returns the number of links
 // processed (for the caller's auto-budget). Throws only on a transport failure or an
 // oversized batch (see above); per-link outcomes are recorded, never thrown.
 export async function runServerTitleImageBatch(
@@ -79,7 +79,7 @@ export async function runServerTitleImageBatch(
   }
 
   // De-dupe URLs (the same article saved twice shares one fetch) and map each URL back to
-  // every link that carries it, so one result enriches them all.
+  // every link that carries it, so one result covers them all.
   const linksByUrl = new Map<string, LinkItem[]>();
   for (const link of links) {
     const group = linksByUrl.get(link.url);

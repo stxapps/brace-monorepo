@@ -28,7 +28,7 @@ async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
 // Returns the discovered title and, when available, the image bytes.
 //
 // Title and image preference order MIRROR the server extractor (brace-extractor
-// `html.ts`) so a page enriches identically whichever tier reaches it:
+// `html.ts`) so a page extracts identically whichever tier reaches it:
 //   title → og:title, else document.title
 //   image → og:image, og:image:url, og:image:secure_url, twitter:image, link[rel=image_src]
 // Relative image URLs need no resolving here — the in-page `fetch` resolves them

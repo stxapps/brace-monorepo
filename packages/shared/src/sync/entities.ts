@@ -290,7 +290,7 @@ export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 //
 // `serverExtraction` is the SECOND, explicit opt-in (see docs/link-extraction.md
 // "server extraction" / "the stance"): the user lets a web/desktop client send a
-// saved link's URL to `brace-extractor` for title/image enrichment. It is a SYNCED
+// saved link's URL to `brace-extractor` for title/image extraction. It is a SYNCED
 // account preference (every device honors the same choice), and OFF BY DEFAULT —
 // absent or `false` means no URL ever leaves the browser. `looseObject` round-trips
 // it for clients that don't model it (e.g. the extension, which is active-context

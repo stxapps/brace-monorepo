@@ -44,7 +44,7 @@ export interface LinkLayoutProps {
 const REPORT_SETTLE_MS = 300;
 
 // Report the on-screen link window to the automatic-extraction loop (extraction-provider), so
-// it enriches what the user is actually looking at — the "displayed" set the provider drains
+// it extracts what the user is actually looking at — the "displayed" set the provider drains
 // (see `reportDisplayedLinkPaths`). Bounded to O(displayed) — a few dozen rows — no matter how
 // far "show more" has grown `links`: reporting the whole loaded page instead would re-scan
 // thousands of paths on every probe re-run (the provider's liveQuery fires on each store
