@@ -6,41 +6,10 @@
     <title>Save link to Brace</title>
     <meta name="manifest.type" content="browser_action" />
     <!--
-      Set the `.dark` class before paint to avoid a flash of the wrong theme.
-      A classic (non-module) inline script runs synchronously during parse,
-      before the popup body renders. Reads the localStorage mirror that the
-      ThemeProvider keeps in sync with browser.storage.sync (key "brace-theme").
-      Mirrors resolveTheme() in @stxapps/shared.
+      The pre-paint theme FOUC script is injected into <head> at build time from the
+      shared `themeInitScript()` (see wxt.config.ts `themeFoucPlugin`) — one source,
+      shared with brace-web, instead of a hand-copied inline script here.
     -->
-    <script>
-      (function () {
-        try {
-          var raw = localStorage.getItem('brace-theme');
-          var s = raw ? JSON.parse(raw) : null;
-          var m = s && s.mode ? s.mode : 'system';
-          var sd = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var d;
-          if (m === 'dark') {
-            d = true;
-          } else if (m === 'light') {
-            d = false;
-          } else if (m === 'custom') {
-            var n = new Date();
-            var c = n.getHours() * 60 + n.getMinutes();
-            var t = function (x) {
-              var p = String(x).split(':');
-              return +p[0] * 60 + +p[1];
-            };
-            var ls = t((s && s.lightStart) || '06:00');
-            var ds = t((s && s.darkStart) || '19:00');
-            d = ls <= ds ? c >= ds || c < ls : c >= ds && c < ls;
-          } else {
-            d = sd;
-          }
-          document.documentElement.classList.toggle('dark', !!d);
-        } catch (e) {}
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

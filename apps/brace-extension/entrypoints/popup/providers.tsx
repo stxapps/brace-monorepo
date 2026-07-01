@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ApiClientProvider } from '@stxapps/react';
 import { AuthProvider, ExternalSyncProvider } from '@stxapps/web-react';
-import { ThemeProvider, type ThemeStorage } from '@stxapps/web-ui/contexts/theme-provider';
+import { ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { apiClient } from '@/utils/api-client';
 import { sendMessage } from '@/utils/messages';
@@ -16,13 +16,7 @@ import { sendMessage } from '@/utils/messages';
 // ExternalSyncProvider, whose `requestSync` just messages the background to run a
 // cycle. This satisfies the editor hooks' `useSync()` (useLinkMutations &c. call
 // requestSync after each local write) without the popup double-running the sync.
-export function Providers({
-  children,
-  themeStorage,
-}: {
-  children: ReactNode;
-  themeStorage: ThemeStorage;
-}) {
+export function Providers({ children }: { children: ReactNode }) {
   // One QueryClient per popup session, created lazily so it isn't shared across
   // renders. ApiClientProvider hands the shared hooks the mode-configured client.
   const [queryClient] = useState(() => new QueryClient());
@@ -36,7 +30,7 @@ export function Providers({
               void sendMessage({ type: 'KICK_SYNC' });
             }}
           >
-            <ThemeProvider storage={themeStorage}>{children}</ThemeProvider>
+            <ThemeProvider>{children}</ThemeProvider>
           </ExternalSyncProvider>
         </AuthProvider>
       </ApiClientProvider>

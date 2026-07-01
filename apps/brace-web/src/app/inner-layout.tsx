@@ -5,13 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ApiClientProvider, ExtractClientProvider } from '@stxapps/react';
 import { AuthProvider } from '@stxapps/web-react';
-import { localStorageThemeStorage, ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
+import { ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { apiClient } from '../lib/api-client';
 import { extractClient } from '../lib/extract-client';
-
-// Stable identity across renders (the provider keys effects off it).
-const themeStorage = localStorageThemeStorage();
 
 function Initializer() {
   useEffect(() => {
@@ -89,7 +86,7 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
         <ApiClientProvider client={apiClient}>
           <ExtractClientProvider client={extractClient}>
             <AuthProvider>
-              <ThemeProvider storage={themeStorage}>
+              <ThemeProvider>
                 <SafeArea>{children}</SafeArea>
               </ThemeProvider>
             </AuthProvider>

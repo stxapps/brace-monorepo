@@ -18,8 +18,10 @@ work, the `extraction/` entity),
 [extension.md](./extension.md) for the brace-extension auth flow (own sign-in,
 no inherited session) and the move-shared-auth-code-later decision,
 [env-files.md](./env-files.md) for per-app environment configuration across
-`development` / `staging` / `production`, and [deployment.md](./deployment.md)
-for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow.
+`development` / `staging` / `production`, [deployment.md](./deployment.md)
+for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow, and
+[theme.md](./theme.md) for the light/dark theme model (four modes, the
+sync/device split shared with link-layout, and the pre-paint FOUC script).
 
 ### apps
 

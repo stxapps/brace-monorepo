@@ -1,6 +1,24 @@
 import tailwindcss from '@tailwindcss/vite';
-import { loadEnv } from 'vite';
+import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'wxt';
+
+import { themeInitScript } from '@stxapps/shared';
+
+// Inject the shared pre-paint FOUC script into every extension HTML page's <head>.
+// The theme's `.dark` class must be set SYNCHRONOUSLY before first paint, which a
+// deferred module `main.tsx` can't do — so it has to be an inline classic <script>
+// in <head>. Rather than hand-copy the resolver into each page's index.html (three
+// copies to keep in step), we generate it once from `themeInitScript()` — the same
+// single source brace-web inlines via layout.tsx — and splice it in at build time.
+// It reads the `brace-theme` localStorage mirror that ThemeProvider keeps warm.
+function themeFoucPlugin(): Plugin {
+  return {
+    name: 'brace-theme-fouc',
+    transformIndexHtml(html) {
+      return html.replace('</head>', `<script>${themeInitScript()}</script></head>`);
+    },
+  };
+}
 
 // See https://wxt.dev/api/config.html
 //
@@ -87,6 +105,6 @@ export default defineConfig({
     };
   },
   vite: () => ({
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), themeFoucPlugin()],
   }),
 });

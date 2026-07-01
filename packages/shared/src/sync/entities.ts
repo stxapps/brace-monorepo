@@ -277,6 +277,35 @@ export type Extraction = z.infer<typeof extractionSchema>;
 export const LINKS_LAYOUTS = ['list', 'card', 'table'] as const;
 export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 
+// The synced theme preference — the same three fields as `@stxapps/shared`'s
+// `ThemeState` (`mode` + the two `custom`-mode crossover times), stored inside
+// `settings/general.enc` (the "Sync" tab). The device-local alternative ("Device"
+// tab) lives off-sync in the web-react `localSettings` store, never here — exactly
+// like `linksLayout` below.
+//
+// Every field is DELIBERATELY permissive (`z.string()`, not `z.enum(THEME_MODES)`
+// or a time regex): this schema parses PERSISTED bytes, and a single strict field
+// failing would fail the WHOLE `settingsGeneralSchema` parse and drop the entire
+// blob from the UI — taking `linksLayout`/`serverExtraction` down with the theme. A
+// newer client's unknown `mode`, or a malformed time, must parse harmlessly instead.
+// The read edge (`coerceThemeState`) is the one that validates/normalizes these into
+// a real `ThemeState`. (`THEME_MODES` in theme.ts is what a writer/UI enumerates the
+// modes from; it is not used to gate parsing here.)
+//
+// This is `z.object`, not the file's usual `looseObject`: theme is a CLOSED shape
+// (only these three fields feed `resolveTheme`), so there are no unknown sub-keys to
+// round-trip, and `z.object`'s inferred type stays index-signature-free so a real
+// `ThemeState` assigns straight into it (a `looseObject`'s catchall index signature
+// would not). Forward-compat still holds at the level that matters: the PARENT
+// `settingsGeneralSchema` is `looseObject`, so a future client's new SIBLING setting
+// round-trips — the extension path for growth here is a new field beside `theme`.
+export const themeStateSchema = z.object({
+  mode: z.string(),
+  lightStart: z.string(),
+  darkStart: z.string(),
+});
+export type SyncedThemeState = z.infer<typeof themeStateSchema>;
+
 // The plaintext of the well-known path `settings/general.enc`. Concern-scoped
 // settings files (the LWW-isolation move — see the doc's "data model"): add a
 // field here for a general setting, or a NEW `settings/<concern>.enc` schema
@@ -298,6 +327,12 @@ export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.enum(LINKS_LAYOUTS).optional(),
   serverExtraction: z.boolean().optional(),
+  // The SYNCED theme (the Settings → theme "Sync" tab). OPTIONAL like `linksLayout`:
+  // absent until the user picks a synced theme, and an older client that never wrote
+  // it still parses — `looseObject` round-trips it. Permissive by design (see
+  // `themeStateSchema`); the read edge coerces it with `coerceThemeState`. The
+  // device-local alternative ("Device" tab) lives in the `localSettings` store.
+  theme: themeStateSchema.optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

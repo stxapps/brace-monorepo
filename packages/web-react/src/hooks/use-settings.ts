@@ -1,8 +1,8 @@
 'use client';
 
-// Reactive read of the user's app settings — today, the links layout. Two sources
-// feed it (see docs/local-first-sync.md "data model — settings" and the Misc
-// settings section):
+// Reactive read of the user's app settings — the links layout and the theme. Two
+// sources feed each (see docs/local-first-sync.md "data model — settings" and the
+// Misc settings section):
 //
 //   - the SYNCED value in `settings/general.enc` (`readSettingsGeneral`), shared
 //     across the user's devices; and
@@ -19,7 +19,12 @@
 
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import type { LinksLayout } from '@stxapps/shared';
+import {
+  coerceThemeState,
+  DEFAULT_THEME,
+  type LinksLayout,
+  type ThemeState,
+} from '@stxapps/shared';
 
 import { getLocalSettings } from '../data/local-settings-store';
 import { readSettingsGeneral } from '../data/queries';
@@ -30,6 +35,7 @@ import { readSettingsGeneral } from '../data/queries';
 const DEFAULT_LINKS_LAYOUT: LinksLayout = 'list';
 
 export type LinksLayoutSource = 'sync' | 'local';
+export type ThemeSource = 'sync' | 'local';
 
 export interface Settings {
   // The links layout the app should render right now — `localLinksLayout` when the
@@ -45,6 +51,17 @@ export interface Settings {
   // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
   // sends a saved URL to `brace-extractor` (see docs/link-extraction.md).
   serverExtraction: boolean;
+  // The theme the app should apply right now — `localTheme` when the active source is
+  // `local`, else the synced `syncTheme`. The ThemeProvider consumes this (the way
+  // main.tsx consumes `linksLayout`) to resolve/apply light-vs-dark and to keep the
+  // localStorage FOUC mirror warm.
+  theme: ThemeState;
+  // Which theme source is active on THIS device (device-local; never synced).
+  themeSource: ThemeSource;
+  // The synced theme (the theme "Sync" tab's value).
+  syncTheme: ThemeState;
+  // This device's own theme (the theme "Device" tab's value).
+  localTheme: ThemeState;
 }
 
 export function useSettings(): Settings {
@@ -60,11 +77,24 @@ export function useSettings(): Settings {
   // Off by default: absent (older client / never toggled) reads as opted-out.
   const serverExtraction = general?.serverExtraction ?? false;
 
+  // Coerce both sources through `coerceThemeState`: the synced value is permissively
+  // typed (entities.ts) so an odd persisted value never drops the settings blob, and
+  // the device value can predate this feature (older `localSettings` row) — both
+  // normalize to a real `ThemeState`, falling back to `DEFAULT_THEME` when absent.
+  const syncTheme = coerceThemeState(general?.theme ?? DEFAULT_THEME);
+  const themeSource = local?.themeSource ?? 'sync';
+  const localTheme = coerceThemeState(local?.theme ?? DEFAULT_THEME);
+  const theme = themeSource === 'local' ? localTheme : syncTheme;
+
   return {
     linksLayout,
     linksLayoutSource,
     syncLinksLayout,
     localLinksLayout,
     serverExtraction,
+    theme,
+    themeSource,
+    syncTheme,
+    localTheme,
   };
 }

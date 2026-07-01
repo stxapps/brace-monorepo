@@ -19,7 +19,7 @@
 
 import Dexie, { type EntityTable, type Table } from 'dexie';
 
-import type { LinksLayout, OpKind } from '@stxapps/shared';
+import type { LinksLayout, OpKind, ThemeState } from '@stxapps/shared';
 
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
@@ -166,7 +166,9 @@ export interface PendingOpRecord {
 // touches this table, and `clearSyncData` (sync-store.ts) wipes it on sign-out so
 // a second user on the device can't inherit the first's preferences.
 //
-// A single row (constant `id`) holds the Settings → Misc "Device" tab choices:
+// A single row (constant `id`) holds the Settings "Device" tab choices. Each
+// setting follows the same source/value pair — a device-local `*Source` toggle
+// selecting between the synced value and this row's own device value:
 //   - `linksLayoutSource` — which source the links page actually renders, `'sync'`
 //     (the synced `settings/general.enc` value) or `'local'` (this row's own
 //     `linksLayout`). It's device-local on purpose: "use this device's own layout"
@@ -174,11 +176,20 @@ export interface PendingOpRecord {
 //     UI labels the `'local'` choice "Device".)
 //   - `linksLayout` — this device's own layout, applied only while
 //     `linksLayoutSource` is `'local'`.
+//   - `themeSource` / `theme` — the same pair for the theme: `themeSource` picks the
+//     synced `settings/general.enc` theme vs this row's own `theme`, applied only
+//     while `themeSource` is `'local'`. Theme is a natural per-device choice (dark
+//     laptop, light phone), so the Device option matters more here than for layout.
+//     The provider mirrors the RESOLVED theme to localStorage for the pre-paint FOUC
+//     script (theme-provider.tsx) — the encrypted synced value can't be read before
+//     paint, so localStorage stays the synchronous cache regardless of source.
 export interface LocalSettingsRecord {
   // Single-row table — one settings blob per device, keyed by a constant.
   id: 'singleton';
   linksLayoutSource: 'sync' | 'local';
   linksLayout: LinksLayout;
+  themeSource: 'sync' | 'local';
+  theme: ThemeState;
 }
 
 class BraceDb extends Dexie {

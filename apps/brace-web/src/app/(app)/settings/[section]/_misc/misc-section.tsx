@@ -1,22 +1,32 @@
 'use client';
 
-// The Misc settings section: small app-wide preferences. Today it owns the link
-// LAYOUT — list / card / table — which used to live as a quick switch in the links
-// topbar. Moving it here makes it a choose-once setting and unlocks the sync/device
-// split the topbar couldn't express.
-//
-// Two tabs select WHERE the choice lives, and the selected tab IS the active
-// source (use-settings.ts resolves `layout` from it):
+// The Misc settings section: small app-wide preferences. It owns the link LAYOUT —
+// list / card / table — and the THEME — light / dark / system / custom time. Both
+// follow the same shape: a Sync/Device tab picks WHERE the choice lives, and the
+// selected tab IS the active source (use-settings.ts resolves the applied value from
+// it):
 //   - Sync   → settings/general.enc, shared across the user's devices;
 //   - Device → the off-sync localSettings store, this device only (wiped on sign-out).
-// Each tab shows the same three layout radios bound to that source's value, so
-// switching tabs both changes which value applies and reveals it for editing.
+// Each tab shows the same controls bound to that source's value, so switching tabs
+// both changes which value applies and reveals it for editing.
 
 import { useState } from 'react';
-import { LayoutGrid, List, Table } from 'lucide-react';
+import { Clock, LayoutGrid, List, Monitor, Moon, Sun, Table } from 'lucide-react';
 
-import { LINKS_LAYOUTS, type LinksLayout } from '@stxapps/shared';
-import { type LinksLayoutSource, useSettingMutations, useSettings } from '@stxapps/web-react';
+import {
+  LINKS_LAYOUTS,
+  type LinksLayout,
+  THEME_MODES,
+  type ThemeMode,
+  type ThemeState,
+} from '@stxapps/shared';
+import {
+  type LinksLayoutSource,
+  type ThemeSource,
+  useSettingMutations,
+  useSettings,
+} from '@stxapps/web-react';
+import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
@@ -40,6 +50,62 @@ const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: R
     },
   };
 
+const THEME_MODE_OPTIONS: Record<ThemeMode, { label: string; hint: string; icon: React.ReactNode }> =
+  {
+    light: {
+      label: 'Light',
+      hint: 'Always use the light theme.',
+      icon: <Sun className="size-4" />,
+    },
+    dark: {
+      label: 'Dark',
+      hint: 'Always use the dark theme.',
+      icon: <Moon className="size-4" />,
+    },
+    system: {
+      label: 'System',
+      hint: "Follow your device's appearance.",
+      icon: <Monitor className="size-4" />,
+    },
+    custom: {
+      label: 'Custom time',
+      hint: 'Light by day, dark by night — you set the times.',
+      icon: <Clock className="size-4" />,
+    },
+  };
+
+// A reusable radio-row Label, shared by the layout and theme option lists so both
+// read identically. `has-data-checked` styles the row when its radio is selected.
+function OptionRow({
+  id,
+  value,
+  label,
+  hint,
+  icon,
+}: {
+  id: string;
+  value: string;
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Label
+      htmlFor={id}
+      className="flex items-start gap-3 rounded-lg border border-border p-3 has-data-checked:border-primary has-data-checked:bg-muted/40"
+    >
+      <RadioGroupItem id={id} value={value} className="mt-0.5" />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-2 font-medium">
+          {icon}
+          {label}
+        </span>
+        <span className="text-sm font-normal text-muted-foreground">{hint}</span>
+      </span>
+    </Label>
+  );
+}
+
 // The three layout radios for one source. `value`/`onChange` are wired to either
 // the synced or the device layout by the parent, so this row is source-agnostic.
 function LayoutRadioGroup({
@@ -54,33 +120,81 @@ function LayoutRadioGroup({
       {LINKS_LAYOUTS.map((layout) => {
         const { label, hint, icon } = LAYOUT_OPTIONS[layout];
         return (
-          <Label
-            key={layout}
-            htmlFor={`layout-${layout}`}
-            className="flex items-start gap-3 rounded-lg border border-border p-3 has-data-checked:border-primary has-data-checked:bg-muted/40"
-          >
-            <RadioGroupItem id={`layout-${layout}`} value={layout} className="mt-0.5" />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="flex items-center gap-2 font-medium">
-                {icon}
-                {label}
-              </span>
-              <span className="text-sm font-normal text-muted-foreground">{hint}</span>
-            </span>
-          </Label>
+          <OptionRow key={layout} id={`layout-${layout}`} value={layout} label={label} hint={hint} icon={icon} />
         );
       })}
     </RadioGroup>
   );
 }
 
+// The four mode radios for one source, plus the two crossover-time inputs revealed
+// only in `custom` mode. Source-agnostic like LayoutRadioGroup: the parent binds
+// `value`/`onChange` to the synced or the device ThemeState. Each edit emits a whole
+// new ThemeState (the mutations take the full object).
+function ThemeControls({
+  value,
+  onChange,
+}: {
+  value: ThemeState;
+  onChange: (theme: ThemeState) => void;
+}) {
+  return (
+    <div className="mt-4">
+      <RadioGroup
+        value={value.mode}
+        onValueChange={(v) => onChange({ ...value, mode: v as ThemeMode })}
+      >
+        {THEME_MODES.map((mode) => {
+          const { label, hint, icon } = THEME_MODE_OPTIONS[mode];
+          return (
+            <OptionRow key={mode} id={`theme-${mode}`} value={mode} label={label} hint={hint} icon={icon} />
+          );
+        })}
+      </RadioGroup>
+
+      {value.mode === 'custom' && (
+        <div className="mt-4 flex flex-wrap gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="theme-light-start">Light starts</Label>
+            <Input
+              id="theme-light-start"
+              type="time"
+              value={value.lightStart}
+              onChange={(e) => onChange({ ...value, lightStart: e.target.value })}
+              className="w-36"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="theme-dark-start">Dark starts</Label>
+            <Input
+              id="theme-dark-start"
+              type="time"
+              value={value.darkStart}
+              onChange={(e) => onChange({ ...value, darkStart: e.target.value })}
+              className="w-36"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MiscSection() {
-  const { linksLayoutSource, syncLinksLayout, localLinksLayout } = useSettings();
-  const { setLinksLayoutSource, setSyncLinksLayout, setLocalLinksLayout } = useSettingMutations();
+  const { linksLayoutSource, syncLinksLayout, localLinksLayout, themeSource, syncTheme, localTheme } =
+    useSettings();
+  const {
+    setLinksLayoutSource,
+    setSyncLinksLayout,
+    setLocalLinksLayout,
+    setThemeSource,
+    setSyncTheme,
+    setLocalTheme,
+  } = useSettingMutations();
   const [error, setError] = useState<string | null>(null);
 
   // Surface a failed write (e.g. the synced write with no active account) rather
-  // than swallowing it; the radios stay live for a retry.
+  // than swallowing it; the controls stay live for a retry.
   const run = (op: Promise<unknown>) => {
     setError(null);
     void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
@@ -91,6 +205,12 @@ export function MiscSection() {
       <h2 className="text-xl font-semibold">Misc.</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">General preferences for the app.</p>
 
+      {error && (
+        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
       <section>
         <h3 className="text-base font-medium">Link layout</h3>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -98,12 +218,6 @@ export function MiscSection() {
           across all your devices. <strong>Device</strong> keeps a separate choice for this device
           only (cleared when you sign out).
         </p>
-
-        {error && (
-          <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
 
         <Tabs
           value={linksLayoutSource}
@@ -120,16 +234,40 @@ export function MiscSection() {
               tab is the active source (use-settings.ts), so the shown radios always
               reflect the layout the app is rendering. */}
           <TabsContent value="sync">
-            <LayoutRadioGroup
-              value={syncLinksLayout}
-              onChange={(l) => run(setSyncLinksLayout(l))}
-            />
+            <LayoutRadioGroup value={syncLinksLayout} onChange={(l) => run(setSyncLinksLayout(l))} />
           </TabsContent>
           <TabsContent value="local">
             <LayoutRadioGroup
               value={localLinksLayout}
               onChange={(l) => run(setLocalLinksLayout(l))}
             />
+          </TabsContent>
+        </Tabs>
+      </section>
+
+      <section className="mt-10">
+        <h3 className="text-base font-medium">Theme</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Choose the app's appearance. <strong>Sync</strong> applies your choice across all your
+          devices. <strong>Device</strong> keeps a separate choice for this device only (cleared
+          when you sign out).
+        </p>
+
+        <Tabs
+          value={themeSource}
+          onValueChange={(v) => run(setThemeSource(v as ThemeSource))}
+          className="mt-4"
+        >
+          <TabsList>
+            <TabsTrigger value="sync">Sync</TabsTrigger>
+            <TabsTrigger value="local">Device</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="sync">
+            <ThemeControls value={syncTheme} onChange={(t) => run(setSyncTheme(t))} />
+          </TabsContent>
+          <TabsContent value="local">
+            <ThemeControls value={localTheme} onChange={(t) => run(setLocalTheme(t))} />
           </TabsContent>
         </Tabs>
       </section>

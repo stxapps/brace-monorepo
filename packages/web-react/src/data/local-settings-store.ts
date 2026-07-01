@@ -8,6 +8,8 @@
 // side-effect-light — no network, no React (the hooks layer adds reactivity via
 // useLiveQuery and the defaults).
 
+import { DEFAULT_THEME } from '@stxapps/shared';
+
 import { db, type LocalSettingsRecord } from './db';
 
 // The constant primary key — one settings blob per device (db.ts).
@@ -22,8 +24,9 @@ export function getLocalSettings(): Promise<LocalSettingsRecord | undefined> {
 // Merge a partial update into the device-local settings row, creating it on first
 // write. Read-merge-`put` (not a bare `update`) so a partial patch keeps the other
 // field, and a missing row still produces a complete record — the column defaults
-// here mirror use-settings.ts's read defaults (`sync` source, `list` layout), so a
-// first write of one field doesn't silently pin the other to a surprising value.
+// here mirror use-settings.ts's read defaults (`sync` sources, `list` layout,
+// `DEFAULT_THEME`), so a first write of one field doesn't silently pin the others to
+// a surprising value.
 export async function setLocalSettings(
   patch: Partial<Omit<LocalSettingsRecord, 'id'>>,
 ): Promise<void> {
@@ -33,6 +36,8 @@ export async function setLocalSettings(
       id: LOCAL_SETTINGS_ID,
       linksLayoutSource: existing?.linksLayoutSource ?? 'sync',
       linksLayout: existing?.linksLayout ?? 'list',
+      themeSource: existing?.themeSource ?? 'sync',
+      theme: existing?.theme ?? DEFAULT_THEME,
       ...patch,
     });
   });

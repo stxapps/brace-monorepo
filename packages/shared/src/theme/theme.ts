@@ -4,7 +4,11 @@
 // light/dark result. Keeping the resolver pure and platform-agnostic lets both
 // apps — and the pre-paint FOUC script — agree on the same answer.
 
-export type ThemeMode = 'light' | 'dark' | 'system' | 'custom';
+// The four modes the user can pick. A `readonly` tuple (not a bare union) so it's
+// also a runtime value: `coerceThemeState` ranges over it to validate an untrusted
+// mode, and the Settings UI maps it to render one radio per mode.
+export const THEME_MODES = ['light', 'dark', 'system', 'custom'] as const;
+export type ThemeMode = (typeof THEME_MODES)[number];
 export type EffectiveTheme = 'light' | 'dark';
 
 export interface ThemeState {
@@ -24,7 +28,6 @@ export const DEFAULT_THEME: ThemeState = {
 /** Key used in localStorage and browser.storage. */
 export const THEME_STORAGE_KEY = 'brace-theme';
 
-const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system', 'custom'];
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function toMinutes(hhmm: string): number {
@@ -59,6 +62,7 @@ export function resolveTheme(
  */
 export function msUntilNextThemeSwitch(state: ThemeState, now: Date): number | null {
   if (state.mode !== 'custom') return null;
+
   const cur = now.getHours() * 60 + now.getMinutes();
   const deltas = [toMinutes(state.lightStart), toMinutes(state.darkStart)].map(
     // 0 means we're exactly on a boundary now; wait a full day for that one.
@@ -70,6 +74,7 @@ export function msUntilNextThemeSwitch(state: ThemeState, now: Date): number | n
 /** Validate/normalize an untrusted value (from storage) into a ThemeState. */
 export function coerceThemeState(value: unknown): ThemeState {
   if (typeof value !== 'object' || value === null) return { ...DEFAULT_THEME };
+
   const v = value as Record<string, unknown>;
   return {
     mode: THEME_MODES.includes(v.mode as ThemeMode) ? (v.mode as ThemeMode) : DEFAULT_THEME.mode,

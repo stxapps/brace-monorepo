@@ -274,7 +274,7 @@ export function deletePin(username: string, path: string): Promise<void> {
 // validates, then writes.
 export async function writeSettingsGeneral(
   username: string,
-  patch: Partial<Pick<SettingsGeneral, 'linksLayout' | 'serverExtraction'>>,
+  patch: Partial<Pick<SettingsGeneral, 'linksLayout' | 'serverExtraction' | 'theme'>>,
 ): Promise<void> {
   const now = Date.now();
   await writeEntityWith(username, SETTINGS_GENERAL_PATH, (existing) => {
