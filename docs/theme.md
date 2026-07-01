@@ -59,10 +59,10 @@ helpers ride alongside it in the same file:
 Like `linksLayout`, the theme has **two sources**, and a per-device toggle picks
 which one applies:
 
-| source     | stored in                              | scope                          |
-| ---------- | -------------------------------------- | ------------------------------ |
-| **Sync**   | `settings/general.enc` (`theme` field) | all the account's devices      |
-| **Device** | `localSettings` row (`theme` field)    | this device only, off-sync     |
+| source     | stored in                              | scope                      |
+| ---------- | -------------------------------------- | -------------------------- |
+| **Sync**   | `settings/general.enc` (`theme` field) | all the account's devices  |
+| **Device** | `localSettings` row (`theme` field)    | this device only, off-sync |
 
 The **`themeSource`** flag (`'sync'` \| `'local'`) lives in the device-local
 `localSettings` row and decides which one the app renders. It is deliberately
@@ -73,10 +73,10 @@ dark on the laptop at night, light on the phone is a genuinely common want.
 Both stores are the SAME ones layout uses:
 
 - **Synced** — `settingsGeneralSchema.theme` in `@stxapps/shared` (`sync/
-  entities.ts`), written by `writeSettingsGeneral` + a sync kick, read by
+entities.ts`), written by `writeSettingsGeneral` + a sync kick, read by
   `readSettingsGeneral`. Optional and permissive (see below).
 - **Device** — `LocalSettingsRecord.theme` / `.themeSource` in `@stxapps/
-  web-react` (`data/db.ts`), a single-row off-sync Dexie table that never becomes
+web-react` (`data/db.ts`), a single-row off-sync Dexie table that never becomes
   an `items` blob, never enqueues a pending op, and is wiped on sign-out.
 
 #### why `settingsGeneralSchema.theme` is permissively typed
@@ -111,7 +111,7 @@ The write and read sides mirror `linksLayout` exactly, in `@stxapps/web-react`:
   re-renders every consumer.
 - **`useSettingMutations()`** exposes `setThemeSource` / `setLocalTheme` (→ the
   device-local `localSettings` store) and `setSyncTheme` (→ `writeSettingsGeneral`
-  + a sync kick, so every device honors it).
+  - a sync kick, so every device honors it).
 
 The **`ThemeProvider`** (`@stxapps/web-ui` `contexts/theme-provider.tsx`) is the
 read/apply half. It does NOT own the preference — it consumes the already-resolved

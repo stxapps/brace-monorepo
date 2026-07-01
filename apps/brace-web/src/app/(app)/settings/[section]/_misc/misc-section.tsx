@@ -50,29 +50,31 @@ const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: R
     },
   };
 
-const THEME_MODE_OPTIONS: Record<ThemeMode, { label: string; hint: string; icon: React.ReactNode }> =
-  {
-    light: {
-      label: 'Light',
-      hint: 'Always use the light theme.',
-      icon: <Sun className="size-4" />,
-    },
-    dark: {
-      label: 'Dark',
-      hint: 'Always use the dark theme.',
-      icon: <Moon className="size-4" />,
-    },
-    system: {
-      label: 'System',
-      hint: "Follow your device's appearance.",
-      icon: <Monitor className="size-4" />,
-    },
-    custom: {
-      label: 'Custom time',
-      hint: 'Light by day, dark by night — you set the times.',
-      icon: <Clock className="size-4" />,
-    },
-  };
+const THEME_MODE_OPTIONS: Record<
+  ThemeMode,
+  { label: string; hint: string; icon: React.ReactNode }
+> = {
+  light: {
+    label: 'Light',
+    hint: 'Always use the light theme.',
+    icon: <Sun className="size-4" />,
+  },
+  dark: {
+    label: 'Dark',
+    hint: 'Always use the dark theme.',
+    icon: <Moon className="size-4" />,
+  },
+  system: {
+    label: 'System',
+    hint: "Follow your device's appearance.",
+    icon: <Monitor className="size-4" />,
+  },
+  custom: {
+    label: 'Custom time',
+    hint: 'Light by day, dark by night — you set the times.',
+    icon: <Clock className="size-4" />,
+  },
+};
 
 // A reusable radio-row Label, shared by the layout and theme option lists so both
 // read identically. `has-data-checked` styles the row when its radio is selected.
@@ -120,7 +122,14 @@ function LayoutRadioGroup({
       {LINKS_LAYOUTS.map((layout) => {
         const { label, hint, icon } = LAYOUT_OPTIONS[layout];
         return (
-          <OptionRow key={layout} id={`layout-${layout}`} value={layout} label={label} hint={hint} icon={icon} />
+          <OptionRow
+            key={layout}
+            id={`layout-${layout}`}
+            value={layout}
+            label={label}
+            hint={hint}
+            icon={icon}
+          />
         );
       })}
     </RadioGroup>
@@ -147,7 +156,14 @@ function ThemeControls({
         {THEME_MODES.map((mode) => {
           const { label, hint, icon } = THEME_MODE_OPTIONS[mode];
           return (
-            <OptionRow key={mode} id={`theme-${mode}`} value={mode} label={label} hint={hint} icon={icon} />
+            <OptionRow
+              key={mode}
+              id={`theme-${mode}`}
+              value={mode}
+              label={label}
+              hint={hint}
+              icon={icon}
+            />
           );
         })}
       </RadioGroup>
@@ -181,8 +197,14 @@ function ThemeControls({
 }
 
 export function MiscSection() {
-  const { linksLayoutSource, syncLinksLayout, localLinksLayout, themeSource, syncTheme, localTheme } =
-    useSettings();
+  const {
+    linksLayoutSource,
+    syncLinksLayout,
+    localLinksLayout,
+    themeSource,
+    syncTheme,
+    localTheme,
+  } = useSettings();
   const {
     setLinksLayoutSource,
     setSyncLinksLayout,
@@ -234,7 +256,10 @@ export function MiscSection() {
               tab is the active source (use-settings.ts), so the shown radios always
               reflect the layout the app is rendering. */}
           <TabsContent value="sync">
-            <LayoutRadioGroup value={syncLinksLayout} onChange={(l) => run(setSyncLinksLayout(l))} />
+            <LayoutRadioGroup
+              value={syncLinksLayout}
+              onChange={(l) => run(setSyncLinksLayout(l))}
+            />
           </TabsContent>
           <TabsContent value="local">
             <LayoutRadioGroup
