@@ -10,8 +10,9 @@
  *     by the deferred `brace-extractor` (docs/link-extraction.md "the extension is
  *     active-context only").
  *   - it answers the typed popup → background message protocol, owning ALL
- *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now), EXTRACT (capture a
- *     facet from the active tab + write back), GET_SYNC_STATUS (read the mirror).
+ *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now) and EXTRACT (capture
+ *     a facet from the active tab + write back). Reading sync status is NOT a message —
+ *     the popup/options read the browser.storage.local mirror (mirrored-sync-state.ts) directly.
  *
  * The popup never fetches brace-api or touches a tab directly — it sends a message
  * and renders the result.
@@ -21,7 +22,6 @@ import { getSession, loadSession } from '@stxapps/web-react';
 
 import { runExtraction } from '@/utils/extraction-worker';
 import type { ExtensionMessage, MessageResponses } from '@/utils/messages';
-import { readSyncStatus } from '@/utils/messages';
 import { runSync } from '@/utils/sync-runner';
 
 const SYNC_ALARM = 'brace-sync';
@@ -67,9 +67,6 @@ async function handle(
       void runSync();
       return { ok: true };
     }
-
-    case 'GET_SYNC_STATUS':
-      return readSyncStatus();
   }
 }
 

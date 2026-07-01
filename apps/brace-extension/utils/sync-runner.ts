@@ -9,7 +9,11 @@ import {
 } from '@stxapps/web-react';
 
 import { apiClient } from './api-client';
-import { INITIAL_SYNC_STATUS, type SyncStatus, writeSyncStatus } from './messages';
+import {
+  INITIAL_MIRRORED_SYNC_STATE,
+  type MirroredSyncState,
+  writeMirroredSyncState,
+} from './mirrored-sync-state';
 
 // The background's sync runner. Builds the engine's SyncDeps from the persisted
 // session (hydrated from IndexedDB — available in the worker) and the mode-bound api
@@ -29,6 +33,7 @@ async function buildDeps(): Promise<SyncDeps | null> {
   // loadSession hydrates the in-memory mirror the api client's authFetch reads.
   const session = (await loadSession()) ?? getSession();
   if (!session) return null;
+
   return {
     username: session.username,
     encryptionKey: session.encryptionKey,
@@ -39,40 +44,42 @@ async function buildDeps(): Promise<SyncDeps | null> {
 
 // Single-flight at the worker level too: overlapping triggers (alarm + a KICK_SYNC
 // from a save) share the in-flight run. The engine single-flights per account
-// internally as well, but coalescing here keeps the status mirror tidy.
+// internally as well, but coalescing here keeps the state mirror tidy.
 let inflight: Promise<void> | null = null;
 
-let status: SyncStatus = INITIAL_SYNC_STATUS;
-async function setStatus(patch: Partial<SyncStatus>): Promise<void> {
-  status = { ...status, ...patch };
-  await writeSyncStatus(status);
+let state: MirroredSyncState = INITIAL_MIRRORED_SYNC_STATE;
+async function setState(patch: Partial<MirroredSyncState>): Promise<void> {
+  state = { ...state, ...patch };
+  await writeMirroredSyncState(state);
 }
 
 export function runSync(): Promise<void> {
   if (inflight) return inflight;
+
   inflight = (async () => {
     try {
       const deps = await buildDeps();
       if (!deps) {
         // Signed out: nothing to sync; present a ready, idle store.
-        await setStatus({ storeStatus: 'ready', bgSyncStatus: 'idle' });
+        await setState({ storeStatus: 'ready', bgSyncStatus: 'idle' });
         return;
       }
-      await setStatus({ bgSyncStatus: 'syncing' });
+
+      await setState({ bgSyncStatus: 'syncing' });
       if (await isFirstSyncDone(deps.username)) {
         await runIncrementalSync(deps);
       } else {
-        await setStatus({ storeStatus: 'syncing-initial' });
+        await setState({ storeStatus: 'syncing-initial' });
         await runInitialSync(deps);
       }
-      await setStatus({
+      await setState({
         storeStatus: 'ready',
         bgSyncStatus: 'idle',
         lastSyncAt: Date.now(),
         lastError: null,
       });
     } catch (err) {
-      await setStatus({
+      await setState({
         bgSyncStatus: 'error',
         lastSyncAt: Date.now(),
         lastError: err instanceof Error ? err.message : String(err),
@@ -81,5 +88,6 @@ export function runSync(): Promise<void> {
       inflight = null;
     }
   })();
+
   return inflight;
 }

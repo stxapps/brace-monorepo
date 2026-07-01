@@ -56,6 +56,13 @@ export type BgSyncStatus =
 interface SyncContextValue {
   storeStatus: StoreStatus;
   bgSyncStatus: BgSyncStatus;
+  // The last (or in-flight) cycle's completion, kept alongside bgSyncStatus so a
+  // status page can render "last synced …" / the failure reason without threading a
+  // second source through. `lastSyncAt` is the epoch ms the last cycle finished —
+  // success OR failure; null before any cycle has finished. `lastError` is that
+  // cycle's error message, or null when it succeeded.
+  lastSyncAt: number | null;
+  lastError: string | null;
   // Bumped each time requestSync() runs — i.e. on every local edit on THIS
   // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
   // read edge (useLinks) keys on it to apply the user's own change immediately
@@ -80,6 +87,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const api = useApiClient();
   const [storeStatus, setStoreStatus] = useState<StoreStatus>('checking');
   const [bgSyncStatus, setBgSyncStatus] = useState<BgSyncStatus>('idle');
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
@@ -116,9 +125,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     if (!session) return; // mirror not hydrated yet; the next render will retry
 
     const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
-    // Fresh slate for the indicator — a stale 'error' from a previous account
-    // (or a pre-retry run) must not bleed into this one.
+    // Fresh slate for the indicator — a stale 'error' / stale timestamp from a
+    // previous account (or a pre-retry run) must not bleed into this one.
     setBgSyncStatus('idle');
+    setLastSyncAt(null);
+    setLastError(null);
 
     // Returning visit → render local data now, refresh in the background. The
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
@@ -127,10 +138,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setBgSyncStatus('syncing');
       void runIncrementalSync(deps).then(
         () => {
-          if (activeRef.current) setBgSyncStatus('idle');
+          if (!activeRef.current) return;
+          setBgSyncStatus('idle');
+          setLastSyncAt(Date.now());
+          setLastError(null);
         },
-        () => {
-          if (activeRef.current) setBgSyncStatus('error');
+        (err: unknown) => {
+          if (!activeRef.current) return;
+          setBgSyncStatus('error');
+          setLastSyncAt(Date.now());
+          setLastError(err instanceof Error ? err.message : String(err));
         },
       );
     };
@@ -159,8 +176,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // sync until the next local edit. Invariant: reaching 'ready' always
         // kicks a cycle, on both branches.
         backgroundSync();
-      } catch {
-        if (activeRef.current) setStoreStatus('error');
+      } catch (err) {
+        if (!activeRef.current) return;
+        setStoreStatus('error');
+        setLastSyncAt(Date.now());
+        setLastError(err instanceof Error ? err.message : String(err));
       }
     })();
 
@@ -171,34 +191,53 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [username, authStatus, attempt, api]);
 
   const value = useMemo<SyncContextValue>(
-    () => ({ storeStatus, bgSyncStatus, localWriteNonce, retryInitialSync, requestSync }),
-    [storeStatus, bgSyncStatus, localWriteNonce, retryInitialSync, requestSync],
+    () => ({
+      storeStatus,
+      bgSyncStatus,
+      lastSyncAt,
+      lastError,
+      localWriteNonce,
+      retryInitialSync,
+      requestSync,
+    }),
+    [
+      storeStatus,
+      bgSyncStatus,
+      lastSyncAt,
+      lastError,
+      localWriteNonce,
+      retryInitialSync,
+      requestSync,
+    ],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
-// A SyncContext provider for clients where the sync ENGINE runs ELSEWHERE — the
-// brace-extension popup, whose sync + selective pull live in the background service
-// worker (a separate JS context), not the popup page. It satisfies the same
-// `useSync` contract the editor hooks depend on (useLinkMutations / useTagMutations
-// / … all call `requestSync` after a write), but instead of driving
-// runIncrementalSync itself it DELEGATES `requestSync` to the caller — which
-// messages the background to run a cycle. Store/bg status are passed in (the popup
-// reads them from `browser.storage`), defaulting to a ready, idle store so the
-// editor is usable as soon as the popup mounts. `localWriteNonce` still bumps on
-// each requestSync so any read edge keyed on it (none in the popup today) stays
-// correct.
+// A SyncContext provider for clients whose sync ENGINE runs in a SEPARATE JS context
+// — e.g. a service worker, another tab, or a web worker — rather than in the page that
+// mounts this provider. It satisfies the same `useSync` contract the editor hooks
+// depend on (useLinkMutations / useTagMutations / … all call `requestSync` after a
+// write), but instead of driving runIncrementalSync itself it DELEGATES `requestSync`
+// to the caller — which signals that other context to run a cycle. Store/bg status
+// (and the last-cycle timestamp/error) are passed in (the caller sources them from
+// wherever that context reports them, e.g. `browser.storage`), defaulting to a ready,
+// idle store so the editor is usable as soon as the page mounts. `localWriteNonce`
+// still bumps on each requestSync so any read edge keyed on it stays correct.
 export function ExternalSyncProvider({
   children,
-  requestSync,
   storeStatus = 'ready',
   bgSyncStatus = 'idle',
+  lastSyncAt = null,
+  lastError = null,
+  requestSync,
 }: {
   children: ReactNode;
-  requestSync: () => void;
   storeStatus?: StoreStatus;
   bgSyncStatus?: BgSyncStatus;
+  lastSyncAt?: number | null;
+  lastError?: string | null;
+  requestSync: () => void;
 }) {
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
   const requestSyncWithNonce = useCallback(() => {
@@ -210,11 +249,13 @@ export function ExternalSyncProvider({
     () => ({
       storeStatus,
       bgSyncStatus,
+      lastSyncAt,
+      lastError,
       localWriteNonce,
       retryInitialSync: () => undefined,
       requestSync: requestSyncWithNonce,
     }),
-    [storeStatus, bgSyncStatus, localWriteNonce, requestSyncWithNonce],
+    [storeStatus, bgSyncStatus, lastSyncAt, lastError, localWriteNonce, requestSyncWithNonce],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
