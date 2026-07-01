@@ -1,4 +1,4 @@
-import { EXTRACTIONS_PREFIX, FILES_PREFIX, LINKS_PREFIX } from '@stxapps/shared';
+import { EXTRACTIONS_PREFIX, FILES_PREFIX, LINKS_PREFIX, SETTINGS_PREFIX } from '@stxapps/shared';
 import {
   getSession,
   isFirstSyncDone,
@@ -20,14 +20,21 @@ import {
 // client, runs one cycle, and mirrors the result into browser.storage.local so the
 // popup / options page can render status without mounting the sync engine.
 //
-// SELECTIVE SYNC: the extension materializes only `links/` + `extractions/` (+ lazy
-// `files/`) — it skips downloading `tags/`/`lists/`/`pins/`/`settings/` blobs. The
-// cursor still advances across ALL ops (the engine filters downloads, not the op
-// pull), so the next cycle resumes correctly.
+// SELECTIVE SYNC: the extension materializes `links/` + `extractions/` (+ lazy
+// `files/`) for the library, plus `settings/` — it still skips downloading
+// `tags/`/`lists/`/`pins/` blobs. `settings/` is pulled because the popup/options
+// ThemeProvider resolves the synced theme (and links layout / serverExtraction)
+// through `useSettings()` → `readSettingsGeneral()`, which reads `settings/general.enc`
+// out of the local store; without it materialized here that read is always undefined
+// and the synced theme silently falls back to the default (the same file the pre-paint
+// FOUC script's localStorage mirror is warmed from). It's a single small blob, so the
+// cost is negligible. The cursor still advances across ALL ops (the engine filters
+// downloads, not the op pull), so the next cycle resumes correctly.
 const pathFilter = (path: string): boolean =>
   path.startsWith(LINKS_PREFIX) ||
   path.startsWith(EXTRACTIONS_PREFIX) ||
-  path.startsWith(FILES_PREFIX);
+  path.startsWith(FILES_PREFIX) ||
+  path.startsWith(SETTINGS_PREFIX);
 
 async function buildDeps(): Promise<SyncDeps | null> {
   // loadSession hydrates the in-memory mirror the api client's authFetch reads.
