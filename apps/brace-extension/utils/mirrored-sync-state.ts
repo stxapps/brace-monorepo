@@ -32,8 +32,7 @@ export const INITIAL_MIRRORED_SYNC_STATE: MirroredSyncState = {
 export async function readMirroredSyncState(): Promise<MirroredSyncState> {
   const res = await browser.storage.local.get(MIRRORED_SYNC_STATE_KEY);
   return (
-    (res[MIRRORED_SYNC_STATE_KEY] as MirroredSyncState | undefined) ??
-    INITIAL_MIRRORED_SYNC_STATE
+    (res[MIRRORED_SYNC_STATE_KEY] as MirroredSyncState | undefined) ?? INITIAL_MIRRORED_SYNC_STATE
   );
 }
 

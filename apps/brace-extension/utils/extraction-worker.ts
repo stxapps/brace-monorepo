@@ -59,6 +59,7 @@ export async function runExtraction(
         if (cleaned) fields.title = cleaned;
         if (image) {
           const resized = await resizeImage(image);
+
           const imageId = newId();
           await writeFile(username, imageId, resized); // content before metadata
           fields.imageId = imageId;
@@ -68,6 +69,7 @@ export async function runExtraction(
       }
       case 'readMode': {
         const html = await captureReadMode(tabId);
+
         const fileId = newId();
         await writeFile(username, fileId, html);
         // No display field references read-mode yet; the facet records its file id
@@ -77,6 +79,7 @@ export async function runExtraction(
       }
       case 'screenshot': {
         const png = await captureScreenshot(tab.windowId);
+
         const screenshotId = newId();
         await writeFile(username, screenshotId, png);
         await markDone(username, linkId, facet, { fields: { screenshotId } });
@@ -84,6 +87,7 @@ export async function runExtraction(
       }
       case 'archive': {
         const dom = await captureArchive(tabId);
+
         const pageArchiveId = newId();
         await writeFile(username, pageArchiveId, dom);
         await markDone(username, linkId, facet, { fields: { pageArchiveId } });

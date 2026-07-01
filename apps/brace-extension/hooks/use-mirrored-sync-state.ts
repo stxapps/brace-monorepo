@@ -26,9 +26,7 @@ export function useMirroredSyncState(): MirroredSyncState {
       area,
     ) => {
       if (area !== 'local') return;
-      const next = changes[MIRRORED_SYNC_STATE_KEY]?.newValue as
-        | MirroredSyncState
-        | undefined;
+      const next = changes[MIRRORED_SYNC_STATE_KEY]?.newValue as MirroredSyncState | undefined;
       if (next) setState(next);
     };
     browser.storage.onChanged.addListener(handler);
