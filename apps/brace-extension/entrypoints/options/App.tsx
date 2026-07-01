@@ -1,14 +1,13 @@
-import { useLiveQuery } from 'dexie-react-hooks';
-
-import { readExtractionFacetCounts, useAuth, useSignOut, useSync } from '@stxapps/web-react';
+import { useAuth, useSignOut, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import { ThemeSection } from './ThemeSection';
 
 // The status / options page (mostly read-only, no library list — per the active-tab-only
-// decision): sync state (mirrored from the background) + extraction facet counts
-// (from the local extractions/ store), a theme picker (the one synced setting that
-// applies here — see ThemeSection), plus sign-out.
+// decision): sync state (mirrored from the background), a theme picker (the one synced
+// setting that applies here — see ThemeSection), plus sign-out. Extraction progress and
+// its controls live in brace-web's Settings → Extraction (the app that runs the
+// extraction loop); this page no longer mirrors the extraction counts.
 function App() {
   const { status, username } = useAuth();
 
@@ -32,12 +31,6 @@ function Status({ username }: { username: string | null }) {
   // storage subscription.
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError } = useSync();
   const signOut = useSignOut();
-
-  const counts = useLiveQuery(() => readExtractionFacetCounts(), []) ?? {
-    done: 0,
-    pending: 0,
-    failed: 0,
-  };
 
   const lastSync = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'never';
 
@@ -69,22 +62,6 @@ function Status({ username }: { username: string | null }) {
             <span>{lastError}</span>
           </div>
         )}
-      </section>
-
-      <section>
-        <h2 className="status-section-title">Extractions</h2>
-        <div className="status-row">
-          <span>Done</span>
-          <span>{counts.done}</span>
-        </div>
-        <div className="status-row">
-          <span>Pending</span>
-          <span>{counts.pending}</span>
-        </div>
-        <div className="status-row">
-          <span>Failed</span>
-          <span>{counts.failed}</span>
-        </div>
       </section>
 
       <ThemeSection />
