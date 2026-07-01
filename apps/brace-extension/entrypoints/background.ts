@@ -37,19 +37,34 @@ export default defineBackground(() => {
   // Periodic sync. `create` with the same name is idempotent across restarts.
   browser.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
   browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === SYNC_ALARM) void runSync();
+    if (alarm.name === SYNC_ALARM) void withSession(runSync);
   });
+
   // Kick one cycle as the worker spins up (on install / browser start / wake).
-  void runSync();
+  void withSession(runSync);
 
   browser.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-    handle(message).then(sendResponse, (err: unknown) =>
+    withSession(() => handle(message)).then(sendResponse, (err: unknown) =>
       sendResponse({ ok: false, error: errorMessage(err) }),
     );
     // Keep the channel open for the async response.
     return true;
   });
 });
+
+// Hydrate the in-memory session mirror before any trigger's work runs. This is
+// THE single hydration point for the worker — the analog of the popup's
+// AuthProvider. The worker is a separate JS context from the popup (which OWNS
+// the session: sign-in/out, token refresh), and the two share state only through
+// IndexedDB, so the worker's mirror goes stale unless it re-reads on every
+// trigger. Gating the three entry points (alarm, startup, message) here lets the
+// leaf handlers (runSync/buildDeps, handle/currentUsername) be pure synchronous
+// getSession() readers — a new message op can't reintroduce the cold-worker
+// "no token" bug by forgetting to load, because it never holds that duty.
+async function withSession<T>(run: () => Promise<T>): Promise<T> {
+  await loadSession();
+  return run();
+}
 
 async function handle(
   message: ExtensionMessage,
@@ -60,8 +75,9 @@ async function handle(
       return { ok: true };
 
     case 'EXTRACT': {
-      const username = await currentUsername();
+      const username = currentUsername();
       if (!username) return { ok: false, error: 'Not signed in' };
+
       await runExtraction(username, message.linkId, message.facet);
       // Push the freshly written files/links to the server (and pull anything new).
       void runSync();
@@ -70,9 +86,10 @@ async function handle(
   }
 }
 
-async function currentUsername(): Promise<string | null> {
-  const session = (await loadSession()) ?? getSession();
-  return session?.username ?? null;
+function currentUsername(): string | null {
+  // Synchronous read of the in-memory mirror — withSession already re-hydrated it
+  // from IndexedDB before dispatching this message.
+  return getSession()?.username ?? null;
 }
 
 function errorMessage(err: unknown): string {

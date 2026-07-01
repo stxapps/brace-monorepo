@@ -2,7 +2,6 @@ import { EXTRACTIONS_PREFIX, FILES_PREFIX, LINKS_PREFIX, SETTINGS_PREFIX } from 
 import {
   getSession,
   isFirstSyncDone,
-  loadSession,
   runIncrementalSync,
   runInitialSync,
   type SyncDeps,
@@ -36,9 +35,11 @@ const pathFilter = (path: string): boolean =>
   path.startsWith(FILES_PREFIX) ||
   path.startsWith(SETTINGS_PREFIX);
 
-async function buildDeps(): Promise<SyncDeps | null> {
-  // loadSession hydrates the in-memory mirror the api client's authFetch reads.
-  const session = (await loadSession()) ?? getSession();
+function buildDeps(): SyncDeps | null {
+  // Synchronous read of the in-memory mirror the api client's authFetch reads —
+  // the background's withSession() hydrates it from IndexedDB before every trigger
+  // (alarm / startup / message), so there's no stale-session hazard here.
+  const session = getSession();
   if (!session) return null;
 
   return {
@@ -65,7 +66,7 @@ export function runSync(): Promise<void> {
 
   inflight = (async () => {
     try {
-      const deps = await buildDeps();
+      const deps = buildDeps();
       if (!deps) {
         // Signed out: nothing to sync; present a ready, idle store.
         await setState({ storeStatus: 'ready', bgSyncStatus: 'idle' });
