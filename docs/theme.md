@@ -165,10 +165,16 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   runs AFTER paint, so the FOUC script can't live there; it must be the inline
   classic `<script>`, and generating it from the shared source beats hand-copying
   it into each `index.html`. `providers.tsx` mounts `<ThemeProvider>` (no props).
-  The extension applies the account's synced theme but has no picker of its own
-  yet — picking happens in brace-web; the extension honors it. Popup and options
-  share one origin, so they share both the `localStorage` mirror and the Dexie
-  stores.
+  The theme **picker** is the options page (`entrypoints/options/ThemeSection.tsx`):
+  a Sync/Device tab, four mode radios, and the two custom-mode time inputs — the same
+  tab shape as brace-web's Misc section, but **theme-only**. Theme is the only synced
+  setting that applies to the extension: `linksLayout` has no library list to lay out
+  here, and `serverExtraction` never fires (the extension is active-context only and
+  never calls `brace-extractor`). The **Device** tab is what earns the extension its
+  own picker — it lets this browser keep a theme (e.g. always-dark) distinct from
+  brace-web, without a context switch to set it. Popup and options share one origin,
+  so they share both the `localStorage` mirror and the Dexie stores (a pick on the
+  options page applies to the popup too).
 
   The extension no longer uses `browser.storage.sync` for theme at all: cross-
   device sync is the sync engine's job now (`settings/general.enc`), and cross-

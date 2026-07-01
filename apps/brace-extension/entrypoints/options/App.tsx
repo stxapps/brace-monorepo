@@ -3,9 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { readExtractionFacetCounts, useAuth, useSignOut, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
-// The status / options page (read-only, no library list — per the active-tab-only
+import { ThemeSection } from './ThemeSection';
+
+// The status / options page (mostly read-only, no library list — per the active-tab-only
 // decision): sync state (mirrored from the background) + extraction facet counts
-// (from the local extractions/ store), plus sign-out.
+// (from the local extractions/ store), a theme picker (the one synced setting that
+// applies here — see ThemeSection), plus sign-out.
 function App() {
   const { status, username } = useAuth();
 
@@ -83,6 +86,8 @@ function Status({ username }: { username: string | null }) {
           <span>{counts.failed}</span>
         </div>
       </section>
+
+      <ThemeSection />
 
       <Button variant="outline" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
         {signOut.isPending ? 'Signing out…' : 'Sign out'}
