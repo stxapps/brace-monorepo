@@ -12,6 +12,12 @@ import { defineConfig } from 'wxt';
 // genuinely differ between stores.
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  // brace-web's `npm run dev` owns :3000 (apps/brace-web/package.json). WXT's
+  // dev server defaults to :3000 too, so running both at once collides — pin
+  // the extension's dev server to :3001.
+  dev: {
+    server: { port: 3001 },
+  },
   // WXT defaults Firefox to MV2; pin MV3 on both to match the existing
   // extensions (Firefox MV3 keeps `background.scripts`, which WXT emits).
   manifestVersion: 3,
