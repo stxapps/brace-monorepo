@@ -45,7 +45,7 @@ function themeFoucPlugin(): Plugin {
 
 // The extension runs the sign-in Argon2id KDF on the main thread (setArgon2Runner('main')
 // in popup/main.tsx), so @stxapps/web-crypto's dynamic import of its worker path
-// (./argon2-worker) is never taken at runtime. But Vite still statically follows that
+// (./argon2-worker-client) is never taken at runtime. But Vite still statically follows that
 // import and emits the worker it references as a ~103 KB chunk (hash-wasm inlined). Since
 // the extension can never use it — and a cross-origin module worker is exactly what
 // crashes the popup under `wxt dev` — redirect that one module to a throwing stub so the
@@ -60,7 +60,7 @@ function stubArgon2WorkerPlugin(): Plugin {
     // specifier is resolved to an absolute path before we get a chance to redirect it.
     enforce: 'pre',
     resolveId(source) {
-      return /(^|\/)argon2-worker(\.ts)?$/.test(source) ? STUB_ID : null;
+      return /(^|\/)argon2-worker-client(\.ts)?$/.test(source) ? STUB_ID : null;
     },
     load(id) {
       if (id !== STUB_ID) return null;

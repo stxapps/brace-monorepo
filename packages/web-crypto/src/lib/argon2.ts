@@ -10,7 +10,7 @@ import { ARGON2_PARAMS } from '@stxapps/shared';
 // else during sign-in, briefly blocking the main thread for the KDF is an acceptable
 // trade to avoid that whole class of worker fragility.
 //
-// The worker path lives in a separate module (./argon2-worker) loaded via dynamic
+// The worker path lives in a separate module (./argon2-worker-client) loaded via dynamic
 // import only when this runner is 'worker', so 'main'-only consumers (the extension)
 // never pull the worker code or its emitted worker chunk into their bundle.
 type Argon2Runner = 'worker' | 'main';
@@ -29,7 +29,8 @@ export function setArgon2Runner(next: Argon2Runner): void {
 // only swaps this Argon2id call.
 export async function deriveArgon2Hash(password: string, salt: Uint8Array): Promise<Uint8Array> {
   if (runner === 'main') return deriveOnMainThread(password, salt);
-  const { deriveInWorker } = await import('./argon2-worker');
+
+  const { deriveInWorker } = await import('./argon2-worker-client');
   return deriveInWorker(password, salt);
 }
 

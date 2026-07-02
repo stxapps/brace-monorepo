@@ -17,6 +17,7 @@ export function deriveInWorker(password: string, salt: Uint8Array): Promise<Uint
     worker.onmessage = (event: MessageEvent<WorkerResult>) => {
       const data = event.data;
       worker.terminate();
+
       if (data.ok) resolve(data.hash);
       else reject(new Error(data.error));
     };
