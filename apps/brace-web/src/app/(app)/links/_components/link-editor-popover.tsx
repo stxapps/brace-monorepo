@@ -14,16 +14,24 @@
 // metadata fetch, so the form only collects a URL (+ optional list/tags).
 //
 // Validation is two-tier: an EMPTY URL is a hard, blocking error; a non-empty
-// but MALFORMED URL only warns and relabels Save → Confirm, so the user can save
-// it as typed on a second click (we never block on a debatable-but-deliberate
-// URL). Bare domains are fine — they're normalized to https:// on save. The tag
+// but MALFORMED URL, or one that's ALREADY SAVED, only warns and relabels
+// Save → Confirm, so the user can save it as typed on a second click (we never
+// block on a debatable-but-deliberate URL — re-saving can be intentional, and
+// the local-first store can't guarantee URL uniqueness across devices anyway).
+// Bare domains are fine — they're normalized to https:// on save. The tag
 // field stays simple: its "Add tag" button is just disabled while empty.
 
 import { useState } from 'react';
 import { ChevronDown, Plus, X } from 'lucide-react';
 
 import { DEFAULT_LIST_ID, flattenTree, normalizeUrl, TRASH_ID } from '@stxapps/shared';
-import { useLinkMutations, useLists, useTagMutations, useTags } from '@stxapps/web-react';
+import {
+  readLinkByUrl,
+  useLinkMutations,
+  useLists,
+  useTagMutations,
+  useTags,
+} from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
@@ -64,10 +72,12 @@ export function LinkEditorPopover() {
   const [addingTag, setAddingTag] = useState(false);
   const [saving, setSaving] = useState(false);
   // urlError is a HARD, blocking error (empty URL); urlWarning is the SOFT
-  // malformed-URL state that relabels Save → Confirm and lets a second submit
-  // through.
+  // state that relabels Save → Confirm and lets the next submit through. Two
+  // grounds, checked in order on submit — 'malformed' (can't normalize), then
+  // 'duplicate' (already in the local store) — so a URL that's both warns on
+  // each ground in turn. Editing the field disarms whichever is showing.
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [urlWarning, setUrlWarning] = useState(false);
+  const [urlWarning, setUrlWarning] = useState<'malformed' | 'duplicate' | null>(null);
 
   // Flat, depth-carrying rows for the pickers (the entities are trees). Lists
   // feed the dropdown; tags feed the chosen-chips lookup and the hint buttons.
@@ -92,7 +102,7 @@ export function LinkEditorPopover() {
       setTagIds([]);
       setTagInput('');
       setUrlError(null);
-      setUrlWarning(false);
+      setUrlWarning(null);
     }
     setOpen(next);
   };
@@ -127,7 +137,7 @@ export function LinkEditorPopover() {
     // Required: an empty URL is a hard error and blocks the save.
     if (trimmed === '') {
       setUrlError('Please enter a URL.');
-      setUrlWarning(false);
+      setUrlWarning(null);
       return;
     }
     setUrlError(null);
@@ -137,13 +147,26 @@ export function LinkEditorPopover() {
     // raw text as typed. A normalizable value (incl. a bare domain) saves the
     // normalized https:// form.
     const normalized = normalizeUrl(trimmed);
-    if (normalized === null && !urlWarning) {
-      setUrlWarning(true);
+    if (normalized === null && urlWarning === null) {
+      setUrlWarning('malformed');
       return;
     }
 
     setSaving(true);
     try {
+      // Soft, second ground: the URL is already saved. Looked up by the exact
+      // string create() would store (readLinkByUrl is an exact-match indexed
+      // get, and links store the normalized url), only once per draft — an
+      // armed 'duplicate' means the user has seen the warning, so Confirm
+      // saves the duplicate deliberately.
+      if (urlWarning !== 'duplicate') {
+        const existing = await readLinkByUrl(normalized ?? trimmed);
+        if (existing) {
+          setUrlWarning('duplicate');
+          return;
+        }
+      }
+
       await create({ url: normalized ?? trimmed, listId, tagIds });
       onOpenChange(false);
     } finally {
@@ -176,16 +199,18 @@ export function LinkEditorPopover() {
                 // Editing re-opens the question: clear the error and disarm the
                 // warning so the button reverts to Save and re-validates.
                 setUrlError(null);
-                setUrlWarning(false);
+                setUrlWarning(null);
               }}
             />
             {urlError !== null ? (
               <p role="alert" className="text-xs text-destructive">
                 {urlError}
               </p>
-            ) : urlWarning ? (
+            ) : urlWarning !== null ? (
               <p role="alert" className="text-xs text-amber-600 dark:text-amber-500">
-                This doesn’t look like a valid URL. Click Confirm to save it anyway.
+                {urlWarning === 'malformed'
+                  ? 'This doesn’t look like a valid URL. Click Confirm to save it anyway.'
+                  : 'You’ve already saved this link. Click Confirm to save it again.'}
               </p>
             ) : null}
           </div>
@@ -294,7 +319,7 @@ export function LinkEditorPopover() {
               Cancel
             </Button>
             <Button type="submit" variant="default" size="sm" disabled={saving}>
-              {urlWarning ? 'Confirm' : 'Save'}
+              {urlWarning !== null ? 'Confirm' : 'Save'}
             </Button>
           </div>
         </form>
