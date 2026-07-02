@@ -16,14 +16,14 @@ const WEB_APP_URL =
 // accounts itself.
 export function SignIn() {
   return (
-    <div className="popup">
-      <h1 className="popup-title">Sign in to Brace</h1>
+    <div className="flex w-[340px] flex-col gap-3 p-4">
+      <h1 className="m-0 text-base font-semibold">Sign in to Brace</h1>
       <SignInForm />
-      <p className="popup-footer">
+      <p className="m-0 text-[13px]">
         New to Brace?{' '}
         <button
           type="button"
-          className="popup-link"
+          className="cursor-pointer border-0 bg-transparent p-0 text-primary [font:inherit]"
           onClick={() => {
             void browser.tabs.create({ url: `${WEB_APP_URL}/create-account` });
           }}

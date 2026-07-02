@@ -83,15 +83,15 @@ export function Editor({
   }
 
   return (
-    <div className="popup">
-      <h1 className="popup-title">Save to Brace</h1>
+    <div className="flex w-[340px] flex-col gap-3 p-4">
+      <h1 className="m-0 text-base font-semibold">Save to Brace</h1>
 
-      <div className="tab-info">
-        <p className="tab-title">{tab.title || url}</p>
-        <p className="tab-url">{url}</p>
+      <div className="flex flex-col gap-0.5">
+        <p className="m-0 font-medium">{tab.title || url}</p>
+        <p className="m-0 truncate text-xs text-muted-foreground">{url}</p>
       </div>
 
-      <div className="field">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="list">List</Label>
         <Select value={listId} onValueChange={setListId}>
           <SelectTrigger id="list">
@@ -107,16 +107,20 @@ export function Editor({
         </Select>
       </div>
 
-      <div className="field">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="tag">Tags</Label>
         {tags.length > 0 && (
-          <div className="tag-chips">
+          <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
-              <span key={tag.id} className="tag-chip">
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
+              >
                 {tag.name}
                 <button
                   type="button"
                   aria-label={`Remove ${tag.name}`}
+                  className="inline-flex cursor-pointer border-0 bg-transparent p-0"
                   onClick={() => setTags((prev) => prev.filter((t) => t.id !== tag.id))}
                 >
                   <X size={12} />
@@ -125,7 +129,7 @@ export function Editor({
             ))}
           </div>
         )}
-        <div className="tag-add">
+        <div className="flex gap-1.5">
           <Input
             id="tag"
             value={tagInput}
@@ -144,7 +148,7 @@ export function Editor({
         </div>
       </div>
 
-      <div className="field">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="note">Note</Label>
         <Textarea
           id="note"

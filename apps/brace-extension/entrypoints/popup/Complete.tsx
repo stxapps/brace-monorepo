@@ -66,25 +66,16 @@ export function Complete({ link }: { link: LinkItem }) {
   }
 
   return (
-    <div className="popup">
-      <div className="popup-header">
-        <h1 className="popup-title">Saved ✓</h1>
-        <button
-          type="button"
-          className="popup-link"
-          onClick={() => browser.runtime.openOptionsPage()}
-        >
-          Status
-        </button>
+    <div className="flex w-[340px] flex-col gap-3 p-4">
+      <h1 className="m-0 text-base font-semibold">Saved ✓</h1>
+
+      <div className="flex flex-col gap-0.5">
+        {imageUrl && <img className="w-full rounded-[6px]" src={imageUrl} alt="" />}
+        <p className="m-0 font-medium">{title || liveLink.url}</p>
+        <p className="m-0 truncate text-xs text-muted-foreground">{liveLink.url}</p>
       </div>
 
-      <div className="saved-preview">
-        {imageUrl && <img className="saved-image" src={imageUrl} alt="" />}
-        <p className="tab-title">{title || liveLink.url}</p>
-        <p className="tab-url">{liveLink.url}</p>
-      </div>
-
-      <div className="facet-buttons">
+      <div className="flex gap-2">
         <FacetButton
           label="Screenshot"
           state={facetState('screenshot')}

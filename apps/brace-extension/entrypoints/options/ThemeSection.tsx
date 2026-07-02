@@ -148,7 +148,7 @@ export function ThemeSection() {
 
   return (
     <section>
-      <h2 className="status-section-title">Theme</h2>
+      <h2 className="mt-0 mb-2 font-semibold">Theme</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Choose the extension's appearance. <strong>Sync</strong> applies your choice across all
         your devices. <strong>Device</strong> keeps a separate choice for this browser only (cleared

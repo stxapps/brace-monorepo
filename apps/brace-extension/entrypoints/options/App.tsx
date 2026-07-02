@@ -1,68 +1,35 @@
-import { useAuth, useSignOut, useSync } from '@stxapps/web-react';
+import { useAuth, useSignOut } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import { ThemeSection } from './ThemeSection';
 
-// The status / options page (mostly read-only, no library list — per the active-tab-only
-// decision): sync state (mirrored from the background), a theme picker (the one synced
-// setting that applies here — see ThemeSection), plus sign-out. Extraction progress and
-// its controls live in brace-web's Settings → Extraction (the app that runs the
-// extraction loop); this page no longer mirrors the extraction counts.
+// The Settings page — durable configuration only: a theme picker (the one synced
+// setting that applies here — see ThemeSection) plus sign-out. Operational state lives
+// in the toolbar popup: sync status (and its detail view) is the popup's SyncPill /
+// SyncDetail, and extraction progress is in brace-web's Settings → Extraction (the app
+// that runs the extraction loop). This page holds nothing that changes on its own.
 function App() {
-  const { status, username } = useAuth();
+  const { status } = useAuth();
 
   if (status === 'loading') {
-    return <div className="status-page">Loading…</div>;
+    return <div className="mx-auto flex w-[460px] max-w-full flex-col gap-5 p-6">Loading…</div>;
   }
   if (status !== 'authenticated') {
     return (
-      <div className="status-page">
-        <p>Sign in from the toolbar popup to see sync status.</p>
+      <div className="mx-auto flex w-[460px] max-w-full flex-col gap-5 p-6">
+        <p>Sign in from the toolbar popup to manage settings.</p>
       </div>
     );
   }
-  return <Status username={username} />;
+  return <AuthedApp />;
 }
 
-function Status({ username }: { username: string | null }) {
-  // Status comes through the same useSync() seam as brace-web — the popup provider
-  // tree (Providers) feeds ExternalSyncProvider from the background's storage mirror,
-  // so this page reads all four fields (store/bg/lastSyncAt/lastError) without its own
-  // storage subscription.
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError } = useSync();
+function AuthedApp() {
   const signOut = useSignOut();
 
-  const lastSync = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'never';
-
   return (
-    <div className="status-page">
-      <h1 className="popup-title">Brace — Status</h1>
-
-      <section>
-        <h2 className="status-section-title">Sync</h2>
-        <div className="status-row">
-          <span>Account</span>
-          <span>{username ?? '—'}</span>
-        </div>
-        <div className="status-row">
-          <span>Store</span>
-          <span>{storeStatus}</span>
-        </div>
-        <div className="status-row">
-          <span>Last cycle</span>
-          <span>{bgSyncStatus}</span>
-        </div>
-        <div className="status-row">
-          <span>Last sync</span>
-          <span>{lastSync}</span>
-        </div>
-        {lastError && (
-          <div className="status-row">
-            <span>Last error</span>
-            <span>{lastError}</span>
-          </div>
-        )}
-      </section>
+    <div className="mx-auto flex w-[460px] max-w-full flex-col gap-5 p-6">
+      <h1 className="m-0 text-base font-semibold">Brace — Settings</h1>
 
       <ThemeSection />
 

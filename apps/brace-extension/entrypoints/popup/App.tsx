@@ -7,6 +7,7 @@ import { type LinkItem, readLinkByUrl, useAuth } from '@stxapps/web-react';
 import { Complete } from './Complete';
 import { Editor } from './Editor';
 import { SignIn } from './SignIn';
+import { SyncDetail, SyncPill } from './Sync';
 
 // The active tab the popup is acting on. `null` once we know there's no usable tab
 // (e.g. a chrome:// page the extension can't save); `undefined` while still loading.
@@ -22,7 +23,11 @@ export function linkIdOf(link: LinkItem): string {
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="popup popup-centered">{children}</div>;
+  return (
+    <div className="flex w-[340px] flex-col items-center justify-center gap-3 p-4 min-h-[120px]">
+      {children}
+    </div>
+  );
 }
 
 // The popup is a tiny in-memory state machine — no router needed. The branch is
@@ -39,7 +44,23 @@ function App() {
   return <AuthedApp />;
 }
 
+// Two parts, one tiny in-popup router: the save flow, with a glanceable sync pill
+// docked under it. Clicking the pill swaps the whole popup to the sync detail view
+// (and back) — sync detail lives in the popup, not Settings, so this is a local
+// `view` toggle rather than opening the options page.
 function AuthedApp() {
+  const [view, setView] = useState<'flow' | 'sync'>('flow');
+
+  if (view === 'sync') return <SyncDetail onBack={() => setView('flow')} />;
+  return (
+    <>
+      <SaveFlow />
+      <SyncPill onClick={() => setView('sync')} />
+    </>
+  );
+}
+
+function SaveFlow() {
   // `undefined` = still querying the active tab; `null` = no usable (http/https) tab.
   const [tab, setTab] = useState<ActiveTab | null | undefined>(undefined);
   // Set the moment a save completes, so we flip to the complete page without waiting
