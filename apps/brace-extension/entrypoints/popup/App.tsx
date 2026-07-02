@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { SettingsIcon } from 'lucide-react';
 
 import { ENC_SUFFIX, LINKS_PREFIX, normalizeUrl } from '@stxapps/shared';
 import { type LinkItem, readLinkByUrl, useAuth } from '@stxapps/web-react';
@@ -55,6 +56,14 @@ function AuthedApp() {
   return (
     <>
       <SaveFlow />
+      <button
+        type="button"
+        className="absolute top-2 right-2 cursor-pointer border-0 bg-transparent p-1 text-muted-foreground"
+        title="Settings"
+        onClick={() => browser.runtime.openOptionsPage()}
+      >
+        <SettingsIcon className="size-4" />
+      </button>
       <SyncPill onClick={() => setView('sync')} />
     </>
   );
