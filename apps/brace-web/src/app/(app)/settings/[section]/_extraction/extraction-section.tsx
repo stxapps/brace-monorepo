@@ -29,8 +29,17 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 export function ExtractionSection() {
-  const { enabled, doneCount, pendingCount, failedCount, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
-    useExtraction();
+  const {
+    enabled,
+    doneCount,
+    pendingCount,
+    failedCount,
+    isRunning,
+    isExtractingAll,
+    autoLimitReached,
+    extractAll,
+    pause,
+  } = useExtraction();
 
   // Two-step confirm for "Extract all": the first click reveals the count +
   // Confirm, since draining the whole library can be thousands of paid requests.
@@ -54,8 +63,8 @@ export function ExtractionSection() {
 
       {!enabled ? (
         <p className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-          Server extraction is off. Turn it on in{' '}
-          <strong>Settings → Misc.</strong> to enrich your links.
+          Server extraction is off. Turn it on in <strong>Settings → Misc.</strong> to enrich your
+          links.
         </p>
       ) : (
         <>
@@ -87,8 +96,8 @@ export function ExtractionSection() {
             ) : confirming ? (
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm">
-                  Enrich all {pendingCount} pending link{pendingCount === 1 ? '' : 's'}? This sends a
-                  request per link to the extractor.
+                  Enrich all {pendingCount} pending link{pendingCount === 1 ? '' : 's'}? This sends
+                  a request per link to the extractor.
                 </span>
                 <div className="flex gap-2">
                   <Button onClick={startExtractAll}>Confirm</Button>

@@ -21,7 +21,7 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      className="box-border flex w-[340px] cursor-pointer items-center justify-between border-0 border-t border-border bg-transparent px-4 py-2.5 text-[13px] [font-family:inherit]"
+      className="box-border flex w-85 cursor-pointer items-center justify-between border-0 border-t border-border bg-transparent px-4 py-2.5 text-sm"
       onClick={onClick}
     >
       <span>Sync</span>
@@ -39,7 +39,7 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
   const lastSync = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'never';
 
   return (
-    <div className="flex w-[340px] flex-col gap-3 p-4">
+    <div className="flex w-85 flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <h1 className="m-0 text-base font-semibold">Sync</h1>
         <button

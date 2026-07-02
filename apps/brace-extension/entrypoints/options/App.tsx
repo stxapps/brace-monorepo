@@ -12,11 +12,11 @@ function App() {
   const { status } = useAuth();
 
   if (status === 'loading') {
-    return <div className="mx-auto flex w-[460px] max-w-full flex-col gap-5 p-6">Loading…</div>;
+    return <div className="mx-auto flex w-115 max-w-full flex-col gap-5 p-6">Loading…</div>;
   }
   if (status !== 'authenticated') {
     return (
-      <div className="mx-auto flex w-[460px] max-w-full flex-col gap-5 p-6">
+      <div className="mx-auto flex w-115 max-w-full flex-col gap-5 p-6">
         <p>Sign in from the toolbar popup to manage settings.</p>
       </div>
     );
@@ -28,7 +28,7 @@ function AuthedApp() {
   const signOut = useSignOut();
 
   return (
-    <div className="mx-auto flex w-[460px] max-w-full flex-col gap-5 p-6">
+    <div className="mx-auto flex w-115 max-w-full flex-col gap-5 p-6">
       <h1 className="m-0 text-base font-semibold">Brace — Settings</h1>
 
       <ThemeSection />

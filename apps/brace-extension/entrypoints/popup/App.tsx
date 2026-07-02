@@ -24,7 +24,7 @@ export function linkIdOf(link: LinkItem): string {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex w-[340px] flex-col items-center justify-center gap-3 p-4 min-h-[120px]">
+    <div className="flex min-h-30 w-85 flex-col items-center justify-center gap-3 p-4">
       {children}
     </div>
   );
