@@ -84,13 +84,22 @@ function SaveFlow() {
         // Only http/https pages can be saved/extracted (no chrome://, web store, …).
         setTab(/^https?:/.test(url) ? { url, title: active?.title ?? '' } : null);
       })
-      .catch(() => setTab(null));
+      .catch(() => {
+        setTab(null)
+      });
   }, []);
 
   const normalizedUrl = tab ? (normalizeUrl(tab.url) ?? '') : '';
   // Live: re-renders if a background sync pulls in a matching saved link.
+  // The `?? null` is load-bearing: readLinkByUrl returns `undefined` for "not saved",
+  // but useLiveQuery also returns `undefined` while it's still resolving. Coercing the
+  // settled not-found case to `null` keeps `undefined` meaning ONLY "still loading" —
+  // without it the guard below would treat every unsaved tab as perpetually loading.
   const existing = useLiveQuery(
-    () => (normalizedUrl ? readLinkByUrl(normalizedUrl) : Promise.resolve(undefined)),
+    () =>
+      (normalizedUrl ? readLinkByUrl(normalizedUrl) : Promise.resolve(undefined)).then(
+        (link) => link ?? null,
+      ),
     [normalizedUrl],
   );
 
