@@ -1,21 +1,70 @@
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import tailwindcss from '@tailwindcss/vite';
 import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'wxt';
 
 import { themeInitScript } from '@stxapps/shared';
 
-// Inject the shared pre-paint FOUC script into every extension HTML page's <head>.
-// The theme's `.dark` class must be set SYNCHRONOUSLY before first paint, which a
-// deferred module `main.tsx` can't do — so it has to be an inline classic <script>
-// in <head>. Rather than hand-copy the resolver into each page's index.html (three
-// copies to keep in step), we generate it once from `themeInitScript()` — the same
-// single source brace-web inlines via layout.tsx — and splice it in at build time.
-// It reads the `brace-theme` localStorage mirror that ThemeProvider keeps warm.
+// The shared pre-paint FOUC script. The theme's `.dark` class must be set
+// SYNCHRONOUSLY before first paint, which a deferred module `main.tsx` can't do — so
+// it has to be a parser-blocking classic <script> in <head>. It reads the
+// `brace-theme` localStorage mirror that ThemeProvider keeps warm. Same single source
+// brace-web inlines via layout.tsx.
+//
+// It CANNOT be inlined here, though: MV3's extension-page CSP is locked to
+// `script-src 'self'` and the manifest validator rejects every escape hatch that
+// would allow inline execution — 'unsafe-inline', nonces, AND sha256 hashes all fail
+// to load ("Insecure CSP value"). So we emit it as a same-origin file and reference it
+// with <script src> (which 'self' permits). A local extension-file fetch is instant,
+// so a parser-blocking external script prevents FOUC exactly as the inline one did.
+// The file is generated from themeInitScript() (not committed) so it can't drift; it
+// lives in public/ because WXT serves that dir in dev and copies it to the output root
+// on build — see THEME_INIT_FILENAME. Written at config load so it exists before WXT
+// scans public/.
+const THEME_INIT_FILENAME = 'theme-init.js';
+writeFileSync(
+  fileURLToPath(new URL(`./public/${THEME_INIT_FILENAME}`, import.meta.url)),
+  themeInitScript(),
+);
+
+// Reference the generated theme script from every extension HTML page's <head> (rather
+// than hand-copy a tag into each page's index.html and keep them in step). head-prepend
+// keeps it parser-blocking and first, so it runs before anything else paints.
 function themeFoucPlugin(): Plugin {
   return {
     name: 'brace-theme-fouc',
-    transformIndexHtml(html) {
-      return html.replace('</head>', `<script>${themeInitScript()}</script></head>`);
+    transformIndexHtml() {
+      return [
+        { tag: 'script', attrs: { src: `/${THEME_INIT_FILENAME}` }, injectTo: 'head-prepend' },
+      ];
+    },
+  };
+}
+
+// The extension runs the sign-in Argon2id KDF on the main thread (setArgon2Runner('main')
+// in popup/main.tsx), so @stxapps/web-crypto's dynamic import of its worker path
+// (./argon2-worker) is never taken at runtime. But Vite still statically follows that
+// import and emits the worker it references as a ~103 KB chunk (hash-wasm inlined). Since
+// the extension can never use it — and a cross-origin module worker is exactly what
+// crashes the popup under `wxt dev` — redirect that one module to a throwing stub so the
+// worker chunk is left out of the extension bundle entirely. brace-web keeps the real
+// worker (this plugin is extension-only); the throw is dead code that just makes a
+// mis-wiring loud instead of silent.
+function stubArgon2WorkerPlugin(): Plugin {
+  const STUB_ID = '\0brace-argon2-worker-stub';
+  return {
+    name: 'brace-stub-argon2-worker',
+    // 'pre' so this resolveId runs before Vite's core resolver — otherwise the relative
+    // specifier is resolved to an absolute path before we get a chance to redirect it.
+    enforce: 'pre',
+    resolveId(source) {
+      return /(^|\/)argon2-worker(\.ts)?$/.test(source) ? STUB_ID : null;
+    },
+    load(id) {
+      if (id !== STUB_ID) return null;
+      return "export function deriveInWorker() { throw new Error('argon2 worker path is disabled in the extension (main-thread runner)'); }";
     },
   };
 }
@@ -92,11 +141,27 @@ export default defineConfig({
         // injection in background.ts); activeTab only grants host access
         'scripting',
       ],
+      // MV3 locks the extension-page CSP to a tiny allow-list ('self', 'none',
+      // 'wasm-unsafe-eval', dev-only localhost); hashes/nonces/'unsafe-inline' are all
+      // rejected at load ("Insecure CSP value"). We need one addition over the
+      // `script-src 'self'` default: 'wasm-unsafe-eval'. The sign-in Argon2id KDF
+      // (derivePasswordKek → deriveArgon2Hash in @stxapps/web-crypto) runs via hash-wasm,
+      // which WebAssembly.compile/instantiates a module — blocked by default ("Wasm code
+      // generation disallowed by embedder"). The extension runs that KDF on the popup's
+      // MAIN THREAD (setArgon2Runner('main') — no worker; see stubArgon2WorkerPlugin), so
+      // the WASM compile happens right on the extension page and this keyword is what
+      // lets it through. It permits WASM compilation only, NOT JS eval. (The theme FOUC
+      // script is an external same-origin file, so plain 'self' already covers it — see
+      // themeFoucPlugin.) Both Chrome and Firefox MV3 accept this, so one policy covers
+      // both targets.
+      content_security_policy: {
+        extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
+      },
       // action.default_title comes from the popup's <title> (entrypoints/popup).
       ...(isFirefox
         ? {
             browser_specific_settings: {
-              gecko: { id: 'addon@brace.to', strict_min_version: '109.0' },
+              gecko: { id: 'addon@brace.to', strict_min_version: '114.0' },
             },
           }
         : {
@@ -105,6 +170,6 @@ export default defineConfig({
     };
   },
   vite: () => ({
-    plugins: [tailwindcss(), themeFoucPlugin()],
+    plugins: [tailwindcss(), themeFoucPlugin(), stubArgon2WorkerPlugin()],
   }),
 });

@@ -16,7 +16,7 @@ const WEB_APP_URL =
 // accounts itself.
 export function SignIn() {
   return (
-    <div className="flex w-[340px] flex-col gap-3 p-4">
+    <div className="flex w-85 flex-col gap-3 p-4">
       <h1 className="m-0 text-base font-semibold">Sign in to Brace</h1>
       <SignInForm />
       <p className="m-0 text-[13px]">

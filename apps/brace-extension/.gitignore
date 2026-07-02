@@ -1,3 +1,6 @@
+# Generated at config load from themeInitScript() (see wxt.config.ts)
+public/theme-init.js
+
 # WXT
 .output
 stats.html

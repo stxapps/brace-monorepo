@@ -6,8 +6,9 @@ export default [
   ...nx.configs['flat/react-typescript'],
   ...baseConfig,
   {
-    // WXT-generated output — not authored source, don't lint it.
-    ignores: ['.wxt/**', '.output/**'],
+    // Generated / build output — not authored source, don't lint it.
+    // public/theme-init.js is emitted from themeInitScript() at config load (wxt.config.ts).
+    ignores: ['.wxt/**', '.output/**', 'public/theme-init.js'],
   },
   {
     files: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'],
