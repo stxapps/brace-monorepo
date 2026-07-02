@@ -9,12 +9,15 @@ import {
   readLinkByUrl,
 } from '@stxapps/web-react';
 
+import { WEB_APP_URL } from '@/utils/web-app-url';
+
 // The complete page — shown right after a save AND when the active tab is already
 // saved (the revisit / bonus path). "Saved ✓", a reactive title/image preview (the
 // titleImage facet fills `title`/`imageId` into the link's `extractions/{id}.enc` in
-// the background, and the live reads here pick it up), and manual Screenshot / Archive
-// buttons that message the background to capture from the active tab. Each button
-// reflects its facet's state read live from the same extraction.
+// the background, and the live reads here pick it up), and a footer button opening
+// the web app's library in a new tab. It reads "Open Brace" (navigation), not "view
+// this link": the extension's session doesn't cross origins (docs/extension.md), so
+// a user who never signed in to brace-web lands on its sign-in page first.
 export function Complete({ link }: { link: LinkItem }) {
   const id = linkIdOf(link);
   // Re-read the link + extraction live so background backfills/captures show up. The
@@ -49,6 +52,18 @@ export function Complete({ link }: { link: LinkItem }) {
         <p className="m-0 font-medium">{title || liveLink.url}</p>
         <p className="m-0 truncate text-xs text-muted-foreground">{liveLink.url}</p>
       </div>
+
+      <p className="m-0 text-[13px]">
+        <button
+          type="button"
+          className="cursor-pointer border-0 bg-transparent p-0 text-primary [font:inherit]"
+          onClick={() => {
+            void browser.tabs.create({ url: `${WEB_APP_URL}/links` });
+          }}
+        >
+          Open Brace →
+        </button>
+      </p>
     </div>
   );
 }
