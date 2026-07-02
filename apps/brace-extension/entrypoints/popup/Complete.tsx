@@ -1,19 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import {
-  type ExtractionFacet,
   linkIdOf,
   type LinkItem,
   readExtraction,
   readFileBytes,
   readLinkByUrl,
 } from '@stxapps/web-react';
-import { Button } from '@stxapps/web-ui/components/ui/button';
-
-import { sendMessage } from '@/utils/messages';
-
-type FacetButtonState = 'idle' | 'capturing' | 'done' | 'failed';
 
 // The complete page — shown right after a save AND when the active tab is already
 // saved (the revisit / bonus path). "Saved ✓", a reactive title/image preview (the
@@ -28,7 +22,6 @@ export function Complete({ link }: { link: LinkItem }) {
   // the link, the extracted values on the extraction — the writer-split).
   const liveLink = useLiveQuery(() => readLinkByUrl(link.url), [link.url]) ?? link;
   const extraction = useLiveQuery(() => readExtraction(id), [id]);
-  const [busy, setBusy] = useState<Partial<Record<ExtractionFacet, boolean>>>({});
 
   const title = liveLink.customTitle ?? extraction?.title;
   const imageId = liveLink.customImageId ?? extraction?.imageId;
@@ -47,25 +40,8 @@ export function Complete({ link }: { link: LinkItem }) {
     [imageUrl],
   );
 
-  function facetState(facet: ExtractionFacet): FacetButtonState {
-    if (busy[facet]) return 'capturing';
-    const status = extraction?.facets?.[facet]?.status;
-    if (status === 'done') return 'done';
-    if (status === 'failed') return 'failed';
-    return 'idle';
-  }
-
-  async function run(facet: ExtractionFacet) {
-    setBusy((b) => ({ ...b, [facet]: true }));
-    try {
-      await sendMessage({ type: 'EXTRACT', linkId: id, facet });
-    } finally {
-      setBusy((b) => ({ ...b, [facet]: false }));
-    }
-  }
-
   return (
-    <div className="flex w-[340px] flex-col gap-3 p-4">
+    <div className="flex w-85 flex-col gap-3 p-4">
       <h1 className="m-0 text-base font-semibold">Saved ✓</h1>
 
       <div className="flex flex-col gap-0.5">
@@ -73,39 +49,6 @@ export function Complete({ link }: { link: LinkItem }) {
         <p className="m-0 font-medium">{title || liveLink.url}</p>
         <p className="m-0 truncate text-xs text-muted-foreground">{liveLink.url}</p>
       </div>
-
-      <div className="flex gap-2">
-        <FacetButton
-          label="Screenshot"
-          state={facetState('screenshot')}
-          onClick={() => run('screenshot')}
-        />
-        <FacetButton label="Archive" state={facetState('archive')} onClick={() => run('archive')} />
-      </div>
     </div>
-  );
-}
-
-function FacetButton({
-  label,
-  state,
-  onClick,
-}: {
-  label: string;
-  state: FacetButtonState;
-  onClick: () => void;
-}) {
-  const text =
-    state === 'capturing'
-      ? 'Capturing…'
-      : state === 'done'
-        ? `${label} ✓`
-        : state === 'failed'
-          ? `${label} — retry`
-          : label;
-  return (
-    <Button type="button" variant="outline" disabled={state === 'capturing'} onClick={onClick}>
-      {text}
-    </Button>
   );
 }

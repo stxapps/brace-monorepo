@@ -34,7 +34,7 @@ const THEME_MODE_OPTIONS: Record<
   },
   system: {
     label: 'System',
-    hint: "Follow your device's appearance.",
+    hint: 'Follow your device’s appearance.',
     icon: <Monitor className="size-4" />,
   },
   custom: {
@@ -150,7 +150,7 @@ export function ThemeSection() {
     <section>
       <h2 className="mt-0 mb-2 font-semibold">Theme</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Choose the extension's appearance. <strong>Sync</strong> applies your choice across all your
+        Choose the extension’s appearance. <strong>Sync</strong> applies your choice across all your
         devices. <strong>Device</strong> keeps a separate choice for this browser only (cleared when
         you sign out).
       </p>

@@ -76,7 +76,7 @@ export function Editor({
       // / archive stay manual on the complete page — see link-extraction.md).
       const id = linkIdOf(link);
       void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'titleImage' });
-      void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'readMode' });
+
       onSaved(link);
     } catch {
       setSaving(false);
@@ -84,7 +84,7 @@ export function Editor({
   }
 
   return (
-    <div className="flex w-[340px] flex-col gap-3 p-4">
+    <div className="flex w-85 flex-col gap-3 p-4">
       <h1 className="m-0 text-base font-semibold">Save to Brace</h1>
 
       <div className="flex flex-col gap-0.5">
