@@ -29,7 +29,7 @@ function AuthedApp() {
 
   return (
     <div className="mx-auto flex w-115 max-w-full flex-col gap-5 p-6">
-      <h1 className="m-0 text-base font-semibold">Brace — Settings</h1>
+      <h1 className="m-0 text-base font-semibold">Settings</h1>
 
       <ThemeSection />
 
