@@ -53,7 +53,15 @@ function buildDeps(): SyncDeps | null {
 // Single-flight at the worker level too: overlapping triggers (alarm + a KICK_SYNC
 // from a save) share the in-flight run. The engine single-flights per account
 // internally as well, but coalescing here keeps the state mirror tidy.
+//
+// Like the engine, single-flight needs a TRAILING RERUN: a trigger that lands while a
+// cycle is mid-flight (e.g. the post-EXTRACT kick while the save's KICK_SYNC cycle is
+// still uploading) may have enqueued pending ops the running cycle already collected
+// past. Without the rerun those ops sit locally until the next wake — worst case the
+// hourly alarm. Overlapping triggers coalesce into at most ONE extra cycle; like the
+// engine, a failed cycle drops the rerun (the error is mirrored; retry is a fresh kick).
 let inflight: Promise<void> | null = null;
+let rerunRequested = false;
 
 let state: MirroredSyncState = INITIAL_MIRRORED_SYNC_STATE;
 async function setState(patch: Partial<MirroredSyncState>): Promise<void> {
@@ -62,30 +70,37 @@ async function setState(patch: Partial<MirroredSyncState>): Promise<void> {
 }
 
 export function runSync(): Promise<void> {
-  if (inflight) return inflight;
+  if (inflight) {
+    rerunRequested = true;
+    return inflight;
+  }
 
   inflight = (async () => {
     try {
-      const deps = buildDeps();
-      if (!deps) {
-        // Signed out: nothing to sync; present a ready, idle store.
-        await setState({ storeStatus: 'ready', bgSyncStatus: 'idle' });
-        return;
-      }
+      do {
+        rerunRequested = false;
 
-      await setState({ bgSyncStatus: 'syncing' });
-      if (await isFirstSyncDone(deps.username)) {
-        await runIncrementalSync(deps);
-      } else {
-        await setState({ storeStatus: 'syncing-initial' });
-        await runInitialSync(deps);
-      }
-      await setState({
-        storeStatus: 'ready',
-        bgSyncStatus: 'idle',
-        lastSyncAt: Date.now(),
-        lastError: null,
-      });
+        const deps = buildDeps();
+        if (!deps) {
+          // Signed out: nothing to sync; present a ready, idle store.
+          await setState({ storeStatus: 'ready', bgSyncStatus: 'idle' });
+          return;
+        }
+
+        await setState({ bgSyncStatus: 'syncing' });
+        if (await isFirstSyncDone(deps.username)) {
+          await runIncrementalSync(deps);
+        } else {
+          await setState({ storeStatus: 'syncing-initial' });
+          await runInitialSync(deps);
+        }
+        await setState({
+          storeStatus: 'ready',
+          bgSyncStatus: 'idle',
+          lastSyncAt: Date.now(),
+          lastError: null,
+        });
+      } while (rerunRequested);
     } catch (err) {
       await setState({
         bgSyncStatus: 'error',
@@ -94,6 +109,7 @@ export function runSync(): Promise<void> {
       });
     } finally {
       inflight = null;
+      rerunRequested = false;
     }
   })();
 
