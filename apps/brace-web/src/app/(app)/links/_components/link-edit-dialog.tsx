@@ -1,0 +1,299 @@
+'use client';
+
+// The full link editor: a centered modal dialog covering exactly the
+// user-authored `links/{id}.enc` fields — custom title, custom image, list,
+// tags, note (docs/link-extraction.md "manual overrides"). One Save = one
+// writeLink, one LWW unit; pinning is deliberately NOT here (a separate
+// `pins/` entity, fully served by the row menu — a form that wrote two files
+// would race two LWW points). It's a dialog, not a route: an edit session is
+// ephemeral, private draft state, which the page-provider's URL doctrine keeps
+// out of the URL (`/links/{id}` stays reserved for a future link DETAIL view).
+//
+// Rendered ONCE at the page level (Main) and driven by the hoisted `editing`
+// state in view-state-provider: rows are virtualized and repaint under sync, so
+// a row-owned dialog could unmount mid-edit — the row menu only *requests* the
+// edit. While open it holds `engaged`, so background sync results are staged
+// rather than repainting the list under the modal.
+//
+// Title/image follow the override-wins model: the inputs edit `customTitle` /
+// `customImageId`, the placeholders/preview fall back to the extracted values,
+// and CLEARING an override (blank title / "Reset to extracted") deletes the
+// field so the display falls back to `extraction.title ?? host(url)` — revert
+// is trivial because the discovered value was never destroyed.
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { ImageOff, ImagePlus } from 'lucide-react';
+
+import { hostFromText, LINK_NOTE_MAX, LINK_TITLE_MAX, TRASH_ID } from '@stxapps/shared';
+import {
+  linkIdOf,
+  type LinkPatch,
+  type LinkView,
+  readExtraction,
+  readFileBytes,
+  useLinkMutations,
+} from '@stxapps/web-react';
+import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
+import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
+import { Button } from '@stxapps/web-ui/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@stxapps/web-ui/components/ui/dialog';
+import { Input } from '@stxapps/web-ui/components/ui/input';
+import { Label } from '@stxapps/web-ui/components/ui/label';
+import { Textarea } from '@stxapps/web-ui/components/ui/textarea';
+
+import { useLinksViewState } from '../_contexts/view-state-provider';
+
+export function LinkEditDialog() {
+  const { editing, closeEditor } = useLinksViewState();
+  // Closed = fully unmounted (no exit animation — deliberate), so the form below
+  // initializes its draft from the link at every open; the key remounts it when
+  // an open dialog is retargeted at another link.
+  if (!editing) return null;
+  return (
+    <LinkEditForm
+      key={editing.link.path}
+      link={editing.link}
+      focusTags={editing.focus === 'tags'}
+      onClose={closeEditor}
+    />
+  );
+}
+
+// What the user has decided about the custom image this session: leave it alone,
+// replace it with picked bytes, or clear the override back to the extracted one.
+type ImageDraft =
+  | { kind: 'keep' }
+  | { kind: 'pick'; bytes: Uint8Array; previewUrl: string }
+  | { kind: 'clear' };
+
+// Order-sensitive equality is fine here: the draft starts FROM link.tagIds, so
+// any reordering means the user removed and re-added — a real edit either way.
+function sameIds(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+function LinkEditForm({
+  link,
+  focusTags,
+  onClose,
+}: {
+  link: LinkView;
+  focusTags: boolean;
+  onClose: () => void;
+}) {
+  const { update, saveCustomImage, deleteCustomImage } = useLinkMutations();
+
+  // The extraction supplies the fallbacks the overrides sit above: the
+  // placeholder title and the image shown after "Reset to extracted". Live, so
+  // a backfill landing mid-edit updates them.
+  const id = linkIdOf(link);
+  const extraction = useLiveQuery(() => readExtraction(id), [id]);
+
+  // Draft state, snapshotted from the row at open (this component mounts per
+  // open — see LinkEditDialog). Title/note hold the OVERRIDE/typed value, not
+  // the resolved display value: blank title = "no override".
+  const [title, setTitle] = useState(link.customTitle ?? '');
+  const [listId, setListId] = useState(link.listId);
+  const [tagIds, setTagIds] = useState<string[]>(link.tagIds);
+  const [note, setNote] = useState(link.note ?? '');
+  const [image, setImage] = useState<ImageDraft>({ kind: 'keep' });
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The stored image the preview shows when no fresh pick is pending: the
+  // override-wins resolution, except 'clear' previews the post-clear fallback
+  // (the extracted image, or nothing). Local bytes only (readFileBytes) — a blob
+  // this device hasn't materialized just shows the empty hint.
+  const storedImageId =
+    image.kind === 'clear' ? extraction?.imageId : (link.customImageId ?? extraction?.imageId);
+  const storedBytes = useLiveQuery(
+    () => (storedImageId ? readFileBytes(storedImageId) : Promise.resolve(undefined)),
+    [storedImageId],
+  );
+  const storedUrl = useMemo(
+    () => (storedBytes ? URL.createObjectURL(new Blob([storedBytes as BlobPart])) : undefined),
+    [storedBytes],
+  );
+  useEffect(
+    () => () => {
+      if (storedUrl) URL.revokeObjectURL(storedUrl);
+    },
+    [storedUrl],
+  );
+  // The picked file's object URL lives inside the draft; revoke it whenever the
+  // draft moves off that pick (new pick, clear, unmount).
+  useEffect(
+    () => () => {
+      if (image.kind === 'pick') URL.revokeObjectURL(image.previewUrl);
+    },
+    [image],
+  );
+  const previewUrl = image.kind === 'pick' ? image.previewUrl : storedUrl;
+
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Allow re-picking the same file after a clear: the input's value is
+    // consumed here so the next change always fires.
+    e.target.value = '';
+    if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    setImage({ kind: 'pick', bytes, previewUrl: URL.createObjectURL(file) });
+  };
+
+  const onSubmit = async (e: React.SubmitEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    try {
+      // Minimal patch: only what actually changed, so an untouched Save is a
+      // no-op (no write, no updatedAt bump reordering the date-modified sort).
+      // A cleared field is an EXPLICIT undefined — writeLink drops the key, the
+      // display falls back (the trivial-revert property).
+      const patch: LinkPatch = {};
+      const trimmedTitle = title.trim();
+      if (trimmedTitle !== (link.customTitle ?? '')) {
+        patch.customTitle = trimmedTitle === '' ? undefined : trimmedTitle;
+      }
+      if (listId !== link.listId) patch.listId = listId;
+      if (!sameIds(tagIds, link.tagIds)) patch.tagIds = tagIds;
+      const trimmedNote = note.trim();
+      if (trimmedNote !== (link.note ?? '')) {
+        patch.note = trimmedNote === '' ? undefined : trimmedNote;
+      }
+
+      // Content-before-metadata: the new `files/` blob lands before the link
+      // references it; the replaced blob is dropped only after the reference
+      // moved off it.
+      const replacedImageId = link.customImageId;
+      if (image.kind === 'pick') {
+        patch.customImageId = await saveCustomImage(image.bytes);
+      } else if (image.kind === 'clear' && replacedImageId) {
+        patch.customImageId = undefined;
+      }
+
+      if (Object.keys(patch).length > 0) {
+        await update(link, patch);
+        if (image.kind !== 'keep' && replacedImageId) {
+          await deleteCustomImage(replacedImageId);
+        }
+      }
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit link</DialogTitle>
+          <DialogDescription className="truncate">{link.url}</DialogDescription>
+        </DialogHeader>
+
+        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-title">Title</Label>
+            <Input
+              id="edit-title"
+              maxLength={LINK_TITLE_MAX}
+              placeholder={extraction?.title ?? hostFromText(link.url)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank to use the page&rsquo;s own title.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-image">Image</Label>
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt=""
+                className="max-h-40 w-full rounded-md border border-border object-cover"
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">No preview image.</p>
+            )}
+            <div className="flex gap-1.5">
+              <input
+                ref={fileInputRef}
+                id="edit-image"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void onPickImage(e)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImagePlus className="size-4" />
+                Choose image
+              </Button>
+              {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setImage({ kind: 'clear' })}
+                >
+                  <ImageOff className="size-4" />
+                  Reset to extracted
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-list">List</Label>
+            {/* No Trash target: trashing is the menu's Remove, never a "move". */}
+            <ListSelect
+              id="edit-list"
+              value={listId}
+              onValueChange={setListId}
+              excludeIds={[TRASH_ID]}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-tag">Tags</Label>
+            <TagsField id="edit-tag" value={tagIds} onChange={setTagIds} autoFocus={focusTags} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-note">Note</Label>
+            <Textarea
+              id="edit-note"
+              maxLength={LINK_NOTE_MAX}
+              placeholder="Optional note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="default" size="sm" disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

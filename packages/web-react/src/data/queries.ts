@@ -63,7 +63,14 @@ import { parseBlob } from './projection';
 // contract beside the entity shapes (entities.ts) and the path↔id math (paths.ts).
 // Re-exported here so the web-react data-layer surface (and its barrel) keeps
 // carrying them for app consumers, which read the read layer as their facade.
-export type { ExtractionItem, LinkItem, ListItem, PinItem, TagItem, WithPath } from '@stxapps/shared';
+export type {
+  ExtractionItem,
+  LinkItem,
+  ListItem,
+  PinItem,
+  TagItem,
+  WithPath,
+} from '@stxapps/shared';
 export { linkIdOf } from '@stxapps/shared';
 
 // A link row resolved for DISPLAY: the user-authored link joined with its
@@ -459,7 +466,7 @@ export async function readLinksPendingTitleImagePage(
   let scannedFrom = cursor;
   let scannedTo: LinkScanCursor | null = cursor ?? null;
 
-  for (; ;) {
+  for (;;) {
     const upper = scannedFrom ? scannedFrom.createdAt : Dexie.maxKey;
     const chunk = await db.items
       .where('[itemType+itemCreatedAt]')

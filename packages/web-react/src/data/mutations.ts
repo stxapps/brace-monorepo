@@ -128,6 +128,17 @@ export async function deleteEntity(username: string, path: string): Promise<void
   });
 }
 
+// The user-authored fields an edit may touch — `links/{id}.enc` is the user half
+// of a link, so this is everything on it except identity/timestamps. The extracted
+// display fields (title/imageId/pageArchiveId/screenshotId) are NOT here: they live
+// in `extractions/{id}.enc` and are written via writeExtraction, so a background
+// extractor never rewrites this file (see docs/link-extraction.md). An EXPLICITLY
+// undefined field clears it: the spread overwrites the old value and JSON encoding
+// drops the key, so e.g. `{ customTitle: undefined }` reverts to the extracted title.
+export type LinkPatch = Partial<
+  Pick<Link, 'url' | 'tagIds' | 'listId' | 'note' | 'customTitle' | 'customImageId'>
+>;
+
 // Apply a patch to a link and write it — create (new `links/{id}.enc`) or edit.
 // Stamps `updatedAt` now so the in-blob "date modified" advances on EVERY edit;
 // that's what keeps the `[itemType+itemUpdatedAt]` sort indexes (db.ts) and the
@@ -139,13 +150,7 @@ export async function deleteEntity(username: string, path: string): Promise<void
 export async function writeLink(
   username: string,
   link: WithPath<Link>,
-  // User-authored fields only — `links/{id}.enc` is the user half of a link. The
-  // extracted display fields (title/imageId/pageArchiveId/screenshotId) are NOT here:
-  // they live in `extractions/{id}.enc` and are written via writeExtraction, so a
-  // background extractor never rewrites this file (see docs/link-extraction.md).
-  patch: Partial<
-    Pick<Link, 'url' | 'tagIds' | 'listId' | 'note' | 'customTitle' | 'customImageId'>
-  >,
+  patch: LinkPatch,
 ): Promise<void> {
   const now = Date.now();
   const next: WithPath<Link> = {
@@ -382,4 +387,13 @@ export async function writeExtraction(
 // phases preserve.
 export function writeFile(username: string, fileId: string, data: Uint8Array): Promise<void> {
   return writeBytes(username, pathFromId(fileId, FILES_PREFIX), data);
+}
+
+// Delete a `files/{id}.enc` content blob — the counterpart of writeFile, for a
+// replaced/cleared custom image or a destroyed link's content. Metadata-before-content
+// on the way down: callers drop the reference (via writeLink/writeExtraction) before
+// or with the blob delete; a briefly-dangling ref is NORMAL and read as "no bytes yet"
+// (readFileBytes → undefined), same as a not-yet-materialized lazy blob.
+export function deleteFile(username: string, fileId: string): Promise<void> {
+  return deleteEntity(username, pathFromId(fileId, FILES_PREFIX));
 }

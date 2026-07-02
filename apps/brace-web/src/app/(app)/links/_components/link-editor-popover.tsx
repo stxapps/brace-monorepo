@@ -18,31 +18,21 @@
 // Save → Confirm, so the user can save it as typed on a second click (we never
 // block on a debatable-but-deliberate URL — re-saving can be intentional, and
 // the local-first store can't guarantee URL uniqueness across devices anyway).
-// Bare domains are fine — they're normalized to https:// on save. The tag
-// field stays simple: its "Add tag" button is just disabled while empty.
+// Bare domains are fine — they're normalized to https:// on save. The list
+// picker and tag editor are the shared ListSelect/TagsField (web-ui), the same
+// pieces the extension editor and the edit dialog render.
 
 import { useState } from 'react';
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 
-import { DEFAULT_LIST_ID, flattenTree, normalizeUrl, TRASH_ID } from '@stxapps/shared';
-import {
-  readLinkByUrlKey,
-  useLinkMutations,
-  useLists,
-  useTagMutations,
-  useTags,
-} from '@stxapps/web-react';
+import { DEFAULT_LIST_ID, normalizeUrl, TRASH_ID } from '@stxapps/shared';
+import { readLinkByUrlKey, useLinkMutations } from '@stxapps/web-react';
+import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
+import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@stxapps/web-ui/components/ui/select';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLinksPage } from '../_contexts/page-provider';
@@ -58,9 +48,6 @@ function useDefaultListId(): string {
 
 export function LinkEditorPopover() {
   const { create } = useLinkMutations();
-  const { findOrCreate: findOrCreateTag } = useTagMutations();
-  const lists = useLists();
-  const tags = useTags();
   const defaultListId = useDefaultListId();
 
   const [open, setOpen] = useState(false);
@@ -68,8 +55,6 @@ export function LinkEditorPopover() {
   const [url, setUrl] = useState('');
   const [listId, setListId] = useState(defaultListId);
   const [tagIds, setTagIds] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
-  const [addingTag, setAddingTag] = useState(false);
   const [saving, setSaving] = useState(false);
   // urlError is a HARD, blocking error (empty URL); urlWarning is the SOFT
   // state that relabels Save → Confirm and lets the next submit through. Two
@@ -78,18 +63,6 @@ export function LinkEditorPopover() {
   // each ground in turn. Editing the field disarms whichever is showing.
   const [urlError, setUrlError] = useState<string | null>(null);
   const [urlWarning, setUrlWarning] = useState<'malformed' | 'duplicate' | null>(null);
-
-  // Flat, depth-carrying rows for the pickers (the entities are trees). Lists
-  // feed the dropdown; tags feed the chosen-chips lookup and the hint buttons.
-  const listRows = flattenTree(lists);
-  const tagRows = flattenTree(tags);
-  const chosenTags = tagRows.filter((n) => tagIds.includes(n.item.id));
-  // Hints = tags not yet chosen, narrowed by what's typed (case-insensitive
-  // substring). Typing both filters the hints and names the tag to add.
-  const tagQuery = tagInput.trim().toLowerCase();
-  const hintTags = tagRows.filter(
-    (n) => !tagIds.includes(n.item.id) && n.item.name.toLowerCase().includes(tagQuery),
-  );
 
   // Reset to a clean draft whenever the popover opens; clear on close too so a
   // half-filled form never lingers. defaultListId is read at open time so the
@@ -100,33 +73,10 @@ export function LinkEditorPopover() {
       setUrl('');
       setListId(defaultListId);
       setTagIds([]);
-      setTagInput('');
       setUrlError(null);
       setUrlWarning(null);
     }
     setOpen(next);
-  };
-
-  const addTag = (id: string) => {
-    setTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    setTagInput('');
-  };
-  const removeTag = (id: string) => setTagIds((prev) => prev.filter((t) => t !== id));
-
-  // "Add tag": reuse-or-mint by the typed name. findOrCreate returns the
-  // existing tag when the name already exists (case-insensitive) and mints a new
-  // top-level one otherwise, so retyping a known tag never forks a duplicate. The
-  // live useTags query picks the new entity up, so its chip renders a beat later.
-  const onAddTag = async () => {
-    const name = tagInput.trim();
-    if (name === '' || addingTag) return;
-    setAddingTag(true);
-    try {
-      const tag = await findOrCreateTag(name);
-      if (tag) addTag(tag.id);
-    } finally {
-      setAddingTag(false);
-    }
   };
 
   const onSubmit = async (e: React.SubmitEvent) => {
@@ -233,83 +183,19 @@ export function LinkEditorPopover() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="link-list">List</Label>
-                <Select value={listId} onValueChange={setListId}>
-                  <SelectTrigger id="link-list" className="w-full">
-                    <SelectValue placeholder="Choose a list" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {listRows.map(({ item, depth }) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        <span style={{ paddingLeft: depth * 12 }}>{item.name}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* No Trash target: it's the deletion staging area, never a place
+                    to add new links (same rule as the default-list fallback). */}
+                <ListSelect
+                  id="link-list"
+                  value={listId}
+                  onValueChange={setListId}
+                  excludeIds={[TRASH_ID]}
+                />
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="link-tag">Tags</Label>
-                <p className="text-xs text-muted-foreground">Type below or choose from hints</p>
-
-                {chosenTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {chosenTags.map(({ item }) => (
-                      <span
-                        key={item.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
-                      >
-                        {item.name}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${item.name}`}
-                          onClick={() => removeTag(item.id)}
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex gap-1.5">
-                  <Input
-                    id="link-tag"
-                    placeholder="Tag name"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        onAddTag();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={tagInput.trim() === '' || addingTag}
-                    onClick={onAddTag}
-                  >
-                    Add tag
-                  </Button>
-                </div>
-
-                {hintTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {hintTags.map(({ item }) => (
-                      <Button
-                        key={item.id}
-                        type="button"
-                        variant="secondary"
-                        size="xs"
-                        onClick={() => addTag(item.id)}
-                      >
-                        {item.name}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+                <TagsField id="link-tag" value={tagIds} onChange={setTagIds} />
               </div>
             </div>
           )}

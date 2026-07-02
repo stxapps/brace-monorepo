@@ -3,10 +3,15 @@
 // The main pane: reads the paginated link query once and hands it to whichever
 // layout the user picked in Settings → Misc (useSettings.linksLayout). Each layout
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
-// place the data hook meets the layouts.
+// place the data hook meets the layouts. It also mounts the page-level dialogs
+// the row menus drive through view-state-provider (edit / delete-permanently):
+// one instance each, OUTSIDE the virtualized rows, so a sync repaint can never
+// unmount them mid-interaction.
 
 import { useSettings } from '@stxapps/web-react';
 
+import { LinkDestroyConfirm } from '../_components/link-destroy-confirm';
+import { LinkEditDialog } from '../_components/link-edit-dialog';
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';
@@ -36,6 +41,8 @@ export function Main() {
         hasPending={hasPending}
         applyPending={applyPending}
       />
+      <LinkEditDialog />
+      <LinkDestroyConfirm />
     </main>
   );
 }

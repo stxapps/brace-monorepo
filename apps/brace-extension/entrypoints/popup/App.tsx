@@ -79,7 +79,7 @@ function SaveFlow() {
         setTab(/^https?:/.test(url) ? { url, title: active?.title ?? '' } : null);
       })
       .catch(() => {
-        setTab(null)
+        setTab(null);
       });
   }, []);
 

@@ -42,11 +42,7 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
     <div className="flex w-85 flex-col gap-3 p-4">
       <div className="flex items-center justify-between">
         <h1 className="text-base font-semibold">Sync</h1>
-        <button
-          type="button"
-          className="text-primary"
-          onClick={onBack}
-        >
+        <button type="button" className="text-primary" onClick={onBack}>
           ‹ Back
         </button>
       </div>
