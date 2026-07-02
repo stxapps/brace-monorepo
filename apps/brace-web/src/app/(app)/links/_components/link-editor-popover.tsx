@@ -26,7 +26,7 @@ import { ChevronDown, Plus, X } from 'lucide-react';
 
 import { DEFAULT_LIST_ID, flattenTree, normalizeUrl, TRASH_ID } from '@stxapps/shared';
 import {
-  readLinkByUrl,
+  readLinkByUrlKey,
   useLinkMutations,
   useLists,
   useTagMutations,
@@ -154,13 +154,13 @@ export function LinkEditorPopover() {
 
     setSaving(true);
     try {
-      // Soft, second ground: the URL is already saved. Looked up by the exact
-      // string create() would store (readLinkByUrl is an exact-match indexed
-      // get, and links store the normalized url), only once per draft — an
-      // armed 'duplicate' means the user has seen the warning, so Confirm
-      // saves the duplicate deliberately.
+      // Soft, second ground: the URL is already saved. Matched by canonical
+      // dedup identity (readLinkByUrlKey — folds scheme/www/trailing slash/query
+      // order), so trivial variants of a saved link warn too. Only checked while
+      // 'duplicate' is unarmed — an armed warning means the user has seen it, so
+      // Confirm saves the duplicate deliberately.
       if (urlWarning !== 'duplicate') {
-        const existing = await readLinkByUrl(normalized ?? trimmed);
+        const existing = await readLinkByUrlKey(normalized ?? trimmed);
         if (existing) {
           setUrlWarning('duplicate');
           return;

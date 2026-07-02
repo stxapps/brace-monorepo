@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { SettingsIcon } from 'lucide-react';
 
 import { normalizeUrl } from '@stxapps/shared';
-import { type LinkItem, readLinkByUrl, useAuth } from '@stxapps/web-react';
+import { type LinkItem, readLinkByUrlKey, useAuth } from '@stxapps/web-react';
 
 import { Complete } from './Complete';
 import { Editor } from './Editor';
@@ -84,14 +84,17 @@ function SaveFlow() {
   }, []);
 
   const normalizedUrl = tab ? (normalizeUrl(tab.url) ?? '') : '';
-  // Live: re-renders if a background sync pulls in a matching saved link.
-  // The `?? null` is load-bearing: readLinkByUrl returns `undefined` for "not saved",
+  // Live: re-renders if a background sync pulls in a matching saved link. Matched
+  // by canonical identity (readLinkByUrlKey), not exact string, so a tab that
+  // differs from the saved link only by scheme/www/trailing slash/query order
+  // still counts as already saved.
+  // The `?? null` is load-bearing: the query returns `undefined` for "not saved",
   // but useLiveQuery also returns `undefined` while it's still resolving. Coercing the
   // settled not-found case to `null` keeps `undefined` meaning ONLY "still loading" —
   // without it the guard below would treat every unsaved tab as perpetually loading.
   const existing = useLiveQuery(
     () =>
-      (normalizedUrl ? readLinkByUrl(normalizedUrl) : Promise.resolve(undefined)).then(
+      (normalizedUrl ? readLinkByUrlKey(normalizedUrl) : Promise.resolve(undefined)).then(
         (link) => link ?? null,
       ),
     [normalizedUrl],

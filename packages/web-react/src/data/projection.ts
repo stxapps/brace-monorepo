@@ -18,6 +18,7 @@
 import { z } from 'zod';
 
 import {
+  canonicalUrlKey,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
@@ -104,6 +105,10 @@ export function toItemRecord(path: string, updatedAt: number, data?: Uint8Array)
       record.itemListId = link.listId;
       record.itemTagIds = link.tagIds;
       record.itemUrl = link.url;
+      // The client-only dedup identity (db.ts `itemUrlKey`): DERIVED here, never
+      // read from the blob, so the key rules can evolve without touching synced
+      // state. null (confirm-saved raw text) projects no key — sparse index.
+      record.itemUrlKey = canonicalUrlKey(link.url) ?? undefined;
     }
     return record;
   }

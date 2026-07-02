@@ -116,10 +116,20 @@ export interface ItemRecord {
   itemListId?: string;
   itemTagIds?: string[];
   // Links only: the link's stored (normalized) URL — indexed so `readLinkByUrl`
-  // (the extension popup's "is this tab already saved?" check) is an index lookup
-  // instead of a full `links/` scan + decode-every-blob. Callers normalize the
-  // query URL the same way the editor normalized this one before storing.
+  // is an exact index lookup instead of a full `links/` scan + decode-every-blob.
+  // Callers normalize the query URL the same way the editor normalized this one
+  // before storing.
   itemUrl?: string;
+  // Links only: the link's canonical DEDUP IDENTITY key — `canonicalUrlKey(url)`
+  // (@stxapps/shared), the aggressive fold (scheme/www/port/trailing-slash/query
+  // order/fragment) behind the "is this URL already saved?" checks
+  // (readLinkByUrlKey: extension popup, web quick-add). DERIVED and CLIENT-ONLY
+  // by design: it lives in this projection, never in the synced blob, so when
+  // the key rules evolve (e.g. utm stripping) a schema bump + reprojection
+  // re-keys every link — nothing is frozen into LWW state. Sparse: absent when
+  // the stored url is confirm-saved raw text the key can't be derived from
+  // (canonicalUrlKey → null; exact `itemUrl` covers those).
+  itemUrlKey?: string;
   // Extractions only: one `${status}:${facet}` token per facet (projection.ts) —
   // e.g. `["done:titleImage", "failed:readMode"]`. Backs the `*itemFacetStatuses`
   // multiEntry index so the options page tallies facet status with
@@ -215,15 +225,17 @@ class BraceDb extends Dexie {
       //                                          (membership; multiEntry can't
       //                                          compound, so the tag view sorts its
       //                                          matched subset in JS).
-      //   itemUrl                              — exact link lookup by URL
+      //   itemUrl                              — exact link lookup by stored URL
       //                                          (readLinkByUrl), links only.
+      //   itemUrlKey                           — canonical dedup-identity lookup
+      //                                          (readLinkByUrlKey), links only.
       //   *itemFacetStatuses (multiEntry)      — `${status}:${facet}` per facet;
       //                                          extraction facet counts + work-loop
       //                                          lookups, extractions only.
       items:
         'path, updatedAt, [itemType+itemUpdatedAt], [itemType+itemCreatedAt], ' +
         '[itemListId+itemUpdatedAt], [itemListId+itemCreatedAt], *itemTagIds, itemUrl, ' +
-        '*itemFacetStatuses',
+        'itemUrlKey, *itemFacetStatuses',
       // pending-ops queue. Compound `[username+path]` primary key gives
       // the one-row-per-(account,path) upsert above; the `username` index scopes a
       // drain to the active account. Unlisted stores (syncMeta, items) carry forward.

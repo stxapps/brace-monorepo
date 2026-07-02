@@ -25,6 +25,7 @@ import type {
   WithPath,
 } from '@stxapps/shared';
 import {
+  canonicalUrlKey,
   compareRank,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -297,15 +298,33 @@ export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined
   return parseBlob(record?.data, settingsGeneralSchema);
 }
 
-// One link looked up by its exact stored URL, or undefined — the extension popup's
-// "is this active tab already saved?" check. Served by the `itemUrl` index (db.ts):
-// a single keyed lookup, not a `links/` scan that decodes every blob until a match
-// — load-bearing because the callers are `useLiveQuery` (popup), re-running on every
-// store write. The editor stores the normalized url, so callers normalize the tab url
-// the same way before querying. Exact match: a deliberate, scaffold-simple identity
-// check, not fuzzy. `itemUrl` is links-only (projection.ts), so the hit is a link.
+// One link looked up by its exact stored URL, or undefined. Served by the
+// `itemUrl` index (db.ts): a single keyed lookup, not a `links/` scan that decodes
+// every blob until a match — load-bearing because the callers are `useLiveQuery`
+// (popup), re-running on every store write. The editor stores the normalized url,
+// so callers normalize the query url the same way before querying. Exact match by
+// design — this reads back a SPECIFIC stored link (Complete.tsx's live refresh);
+// for "is this URL already saved?" use readLinkByUrlKey below. `itemUrl` is
+// links-only (projection.ts), so the hit is a link.
 export async function readLinkByUrl(url: string): Promise<LinkItem | undefined> {
   const record = await db.items.where('itemUrl').equals(url).first();
+  return record ? decodeCachedLink(record) : undefined;
+}
+
+// One link that's the SAME RESOURCE as `url` under the canonical dedup identity
+// (canonicalUrlKey — folds http/https, `www.`, default port, trailing slash,
+// query order, fragment), or undefined — the "is this URL already saved?" check
+// behind the extension popup's save flow and the web quick-add's duplicate
+// warning. Takes the URL (not a precomputed key) and derives it here, so every
+// caller keys identically; served by the `itemUrlKey` index (db.ts), same
+// single-keyed-lookup economics as readLinkByUrl. Input the key can't be derived
+// from (confirm-saved raw text, canonicalUrlKey → null) falls back to the exact
+// lookup, so re-typed raw text still matches its earlier save.
+export async function readLinkByUrlKey(url: string): Promise<LinkItem | undefined> {
+  const key = canonicalUrlKey(url);
+  if (key === null) return readLinkByUrl(url);
+
+  const record = await db.items.where('itemUrlKey').equals(key).first();
   return record ? decodeCachedLink(record) : undefined;
 }
 
@@ -440,7 +459,7 @@ export async function readLinksPendingTitleImagePage(
   let scannedFrom = cursor;
   let scannedTo: LinkScanCursor | null = cursor ?? null;
 
-  for (;;) {
+  for (; ;) {
     const upper = scannedFrom ? scannedFrom.createdAt : Dexie.maxKey;
     const chunk = await db.items
       .where('[itemType+itemCreatedAt]')
