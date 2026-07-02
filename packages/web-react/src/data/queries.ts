@@ -14,7 +14,16 @@
 import Dexie from 'dexie';
 import type { z } from 'zod';
 
-import type { Extraction, Link, List, Pin, SettingsGeneral, Tag } from '@stxapps/shared';
+import type {
+  Extraction,
+  ExtractionItem,
+  LinkItem,
+  ListItem,
+  PinItem,
+  SettingsGeneral,
+  TagItem,
+  WithPath,
+} from '@stxapps/shared';
 import {
   compareRank,
   EXTRACTIONS_PREFIX,
@@ -48,15 +57,13 @@ import {
 } from './decode-cache';
 import { parseBlob } from './projection';
 
-// A parsed entity always carries its source `items` path — the stable id every
-// other layer (op log, pending queue, R2) keys by, and what the UI needs to
-// select/edit/delete a row without a second lookup.
-export type WithPath<T> = T & { path: string };
-export type LinkItem = WithPath<Link>;
-export type ListItem = WithPath<List>;
-export type TagItem = WithPath<Tag>;
-export type PinItem = WithPath<Pin>;
-export type ExtractionItem = WithPath<Extraction>;
+// The typed item bundles (`WithPath` = decoded entity + its `items` path) and
+// `linkIdOf` now live in `@stxapps/shared` (sync/items.ts) — the cross-platform
+// contract beside the entity shapes (entities.ts) and the path↔id math (paths.ts).
+// Re-exported here so the web-react data-layer surface (and its barrel) keeps
+// carrying them for app consumers, which read the read layer as their facade.
+export type { ExtractionItem, LinkItem, ListItem, PinItem, TagItem, WithPath } from '@stxapps/shared';
+export { linkIdOf } from '@stxapps/shared';
 
 // A link row resolved for DISPLAY: the user-authored link joined with its
 // machine-derived `extractions/{id}.enc` (the writer-split — docs/link-extraction.md).

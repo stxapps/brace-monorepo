@@ -3,14 +3,13 @@ import { useLiveQuery } from 'dexie-react-hooks';
 
 import {
   type ExtractionFacet,
+  linkIdOf,
   type LinkItem,
   readExtraction,
   readFileBytes,
   readLinkByUrl,
 } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
-
-import { linkIdOf } from './App';
 
 import { sendMessage } from '@/utils/messages';
 

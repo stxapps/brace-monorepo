@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 
 import { DEFAULT_LIST_ID, flattenTree } from '@stxapps/shared';
 import {
+  linkIdOf,
   type LinkItem,
   type TagItem,
   useLinkMutations,
@@ -21,7 +22,7 @@ import {
 } from '@stxapps/web-ui/components/ui/select';
 import { Textarea } from '@stxapps/web-ui/components/ui/textarea';
 
-import { type ActiveTab, linkIdOf } from './App';
+import { type ActiveTab } from './App';
 
 import { sendMessage } from '@/utils/messages';
 

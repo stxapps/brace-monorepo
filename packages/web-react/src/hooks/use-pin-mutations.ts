@@ -14,26 +14,14 @@
 
 import { useCallback, useMemo } from 'react';
 
-import {
-  compareRank,
-  idFromPath,
-  LINKS_PREFIX,
-  pathFromId,
-  PINS_PREFIX,
-  rankForIndex,
-} from '@stxapps/shared';
+import { compareRank, pathFromId, PINS_PREFIX, rankForIndex } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { deletePin, writePin } from '../data/mutations';
-import { type LinkItem, type PinItem, readPins } from '../data/queries';
+import { linkIdOf, type LinkItem, type PinItem, readPins } from '../data/queries';
 
-// A link's id is the `{id}` of its `links/{id}.enc` path; the pin shadows it at
-// `pins/{id}.enc`. Derive both from the link's stored path so callers pass a
-// LinkItem and nothing reconstructs ids by hand.
-function linkIdOf(link: LinkItem): string {
-  return idFromPath(link.path, LINKS_PREFIX);
-}
+// The pin shadows the link at `pins/{id}.enc`, keyed by the link's id (linkIdOf).
 function pinPathOf(linkId: string): string {
   return pathFromId(linkId, PINS_PREFIX);
 }

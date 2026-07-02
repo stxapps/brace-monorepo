@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { SettingsIcon } from 'lucide-react';
 
-import { ENC_SUFFIX, LINKS_PREFIX, normalizeUrl } from '@stxapps/shared';
+import { normalizeUrl } from '@stxapps/shared';
 import { type LinkItem, readLinkByUrl, useAuth } from '@stxapps/web-react';
 
 import { Complete } from './Complete';
@@ -15,12 +15,6 @@ import { SyncDetail, SyncPill } from './Sync';
 export interface ActiveTab {
   url: string;
   title: string;
-}
-
-// The link id (the `{id}` of `links/{id}.enc`) for a saved link — what the EXTRACT
-// messages and the extraction reads key on.
-export function linkIdOf(link: LinkItem): string {
-  return link.path.slice(LINKS_PREFIX.length, -ENC_SUFFIX.length);
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
