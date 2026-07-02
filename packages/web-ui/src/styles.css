@@ -148,6 +148,17 @@
   }
 
   /*
+   * Tailwind v4's Preflight leaves buttons on the platform default cursor
+   * (matching native buttons). We want the pointer on every enabled button —
+   * shadcn components included — so opt back in once here instead of
+   * sprinkling `cursor-pointer` on each one.
+   */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /*
    * Reserve the scrollbar gutter so its width is constant: layout no longer
    * shifts when a scrollbar appears/disappears, which also keeps JS width math
    * and CSS media-query breakpoints in agreement.

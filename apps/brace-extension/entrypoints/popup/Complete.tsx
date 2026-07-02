@@ -45,18 +45,18 @@ export function Complete({ link }: { link: LinkItem }) {
 
   return (
     <div className="flex w-85 flex-col gap-3 p-4">
-      <h1 className="m-0 text-base font-semibold">Saved ✓</h1>
+      <h1 className="text-base font-semibold">Saved ✓</h1>
 
       <div className="flex flex-col gap-0.5">
         {imageUrl && <img className="w-full rounded-[6px]" src={imageUrl} alt="" />}
-        <p className="m-0 font-medium">{title || liveLink.url}</p>
-        <p className="m-0 truncate text-xs text-muted-foreground">{liveLink.url}</p>
+        <p className="font-medium">{title || liveLink.url}</p>
+        <p className="truncate text-xs text-muted-foreground">{liveLink.url}</p>
       </div>
 
-      <p className="m-0 text-[13px]">
+      <p className="text-sm">
         <button
           type="button"
-          className="cursor-pointer border-0 bg-transparent p-0 text-primary [font:inherit]"
+          className="text-primary"
           onClick={() => {
             void browser.tabs.create({ url: `${WEB_APP_URL}/links` });
           }}

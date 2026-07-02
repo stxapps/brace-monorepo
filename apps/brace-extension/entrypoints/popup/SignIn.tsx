@@ -10,13 +10,13 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 export function SignIn() {
   return (
     <div className="flex w-85 flex-col gap-3 p-4">
-      <h1 className="m-0 text-base font-semibold">Sign in to Brace</h1>
+      <h1 className="text-base font-semibold">Sign in to Brace</h1>
       <SignInForm />
-      <p className="m-0 text-[13px]">
+      <p className="text-sm">
         New to Brace?{' '}
         <button
           type="button"
-          className="cursor-pointer border-0 bg-transparent p-0 text-primary [font:inherit]"
+          className="text-primary"
           onClick={() => {
             void browser.tabs.create({ url: `${WEB_APP_URL}/create-account` });
           }}

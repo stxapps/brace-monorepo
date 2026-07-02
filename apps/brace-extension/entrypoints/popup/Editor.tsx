@@ -85,11 +85,11 @@ export function Editor({
 
   return (
     <div className="flex w-85 flex-col gap-3 p-4">
-      <h1 className="m-0 text-base font-semibold">Save to Brace</h1>
+      <h1 className="text-base font-semibold">Save to Brace</h1>
 
       <div className="flex flex-col gap-0.5">
-        <p className="m-0 font-medium">{tab.title || url}</p>
-        <p className="m-0 truncate text-xs text-muted-foreground">{url}</p>
+        <p className="font-medium">{tab.title || url}</p>
+        <p className="truncate text-xs text-muted-foreground">{url}</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -121,7 +121,7 @@ export function Editor({
                 <button
                   type="button"
                   aria-label={`Remove ${tag.name}`}
-                  className="inline-flex cursor-pointer border-0 bg-transparent p-0"
+                  className="inline-flex"
                   onClick={() => setTags((prev) => prev.filter((t) => t.id !== tag.id))}
                 >
                   <X size={12} />

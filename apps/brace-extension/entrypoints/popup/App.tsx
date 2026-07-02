@@ -52,7 +52,7 @@ function AuthedApp() {
       <SaveFlow />
       <button
         type="button"
-        className="absolute top-2 right-2 cursor-pointer border-0 bg-transparent p-1 text-muted-foreground"
+        className="absolute top-2 right-2 p-1 text-muted-foreground"
         title="Settings"
         onClick={() => browser.runtime.openOptionsPage()}
       >
