@@ -20,10 +20,20 @@ export function CreateAccountForm() {
     register,
     handleSubmit,
     setError,
+    clearErrors,
     watch,
     formState: { errors, isSubmitting },
   } = useCreateAccountForm();
   const createAccount = useCreateAccount();
+
+  // The generic failure is a submit-level `root` error, not tied to a field, so
+  // react-hook-form's onChange re-validation never clears it. Drop it as soon as
+  // the user edits either field, otherwise a stale "Could not create account"
+  // lingers while they're correcting their input. (The `username` field errors
+  // above already auto-clear on change.)
+  const clearRootError = () => {
+    if (errors.root) clearErrors('root');
+  };
 
   // Live availability as the user types (debounced + race-safe inside the hook).
   // Only meaningful once the value is a valid format, which gates the query too.
@@ -72,7 +82,7 @@ export function CreateAccountForm() {
             autoComplete="username"
             autoFocus
             aria-invalid={!!errors.username}
-            {...register('username')}
+            {...register('username', { onChange: clearRootError })}
           />
           <FieldError errors={errors.username ? [errors.username] : undefined} />
           {usernameHint ? (
@@ -88,7 +98,7 @@ export function CreateAccountForm() {
             type="password"
             autoComplete="new-password"
             aria-invalid={!!errors.password}
-            {...register('password')}
+            {...register('password', { onChange: clearRootError })}
           />
           <FieldError errors={errors.password ? [errors.password] : undefined} />
         </Field>

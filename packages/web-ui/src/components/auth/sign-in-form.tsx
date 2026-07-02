@@ -14,9 +14,18 @@ export function SignInForm() {
     register,
     handleSubmit,
     setError,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useSignInForm();
   const signIn = useSignIn();
+
+  // The credential failure is a submit-level `root` error, not tied to a field,
+  // so react-hook-form's onChange re-validation never clears it. Drop it as soon
+  // as the user edits either field, otherwise a stale "Incorrect username or
+  // password" lingers while they're correcting their input.
+  const clearRootError = () => {
+    if (errors.root) clearErrors('root');
+  };
 
   async function onSubmit(values: SignInValues) {
     // Inputs are already validated by zodResolver. The hook owns the submit sequence
@@ -46,7 +55,7 @@ export function SignInForm() {
             autoComplete="username"
             autoFocus
             aria-invalid={!!errors.username}
-            {...register('username')}
+            {...register('username', { onChange: clearRootError })}
           />
           <FieldError errors={errors.username ? [errors.username] : undefined} />
         </Field>
@@ -57,7 +66,7 @@ export function SignInForm() {
             type="password"
             autoComplete="current-password"
             aria-invalid={!!errors.password}
-            {...register('password')}
+            {...register('password', { onChange: clearRootError })}
           />
           <FieldError errors={errors.password ? [errors.password] : undefined} />
         </Field>
