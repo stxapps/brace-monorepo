@@ -466,7 +466,7 @@ export async function readLinksPendingTitleImagePage(
   let scannedFrom = cursor;
   let scannedTo: LinkScanCursor | null = cursor ?? null;
 
-  for (;;) {
+  for (; ;) {
     const upper = scannedFrom ? scannedFrom.createdAt : Dexie.maxKey;
     const chunk = await db.items
       .where('[itemType+itemCreatedAt]')
@@ -806,7 +806,8 @@ async function readRest(
 async function readPinnedOverlay(
   query: LinkQuery,
 ): Promise<{ links: LinkItem[]; paths: Set<string> }> {
-  const pins = (await readPins()).sort(compareRank);
+  // Promise.resolve: helper await inside a querier — see readLinks' zone-echo note.
+  const pins = (await Promise.resolve(readPins())).sort(compareRank);
   if (pins.length === 0) return { links: [], paths: new Set() };
 
   const records = await db.items.bulkGet(pins.map((pin) => pathFromId(pin.id, LINKS_PREFIX)));
@@ -838,11 +839,28 @@ async function readPinnedOverlay(
 // then the page of the rest. `limit`/"show more" pages only the rest — pins are
 // few and never paginated. The pinned set is excluded from the rest so a link
 // never appears twice, and folded into `total` when the rest's total is exact.
+//
+// ZONE-ECHO CONSTRAINT (this is a liveQuery querier — useLinks). Dexie tracks
+// which ranges a querier read via a zone it keeps alive across awaits, but the
+// zone survives only ONE native-await resumption per awaited Dexie promise:
+// awaiting an async HELPER that itself awaited (a stacked resumption) silently
+// kills it, and every Dexie call after that registers nothing — the query still
+// returns correct data, but writes never re-fire it (new links didn't appear
+// until a reload; pin writes still re-fired because `pins/` was read before the
+// zone died, which masked the bug). Inside the zone the global `Promise` is
+// Dexie's own, so `await Promise.resolve(helper())` re-arms the echo — the wrap
+// Dexie's docs prescribe for foreign promises (https://dexie.org/docs/liveQuery()).
+// The invariant for everything reachable from a querier: direct `db.*` awaits,
+// pass-through `return helper()`, and `Promise.all` of direct Dexie calls are
+// safe; an AWAIT of an async helper must be wrapped in `Promise.resolve(...)`.
+// Verified in-browser (Chrome + dexie 4.4.3, 2026-07); Node/fake-indexeddb
+// resolves in microtasks and never reproduces it, so tests won't catch a
+// regression here.
 export async function readLinks(query: LinkQuery, limit: number): Promise<LinksResult> {
-  const overlay = await readPinnedOverlay(query);
-  const rest = await readRest(query, limit, overlay.paths);
+  const overlay = await Promise.resolve(readPinnedOverlay(query));
+  const rest = await Promise.resolve(readRest(query, limit, overlay.paths));
   // Join the whole page (overlay + rest) with extractions in one pass → display rows.
-  const links = await joinExtractions([...overlay.links, ...rest.links]);
+  const links = await Promise.resolve(joinExtractions([...overlay.links, ...rest.links]));
   return {
     links,
     pinnedCount: overlay.links.length,
