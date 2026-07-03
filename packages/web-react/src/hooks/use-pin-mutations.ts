@@ -66,7 +66,7 @@ export function usePinMutations(): PinMutations {
     async (link: LinkItem) => {
       if (!username) throw new Error('usePinMutations: no active account');
 
-      await deletePin(username, pinPathOf(linkIdOf(link)));
+      await deletePin(username, linkIdOf(link));
       requestSync();
     },
     [username, requestSync],

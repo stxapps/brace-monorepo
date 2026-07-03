@@ -376,7 +376,7 @@ function SortableRow({
 
 export function ListsSection() {
   const lists = useLists();
-  const { create, rename, move, remove, reorder } = useListMutations();
+  const { create, rename, move, destroy, reorder } = useListMutations();
 
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
   const [error, setError] = useState<string | null>(null);
@@ -555,7 +555,7 @@ export function ListsSection() {
                       run(move(row.item, parentId, dest, dest.length));
                     }}
                     onSortChildren={(dir) => sortGroup(row.item.id, dir)}
-                    onDelete={() => run(remove(row.item))}
+                    onDelete={() => run(destroy(row.item))}
                   />
                 );
               })}

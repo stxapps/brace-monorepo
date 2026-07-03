@@ -26,6 +26,7 @@ import {
   listSchema,
   pathFromId,
   type Pin,
+  PINS_PREFIX,
   pinSchema,
   SETTINGS_GENERAL_PATH,
   type SettingsGeneral,
@@ -118,8 +119,9 @@ async function writeEntity<T extends WithPath<object>>(username: string, item: T
 // diffs our own echo against, exactly as on the put path. A path with no local
 // record (a never-stored system-list default, an already-gone pin) makes the
 // delete a no-op locally and a harmless tombstone upstream. Entity-agnostic so
-// every namespace deletes by one definition; callers gate the higher-level rules.
-export async function deleteEntity(username: string, path: string): Promise<void> {
+// every namespace deletes by one definition; the named per-namespace deletes
+// below are the public surface, and callers gate the higher-level rules.
+async function deleteEntity(username: string, path: string): Promise<void> {
   await db.transaction('rw', db.items, db.pendingOps, async () => {
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
@@ -260,10 +262,12 @@ export async function writePin(
   await writeEntity(username, next);
 }
 
-// Unpin: delete the pin file at `path`. Unpinning is just removing the marker; the
-// link itself is untouched (separate file).
-export function deletePin(username: string, path: string): Promise<void> {
-  return deleteEntity(username, path);
+// Unpin: delete the link's `pins/{id}.enc` marker. Keyed by the link's id (a pin
+// shadows its link — entities.ts), mirroring writeExtraction/deleteExtraction so
+// callers never build the path themselves. The link itself is untouched (separate
+// file).
+export function deletePin(username: string, linkId: string): Promise<void> {
+  return deleteEntity(username, pathFromId(linkId, PINS_PREFIX));
 }
 
 // Patch the synced general-settings blob (`settings/general.enc`) and write it —
@@ -378,6 +382,14 @@ export async function writeExtraction(
     }
     return next;
   });
+}
+
+// Delete one link's `extractions/{id}.enc` — the machine half's counterpart of
+// deleteLink, keyed by the link's id like writeExtraction so callers never build
+// the path themselves. The `files/` blobs the extraction references are the
+// caller's concern (same split as deleteLink's header).
+export function deleteExtraction(username: string, linkId: string): Promise<void> {
+  return deleteEntity(username, pathFromId(linkId, EXTRACTIONS_PREFIX));
 }
 
 // Write a `files/{id}.enc` content blob (a captured screenshot/archive/read-mode

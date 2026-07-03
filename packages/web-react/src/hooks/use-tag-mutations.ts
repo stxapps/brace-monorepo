@@ -51,11 +51,12 @@ export interface TagMutations {
     siblings: TagItem[],
     index: number,
   ) => Promise<void>;
-  // Delete a tag. Rejected only for a tag that still has sub-tags — deleting it
-  // would silently re-root them (buildTree promotes orphans), so the UI must
-  // move them first. No system-tag guard (none exist) and no link guard (a
-  // dangling tagIds reference is normal). The thrown message surfaces to the user.
-  remove: (tag: TagItem) => Promise<void>;
+  // Permanently delete a tag (no trash for tags — irreversible, like
+  // useLinkMutations.destroy). Rejected only for a tag that still has sub-tags —
+  // deleting it would silently re-root them (buildTree promotes orphans), so the
+  // UI must move them first. No system-tag guard (none exist) and no link guard
+  // (a dangling tagIds reference is normal). The thrown message surfaces to the user.
+  destroy: (tag: TagItem) => Promise<void>;
   // Re-rank a sibling group into a new order in one batch (e.g. sort A→Z). Only
   // the tags whose rank actually changes are written, each the same one-field
   // `{ rank }` write `move` makes — so an already-ordered group is a no-op.
@@ -137,7 +138,7 @@ export function useTagMutations(): TagMutations {
     [username, requestSync],
   );
 
-  const remove = useCallback(
+  const destroy = useCallback(
     async (tag: TagItem) => {
       if (!username) throw new Error('useTagMutations: no active account');
 
@@ -178,7 +179,7 @@ export function useTagMutations(): TagMutations {
   );
 
   return useMemo<TagMutations>(
-    () => ({ create, findOrCreate, rename, move, remove, reorder }),
-    [create, findOrCreate, rename, move, remove, reorder],
+    () => ({ create, findOrCreate, rename, move, destroy, reorder }),
+    [create, findOrCreate, rename, move, destroy, reorder],
   );
 }

@@ -53,10 +53,11 @@ export interface ListMutations {
     siblings: ListItem[],
     index: number,
   ) => Promise<void>;
-  // Delete a list. Rejected for system lists, and for any list that still has
-  // sub-lists or links — deleting it would orphan them, so the UI must empty it
-  // first. The thrown message is meant to surface to the user.
-  remove: (list: ListItem) => Promise<void>;
+  // Permanently delete a list (no trash for lists — irreversible, like
+  // useLinkMutations.destroy). Rejected for system lists, and for any list that
+  // still has sub-lists or links — deleting it would orphan them, so the UI must
+  // empty it first. The thrown message is meant to surface to the user.
+  destroy: (list: ListItem) => Promise<void>;
   // Re-rank a sibling group into a new order in one batch (e.g. sort A→Z).
   // `ordered` is the group as it should end up; only the lists whose rank
   // actually changes are written, each the same one-field `{ rank }` write
@@ -122,7 +123,7 @@ export function useListMutations(): ListMutations {
     [username, requestSync],
   );
 
-  const remove = useCallback(
+  const destroy = useCallback(
     async (list: ListItem) => {
       if (!username) throw new Error('useListMutations: no active account');
       if (isSystemListId(list.id)) throw new Error('System lists cannot be deleted');
@@ -135,7 +136,7 @@ export function useListMutations(): ListMutations {
         throw new Error('Move or delete its sub-lists first');
       }
       if ((await countLinksInList(list.id)) > 0) {
-        throw new Error('Move or remove its links first');
+        throw new Error('Move or delete its links first');
       }
 
       await deleteList(username, list);
@@ -166,7 +167,7 @@ export function useListMutations(): ListMutations {
   );
 
   return useMemo<ListMutations>(
-    () => ({ create, rename, move, remove, reorder }),
-    [create, rename, move, remove, reorder],
+    () => ({ create, rename, move, destroy, reorder }),
+    [create, rename, move, destroy, reorder],
   );
 }

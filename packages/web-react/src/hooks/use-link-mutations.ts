@@ -12,13 +12,13 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { EXTRACTIONS_PREFIX, LINKS_PREFIX, pathFromId, PINS_PREFIX } from '@stxapps/shared';
+import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import {
-  deleteEntity,
+  deleteExtraction,
   deleteFile,
   deleteLink,
   deletePin,
@@ -143,9 +143,9 @@ export function useLinkMutations(): LinkMutations {
       for (const fileId of fileIds) await deleteFile(username, fileId);
 
       // Satellites keyed by the link's id. Absent ones (never extracted, never
-      // pinned) are local no-ops + harmless tombstones upstream (deleteEntity).
-      await deleteEntity(username, pathFromId(id, EXTRACTIONS_PREFIX));
-      await deletePin(username, pathFromId(id, PINS_PREFIX));
+      // pinned) are local no-ops + harmless tombstones upstream.
+      await deleteExtraction(username, id);
+      await deletePin(username, id);
       await deleteLink(username, current);
       requestSync();
     },
@@ -156,11 +156,11 @@ export function useLinkMutations(): LinkMutations {
     async (bytes: Uint8Array) => {
       if (!username) throw new Error('useLinkMutations: no active account');
 
+      const fileId = newId();
       // Cap dimensions before it's stored (docs/link-extraction.md — thumbnailing is
       // a client step, bounding the per-user quota); resizeImage falls back to the
       // original bytes for anything it can't decode, so this never rejects a pick.
       const capped = await resizeImage(bytes);
-      const fileId = newId();
       await writeFile(username, fileId, capped);
       // No sync kick here: the caller follows with `update({ customImageId })`,
       // which kicks it — content-before-metadata within one drain.
