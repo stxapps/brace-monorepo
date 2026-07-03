@@ -292,6 +292,7 @@ export function LinkRowMenu({
 // plus a small dedicated target, not a separate mechanism.
 export function LinkRowSelect({ link }: { link: LinkView }) {
   const { selectedLinks, toggleSelected } = useLinksViewState();
+
   return (
     <span className="flex size-8 shrink-0 items-center justify-center">
       <Checkbox
@@ -315,6 +316,7 @@ interface ShowMoreProps {
 
 export function ShowMore({ hasMore, showMore }: ShowMoreProps) {
   if (!hasMore) return null;
+
   return (
     <div className="flex justify-center py-4">
       <Button variant="outline" size="sm" onClick={showMore}>
@@ -337,6 +339,7 @@ interface RefreshPillProps {
 
 export function RefreshPill({ show, onClick }: RefreshPillProps) {
   if (!show) return null;
+
   return (
     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
       <Button size="sm" onClick={onClick} className="pointer-events-auto rounded-full shadow-md">
