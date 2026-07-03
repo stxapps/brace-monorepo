@@ -32,6 +32,7 @@ import {
   usePinMutations,
 } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -203,7 +204,7 @@ export function LinkRowMenu({
               Restore
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => requestDestroy(link)}>
+            <DropdownMenuItem variant="destructive" onSelect={() => requestDestroy([link])}>
               <Trash2 className="size-4" />
               Delete permanently
             </DropdownMenuItem>
@@ -280,6 +281,25 @@ export function LinkRowMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// The bulk-edit stand-in for LinkRowMenu: each layout swaps its menu slot for
+// this checkbox while `bulkEditing` is on, so the row geometry stays put. Sized
+// to the menu trigger's footprint (size-8) so the swap doesn't shift the row.
+// It toggles the same hoisted selection the row's own click does (in bulk mode
+// the layouts intercept the anchor click) — the checkbox is the visible state
+// plus a small dedicated target, not a separate mechanism.
+export function LinkRowSelect({ link }: { link: LinkView }) {
+  const { selectedLinks, toggleSelected } = useLinksViewState();
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center">
+      <Checkbox
+        checked={selectedLinks.has(link.path)}
+        onCheckedChange={() => toggleSelected(link)}
+        aria-label="Select link"
+      />
+    </span>
   );
 }
 

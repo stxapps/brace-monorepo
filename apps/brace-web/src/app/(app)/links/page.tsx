@@ -8,7 +8,9 @@ import { Topbar } from './_panes/topbar';
 // two-pane frame (full-height sidebar on the left; a topbar above the scrolling
 // main pane on the right), all wrapped in LinksPageProvider so the sidebar (sets
 // selection), topbar (layout switch + selection name), and main (reads both)
-// share one state.
+// share one state. LinksViewStateProvider wraps the topbar + main column (not
+// the sidebar): the topbar's bulk-edit toggle writes the same view state the
+// main pane's rows and dialogs read.
 //
 // No 'use client' here — this is pure composition of client components, with no
 // hooks or handlers of its own. The provider owns its own Suspense boundary (it
@@ -20,12 +22,12 @@ export default function LinksPage() {
     <LinksPageProvider>
       <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          <LinksViewStateProvider>
+        <LinksViewStateProvider>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Topbar />
             <Main />
-          </LinksViewStateProvider>
-        </div>
+          </div>
+        </LinksViewStateProvider>
       </div>
     </LinksPageProvider>
   );

@@ -15,6 +15,7 @@ import {
   faviconUrl,
   type LinkLayoutProps,
   LinkRowMenu,
+  LinkRowSelect,
   PinnedBadge,
   RefreshPill,
   ShowMore,
@@ -39,7 +40,7 @@ export function TableLayout({
   applyPending,
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { setScrolled } = useLinksViewState();
+  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
 
   useEffect(() => {
     setScrolled(false);
@@ -90,10 +91,13 @@ export function TableLayout({
             {rows.map((row) => {
               const link = links[row.index];
               const pinned = row.index < pinnedCount;
+              const selected = bulkEditing && selectedLinks.has(link.path);
               return (
                 <div
                   key={link.path}
-                  className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border pr-2 pl-4 text-sm hover:bg-muted/50`}
+                  className={`absolute inset-x-0 grid ${COLUMNS} items-center gap-3 border-b border-border pr-2 pl-4 text-sm ${
+                    selected ? 'bg-muted' : 'hover:bg-muted/50'
+                  }`}
                   style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
                 >
                   <a
@@ -101,6 +105,16 @@ export function TableLayout({
                     target="_blank"
                     rel="noreferrer"
                     className="flex min-w-0 items-center gap-2"
+                    // In bulk-edit mode the row's click toggles selection instead
+                    // of opening the link (middle/cmd-click still opens).
+                    onClick={
+                      bulkEditing
+                        ? (e) => {
+                            e.preventDefault();
+                            toggleSelected(link);
+                          }
+                        : undefined
+                    }
                   >
                     {pinned && <PinnedBadge />}
                     <img
@@ -115,12 +129,16 @@ export function TableLayout({
                   <span className="text-xs text-muted-foreground">
                     {formatDate(link.updatedAt)}
                   </span>
-                  <LinkRowMenu
-                    link={link}
-                    pinned={pinned}
-                    isFirst={row.index === 0}
-                    isLast={row.index === pinnedCount - 1}
-                  />
+                  {bulkEditing ? (
+                    <LinkRowSelect link={link} />
+                  ) : (
+                    <LinkRowMenu
+                      link={link}
+                      pinned={pinned}
+                      isFirst={row.index === 0}
+                      isLast={row.index === pinnedCount - 1}
+                    />
+                  )}
                 </div>
               );
             })}

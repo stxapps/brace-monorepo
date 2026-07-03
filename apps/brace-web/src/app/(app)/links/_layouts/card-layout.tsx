@@ -16,6 +16,7 @@ import {
   faviconUrl,
   type LinkLayoutProps,
   LinkRowMenu,
+  LinkRowSelect,
   PinnedBadge,
   RefreshPill,
   ShowMore,
@@ -36,7 +37,7 @@ export function CardLayout({
   applyPending,
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { setScrolled } = useLinksViewState();
+  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
   const rowCount = Math.ceil(links.length / COLUMNS);
 
   useEffect(() => {
@@ -92,16 +93,29 @@ export function CardLayout({
                 {rowLinks.map((link, cardIndex) => {
                   const index = start + cardIndex;
                   const pinned = index < pinnedCount;
+                  const selected = bulkEditing && selectedLinks.has(link.path);
                   return (
                     <div
                       key={link.path}
-                      className="relative flex rounded-lg border border-border hover:bg-muted/50"
+                      className={`relative flex rounded-lg border border-border ${
+                        selected ? 'bg-muted' : 'hover:bg-muted/50'
+                      }`}
                     >
                       <a
                         href={link.url}
                         target="_blank"
                         rel="noreferrer"
                         className="flex min-w-0 flex-1 flex-col gap-2 p-3"
+                        // In bulk-edit mode the card's click toggles selection
+                        // instead of opening the link (middle/cmd-click still opens).
+                        onClick={
+                          bulkEditing
+                            ? (e) => {
+                                e.preventDefault();
+                                toggleSelected(link);
+                              }
+                            : undefined
+                        }
                       >
                         <div className="flex items-center gap-2 pr-8">
                           {pinned && <PinnedBadge />}
@@ -120,12 +134,16 @@ export function CardLayout({
                         </span>
                       </a>
                       <div className="absolute top-1 right-1">
-                        <LinkRowMenu
-                          link={link}
-                          pinned={pinned}
-                          isFirst={index === 0}
-                          isLast={index === pinnedCount - 1}
-                        />
+                        {bulkEditing ? (
+                          <LinkRowSelect link={link} />
+                        ) : (
+                          <LinkRowMenu
+                            link={link}
+                            pinned={pinned}
+                            isFirst={index === 0}
+                            isLast={index === pinnedCount - 1}
+                          />
+                        )}
                       </div>
                     </div>
                   );

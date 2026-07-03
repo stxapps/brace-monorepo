@@ -3,13 +3,15 @@
 // The main pane: reads the paginated link query once and hands it to whichever
 // layout the user picked in Settings → Misc (useSettings.linksLayout). Each layout
 // owns its own scroll/virtualization, so this is a thin switch — it's the single
-// place the data hook meets the layouts. It also mounts the page-level dialogs
-// the row menus drive through view-state-provider (edit / delete-permanently):
-// one instance each, OUTSIDE the virtualized rows, so a sync repaint can never
-// unmount them mid-interaction.
+// place the data hook meets the layouts. It also mounts the bulk-edit toolbar
+// (shown while the topbar's toggle holds `bulkEditing`) and the page-level
+// dialogs the row menus + toolbar drive through view-state-provider (edit /
+// delete-permanently): one instance each, OUTSIDE the virtualized rows, so a
+// sync repaint can never unmount them mid-interaction.
 
 import { useSettings } from '@stxapps/web-react';
 
+import { BulkEditToolbar } from '../_components/bulk-edit-toolbar';
 import { LinkDestroyConfirm } from '../_components/link-destroy-confirm';
 import { LinkEditDialog } from '../_components/link-edit-dialog';
 import { useLinks } from '../_hooks/use-links';
@@ -31,16 +33,19 @@ export function Main() {
   const Layout = LAYOUTS[linksLayout];
 
   return (
-    <main className="min-h-0 flex-1">
-      <Layout
-        links={links}
-        pinnedCount={pinnedCount}
-        hasMore={hasMore}
-        showMore={showMore}
-        isLoading={isLoading}
-        hasPending={hasPending}
-        applyPending={applyPending}
-      />
+    <main className="flex min-h-0 flex-1 flex-col">
+      <BulkEditToolbar />
+      <div className="min-h-0 flex-1">
+        <Layout
+          links={links}
+          pinnedCount={pinnedCount}
+          hasMore={hasMore}
+          showMore={showMore}
+          isLoading={isLoading}
+          hasPending={hasPending}
+          applyPending={applyPending}
+        />
+      </div>
       <LinkEditDialog />
       <LinkDestroyConfirm />
     </main>

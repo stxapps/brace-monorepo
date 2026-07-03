@@ -1,35 +1,56 @@
 'use client';
 
-// Transient view state for the main pane that decides WHEN a background sync is
-// allowed to repaint the list. The list is index-virtualized and sorted
+// Transient view state for the topbar + main pane that decides WHEN a background
+// sync is allowed to repaint the list. The list is index-virtualized and sorted
 // newest-first, so applying a sync mid-interaction shifts the rows under the user
 // (the read edge, useLinks, holds results back instead — see its `hasPending` /
-// refresh pill). "Mid-interaction" is four things, tracked here:
+// refresh pill). "Mid-interaction" is five things, tracked here:
 //
-//   scrolled   — the active layout reports its scroll container left the top.
-//                Applying at the top is harmless (it's a newest-first feed), so we
-//                only guard once scrolled away. One layout is mounted at a time, so
-//                a single flag suffices; layouts reset it on mount/unmount.
-//   openMenus  — a row's options menu is open; its trigger lives in a virtualized
-//                row, so a repaint can move or unmount it out from under the user.
-//                Counted (not a bool) so an open landing as another closes can't
-//                leave it stuck.
-//   editing    — the link edit dialog is open. The dialog itself is hoisted to the
-//                page level (one instance, portaled) exactly so a repaint can't
-//                unmount it with a row, but repainting the list under a modal is
-//                still disorienting — same guard, same reason as openMenus. This is
-//                also WHERE the "which link is being edited" state lives: a menu
-//                item in a virtualized row requests it, the page-level dialog
-//                renders it (see LinkEditDialog).
-//   destroying — same hoisting for the Trash view's "Delete permanently"
-//                confirmation (see LinkDestroyConfirm).
+//   scrolled    — the active layout reports its scroll container left the top.
+//                 Applying at the top is harmless (it's a newest-first feed), so we
+//                 only guard once scrolled away. One layout is mounted at a time, so
+//                 a single flag suffices; layouts reset it on mount/unmount.
+//   openMenus   — a row's options menu is open; its trigger lives in a virtualized
+//                 row, so a repaint can move or unmount it out from under the user.
+//                 Counted (not a bool) so an open landing as another closes can't
+//                 leave it stuck.
+//   editing     — the link edit dialog is open. The dialog itself is hoisted to the
+//                 page level (one instance, portaled) exactly so a repaint can't
+//                 unmount it with a row, but repainting the list under a modal is
+//                 still disorienting — same guard, same reason as openMenus. This is
+//                 also WHERE the "which link is being edited" state lives: a menu
+//                 item in a virtualized row requests it, the page-level dialog
+//                 renders it (see LinkEditDialog).
+//   destroying  — same hoisting for the Trash view's "Delete permanently"
+//                 confirmation (see LinkDestroyConfirm). A LIST of links: the bulk
+//                 toolbar's delete confirms the whole selection at once; the row
+//                 menu passes a single-element list.
+//   bulkEditing — bulk-edit mode is on (topbar toggles it, rows become selectable,
+//                 the BulkEditToolbar shows). Selection is by row, so rows shifting
+//                 mid-multi-select is exactly the disruption this flag exists for.
+//                 The selection itself lives here too (`selectedLinks`, keyed by
+//                 the stable `link.path` row key): the topbar enters the mode, the
+//                 virtualized rows toggle membership, the toolbar acts on it.
 //
 // This is deliberately SEPARATE from page-provider (URL/layout state): it's
-// ephemeral interaction state, never persisted, never in the URL.
+// ephemeral interaction state, never persisted, never in the URL. It does WATCH
+// the page query (read-only) for one thing: navigating to another view exits
+// bulk-edit mode, so a selection made in one view can never be acted on from
+// another (Remove and Delete-permanently mean different things per view).
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { LinkView } from '@stxapps/web-react';
+
+import { useLinksPage } from './page-provider';
 
 // An open edit-dialog request: the link's row snapshot (the dialog re-resolves
 // freshness at save time — useLinkMutations.update re-reads before merging) and
@@ -41,8 +62,8 @@ export interface LinkEditRequest {
 
 interface LinksViewStateValue {
   // True while a repaint would disrupt the user: scrolled past the top, a row
-  // menu is open, or a page-level dialog is up. useLinks stages sync results
-  // while this holds.
+  // menu is open, a page-level dialog is up, or bulk-edit mode is on. useLinks
+  // stages sync results while this holds.
   engaged: boolean;
   // The active layout's scroll position crossed (or returned to) the top.
   setScrolled: (scrolled: boolean) => void;
@@ -52,10 +73,21 @@ interface LinksViewStateValue {
   editing: LinkEditRequest | null;
   openEditor: (link: LinkView, focus?: 'tags') => void;
   closeEditor: () => void;
-  // The permanent-delete confirmation: the link awaiting it (null = none).
-  destroying: LinkView | null;
-  requestDestroy: (link: LinkView) => void;
+  // The permanent-delete confirmation: the links awaiting it (null = none; an
+  // empty request is ignored, so a non-null value always has at least one).
+  destroying: LinkView[] | null;
+  requestDestroy: (links: LinkView[]) => void;
   closeDestroy: () => void;
+  // Bulk-edit mode: the topbar toggles it, rows toggle selection while it's on,
+  // the BulkEditToolbar acts on the selection. Exiting clears the selection.
+  bulkEditing: boolean;
+  enterBulkEdit: () => void;
+  exitBulkEdit: () => void;
+  // Row snapshots keyed by `link.path` (the row key). Snapshots may go stale
+  // under a held-back sync, which is fine: the mutations re-read the current
+  // blob before acting (see useLinkMutations.update/destroy).
+  selectedLinks: ReadonlyMap<string, LinkView>;
+  toggleSelected: (link: LinkView) => void;
 }
 
 const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
@@ -64,7 +96,9 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   const [scrolled, setScrolled] = useState(false);
   const [openMenus, setOpenMenus] = useState(0);
   const [editing, setEditing] = useState<LinkEditRequest | null>(null);
-  const [destroying, setDestroying] = useState<LinkView | null>(null);
+  const [destroying, setDestroying] = useState<LinkView[] | null>(null);
+  const [bulkEditing, setBulkEditing] = useState(false);
+  const [selectedLinks, setSelectedLinks] = useState<ReadonlyMap<string, LinkView>>(new Map());
 
   const setMenuOpen = useCallback((open: boolean) => {
     setOpenMenus((n) => Math.max(0, n + (open ? 1 : -1)));
@@ -75,12 +109,39 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   }, []);
   const closeEditor = useCallback(() => setEditing(null), []);
 
-  const requestDestroy = useCallback((link: LinkView) => setDestroying(link), []);
+  const requestDestroy = useCallback((links: LinkView[]) => {
+    if (links.length > 0) setDestroying(links);
+  }, []);
   const closeDestroy = useCallback(() => setDestroying(null), []);
+
+  const enterBulkEdit = useCallback(() => setBulkEditing(true), []);
+  const exitBulkEdit = useCallback(() => {
+    setBulkEditing(false);
+    setSelectedLinks(new Map());
+  }, []);
+  const toggleSelected = useCallback((link: LinkView) => {
+    setSelectedLinks((prev) => {
+      const next = new Map(prev);
+      if (next.has(link.path)) next.delete(link.path);
+      else next.set(link.path, link);
+      return next;
+    });
+  }, []);
+
+  // Navigating to another view (sidebar click, back button, deep link) exits
+  // bulk-edit mode — see the header comment. Keyed on the query's identity, the
+  // same stable reference useLinks depends on.
+  const { query } = useLinksPage();
+  const prevQueryRef = useRef(query);
+  useEffect(() => {
+    if (prevQueryRef.current === query) return;
+    prevQueryRef.current = query;
+    exitBulkEdit();
+  }, [query, exitBulkEdit]);
 
   const value = useMemo<LinksViewStateValue>(
     () => ({
-      engaged: scrolled || openMenus > 0 || editing !== null || destroying !== null,
+      engaged: scrolled || openMenus > 0 || editing !== null || destroying !== null || bulkEditing,
       setScrolled,
       setMenuOpen,
       editing,
@@ -89,6 +150,11 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       destroying,
       requestDestroy,
       closeDestroy,
+      bulkEditing,
+      enterBulkEdit,
+      exitBulkEdit,
+      selectedLinks,
+      toggleSelected,
     }),
     [
       scrolled,
@@ -100,6 +166,11 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       destroying,
       requestDestroy,
       closeDestroy,
+      bulkEditing,
+      enterBulkEdit,
+      exitBulkEdit,
+      selectedLinks,
+      toggleSelected,
     ],
   );
 

@@ -16,6 +16,7 @@ import {
   faviconUrl,
   type LinkLayoutProps,
   LinkRowMenu,
+  LinkRowSelect,
   PinnedBadge,
   RefreshPill,
   ShowMore,
@@ -37,7 +38,7 @@ export function ListLayout({
   applyPending,
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { setScrolled } = useLinksViewState();
+  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
 
   // This layout owns the scroll position; reset the shared flag on mount (fresh
   // at top) and unmount (so a layout switch doesn't leave it stuck true).
@@ -80,10 +81,13 @@ export function ListLayout({
           {rows.map((row) => {
             const link = links[row.index];
             const pinned = row.index < pinnedCount;
+            const selected = bulkEditing && selectedLinks.has(link.path);
             return (
               <div
                 key={link.path}
-                className="absolute inset-x-0 flex items-center gap-1 border-b border-border pr-2 hover:bg-muted/50"
+                className={`absolute inset-x-0 flex items-center gap-1 border-b border-border pr-2 ${
+                  selected ? 'bg-muted' : 'hover:bg-muted/50'
+                }`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
               >
                 <a
@@ -91,6 +95,16 @@ export function ListLayout({
                   target="_blank"
                   rel="noreferrer"
                   className="flex h-full min-w-0 flex-1 items-center gap-3 px-4"
+                  // In bulk-edit mode the row's click toggles selection instead
+                  // of opening the link (middle/cmd-click still opens).
+                  onClick={
+                    bulkEditing
+                      ? (e) => {
+                          e.preventDefault();
+                          toggleSelected(link);
+                        }
+                      : undefined
+                  }
                 >
                   <img
                     src={faviconUrl(link.url)}
@@ -110,12 +124,16 @@ export function ListLayout({
                     </span>
                   </span>
                 </a>
-                <LinkRowMenu
-                  link={link}
-                  pinned={pinned}
-                  isFirst={row.index === 0}
-                  isLast={row.index === pinnedCount - 1}
-                />
+                {bulkEditing ? (
+                  <LinkRowSelect link={link} />
+                ) : (
+                  <LinkRowMenu
+                    link={link}
+                    pinned={pinned}
+                    isFirst={row.index === 0}
+                    isLast={row.index === pinnedCount - 1}
+                  />
+                )}
               </div>
             );
           })}

@@ -6,8 +6,9 @@
 // moved to Settings → Misc (a choose-once setting with a sync/device split), so
 // the topbar stays minimal.
 //
-// The overflow menu (More options) is wired up; add/search/bulk-edit are still
-// `onClick` stubs — this scaffold owns layout and state plumbing, not those flows.
+// The overflow menu (More options) and bulk edit are wired up (the latter
+// toggles view-state-provider's `bulkEditing` — rows become selectable and the
+// main pane shows the BulkEditToolbar); search is still an `onClick` stub.
 
 import {
   LifeBuoy,
@@ -34,6 +35,7 @@ import {
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 import { LinkEditorPopover } from '../_components/link-editor-popover';
 import { useLinksPage } from '../_contexts/page-provider';
+import { useLinksViewState } from '../_contexts/view-state-provider';
 
 function useSelectionLabel(): string {
   const { selection } = useLinksPage();
@@ -98,6 +100,7 @@ function MoreOptionsMenu() {
 
 export function Topbar() {
   const label = useSelectionLabel();
+  const { bulkEditing, enterBulkEdit, exitBulkEdit } = useLinksViewState();
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
@@ -108,7 +111,13 @@ export function Topbar() {
         <Button variant="ghost" size="icon-sm" aria-label="Search">
           <Search className="size-4" />
         </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Bulk edit">
+        <Button
+          variant={bulkEditing ? 'secondary' : 'ghost'}
+          size="icon-sm"
+          aria-label="Bulk edit"
+          aria-pressed={bulkEditing}
+          onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
+        >
           <SquarePen className="size-4" />
         </Button>
         <MoreOptionsMenu />
