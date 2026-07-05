@@ -149,6 +149,19 @@ function LinkEditForm({
     setImage({ kind: 'pick', bytes, previewUrl: URL.createObjectURL(file) });
   };
 
+  // Does closing now lose anything? Mirrors the field-by-field comparison
+  // onSubmit uses to build its patch, so "dirty" means exactly "Save would
+  // write something". Image dirt tracks the patch rule too: a fresh pick always
+  // counts, but clearing when there was no override is a no-op, not a change.
+  const imageDirty =
+    image.kind === 'pick' || (image.kind === 'clear' && Boolean(link.customImageId));
+  const isDirty =
+    title.trim() !== (link.customTitle ?? '') ||
+    listId !== link.listId ||
+    !sameIds(tagIds, link.tagIds) ||
+    note.trim() !== (link.note ?? '') ||
+    imageDirty;
+
   const onSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -193,7 +206,12 @@ function LinkEditForm({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    // Guard only the ACCIDENTAL close vectors — backdrop click, Escape, and the
+    // corner X all funnel through onOpenChange. When there are unsaved changes,
+    // swallow those so a stray click can't drop a typed note or picked image;
+    // the user must then reach for Save or the explicit Cancel below (which calls
+    // onClose directly, bypassing this — a deliberate discard stays one click).
+    <Dialog open onOpenChange={(open) => !open && !isDirty && onClose()}>
       {/* Cap to the viewport and scroll the fields region (below) rather than
           the whole dialog, so the header and Save/Cancel footer stay pinned
           when the form (image preview + tags + note) outgrows a short screen. */}
