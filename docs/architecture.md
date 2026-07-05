@@ -21,7 +21,12 @@ no inherited session) and the move-shared-auth-code-later decision,
 `development` / `staging` / `production`, [deployment.md](./deployment.md)
 for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow, and
 [theme.md](./theme.md) for the light/dark theme model (four modes, the
-sync/device split shared with link-layout, and the pre-paint FOUC script).
+sync/device split shared with link-layout, and the pre-paint FOUC script), and
+[editors.md](./editors.md) for the link editors (create + full edit across the
+extension and web) and the list/tag taxonomy UI — the shared `ListSelect`/
+`TagsField` pickers, the invariants every editor upholds (copy-to-draft, input
+validation, close guard), how the sidebar and the row menu's "Move to" couple to
+the same trees, and bulk edit.
 
 ### apps
 
