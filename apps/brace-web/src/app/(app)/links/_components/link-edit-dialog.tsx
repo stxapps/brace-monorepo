@@ -32,6 +32,7 @@ import {
   type LinkView,
   readExtraction,
   readFileBytes,
+  resizeImage,
   useLinkMutations,
 } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
@@ -145,8 +146,18 @@ function LinkEditForm({
     // consumed here so the next change always fires.
     e.target.value = '';
     if (!file) return;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    setImage({ kind: 'pick', bytes, previewUrl: URL.createObjectURL(file) });
+    // Cap dimensions at pick time (the client-thumbnailing step — see
+    // resize-image.ts / docs/editors.md) so the draft holds exactly the bytes
+    // that will be stored and the preview reflects them, not a full-size original
+    // kept in state. resizeImage returns the input untouched when it's already
+    // within the cap and never throws, so a pick can't be rejected. saveCustomImage
+    // resizes again on Save — a no-op on these already-capped bytes, kept as the
+    // backstop for any other caller.
+    const bytes = await resizeImage(new Uint8Array(await file.arrayBuffer()));
+    // Preview from the resized bytes, not the file, so what the user sees is what
+    // gets stored. An object URL over typeless bytes still renders (the <img>
+    // sniffs the format — same as the stored-image preview below).
+    setImage({ kind: 'pick', bytes, previewUrl: URL.createObjectURL(new Blob([bytes as BlobPart])) });
   };
 
   // Does closing now lose anything? Mirrors the field-by-field comparison
