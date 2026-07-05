@@ -193,95 +193,102 @@ function LinkEditForm({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      {/* Cap to the viewport and scroll the fields region (below) rather than
+          the whole dialog, so the header and Save/Cancel footer stay pinned
+          when the form (image preview + tags + note) outgrows a short screen. */}
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit link</DialogTitle>
           <DialogDescription className="truncate">{link.url}</DialogDescription>
         </DialogHeader>
 
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-title">Title</Label>
-            <Input
-              id="edit-title"
-              maxLength={LINK_TITLE_MAX}
-              placeholder={extraction?.title ?? hostFromText(link.url)}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Leave blank to use the page&rsquo;s own title.
-            </p>
-          </div>
+        <form className="flex min-h-0 flex-1 flex-col gap-4" onSubmit={onSubmit} noValidate>
+          {/* The scrollable body. -mx-1 px-1 gives focus rings room so
+              overflow-y-auto doesn't clip them at the edges. */}
+          <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                maxLength={LINK_TITLE_MAX}
+                placeholder={extraction?.title ?? hostFromText(link.url)}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to use the page&rsquo;s own title.
+              </p>
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-image">Image</Label>
-            {previewUrl ? (
-              <img
-                src={previewUrl}
-                alt=""
-                className="max-h-40 w-full rounded-md border border-border object-cover"
-              />
-            ) : (
-              <p className="text-xs text-muted-foreground">No preview image.</p>
-            )}
-            <div className="flex gap-1.5">
-              <input
-                ref={fileInputRef}
-                id="edit-image"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => void onPickImage(e)}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <ImagePlus className="size-4" />
-                Choose image
-              </Button>
-              {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-image">Image</Label>
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt=""
+                  className="max-h-40 w-full rounded-md border border-border object-cover"
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">No preview image.</p>
+              )}
+              <div className="flex gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  id="edit-image"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void onPickImage(e)}
+                />
                 <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={() => setImage({ kind: 'clear' })}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <ImageOff className="size-4" />
-                  Reset to extracted
+                  <ImagePlus className="size-4" />
+                  Choose image
                 </Button>
-              )}
+                {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setImage({ kind: 'clear' })}
+                  >
+                    <ImageOff className="size-4" />
+                    Reset to extracted
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-list">List</Label>
-            {/* No Trash target: trashing is the menu's Remove, never a "move". */}
-            <ListSelect
-              id="edit-list"
-              value={listId}
-              onValueChange={setListId}
-              excludeIds={[TRASH_ID]}
-            />
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-list">List</Label>
+              {/* No Trash target: trashing is the menu's Remove, never a "move". */}
+              <ListSelect
+                id="edit-list"
+                value={listId}
+                onValueChange={setListId}
+                excludeIds={[TRASH_ID]}
+              />
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-tag">Tags</Label>
-            <TagsField id="edit-tag" value={tagIds} onChange={setTagIds} autoFocus={focusTags} />
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-tag">Tags</Label>
+              <TagsField id="edit-tag" value={tagIds} onChange={setTagIds} autoFocus={focusTags} />
+            </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-note">Note</Label>
-            <Textarea
-              id="edit-note"
-              maxLength={LINK_NOTE_MAX}
-              placeholder="Optional note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-note">Note</Label>
+              <Textarea
+                id="edit-note"
+                maxLength={LINK_NOTE_MAX}
+                placeholder="Optional note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
           </div>
 
           <DialogFooter>

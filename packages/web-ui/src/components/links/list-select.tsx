@@ -68,7 +68,14 @@ export function ListSelect({
           <ChevronsUpDownIcon className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-(--radix-popover-trigger-width) min-w-48 p-0">
+      {/* Not portalled: this picker also opens inside the edit Dialog, whose
+          modal scroll-lock would otherwise swallow wheel/trackpad scrolling
+          over a body-portalled popover (see PopoverContent's `portal`). */}
+      <PopoverContent
+        align="start"
+        portal={false}
+        className="w-(--radix-popover-trigger-width) min-w-48 p-0"
+      >
         <ListCommand
           value={value}
           excludeIds={excludeIds}
