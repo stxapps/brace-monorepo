@@ -53,6 +53,11 @@ function SelectContent({
   children,
   position = 'item-aligned',
   align = 'center',
+  // Keep an 8px gutter from the viewport edge (Radix defaults this to 0, which
+  // sits flush) — same idiom as popover/dropdown content, and it feeds the
+  // available-height cap in the className so a tall list scrolls inside instead
+  // of running off-screen.
+  collisionPadding = 8,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
@@ -68,6 +73,7 @@ function SelectContent({
         )}
         position={position}
         align={align}
+        collisionPadding={collisionPadding}
         {...props}
       >
         <SelectScrollUpButton />
