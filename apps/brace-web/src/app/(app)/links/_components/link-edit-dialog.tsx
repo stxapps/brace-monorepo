@@ -96,6 +96,7 @@ function LinkEditForm({
   // a backfill landing mid-edit updates them.
   const id = linkIdOf(link);
   const extraction = useLiveQuery(() => readExtraction(id), [id]);
+  const extractedTitle = extraction?.title;
 
   // Draft state, snapshotted from the row at open (this component mounts per
   // open — see LinkEditDialog). Title/note hold the OVERRIDE/typed value, not
@@ -211,13 +212,31 @@ function LinkEditForm({
               <Input
                 id="edit-title"
                 maxLength={LINK_TITLE_MAX}
-                placeholder={extraction?.title ?? hostFromText(link.url)}
+                placeholder={extractedTitle ?? hostFromText(link.url)}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Leave blank to use the page&rsquo;s own title.
-              </p>
+              {/* The placeholder isn't selectable, so someone who wants to tweak
+                  just part of the extracted title has no seed to edit. Offer one
+                  ONLY while the field is blank (no override yet) and a real
+                  extracted title exists — seeding host(url) isn't worth editing,
+                  and once there's content this affordance can't clobber it.
+                  Note: seeding turns the live fallback into a frozen override,
+                  which is exactly what editing the title means. */}
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the page&rsquo;s own title.
+                </p>
+                {title.trim() === '' && extractedTitle && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-primary underline-offset-2 hover:underline"
+                    onClick={() => setTitle(extractedTitle)}
+                  >
+                    Edit it instead
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
