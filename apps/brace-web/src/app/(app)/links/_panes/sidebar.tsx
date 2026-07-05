@@ -3,10 +3,12 @@
 // Full-height left rail: brace mark at the top, an optional filter box (shown
 // only once there are enough lists/tags to be worth scanning), then two
 // collapsible sections — Lists (the My List / Archive / Trash system lists plus
-// the user's own) and Tags — as selectable filters. A pinned footer holds Show
-// All (the unfiltered "view everything" reset) and the Manage lists / Manage
-// tags links. Clicking an entry sets the shared selection (see page-provider);
-// the main pane reacts.
+// the user's own) and Tags — as selectable filters. Only the brand and the
+// (count-gated) filter box are pinned; a final utility band — Show All (the
+// unfiltered "view everything" reset) and the Manage lists / Manage tags links —
+// scrolls with the trees rather than pinning, since those are low-frequency and
+// pinning them was squeezing the tree's scroll room. Clicking an entry sets the
+// shared selection (see page-provider); the main pane reacts.
 //
 // Tree rows collapse: a parent row carries a chevron on the LEFT as a SEPARATE
 // hit target (row click = select filter, chevron = toggle), matching the Lists
@@ -448,25 +450,31 @@ export function Sidebar() {
             />
           )}
         </Section>
-      </nav>
 
-      {/* Pinned footer, outside the scroll area so it's always reachable: the
-          Show All reset, then a separator, then the Manage links. Two bands —
-          filter reset vs. settings navigation — divided by the rules. */}
-      <div className="flex flex-col gap-0.5 border-t border-border px-2 py-2">
-        <NavItem icon={<Layers className="size-4" />} label={ALL_LABEL} selection={{ kind: 'all' }} />
-        <div className="my-1 border-t border-border" />
-        <FooterLink
-          href="/settings/lists"
-          icon={<Settings2 className="size-4" />}
-          label="Manage lists"
-        />
-        <FooterLink
-          href="/settings/tags"
-          icon={<Settings2 className="size-4" />}
-          label="Manage tags"
-        />
-      </div>
+        {/* Low-frequency utility band, scrolling with the trees rather than
+            pinned (pinning it starved the tree's scroll room): the Show All
+            reset, a separator, then the Manage links out to settings. The
+            border-t sets it off from the Tags section above. Hidden while
+            filtering — none of these are list/tag entities, so a find-in-nav
+            query never matches them, and leaving them under the results reads
+            as noise. Clearing the box brings the band back. */}
+        {!filtering && (
+          <div className="mt-2 flex flex-col gap-0.5 border-t border-border pt-2">
+            <NavItem icon={<Layers className="size-4" />} label={ALL_LABEL} selection={{ kind: 'all' }} />
+            <div className="my-1 border-t border-border" />
+            <FooterLink
+              href="/settings/lists"
+              icon={<Settings2 className="size-4" />}
+              label="Manage lists"
+            />
+            <FooterLink
+              href="/settings/tags"
+              icon={<Settings2 className="size-4" />}
+              label="Manage tags"
+            />
+          </div>
+        )}
+      </nav>
     </aside>
   );
 }
