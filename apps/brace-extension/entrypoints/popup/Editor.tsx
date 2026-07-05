@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, LINK_NOTE_MAX, TRASH_ID } from '@stxapps/shared';
 import { linkIdOf, type LinkItem, useLinkMutations } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -77,6 +77,7 @@ export function Editor({
         <Label htmlFor="note">Note</Label>
         <Textarea
           id="note"
+          maxLength={LINK_NOTE_MAX}
           value={note}
           placeholder="Optional note"
           onChange={(e) => setNote(e.target.value)}

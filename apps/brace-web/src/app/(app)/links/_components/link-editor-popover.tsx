@@ -9,9 +9,10 @@
 // content) is the future dialog/route, not this.
 //
 // Shape: a URL field always visible, an "Advanced" disclosure that reveals the
-// list picker + tag editor, and Save/Cancel. Saving writes one `links/{id}.enc`
-// via useLinkMutations and kicks a sync; the title is back-filled later by a
-// metadata fetch, so the form only collects a URL (+ optional list/tags).
+// list picker + tag editor + note, and Save/Cancel. Saving writes one
+// `links/{id}.enc` via useLinkMutations and kicks a sync; the title is
+// back-filled later by a metadata fetch, so the form only collects a URL
+// (+ optional list/tags/note — the same create fields the extension editor sets).
 //
 // Validation is two-tier: an EMPTY URL is a hard, blocking error; a non-empty
 // but MALFORMED URL, or one that's ALREADY SAVED, only warns and relabels
@@ -25,7 +26,7 @@
 import { useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
 
-import { DEFAULT_LIST_ID, normalizeUrl, TRASH_ID } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, LINK_NOTE_MAX, normalizeUrl, TRASH_ID } from '@stxapps/shared';
 import { readLinkByUrlKey, useLinkMutations } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -33,6 +34,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
+import { Textarea } from '@stxapps/web-ui/components/ui/textarea';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLinksPage } from '../_contexts/page-provider';
@@ -55,6 +57,7 @@ export function LinkEditorPopover() {
   const [url, setUrl] = useState('');
   const [listId, setListId] = useState(defaultListId);
   const [tagIds, setTagIds] = useState<string[]>([]);
+  const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   // urlError is a HARD, blocking error (empty URL); urlWarning is the SOFT
   // state that relabels Save → Confirm and lets the next submit through. Two
@@ -73,6 +76,7 @@ export function LinkEditorPopover() {
       setUrl('');
       setListId(defaultListId);
       setTagIds([]);
+      setNote('');
       setUrlError(null);
       setUrlWarning(null);
     }
@@ -117,7 +121,7 @@ export function LinkEditorPopover() {
         }
       }
 
-      await create({ url: normalized ?? trimmed, listId, tagIds });
+      await create({ url: normalized ?? trimmed, listId, tagIds, note: note.trim() || undefined });
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -196,6 +200,17 @@ export function LinkEditorPopover() {
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="link-tag">Tags</Label>
                 <TagsField id="link-tag" value={tagIds} onChange={setTagIds} />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="link-note">Note</Label>
+                <Textarea
+                  id="link-note"
+                  maxLength={LINK_NOTE_MAX}
+                  placeholder="Optional note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
               </div>
             </div>
           )}
