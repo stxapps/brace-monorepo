@@ -33,7 +33,7 @@ import {
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
-import { LinkEditorPopover } from '../_components/link-editor-popover';
+import { LinkAddPopover } from '../_components/link-add-popover';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
@@ -107,7 +107,7 @@ export function Topbar() {
       <h1 className="truncate text-lg font-semibold">{label}</h1>
 
       <div className="flex items-center gap-2">
-        <LinkEditorPopover />
+        <LinkAddPopover />
         <Button variant="ghost" size="icon-sm" aria-label="Search">
           <Search className="size-4" />
         </Button>

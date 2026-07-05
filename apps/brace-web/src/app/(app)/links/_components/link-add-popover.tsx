@@ -48,7 +48,7 @@ function useDefaultListId(): string {
   return selection.kind === 'list' && selection.id !== TRASH_ID ? selection.id : DEFAULT_LIST_ID;
 }
 
-export function LinkEditorPopover() {
+export function LinkAddPopover() {
   const { create } = useLinkMutations();
   const defaultListId = useDefaultListId();
 
