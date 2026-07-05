@@ -5,7 +5,7 @@
 // own scroll container + virtualizer (row geometry differs per layout), so this
 // is deliberately just the shared chrome, not a base component.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -23,14 +23,14 @@ import {
   Undo2,
 } from 'lucide-react';
 
-import { ARCHIVE_ID, DEFAULT_LIST_ID, flattenTree, hostFromText, TRASH_ID } from '@stxapps/shared';
+import { ARCHIVE_ID, DEFAULT_LIST_ID, hostFromText, TRASH_ID } from '@stxapps/shared';
 import {
   type LinkView,
   useExtraction,
   useLinkMutations,
-  useLists,
   usePinMutations,
 } from '@stxapps/web-react';
+import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import {
@@ -151,12 +151,14 @@ export function LinkRowMenu({
 }) {
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
-  const lists = useLists();
   // Report open/close so a background sync won't repaint the row (moving or
   // unmounting this trigger) while the menu is open — see view-state-provider. Track
   // our own open state so an unmount-while-open (e.g. a layout switch) releases
-  // the count instead of leaking it and pinning `engaged` true forever.
+  // the count instead of leaking it and pinning `engaged` true forever. The menu is
+  // CONTROLLED because Move to selects via a CommandItem, not a DropdownMenuItem —
+  // Radix won't auto-close for it, so the select handler closes explicitly.
   const { setMenuOpen, openEditor, requestDestroy } = useLinksViewState();
+  const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   useEffect(
     () => () => {
@@ -164,17 +166,14 @@ export function LinkRowMenu({
     },
     [setMenuOpen],
   );
-  const handleOpenChange = (open: boolean) => {
-    openRef.current = open;
-    setMenuOpen(open);
+  const handleOpenChange = (nextOpen: boolean) => {
+    openRef.current = nextOpen;
+    setOpen(nextOpen);
+    setMenuOpen(nextOpen);
   };
 
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
-  // Move targets: the flat list tree minus Trash — trashing is Remove, never a
-  // "move". The link's current list stays visible but disabled, keeping the
-  // tree's shape (and the user's bearings) intact.
-  const moveTargets = flattenTree(lists).filter(({ item }) => item.id !== TRASH_ID);
 
   const copyLink = (
     <DropdownMenuItem onSelect={() => void navigator.clipboard.writeText(link.url)}>
@@ -184,7 +183,7 @@ export function LinkRowMenu({
   );
 
   return (
-    <DropdownMenu onOpenChange={handleOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -221,16 +220,20 @@ export function LinkRowMenu({
                 <FolderInput className="size-4" />
                 Move to
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {moveTargets.map(({ item, depth }) => (
-                  <DropdownMenuItem
-                    key={item.id}
-                    disabled={item.id === link.listId}
-                    onSelect={() => void update(link, { listId: item.id })}
-                  >
-                    <span style={{ paddingLeft: depth * 12 }}>{item.name}</span>
-                  </DropdownMenuItem>
-                ))}
+              {/* The same searchable list command as ListSelect (list-command.tsx).
+                  No Trash target — trashing is Remove, never a "move". The link's
+                  current list stays visible but disabled (and checked), keeping the
+                  tree's shape (and the user's bearings) intact. */}
+              <DropdownMenuSubContent className="w-64 p-0">
+                <ListCommand
+                  value={link.listId}
+                  excludeIds={[TRASH_ID]}
+                  disabledIds={[link.listId]}
+                  onSelect={(listId) => {
+                    void update(link, { listId });
+                    handleOpenChange(false);
+                  }}
+                />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuItem onSelect={() => openEditor(link, 'tags')}>

@@ -33,12 +33,13 @@
     "react-dom": "^19.0.0"
   },
   "dependencies": {
-    "@stxapps/shared": "*",
-    "@stxapps/react": "*",
-    "@stxapps/web-react": "*",
     "@radix-ui/react-slot": "^1.2.4",
+    "@stxapps/react": "*",
+    "@stxapps/shared": "*",
+    "@stxapps/web-react": "*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "lucide-react": "^1.17.0",
     "radix-ui": "^1.4.3",
     "tailwind-merge": "^3.6.0",
