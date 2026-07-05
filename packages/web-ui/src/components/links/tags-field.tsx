@@ -1,23 +1,30 @@
 'use client';
 
 // The tag editor shared by the link editors (web quick-add popover, extension
-// save editor, edit dialog): chosen-tag chips, a free-text "add tag" input, and
-// hint buttons for the not-yet-chosen tags narrowed by what's typed. Controlled —
-// the caller owns the chosen tag-id list; this component owns only the transient
-// input/in-flight state. "Add tag" is reuse-or-mint by the typed name
-// (useTagMutations.findOrCreate returns the existing tag on a case-insensitive
-// name match and mints a new top-level one otherwise), so retyping a known tag
-// never forks a duplicate; the live useTags query picks a new entity up, so its
-// chip renders a beat later. Wired to web-react like ListSelect (and the auth
+// save editor, edit dialog): a token combobox. Chosen tags render as removable
+// chips in the trigger; opening it drops a searchable, multi-select TagsCommand
+// (the tag sibling of ListSelect/ListCommand) whose list IS the "pick an
+// existing tag" affordance — the old always-on hint section, now folded into the
+// popover and searchable — and whose Create row mints a new tag. Controlled: the
+// caller owns the chosen tag-id list; this owns only the popover open state.
+// Reuse-or-mint is by name (useTagMutations.findOrCreate, case-insensitive), so
+// retyping a known tag never forks a duplicate; the live useTags query renders
+// the chip a beat later. Wired to web-react like ListSelect (and the auth
 // forms) — see docs/architecture.md on the ui → react-logic layering.
 
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useId, useMemo, useState } from 'react';
+import { ChevronsUpDownIcon, X } from 'lucide-react';
 
 import { flattenTree } from '@stxapps/shared';
 import { useTagMutations, useTags } from '@stxapps/web-react';
-import { Button } from '@stxapps/web-ui/components/ui/button';
-import { Input } from '@stxapps/web-ui/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@stxapps/web-ui/components/ui/popover';
+import { cn } from '@stxapps/web-ui/lib/utils';
+
+import { TagsCommand } from './tags-command';
 
 export function TagsField({
   id,
@@ -25,112 +32,105 @@ export function TagsField({
   onChange,
   autoFocus,
 }: {
-  // The labelled form-control id (htmlFor target), landing on the text input.
+  // The labelled form-control id (htmlFor target), landing on the trigger.
   id?: string;
   // The chosen tag ids, in chosen order.
   value: string[];
   onChange: (tagIds: string[]) => void;
-  // Focus the text input on mount — for an editor opened straight onto tags.
+  // Open the picker on mount — for an editor opened straight onto tags. The
+  // token-combobox analog of focusing the old text field: focus lands in the
+  // command's search input.
   autoFocus?: boolean;
 }) {
   const tags = useTags();
   const { findOrCreate } = useTagMutations();
+  const [open, setOpen] = useState(Boolean(autoFocus));
+  // aria-controls target: names the popover's list so the combobox trigger is
+  // valid even while the content is unmounted (closed).
+  const listId = useId();
 
-  const [tagInput, setTagInput] = useState('');
-  const [adding, setAdding] = useState(false);
+  // Chosen chips: map ids → names off the live tree. An id with no row yet (a
+  // just-minted tag useTags hasn't surfaced) is skipped until it catches up.
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of flattenTree(tags)) m.set(n.item.id, n.item.name);
+    return m;
+  }, [tags]);
+  const chosen = value
+    .map((tid) => ({ id: tid, name: nameById.get(tid) }))
+    .filter((t): t is { id: string; name: string } => t.name !== undefined);
 
-  // Flat, depth-carrying rows (the entities are a tree): the chosen-chips lookup
-  // and the hint buttons. Hints = tags not yet chosen, narrowed by what's typed
-  // (case-insensitive substring) — typing both filters the hints and names the
-  // tag to add.
-  const rows = flattenTree(tags);
-  const chosen = rows.filter((n) => value.includes(n.item.id));
-  const query = tagInput.trim().toLowerCase();
-  const hints = rows.filter(
-    (n) => !value.includes(n.item.id) && n.item.name.toLowerCase().includes(query),
-  );
-
-  const addTag = (tagId: string) => {
-    if (!value.includes(tagId)) onChange([...value, tagId]);
-    setTagInput('');
+  const toggle = (tagId: string) => {
+    onChange(value.includes(tagId) ? value.filter((t) => t !== tagId) : [...value, tagId]);
   };
-
-  const onAddTag = async () => {
-    const name = tagInput.trim();
-    if (name === '' || adding) return;
-    setAdding(true);
-    try {
-      const tag = await findOrCreate(name);
-      if (tag) addTag(tag.id);
-    } finally {
-      setAdding(false);
-    }
+  const create = async (name: string) => {
+    const tag = await findOrCreate(name);
+    if (tag && !value.includes(tag.id)) onChange([...value, tag.id]);
   };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-xs text-muted-foreground">Type below or choose from hints</p>
-
-      {chosen.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {chosen.map(({ item }) => (
-            <span
-              key={item.id}
-              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
-            >
-              {item.name}
-              <button
-                type="button"
-                aria-label={`Remove ${item.name}`}
-                className="inline-flex"
-                onClick={() => onChange(value.filter((t) => t !== item.id))}
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="flex gap-1.5">
-        <Input
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {/* A div, not a Button: each chip carries its own ✕ button, and a button
+            nested in a button is invalid HTML. role/tabIndex + the key handler
+            give it the combobox affordances by hand (Radix wires the click). */}
+        <div
           id={id}
-          placeholder="Tag name"
-          autoFocus={autoFocus}
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
+          role="combobox"
+          aria-controls={listId}
+          aria-expanded={open}
+          tabIndex={0}
+          className={cn(
+            'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-2xl border border-input',
+            'bg-input/30 px-3 py-1.5 text-sm outline-none',
+            'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          )}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
               e.preventDefault();
-              void onAddTag();
+              setOpen(true);
             }
           }}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          disabled={tagInput.trim() === '' || adding}
-          onClick={() => void onAddTag()}
         >
-          Add tag
-        </Button>
-      </div>
-
-      {hints.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {hints.map(({ item }) => (
-            <Button
-              key={item.id}
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={() => addTag(item.id)}
-            >
-              {item.name}
-            </Button>
-          ))}
+          {chosen.length > 0 ? (
+            chosen.map((t) => (
+              <span
+                key={t.id}
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+              >
+                {t.name}
+                <button
+                  type="button"
+                  aria-label={`Remove ${t.name}`}
+                  className="inline-flex"
+                  // Don't let removing a chip open the popover.
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange(value.filter((id) => id !== t.id));
+                  }}
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="text-muted-foreground">Add tags</span>
+          )}
+          <ChevronsUpDownIcon className="ml-auto size-4 shrink-0 text-muted-foreground" />
         </div>
-      )}
-    </div>
+      </PopoverTrigger>
+      {/* Not portalled — same reason as ListSelect: this also opens inside the
+          edit Dialog, whose modal scroll-lock would swallow wheel/trackpad
+          scrolling over a body-portalled popover. */}
+      <PopoverContent
+        id={listId}
+        align="start"
+        portal={false}
+        className="w-(--radix-popover-trigger-width) min-w-56 p-0"
+      >
+        <TagsCommand value={value} onToggle={toggle} onCreate={create} />
+      </PopoverContent>
+    </Popover>
   );
 }
