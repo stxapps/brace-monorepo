@@ -53,6 +53,7 @@ import {
 
 import { ARCHIVE_ID, isSystemListId, MY_LIST_ID, TRASH_ID } from '@stxapps/shared';
 import { type ListItem, useListMutations, useLists } from '@stxapps/web-react';
+import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -119,11 +120,14 @@ function RenameField({ list, onRename }: { list: ListItem; onRename: (name: stri
 }
 
 // The per-row overflow menu: reorder within siblings, reparent, delete. Move-to
-// lists every candidate parent (root + lists that aren't this one, its subtree,
-// or a no-children container). Delete is hidden for system lists.
+// embeds the shared ListCommand (the same picker the link row menu's Move to and
+// the editors use) with reparent-specific wiring: `root` adds the "Top level"
+// target (parentId === null), `excludeIds` rules out invalid parents (the row's
+// own subtree — no cycles — plus no-children containers), and the current parent
+// stays visible-but-disabled. Delete is hidden for system lists.
 function RowActions({
   row,
-  candidates,
+  excludeIds,
   onMoveUp,
   onMoveDown,
   onMoveTo,
@@ -131,7 +135,9 @@ function RowActions({
   onDelete,
 }: {
   row: ListRow;
-  candidates: ListRow[];
+  // Parent ids the row may NOT move under (forbiddenParentIds): its subtree +
+  // no-children containers. Passed to ListCommand's excludeIds.
+  excludeIds: readonly string[];
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
@@ -142,8 +148,17 @@ function RowActions({
   const isLast = row.index === row.siblings.length - 1;
   const deletable = !isSystemListId(row.item.id);
 
+  // Controlled so a Move-to pick closes the menu: ListCommand selects via a
+  // CommandItem, not a DropdownMenuItem, so Radix won't auto-close for it (same
+  // reason the link row menu's Move to is controlled).
+  const [open, setOpen] = useState(false);
+  const moveTo = (parentId: string | null) => {
+    onMoveTo(parentId);
+    setOpen(false);
+  };
+
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label="List actions">
           <MoreHorizontal className="size-4" />
@@ -160,22 +175,18 @@ function RowActions({
           <DropdownMenuSubTrigger>
             <CornerUpRight className="size-4" /> Move to
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuItem disabled={row.parentId === null} onSelect={() => onMoveTo(null)}>
-              Top level
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {candidates.map((c) => (
-              <DropdownMenuItem
-                key={c.item.id}
-                disabled={c.item.id === row.parentId}
-                onSelect={() => onMoveTo(c.item.id)}
-              >
-                <span style={{ paddingLeft: `${c.depth * 0.75}rem` }} className="truncate">
-                  {c.item.name}
-                </span>
-              </DropdownMenuItem>
-            ))}
+          <DropdownMenuSubContent className="w-64 p-0">
+            <ListCommand
+              value={row.parentId ?? undefined}
+              excludeIds={excludeIds}
+              disabledIds={row.parentId ? [row.parentId] : undefined}
+              root={{
+                label: 'Top level',
+                selected: row.parentId === null,
+                onSelect: () => moveTo(null),
+              }}
+              onSelect={(listId) => moveTo(listId)}
+            />
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         {row.hasChildren && (
@@ -284,7 +295,7 @@ function SortableRow({
   row,
   renderDepth,
   collapsedIds,
-  candidates,
+  excludeIds,
   onToggle,
   onRename,
   onMoveUp,
@@ -296,7 +307,7 @@ function SortableRow({
   row: ListRow;
   renderDepth: number;
   collapsedIds: ReadonlySet<string>;
-  candidates: ListRow[];
+  excludeIds: readonly string[];
   onToggle: () => void;
   onRename: (name: string) => void;
   onMoveUp: () => void;
@@ -363,7 +374,7 @@ function SortableRow({
 
       <RowActions
         row={row}
-        candidates={candidates}
+        excludeIds={excludeIds}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
         onMoveTo={onMoveTo}
@@ -400,9 +411,6 @@ export function ListsSection() {
   // While dragging, the active row's subtree travels with it, so drop it out of
   // the flat list the sortable + projection see (and that we render).
   const displayRows = useMemo(() => excludeActiveDescendants(rows, activeId), [rows, activeId]);
-  // The move-to candidate list ignores collapse — every list is a valid target
-  // whether or not its row is shown.
-  const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
 
   // The depth the dragged row would land at, recomputed as it moves. Drives both
   // the live indent of the dragged row and the final drop.
@@ -529,8 +537,10 @@ export function ListsSection() {
           >
             <ul>
               {displayRows.map((row) => {
-                const forbidden = forbiddenParentIds(lists, row.item.id);
-                const candidates = allRows.filter((c) => !forbidden.has(c.item.id));
+                // Parents this row may not move under — its own subtree (no
+                // cycles) + no-children containers. ListCommand renders every
+                // other list (it reads useLists itself) minus these.
+                const excludeIds = [...forbiddenParentIds(lists, row.item.id)];
                 // The dragged row renders at its projected (would-be) depth so the
                 // indent tracks the pointer; every other row keeps its real depth.
                 const renderDepth =
@@ -541,7 +551,7 @@ export function ListsSection() {
                     row={row}
                     renderDepth={renderDepth}
                     collapsedIds={collapsedIds}
-                    candidates={candidates}
+                    excludeIds={excludeIds}
                     onToggle={() => toggle(row.item.id)}
                     onRename={(name) => run(rename(row.item, name))}
                     onMoveUp={() =>

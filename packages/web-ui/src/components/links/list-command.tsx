@@ -1,9 +1,12 @@
 'use client';
 
 // The searchable list command shared by every "pick a list" surface: ListSelect
-// wraps it in a popover for the editors, and the link row menu's "Move to"
-// embeds it in a dropdown submenu — one implementation of the tree rendering,
-// search behavior, and path labels instead of per-surface drift.
+// wraps it in a popover for the editors, the link row menu's "Move to" embeds it
+// in a dropdown submenu, and the Lists settings reparent menu embeds it too —
+// one implementation of the tree rendering, search behavior, and path labels
+// instead of per-surface drift. The reparent menu additionally opts into the
+// `root` ("Top level") item: moving a *list* to no parent is a valid target that
+// a *link*-move never has (a link always lands in some list).
 //
 // Past SEARCH_THRESHOLD items a filter input appears at the top. Two render
 // modes, because filtering breaks indentation's meaning (a depth-3 match would
@@ -23,11 +26,17 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from '@stxapps/web-ui/components/ui/command';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 // Below this many lists, scrolling beats a filter box — don't render one.
 const SEARCH_THRESHOLD = 10;
+
+// cmdk value for the optional `root` item. A reserved sentinel that can't collide
+// with a list id (user ids are UUIDs, system ids are slugs like 'my-list'), so
+// `shouldFilter={false}` keyboard nav treats it as just another distinct row.
+const ROOT_VALUE = '__root__';
 
 export type ListRow = { item: ListItem; depth: number; ancestors: string[] };
 
@@ -59,6 +68,7 @@ export function ListCommand({
   onSelect,
   excludeIds,
   disabledIds,
+  root,
   className,
 }: {
   // The current list id — its row gets the check mark.
@@ -70,6 +80,12 @@ export function ListCommand({
   // row menu's Move to, so the tree's shape (and the user's bearings) stays
   // intact while ruling out a no-op move.
   disabledIds?: readonly string[];
+  // An optional "no parent" entry rendered above the tree, for surfaces where
+  // selecting *nothing* is a real target with no list id — the Lists settings
+  // reparent menu ("Top level"). `selected` gives it the check mark and disables
+  // it (already at the root, so moving there is a no-op), mirroring how `value` /
+  // `disabledIds` treat the current-parent list row. Omitted by link surfaces.
+  root?: { label: string; selected: boolean; onSelect: () => void };
   className?: string;
 }) {
   const rows = useListRows(excludeIds);
@@ -94,6 +110,21 @@ export function ListCommand({
       )}
       <CommandList>
         <CommandEmpty>No lists found.</CommandEmpty>
+        {root && !filtering && (
+          // Hidden while filtering: it has no name to match, and the flat
+          // filtered view is name-matches only (like the indent guides).
+          <>
+            <CommandItem
+              value={ROOT_VALUE}
+              disabled={root.selected}
+              data-checked={root.selected}
+              onSelect={() => root.onSelect()}
+            >
+              <span className="truncate">{root.label}</span>
+            </CommandItem>
+            <CommandSeparator />
+          </>
+        )}
         {visibleRows.map(({ item, depth, ancestors }) => (
           <CommandItem
             key={item.id}

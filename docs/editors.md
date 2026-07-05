@@ -71,6 +71,20 @@ editors:
   `excludeIds={[TRASH_ID]}` and `disabledIds={[link.listId]}` — trashing is the
   menu's Remove, never a "move", and the current list stays visible-but-disabled
   to keep the tree's shape intact.
+- **The Lists settings "Move to"** (`_lists/lists-section.tsx`, `RowActions`)
+  also embeds `ListCommand` — but it **reparents a list**, not a link, so it uses
+  two things a link-move never does. It opts into `ListCommand`'s **`root`** prop
+  to offer a "Top level" target (`parentId === null`, which has no list id — the
+  reason `root` exists rather than a sentinel id); and its `excludeIds` is the
+  row's whole **subtree** (`forbiddenParentIds` — self + descendants + no-children
+  containers) so a list can't move under itself (cycle) or into Trash, with the
+  current parent left visible-but-disabled (`value`/`disabledIds`) like the link
+  menu. Because the pick comes from a `CommandItem` (not a `DropdownMenuItem`,
+  which Radix would auto-close), that menu is **controlled** and closes itself on
+  select — same pattern as `LinkRowMenu`. Drag-and-drop with depth projection is
+  still the *primary* reparent gesture there; this menu is the keyboard/mouse
+  fallback. So `list-command`'s `root` prop now has two audiences: leave it out
+  for link surfaces, opt in for reparenting.
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker
   components — it renders its own `NavTree`. But it renders it over the **same
   `useLists`/`useTags` trees** and the same `@stxapps/shared` tree helpers
