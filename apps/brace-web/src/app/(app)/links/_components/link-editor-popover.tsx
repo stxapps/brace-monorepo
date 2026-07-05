@@ -128,8 +128,26 @@ export function LinkEditorPopover() {
     }
   };
 
+  // Does closing now lose real work? A bare typed URL doesn't count — it's
+  // cheap to retype and the click-away-to-dismiss popover idiom is worth more
+  // than guarding it. Only the Advanced fields (note, tags, a non-default list)
+  // represent effort worth protecting from a stray outside-click or Escape.
+  const advancedDirty =
+    note.trim() !== '' || tagIds.length > 0 || listId !== defaultListId;
+
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover
+      open={open}
+      // Guard only the ACCIDENTAL close vectors (outside-click, Escape), and
+      // only when the Advanced section holds work — swallow those so a stray
+      // click can't drop a typed note or picked tags. The Cancel button calls
+      // onOpenChange(false) directly, bypassing this, so a deliberate discard
+      // stays one click.
+      onOpenChange={(next) => {
+        if (!next && advancedDirty) return;
+        onOpenChange(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <Button variant="default" size="sm">
           <Plus className="size-4" />
