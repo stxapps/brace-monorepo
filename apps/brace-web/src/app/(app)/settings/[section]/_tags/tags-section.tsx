@@ -13,7 +13,7 @@
 // same one-file-per-op LWW writes the Lists section makes, so this page never
 // reasons about the sync layer; it renders the live list and fires intents.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -40,6 +40,7 @@ import {
   ChevronUp,
   GripVertical,
   MoreHorizontal,
+  Pencil,
   Plus,
   Tag,
   Trash2,
@@ -73,9 +74,18 @@ function sortedByName(items: TagItem[], dir: SortDir): TagItem[] {
 // Inline rename. Uncontrolled so typing never round-trips through the store;
 // commits on blur and Enter, reverts on Escape. `key`ed by the stored name in the
 // parent so an external rename (another device) refreshes the field.
-function RenameField({ tag, onRename }: { tag: TagItem; onRename: (name: string) => void }) {
+function RenameField({
+  tag,
+  onRename,
+  ref,
+}: {
+  tag: TagItem;
+  onRename: (name: string) => void;
+  ref?: React.Ref<HTMLInputElement>;
+}) {
   return (
     <Input
+      ref={ref}
       defaultValue={tag.name}
       aria-label="Tag name"
       className="h-8 border-transparent bg-transparent px-2 hover:border-border focus-visible:bg-background"
@@ -91,22 +101,33 @@ function RenameField({ tag, onRename }: { tag: TagItem; onRename: (name: string)
   );
 }
 
-// The per-row overflow menu: reorder within the group, delete. No "Move to" (flat
-// taxonomy — nowhere to move to) and no system-tag guard (every tag is deletable;
-// destroy still rejects a tag that has sub-tags, but none exist in the flat UI).
+// The per-row overflow menu: rename, reorder within the group, delete. Rename
+// just refocuses the inline RenameField (the name is edited in place, not in the
+// menu) — it's here so the kebab is a complete inventory of row actions, since the
+// field reads as static text until hovered. No "Move to" (flat taxonomy — nowhere
+// to move to) and no system-tag guard (every tag is deletable; destroy still
+// rejects a tag that has sub-tags, but none exist in the flat UI).
 function RowActions({
   isFirst,
   isLast,
+  onFocusName,
   onMoveUp,
   onMoveDown,
   onDelete,
 }: {
   isFirst: boolean;
   isLast: boolean;
+  onFocusName: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
 }) {
+  // Rename can't focus the field from onSelect: Radix closes the menu and returns
+  // focus to the trigger on close (onCloseAutoFocus), which fires after us and
+  // steals it back. So onSelect only records the intent, and we move focus from
+  // within onCloseAutoFocus itself — preventing Radix's default trigger-refocus.
+  const focusNameRequested = useRef(false);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -114,7 +135,19 @@ function RowActions({
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        onCloseAutoFocus={(e) => {
+          if (!focusNameRequested.current) return;
+          focusNameRequested.current = false;
+          e.preventDefault();
+          onFocusName();
+        }}
+      >
+        <DropdownMenuItem onSelect={() => (focusNameRequested.current = true)}>
+          <Pencil className="size-4" /> Rename
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem disabled={isFirst} onSelect={onMoveUp}>
           <ChevronUp className="size-4" /> Move up
         </DropdownMenuItem>
@@ -225,6 +258,15 @@ function SortableRow({
     id: tag.id,
   });
 
+  // Focus (and select) the inline name field when Rename is picked. Called from
+  // the menu's onCloseAutoFocus (after Radix's own trigger-refocus is prevented),
+  // so a plain synchronous focus wins.
+  const nameRef = useRef<HTMLInputElement>(null);
+  const focusName = () => {
+    nameRef.current?.focus();
+    nameRef.current?.select();
+  };
+
   return (
     <li
       ref={setNodeRef}
@@ -247,12 +289,13 @@ function SortableRow({
       </span>
 
       <div className="min-w-0 flex-1">
-        <RenameField key={`${tag.id}:${tag.name}`} tag={tag} onRename={onRename} />
+        <RenameField key={`${tag.id}:${tag.name}`} ref={nameRef} tag={tag} onRename={onRename} />
       </div>
 
       <RowActions
         isFirst={isFirst}
         isLast={isLast}
+        onFocusName={focusName}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
         onDelete={onDelete}

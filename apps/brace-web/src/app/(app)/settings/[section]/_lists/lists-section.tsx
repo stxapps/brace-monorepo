@@ -13,7 +13,7 @@
 // keyboard-accessible. Secondary actions live behind a per-row kebab menu rather
 // than a width-measured overflow, so rows stay stable at any container width.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -46,6 +46,7 @@ import {
   GripVertical,
   Inbox,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
   X,
@@ -101,9 +102,18 @@ function listIcon(id: string): React.ReactNode {
 // Inline rename. Uncontrolled so typing never round-trips through the store;
 // commits on blur and Enter, reverts on Escape. `key`ed by the stored name in the
 // parent so an external rename (another device) refreshes the field.
-function RenameField({ list, onRename }: { list: ListItem; onRename: (name: string) => void }) {
+function RenameField({
+  list,
+  onRename,
+  ref,
+}: {
+  list: ListItem;
+  onRename: (name: string) => void;
+  ref?: React.Ref<HTMLInputElement>;
+}) {
   return (
     <Input
+      ref={ref}
       defaultValue={list.name}
       aria-label="List name"
       className="h-8 border-transparent bg-transparent px-2 hover:border-border focus-visible:bg-background"
@@ -119,15 +129,19 @@ function RenameField({ list, onRename }: { list: ListItem; onRename: (name: stri
   );
 }
 
-// The per-row overflow menu: reorder within siblings, reparent, delete. Move-to
-// embeds the shared ListCommand (the same picker the link row menu's Move to and
-// the editors use) with reparent-specific wiring: `root` adds the "Top level"
-// target (parentId === null), `excludeIds` rules out invalid parents (the row's
-// own subtree — no cycles — plus no-children containers), and the current parent
+// The per-row overflow menu: rename, reorder within siblings, reparent, delete.
+// Rename just refocuses the inline RenameField (the name is edited in place, not
+// in the menu) — it's here so the kebab is a complete inventory of row actions,
+// since the field reads as static text until hovered. Move-to embeds the shared
+// ListCommand (the same picker the link row menu's Move to and the editors use)
+// with reparent-specific wiring: `root` adds the "Top level" target
+// (parentId === null), `excludeIds` rules out invalid parents (the row's own
+// subtree — no cycles — plus no-children containers), and the current parent
 // stays visible-but-disabled. Delete is hidden for system lists.
 function RowActions({
   row,
   excludeIds,
+  onFocusName,
   onMoveUp,
   onMoveDown,
   onMoveTo,
@@ -138,6 +152,7 @@ function RowActions({
   // Parent ids the row may NOT move under (forbiddenParentIds): its subtree +
   // no-children containers. Passed to ListCommand's excludeIds.
   excludeIds: readonly string[];
+  onFocusName: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
@@ -157,6 +172,12 @@ function RowActions({
     setOpen(false);
   };
 
+  // Rename can't focus the field from onSelect: Radix closes the menu and returns
+  // focus to the trigger on close (onCloseAutoFocus), which fires after us and
+  // steals it back. So onSelect only records the intent, and we move focus from
+  // within onCloseAutoFocus itself — preventing Radix's default trigger-refocus.
+  const focusNameRequested = useRef(false);
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
@@ -164,7 +185,19 @@ function RowActions({
           <MoreHorizontal className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        onCloseAutoFocus={(e) => {
+          if (!focusNameRequested.current) return;
+          focusNameRequested.current = false;
+          e.preventDefault();
+          onFocusName();
+        }}
+      >
+        <DropdownMenuItem onSelect={() => (focusNameRequested.current = true)}>
+          <Pencil className="size-4" /> Rename
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem disabled={isFirst} onSelect={onMoveUp}>
           <ChevronUp className="size-4" /> Move up
         </DropdownMenuItem>
@@ -320,6 +353,15 @@ function SortableRow({
     id: row.item.id,
   });
 
+  // Focus (and select) the inline name field when Rename is picked. Called from
+  // the menu's onCloseAutoFocus (after Radix's own trigger-refocus is prevented),
+  // so a plain synchronous focus wins.
+  const nameRef = useRef<HTMLInputElement>(null);
+  const focusName = () => {
+    nameRef.current?.focus();
+    nameRef.current?.select();
+  };
+
   return (
     <li
       ref={setNodeRef}
@@ -369,12 +411,18 @@ function SortableRow({
       </span>
 
       <div className="min-w-0 flex-1">
-        <RenameField key={`${row.item.id}:${row.item.name}`} list={row.item} onRename={onRename} />
+        <RenameField
+          key={`${row.item.id}:${row.item.name}`}
+          ref={nameRef}
+          list={row.item}
+          onRename={onRename}
+        />
       </div>
 
       <RowActions
         row={row}
         excludeIds={excludeIds}
+        onFocusName={focusName}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
         onMoveTo={onMoveTo}
