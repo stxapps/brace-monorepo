@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
 import type { AppEnv, Bindings, RateLimit } from '../lib/env';
-import { ApiError } from '../lib/errors';
+import { HttpError } from '../lib/errors';
 
 // Rate limiting — tiers, key strategies, and the middleware that uses them, all
 // in one place (the middleware is the only consumer). The actual volumes
@@ -76,7 +76,7 @@ export function rateLimit(
 
     const { success } = await limiter.limit({ key: key(c) });
     if (!success) {
-      throw new ApiError(429, 'rate_limited', 'Too many requests', {
+      throw new HttpError(429, 'rate_limited', 'Too many requests', {
         'retry-after': String(RATE_LIMIT_PERIODS[tier]),
       });
     }

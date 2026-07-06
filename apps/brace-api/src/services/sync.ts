@@ -10,7 +10,7 @@ import type {
 import type { CommitEntry } from '../do/user-data';
 import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
-import { ApiError } from '../lib/errors';
+import { HttpError } from '../lib/errors';
 import { MAX_BYTES, MAX_FILES } from '../lib/quota';
 import { userFilesRepo } from '../r2/user-files';
 
@@ -58,10 +58,10 @@ export async function signUserFileUrls(
     // so bound on current usage plus the requested file count. A re-PUT of an
     // existing path is counted as new here (harmless over-count near the ceiling).
     if (fileCount + paths.length > MAX_FILES) {
-      throw new ApiError(403, 'quota_exceeded', 'File-count quota exceeded');
+      throw new HttpError(403, 'quota_exceeded', 'File-count quota exceeded');
     }
     if (totalBytes >= MAX_BYTES) {
-      throw new ApiError(403, 'quota_exceeded', 'Storage quota exceeded');
+      throw new HttpError(403, 'quota_exceeded', 'Storage quota exceeded');
     }
   }
 

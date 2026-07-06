@@ -1,7 +1,7 @@
 import type { FilesListResponse, SignedUrl } from '@stxapps/shared';
 
 import type { Bindings } from '../lib/env';
-import { ApiError } from '../lib/errors';
+import { HttpError } from '../lib/errors';
 import { stripUserPrefix, userFileKey, userPrefix } from './keys';
 import { isLocalR2, localBlobUrl } from './local';
 import { presignR2Url, type R2Credentials } from './presign';
@@ -22,7 +22,7 @@ import { presignR2Url, type R2Credentials } from './presign';
 function r2Credentials(env: Bindings): R2Credentials {
   const { R2_ACCOUNT_ID, R2_USER_FILES_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = env;
   if (!R2_ACCOUNT_ID || !R2_USER_FILES_BUCKET || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
-    throw new ApiError(500, 'r2_unconfigured', 'R2 signing credentials are not configured');
+    throw new HttpError(500, 'r2_unconfigured', 'R2 signing credentials are not configured');
   }
   return {
     accountId: R2_ACCOUNT_ID,

@@ -6,7 +6,7 @@ import type { ErrorBody } from '@stxapps/shared';
 import type { AppEnv } from './env';
 
 // Uniform JSON error handling, identical in shape to brace-api so clients parse one
-// error envelope across both origins. Middleware/handlers `throw new ApiError(...)`;
+// error envelope across both origins. Middleware/handlers `throw new HttpError(...)`;
 // `errorHandler` (wired via `app.onError` in app.ts) turns every thrown error into:
 //
 //   { "error": "<code>", "message"?: "<human readable>" }
@@ -18,7 +18,7 @@ import type { AppEnv } from './env';
 // reason to exist is that the URL it sees stays transient (docs "Never log the URL"),
 // so error bodies and logs must stay aggregate/code-level, never echo the target URL.
 
-export class ApiError extends Error {
+export class HttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
@@ -27,12 +27,12 @@ export class ApiError extends Error {
     readonly headers?: Record<string, string>,
   ) {
     super(message ?? code);
-    this.name = 'ApiError';
+    this.name = 'HttpError';
   }
 }
 
 export function errorHandler(err: unknown, c: Context<AppEnv>): Response {
-  if (err instanceof ApiError) {
+  if (err instanceof HttpError) {
     const body: ErrorBody = { error: err.code };
     if (err.message && err.message !== err.code) body.message = err.message;
     return c.json(body, err.status as 400, err.headers);

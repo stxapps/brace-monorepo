@@ -5,7 +5,7 @@ import type { ErrorBody } from '@stxapps/shared';
 
 import type { AppEnv } from './env';
 
-// Uniform JSON error handling. Middleware and handlers `throw new ApiError(...)`
+// Uniform JSON error handling. Middleware and handlers `throw new HttpError(...)`
 // instead of building ad-hoc `c.json(..., 4xx)` responses; `errorHandler` (wired
 // via `app.onError` in app.ts) turns every thrown error into the same shape:
 //
@@ -14,7 +14,7 @@ import type { AppEnv } from './env';
 // `code` is a stable, client-parseable string (e.g. 'unauthorized',
 // 'rate_limited'); `message` is optional and for humans/logs only.
 
-export class ApiError extends Error {
+export class HttpError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
@@ -23,12 +23,12 @@ export class ApiError extends Error {
     readonly headers?: Record<string, string>,
   ) {
     super(message ?? code);
-    this.name = 'ApiError';
+    this.name = 'HttpError';
   }
 }
 
 export function errorHandler(err: unknown, c: Context<AppEnv>): Response {
-  if (err instanceof ApiError) {
+  if (err instanceof HttpError) {
     const body: ErrorBody = { error: err.code };
     if (err.message && err.message !== err.code) body.message = err.message;
     return c.json(body, err.status as 400, err.headers);

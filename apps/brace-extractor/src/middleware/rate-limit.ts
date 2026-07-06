@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 
 import type { AppEnv, Bindings, RateLimit } from '../lib/env';
-import { ApiError } from '../lib/errors';
+import { HttpError } from '../lib/errors';
 
 // Rate limiting — the same shape as brace-api's, minus the per-user key (the
 // extractor is anonymous, so there's no session to key on; everything is per-IP).
@@ -71,7 +71,7 @@ export function rateLimit(tier: RateLimitTier = 'standard') {
 
     const { success } = await limiter.limit({ key: ipRateLimitKey(c) });
     if (!success) {
-      throw new ApiError(429, 'rate_limited', 'Too many requests', {
+      throw new HttpError(429, 'rate_limited', 'Too many requests', {
         'retry-after': String(RATE_LIMIT_PERIODS[tier]),
       });
     }

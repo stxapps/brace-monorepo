@@ -17,7 +17,7 @@ function corsOrigins(env: Bindings | undefined): string[] {
 
 export const app = new Hono<AppEnv>();
 
-// Centralized error handling: middleware/handlers `throw new ApiError(...)` and
+// Centralized error handling: middleware/handlers `throw new HttpError(...)` and
 // this turns every error into a uniform JSON body. See lib/errors.ts.
 app.onError(errorHandler);
 

@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { imageProxyEndpoint } from '@stxapps/shared';
 
 import type { AppEnv } from '../lib/env';
-import { ApiError } from '../lib/errors';
+import { HttpError } from '../lib/errors';
 import { MAX_IMAGE_BYTES, safeFetch, SafeFetchError, streamWithLimit } from '../lib/safe-fetch';
 import { rateLimit } from '../middleware/rate-limit';
 
@@ -53,7 +53,7 @@ export const imageRoutes = new Hono<AppEnv>().get(
       ({ response } = await safeFetch(url, 'image/*'));
     } catch (err) {
       if (err instanceof SafeFetchError) {
-        throw new ApiError(statusForError(err.code), err.code);
+        throw new HttpError(statusForError(err.code), err.code);
       }
       throw err;
     }
@@ -61,7 +61,7 @@ export const imageRoutes = new Hono<AppEnv>().get(
     const contentType = (response.headers.get('content-type') ?? '').split(';')[0].trim();
     if (!contentType.toLowerCase().startsWith('image/')) {
       await response.body?.cancel().catch(() => undefined);
-      throw new ApiError(415, 'unsupported_type');
+      throw new HttpError(415, 'unsupported_type');
     }
 
     // Early reject if the upstream declares an oversized body — cheaper than
@@ -70,11 +70,11 @@ export const imageRoutes = new Hono<AppEnv>().get(
     const declaredLength = Number(response.headers.get('content-length'));
     if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_BYTES) {
       await response.body?.cancel().catch(() => undefined);
-      throw new ApiError(413, 'too_large');
+      throw new HttpError(413, 'too_large');
     }
 
     if (!response.body) {
-      throw new ApiError(502, 'fetch_failed');
+      throw new HttpError(502, 'fetch_failed');
     }
 
     // Stream the bytes through, hard-aborting past the ceiling. Forward ONLY safe,

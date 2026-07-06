@@ -5,7 +5,7 @@ import { accountKeysRepo } from '../db/repositories/account-keys';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
 import type { Bindings } from '../lib/env';
-import { ApiError } from '../lib/errors';
+import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { type IssuedSession, issueSession } from './session';
 
@@ -76,7 +76,7 @@ export async function createAccount(
   // error, so a lost race is a clean 409.
   const claimed = await directory.claim({ username: input.username, userId, accountDbId });
   if (!claimed) {
-    throw new ApiError(409, 'username_taken', 'Username is already taken');
+    throw new HttpError(409, 'username_taken', 'Username is already taken');
   }
 
   // (2) WRITE the account in the shard — users + every wrapped-DEK door in ONE
@@ -104,7 +104,7 @@ export async function createAccount(
     });
     // Log the cause for observability (wrangler tail); never leak it to the client.
     console.error('createAccount shard write failed:', err);
-    throw new ApiError(500, 'account_create_failed', 'Could not create account, please retry');
+    throw new HttpError(500, 'account_create_failed', 'Could not create account, please retry');
   }
 
   const session = await issueSession(env, { id: userId, accountDbId });
@@ -132,12 +132,12 @@ export async function getPasswordDoor(
   username: string,
 ): Promise<{ wrappedDek: Uint8Array; iv: Uint8Array }> {
   const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(username);
-  if (!entry) throw new ApiError(404, 'not_found', 'No account for that username');
+  if (!entry) throw new HttpError(404, 'not_found', 'No account for that username');
 
   const password = await accountKeysRepo(
     accountsDb(env, entry.accountDbId),
   ).findByUserIdAndDoorType(entry.userId, DOOR_PASSWORD);
-  if (!password) throw new ApiError(404, 'not_found', 'No password door for that account');
+  if (!password) throw new HttpError(404, 'not_found', 'No password door for that account');
 
   return { wrappedDek: password.wrappedDek, iv: password.iv };
 }
@@ -153,7 +153,7 @@ export async function signIn(
   env: Bindings,
   input: { username: string; publicKey: string },
 ): Promise<{ userId: string; session: IssuedSession }> {
-  const invalid = () => new ApiError(401, 'invalid_credentials', 'Incorrect username or password');
+  const invalid = () => new HttpError(401, 'invalid_credentials', 'Incorrect username or password');
 
   const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(input.username);
   if (!entry) throw invalid();

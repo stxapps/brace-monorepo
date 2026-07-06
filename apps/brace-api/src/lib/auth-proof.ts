@@ -2,7 +2,7 @@ import type { z } from 'zod';
 
 import { hexToBytes } from '@stxapps/shared';
 
-import { ApiError } from './errors';
+import { HttpError } from './errors';
 
 // Proof-of-possession for the auth flows. A client proves it holds the private
 // key for the `publicKey` it presents by signing a JSON payload; we verify that
@@ -39,7 +39,7 @@ export async function verifyEd25519(
 }
 
 // Validate + authenticate a signed auth payload. Returns the typed payload, or
-// throws an ApiError (400/401) the global handler renders. The schema must yield a
+// throws an HttpError (400/401) the global handler renders. The schema must yield a
 // `publicKey` (verified against) and a `timestamp` (freshness-checked); the schema
 // also enforces `action` (a z.literal), which binds the signature to one operation
 // so a create-account proof can't be replayed as a sign-in.
@@ -52,12 +52,12 @@ export async function verifyAuthProof<T extends { publicKey: string; timestamp: 
   try {
     json = JSON.parse(rawPayload);
   } catch {
-    throw new ApiError(400, 'invalid_payload', 'Payload is not valid JSON');
+    throw new HttpError(400, 'invalid_payload', 'Payload is not valid JSON');
   }
 
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
-    throw new ApiError(400, 'invalid_payload', 'Payload failed contract validation');
+    throw new HttpError(400, 'invalid_payload', 'Payload failed contract validation');
   }
   const payload = parsed.data;
 
@@ -65,11 +65,11 @@ export async function verifyAuthProof<T extends { publicKey: string; timestamp: 
   // parsed object, whose key order could differ and fail verification.
   const valid = await verifyEd25519(payload.publicKey, rawPayload, signatureHex);
   if (!valid) {
-    throw new ApiError(401, 'invalid_signature', 'Signature does not match the public key');
+    throw new HttpError(401, 'invalid_signature', 'Signature does not match the public key');
   }
 
   if (Math.abs(Date.now() - payload.timestamp) > TIMESTAMP_WINDOW_MS) {
-    throw new ApiError(401, 'stale_request', 'Request timestamp is outside the allowed window');
+    throw new HttpError(401, 'stale_request', 'Request timestamp is outside the allowed window');
   }
 
   return payload;
