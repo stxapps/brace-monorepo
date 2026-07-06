@@ -80,7 +80,7 @@ import {
   readLinksPendingTitleImagePage,
 } from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
-import { runServerTitleImageBatch } from '../lib/server-extraction';
+import { isRetryableTransportError, runServerTitleImageBatch } from '../lib/server-extraction';
 import { useAuth } from './auth-provider';
 import { useSync } from './sync-provider';
 
@@ -103,6 +103,16 @@ const BATCH = MAX_EXTRACT_URLS;
 // all-at-once when the user asks. Expressed as a whole number of batched extract requests
 // (`BATCH`) so the per-session ceiling is always a round number of round trips.
 const AUTO_BUDGET = 10 * BATCH;
+
+// Backoff for auto-resuming a drain after a RETRYABLE transport failure — a 429 from the
+// extractor's per-IP cap, a 5xx, or a network blip (isRetryableTransportError). brace-extractor
+// sends no Retry-After header, so the client paces its own retry: start at RETRY_BASE_MS, double
+// per consecutive failure up to RETRY_MAX_MS, and reset to BASE after the first clean batch.
+// This is what lets an extract-all job RESUME after a 429 instead of stalling — a failed batch
+// writes no facets, so the free counts/probe (and thus the drain effect's deps) never change, and
+// the scheduled retry is the only thing that re-wakes it.
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
 
 interface ExtractionContextValue {
   // Is server extraction live at all (opted in, store ready, extractor configured)?
@@ -249,6 +259,13 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   const rerunRef = useRef(false);
   const [isRunning, setIsRunning] = useState(false);
 
+  // Pending auto-resume retry timer + its current backoff delay (grows per consecutive
+  // retryable failure, reset to RETRY_BASE_MS on a clean batch). Set/cleared by the drain
+  // effect's scheduleRetry; also cleared on pause() and unmount so a Pause or teardown
+  // halts a backed-off outage rather than letting it fire later.
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryDelayRef = useRef(RETRY_BASE_MS);
+
   const extractAll = useCallback(() => {
     extractingAllRef.current = true;
     extractAllCursorRef.current = undefined; // walk the whole library from the newest link
@@ -261,6 +278,11 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     // Spend the rest of the auto budget too, so Pause fully stops rather than letting
     // the incidental drain quietly carry on. A later extractAll() is the only resume.
     budgetRef.current = 0;
+    // Drop any pending auto-resume retry so Pause halts a backed-off outage too.
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     setIsExtractingAll(false);
   }, []);
 
@@ -273,6 +295,22 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       return;
 
     let cancelled = false;
+
+    // Auto-resume the drain after a RETRYABLE transport failure, backing off between tries.
+    // brace-extractor sends no Retry-After, so we pace it ourselves: wait retryDelayRef, which
+    // scheduleRetry then doubles (capped at RETRY_MAX_MS) for the next consecutive failure; a
+    // clean batch resets it to RETRY_BASE_MS. Only ONE retry pending at a time; the effect
+    // cleanup and pause() clear it. This is what makes extract-all survive a 429 — its failed
+    // batch changes no synced state, so nothing else re-wakes the loop.
+    const scheduleRetry = () => {
+      if (retryTimerRef.current !== null) return;
+      const delay = retryDelayRef.current;
+      retryDelayRef.current = Math.min(delay * 2, RETRY_MAX_MS);
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null;
+        if (!cancelled) void drain();
+      }, delay);
+    };
 
     const drain = async () => {
       if (runningRef.current) {
@@ -300,6 +338,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
               // so titles land together fast and images fill in pooled. Throws only on a
               // wholesale transport failure (caught below to stop the drain).
               await runServerTitleImageBatch(username, page.links, extractClient);
+              retryDelayRef.current = RETRY_BASE_MS; // a clean batch clears any accrued backoff
               // Push this batch's `files/` + `extractions/` writes (and pull anything new).
               requestSync();
             }
@@ -339,19 +378,28 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           // Returns the count processed (`take` already bounds it to the auto budget), or
           // throws on a wholesale transport failure (caught below — budget is left intact).
           const processed = await runServerTitleImageBatch(username, links, extractClient);
+          retryDelayRef.current = RETRY_BASE_MS; // a clean batch clears any accrued backoff
           budgetRef.current -= processed;
           // Push writes; the next iteration re-scans, where just-settled links drop out.
           requestSync();
         }
-      } catch {
+      } catch (err) {
         // A wholesale transport failure from runServerTitleImageBatch (network/abort/non-2xx)
-        // — nothing was learned about this page's links, and the next page would just fail
-        // too. Stop the drain and wait for the next natural wake (a sync landing new links, a
-        // visibility flip, extractAll) rather than hot-looping or recording bogus per-link
-        // failures. The unprocessed page stays pending (no facet writes, cursor/budget
-        // untouched), so a later wake re-picks it. Clear any queued rerun so a trigger that
-        // fired mid-drain doesn't restart us straight back into the same outage.
+        // — nothing was learned about this page's links. The unprocessed page stays pending
+        // (no facet writes, cursor/budget untouched), so a later wake re-picks it. Clear any
+        // queued rerun so a trigger that fired mid-drain doesn't restart us straight back into
+        // the same outage.
         rerunRef.current = false;
+        // If the failure is RETRYABLE (a 429 from the extractor's per-IP cap, a 5xx, or a
+        // network blip), schedule a backed-off self-resume instead of just waiting for a
+        // natural wake. This is load-bearing for extract-all: its failed batch writes no
+        // facets, so counts/probe (and the effect deps) don't change and nothing would ever
+        // re-fire — the job would stall on the first 429. A non-retryable 4xx still just stops.
+        // Gated like the auto drain (don't self-resume a hidden tab's incidental work), but
+        // extract-all — explicit + finite — resumes even while hidden.
+        if (!cancelled && isRetryableTransportError(err) && (visibleRef.current || extractingAllRef.current)) {
+          scheduleRetry();
+        }
       } finally {
         runningRef.current = false;
         setIsRunning(false);
@@ -365,6 +413,11 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     void drain();
     return () => {
       cancelled = true;
+      // Drop a pending backoff retry so a dep change / teardown doesn't fire a stale drain.
+      if (retryTimerRef.current !== null) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
     };
   }, [enabled, username, extractClient, hasWork, visible, isExtractingAll, requestSync]);
 

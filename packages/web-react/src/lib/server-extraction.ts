@@ -161,6 +161,20 @@ export async function runServerTitleImageBatch(
   return links.length;
 }
 
+// Classify a wholesale failure THROWN by runServerTitleImageBatch (the extract request
+// itself — never a per-link outcome, which is recorded, not thrown) as retryable or not,
+// so the drain can auto-resume a transient outage instead of stalling. RETRYABLE = a
+// later attempt might succeed: a 429 (the extractor's per-IP cap — brace-extractor sends
+// no Retry-After yet, so the caller paces its own backoff), a 5xx, or a network error
+// (no HTTP status — surfaces as TypeError "Failed to fetch"). NOT retryable = a non-429
+// 4xx (a request the server rejected on its merits — won't change on retry) or any other
+// throw (e.g. the oversized-batch guard, a bug) — the drain stays stopped rather than
+// spinning. Lives here beside the throw so the transport semantics are classified once.
+export function isRetryableTransportError(err: unknown): boolean {
+  if (err instanceof ApiError) return err.status === 429 || err.status >= 500;
+  return err instanceof TypeError;
+}
+
 // Apply one extraction patch to every link in a group (links sharing a URL). Identity
 // comes from the PATH (the one authority a round-tripped blob can't drift from), same as
 // the pending query — not from any `id` copy inside the blob.
