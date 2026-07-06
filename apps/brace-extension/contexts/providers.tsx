@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ApiClientProvider } from '@stxapps/react';
@@ -29,6 +29,17 @@ export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError } = useMirroredSyncState();
 
+  // Stable identity: `sendMessage` is a module import, so this closes over nothing
+  // that changes. Providers re-renders whenever the mirrored sync state updates
+  // (every cycle toggles bgSyncStatus), so an inline arrow here would hand every
+  // `useSync()` consumer a fresh `requestSync` each cycle. Harmless for the editor
+  // hooks that only call it from event handlers, but a popup-open effect that
+  // depends on `requestSync` (App.tsx's AuthedApp mount kick) would re-fire on
+  // every cycle and drive an endless syncing⇄synced loop. useCallback breaks it.
+  const requestSync = useCallback(() => {
+    void sendMessage({ type: 'KICK_SYNC' });
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ApiClientProvider client={apiClient}>
@@ -38,9 +49,7 @@ export function Providers({ children }: { children: ReactNode }) {
             bgSyncStatus={bgSyncStatus}
             lastSyncAt={lastSyncAt}
             lastError={lastError}
-            requestSync={() => {
-              void sendMessage({ type: 'KICK_SYNC' });
-            }}
+            requestSync={requestSync}
           >
             <ThemeProvider>{children}</ThemeProvider>
           </ExternalSyncProvider>

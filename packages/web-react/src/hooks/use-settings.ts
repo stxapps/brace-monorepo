@@ -17,6 +17,7 @@
 // on either source (a local edit, or a sync landing a new `settings/general.enc`)
 // re-renders every consumer.
 
+import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import {
@@ -81,9 +82,16 @@ export function useSettings(): Settings {
   // typed (entities.ts) so an odd persisted value never drops the settings blob, and
   // the device value can predate this feature (older `localSettings` row) — both
   // normalize to a real `ThemeState`, falling back to `DEFAULT_THEME` when absent.
-  const syncTheme = coerceThemeState(general?.theme ?? DEFAULT_THEME);
+  //
+  // Memoized because `coerceThemeState` allocates a FRESH object every call, so an
+  // unmemoized `theme` would have a new identity on every render even when unchanged.
+  // Consumers use `theme` as a dependency (ThemeProvider's apply effect keys on it),
+  // where a per-render identity churns the effect needlessly — and is a latent render
+  // loop for any consumer that both deps on it and sets state from it. Keyed on the
+  // raw liveQuery values, so identity only changes when a source actually re-emits.
+  const syncTheme = useMemo(() => coerceThemeState(general?.theme ?? DEFAULT_THEME), [general?.theme]);
   const themeSource = local?.themeSource ?? 'sync';
-  const localTheme = coerceThemeState(local?.theme ?? DEFAULT_THEME);
+  const localTheme = useMemo(() => coerceThemeState(local?.theme ?? DEFAULT_THEME), [local?.theme]);
   const theme = themeSource === 'local' ? localTheme : syncTheme;
 
   return {
