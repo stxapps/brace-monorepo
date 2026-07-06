@@ -81,9 +81,10 @@ export function ExtractionSection() {
     <div className="mx-auto max-w-2xl px-6 py-8">
       <h2 className="text-xl font-semibold">Link previews</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Brace fills in each saved link's title and preview image by fetching the page on the server.
-        This happens automatically for the links you're viewing; use <strong>Generate all</strong>{' '}
-        to preview your whole library at once.
+        Brace fills in each saved link's title and preview image automatically — you don't need to
+        do it by hand. Links you save from the Brace extension or mobile app are previewed right on
+        your device, so the page never leaves it. For links saved on the web or added by import,
+        turn on server-side previews below and Brace will fetch them for you.
       </p>
 
       <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
@@ -92,8 +93,9 @@ export function ExtractionSection() {
             Server-side previews
           </Label>
           <span className="text-sm font-normal text-muted-foreground">
-            Fetch each link on the server to fill in its title and preview image. Your links' URLs
-            are sent to the server only while this is on.
+            Fetch each link on the server to fill in its title and preview image — for links that
+            weren't previewed on the device that saved them. Only the link's URL is sent, never
+            your account or anything else, and only while this is on.
           </span>
         </div>
         <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
