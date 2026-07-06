@@ -161,15 +161,14 @@ export async function runServerTitleImageBatch(
   return links.length;
 }
 
-// Classify a wholesale failure THROWN by runServerTitleImageBatch (the extract request
-// itself — never a per-link outcome, which is recorded, not thrown) as retryable or not,
-// so the drain can auto-resume a transient outage instead of stalling. The rule is the
-// shared transport classification (@stxapps/shared api/retry.ts: 429 / 5xx / network
-// TypeError — a 429 now carries the server's Retry-After, which the drain prefers over
-// its guessed backoff), re-exported beside the throw so the drains keep one import site.
-// A non-retryable throw (a non-429 4xx, the oversized-batch guard, a bug) still stops
-// the drain rather than spinning.
-export { isRetryableTransportError } from '@stxapps/shared';
+// A wholesale failure THROWN by runServerTitleImageBatch (the extract request itself —
+// never a per-link outcome, which is recorded, not thrown) is classified retryable-or-not
+// by `isRetryableTransportError` from @stxapps/shared (api/retry.ts: 429 / 5xx / network
+// TypeError — a 429 now carries the server's Retry-After, which the drain prefers over its
+// guessed backoff), so the drain can auto-resume a transient outage instead of stalling.
+// The drain imports it straight from @stxapps/shared, beside its sibling `retryAfterMsOf`.
+// A non-retryable throw (a non-429 4xx, the oversized-batch guard, a bug) still stops the
+// drain rather than spinning.
 
 // Apply one extraction patch to every link in a group (links sharing a URL). Identity
 // comes from the PATH (the one authority a round-tripped blob can't drift from), same as

@@ -26,10 +26,13 @@ export class ApiError extends Error {
 export function parseRetryAfterSeconds(res: Response): number | undefined {
   const header = res.headers.get('retry-after');
   if (!header) return undefined;
+
   const seconds = Number(header);
   if (Number.isFinite(seconds)) return Math.max(0, seconds);
+
   const date = Date.parse(header);
   if (Number.isNaN(date)) return undefined;
+
   return Math.max(0, (date - Date.now()) / 1000);
 }
 

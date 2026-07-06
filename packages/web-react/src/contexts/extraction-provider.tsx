@@ -71,7 +71,12 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { useExtractClient } from '@stxapps/react';
-import { jitteredDelayMs, MAX_EXTRACT_URLS, retryAfterMsOf } from '@stxapps/shared';
+import {
+  isRetryableTransportError,
+  jitteredDelayMs,
+  MAX_EXTRACT_URLS,
+  retryAfterMsOf,
+} from '@stxapps/shared';
 
 import {
   type LinkScanCursor,
@@ -80,7 +85,7 @@ import {
   readLinksPendingTitleImagePage,
 } from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
-import { isRetryableTransportError, runServerTitleImageBatch } from '../lib/server-extraction';
+import { runServerTitleImageBatch } from '../lib/server-extraction';
 import { useAuth } from './auth-provider';
 import { useSync } from './sync-provider';
 
