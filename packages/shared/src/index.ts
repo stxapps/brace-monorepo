@@ -1,5 +1,6 @@
 export * from './api/client';
 export * from './api/endpoint';
+export * from './api/retry';
 export * from './async/pool';
 export * from './auth/credentials';
 export * from './auth/endpoints';

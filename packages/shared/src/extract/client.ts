@@ -1,4 +1,4 @@
-import { ApiError, callEndpoint } from '../api/client';
+import { ApiError, callEndpoint, parseRetryAfterSeconds } from '../api/client';
 import {
   extractEndpoint,
   type ExtractResult,
@@ -87,7 +87,13 @@ export function createExtractClient({
       const target = new URL(imageProxyEndpoint.path, baseUrl);
       target.searchParams.set('url', url);
       const res = await fetchImpl(target.toString(), { method: 'GET', signal });
-      if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+      if (!res.ok) {
+        throw new ApiError(
+          res.status,
+          await res.text().catch(() => ''),
+          parseRetryAfterSeconds(res),
+        );
+      }
       return new Uint8Array(await res.arrayBuffer());
     },
   };

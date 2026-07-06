@@ -38,6 +38,9 @@ app.use(
       const allow = corsOrigins(c.env as Bindings | undefined);
       return allow.includes(origin) ? origin : null;
     },
+    // Let browser JS read the 429's Retry-After (middleware/rate-limit.ts) — a
+    // non-safelisted response header is invisible to a CORS caller otherwise.
+    exposeHeaders: ['Retry-After'],
   }),
 );
 

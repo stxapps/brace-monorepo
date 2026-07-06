@@ -71,7 +71,7 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { useExtractClient } from '@stxapps/react';
-import { MAX_EXTRACT_URLS } from '@stxapps/shared';
+import { jitteredDelayMs, MAX_EXTRACT_URLS, retryAfterMsOf } from '@stxapps/shared';
 
 import {
   type LinkScanCursor,
@@ -105,9 +105,11 @@ const BATCH = MAX_EXTRACT_URLS;
 const AUTO_BUDGET = 10 * BATCH;
 
 // Backoff for auto-resuming a drain after a RETRYABLE transport failure — a 429 from the
-// extractor's per-IP cap, a 5xx, or a network blip (isRetryableTransportError). brace-extractor
-// sends no Retry-After header, so the client paces its own retry: start at RETRY_BASE_MS, double
-// per consecutive failure up to RETRY_MAX_MS, and reset to BASE after the first clean batch.
+// extractor's per-IP cap, a 5xx, or a network blip (isRetryableTransportError). A 429 carries
+// the server's Retry-After (the rate-limit window's period), which the retry waits out instead
+// of guessing; a hintless failure paces itself: start at RETRY_BASE_MS, double per consecutive
+// failure up to RETRY_MAX_MS, and reset to BASE after the first clean batch. Either delay is
+// jittered upward so parallel tabs sharing the IP bucket don't retry in lockstep.
 // This is what lets an extract-all job RESUME after a 429 instead of stalling — a failed batch
 // writes no facets, so the free counts/probe (and thus the drain effect's deps) never change, and
 // the scheduled retry is the only thing that re-wakes it.
@@ -297,19 +299,22 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     // Auto-resume the drain after a RETRYABLE transport failure, backing off between tries.
-    // brace-extractor sends no Retry-After, so we pace it ourselves: wait retryDelayRef, which
-    // scheduleRetry then doubles (capped at RETRY_MAX_MS) for the next consecutive failure; a
-    // clean batch resets it to RETRY_BASE_MS. Only ONE retry pending at a time; the effect
-    // cleanup and pause() clear it. This is what makes extract-all survive a 429 — its failed
-    // batch changes no synced state, so nothing else re-wakes the loop.
-    const scheduleRetry = () => {
+    // A 429's Retry-After (when the error carries one) wins over the guessed delay — it's the
+    // limiter window's period, so waiting it out is the earliest retry with a fresh bucket;
+    // otherwise wait retryDelayRef. Either way the doubling (capped at RETRY_MAX_MS) still
+    // accrues for the next consecutive failure, and a clean batch resets it to RETRY_BASE_MS.
+    // Only ONE retry pending at a time; the effect cleanup and pause() clear it. This is what
+    // makes extract-all survive a 429 — its failed batch changes no synced state, so nothing
+    // else re-wakes the loop.
+    const scheduleRetry = (err: unknown) => {
       if (retryTimerRef.current !== null) return;
-      const delay = retryDelayRef.current;
-      retryDelayRef.current = Math.min(delay * 2, RETRY_MAX_MS);
+      const hintMs = retryAfterMsOf(err);
+      const baseMs = hintMs !== undefined ? Math.max(hintMs, RETRY_BASE_MS) : retryDelayRef.current;
+      retryDelayRef.current = Math.min(retryDelayRef.current * 2, RETRY_MAX_MS);
       retryTimerRef.current = setTimeout(() => {
         retryTimerRef.current = null;
         if (!cancelled) void drain();
-      }, delay);
+      }, jitteredDelayMs(baseMs));
     };
 
     const drain = async () => {
@@ -398,7 +403,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         // Gated like the auto drain (don't self-resume a hidden tab's incidental work), but
         // extract-all — explicit + finite — resumes even while hidden.
         if (!cancelled && isRetryableTransportError(err) && (visibleRef.current || extractingAllRef.current)) {
-          scheduleRetry();
+          scheduleRetry(err);
         }
       } finally {
         runningRef.current = false;

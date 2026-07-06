@@ -12,10 +12,25 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly body: string,
+    /** Server's `Retry-After` hint in seconds (a 429/503 may carry one) — lets a
+     *  retrying caller wait the window out instead of guessing. */
+    public readonly retryAfterSeconds?: number,
   ) {
     super(`Request failed with status ${status}`);
     this.name = 'ApiError';
   }
+}
+
+// `Retry-After` from an error response, in seconds. Handles both header forms
+// (delta-seconds and HTTP-date); undefined when absent or unparseable.
+export function parseRetryAfterSeconds(res: Response): number | undefined {
+  const header = res.headers.get('retry-after');
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const date = Date.parse(header);
+  if (Number.isNaN(date)) return undefined;
+  return Math.max(0, (date - Date.now()) / 1000);
 }
 
 export interface ApiClientOptions {
@@ -66,7 +81,7 @@ export async function callEndpoint<
 
   const res = await fetchImpl(url.toString(), init);
   if (!res.ok) {
-    throw new ApiError(res.status, await res.text().catch(() => ''));
+    throw new ApiError(res.status, await res.text().catch(() => ''), parseRetryAfterSeconds(res));
   }
 
   return endpoint.response.parse(await res.json());

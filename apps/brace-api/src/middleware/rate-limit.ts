@@ -25,6 +25,16 @@ export const RATE_LIMIT_TIERS = {
 
 export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
 
+// Each tier's window length in seconds — keep in sync with the `simple.period`
+// values in wrangler.jsonc (the native binding only allows 10 or 60). Sent as
+// `Retry-After` on a 429: the binding doesn't expose the window's actual reset
+// time, so the full period is the conservative ceiling — waiting it out always
+// lands the client in a fresh window.
+export const RATE_LIMIT_PERIODS: Record<RateLimitTier, number> = {
+  standard: 60,
+  tight: 10,
+};
+
 // The counter key. Per-IP + per-path by default: each (caller, endpoint) pair
 // gets its own bucket, so a flood of one endpoint doesn't throttle the others.
 // `cf-connecting-ip` is the real client IP set by Cloudflare's edge.
@@ -66,7 +76,9 @@ export function rateLimit(
 
     const { success } = await limiter.limit({ key: key(c) });
     if (!success) {
-      throw new ApiError(429, 'rate_limited', 'Too many requests');
+      throw new ApiError(429, 'rate_limited', 'Too many requests', {
+        'retry-after': String(RATE_LIMIT_PERIODS[tier]),
+      });
     }
     return next();
   });

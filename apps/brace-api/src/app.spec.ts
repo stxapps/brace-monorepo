@@ -25,4 +25,27 @@ describe('brace-api', () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ status: 'ok' });
   });
+
+  // The real binding would need 60 requests to trip, so swap in a denying fake:
+  // what's under test is the 429 envelope + the Retry-After header (the standard
+  // tier's 60s window — middleware/rate-limit.ts RATE_LIMIT_PERIODS).
+  it('sends Retry-After on a rate-limited request', async () => {
+    const deny = { limit: async () => ({ success: false }) };
+    const res = await app.request('/', {}, { ...env, API_RATE_LIMIT: deny });
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('retry-after')).toBe('60');
+    await expect(res.json()).resolves.toEqual({
+      error: 'rate_limited',
+      message: 'Too many requests',
+    });
+  });
+
+  // Retry-After is not CORS-safelisted, so browser JS only sees it if the CORS
+  // layer exposes it (app.ts exposeHeaders) — pin that wiring.
+  it('exposes Retry-After to CORS callers', async () => {
+    const res = await app.request('/', {}, env);
+
+    expect(res.headers.get('access-control-expose-headers')).toBe('Retry-After');
+  });
 });

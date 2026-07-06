@@ -539,9 +539,12 @@ Each facet answers the same questions independently:
     timestamp arithmetic, no implicit "failed-with-no-deadline = permanent" rule to
     get wrong. Because this is **synced**, one device's `permanent` (or fresh
     `failed`) stops _every_ device retrying that facet — not the per-device thrash a
-    device-local marker would give. (If we ever honor a server-supplied
-    `Retry-After` / 429, _that_ deadline isn't derivable from `attempts` and earns
-    its own field at that point — until then, don't pre-pay it.)
+    device-local marker would give. (The extractor's 429 `Retry-After` IS honored,
+    but at the transport level — the drain's in-memory retry timer waits it out
+    (extraction-provider `scheduleRetry`) and a wholesale transport failure is
+    never recorded per-link — so no synced deadline field is needed. If a
+    _per-link_ server deadline ever appears, it isn't derivable from `attempts`
+    and earns its own field at that point — until then, don't pre-pay it.)
 - **cross-device dedup** → **none, by design.** There is no claim lease. A lease
   would force an extra _write-claim-then-sync before extraction_ on the critical
   path, yet stay best-effort anyway (two devices waking in the same poll window

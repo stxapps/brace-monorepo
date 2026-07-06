@@ -28,6 +28,7 @@ import {
   opsListEndpoint,
   type OpsListResponse,
   type SignOp,
+  withRetry,
 } from '@stxapps/shared';
 
 import { db, type PendingOpRecord } from '../data/db';
@@ -99,6 +100,18 @@ interface Entry {
   updatedAt: number;
 }
 
+// Every public flow rides a retrying api client: a 429 (brace-api's rate limits are
+// shared buckets — another tab, another device on the account, a NATed neighbor —
+// so no amount of client pacing can rule one out), a 5xx, or a network blip gets a
+// few backed-off retries (honoring the server's Retry-After) instead of failing the
+// whole cycle into bgSyncStatus 'error' and waiting for a human. Retrying at the
+// CALL level, not the cycle level, keeps already-paged op-log/list work; a run that
+// still fails after the retries surfaces exactly as before. Wrapped per flow (not
+// stored) so SyncDeps stays a plain value the callers construct freely.
+function withRetryDeps(deps: SyncDeps): SyncDeps {
+  return { ...deps, api: withRetry(deps.api) };
+}
+
 // --- public flows -----------------------------------------------------------
 
 // First sync after a fresh sign-in on this device (docs flow #1). List the full R2
@@ -106,6 +119,7 @@ interface Entry {
 // pulled here. BLOCKING from the UI's point of view (InitialSyncGate shows the
 // decrypting screen until this resolves).
 export async function runInitialSync(deps: SyncDeps): Promise<void> {
+  deps = withRetryDeps(deps);
   const files = await listAllFiles(deps.api);
   await storeDownloads(deps, files);
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
@@ -151,6 +165,7 @@ export function runIncrementalSync(deps: SyncDeps): Promise<void> {
 }
 
 async function incrementalSyncOnce(deps: SyncDeps): Promise<void> {
+  deps = withRetryDeps(deps);
   const meta = await getSyncMeta(deps.username);
   // The cursor is the compound key (updatedAt, path); both halves go over the wire
   // as opsListEndpoint's `since` + `sincePath`. `since` is always sent (even 0, for
@@ -188,7 +203,7 @@ export async function loadEntityContent(
   if (!rec) return undefined;
   if (rec.data) return rec.data;
 
-  const url = (await signPaths(deps.api, 'get', [path])).get(path);
+  const url = (await signPaths(withRetry(deps.api), 'get', [path])).get(path);
   if (!url) return undefined;
 
   const blob = await getBlob(url).catch((err: unknown) => {

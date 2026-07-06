@@ -23,6 +23,8 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message?: string,
+    /** Extra response headers, e.g. a 429's `Retry-After` (middleware/rate-limit.ts). */
+    readonly headers?: Record<string, string>,
   ) {
     super(message ?? code);
     this.name = 'ApiError';
@@ -33,7 +35,7 @@ export function errorHandler(err: unknown, c: Context<AppEnv>): Response {
   if (err instanceof ApiError) {
     const body: ErrorBody = { error: err.code };
     if (err.message && err.message !== err.code) body.message = err.message;
-    return c.json(body, err.status as 400);
+    return c.json(body, err.status as 400, err.headers);
   }
 
   // Hono's own thrown errors (incl. zValidator failures it re-raises) carry a
