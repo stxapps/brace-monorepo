@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { SettingsIcon } from 'lucide-react';
 
 import { normalizeUrl } from '@stxapps/shared';
-import { type LinkItem, readLinkByUrlKey, useAuth } from '@stxapps/web-react';
+import { type LinkItem, readLinkByUrlKey, useAuth, useSync } from '@stxapps/web-react';
 
 import { Complete } from './Complete';
 import { Editor } from './Editor';
@@ -44,7 +44,21 @@ function App() {
 // (and back) — sync detail lives in the popup, not Settings, so this is a local
 // `view` toggle rather than opening the options page.
 function AuthedApp() {
+  const { requestSync } = useSync();
   const [view, setView] = useState<'flow' | 'sync'>('flow');
+
+  // Kick a background cycle the moment the popup is authenticated. This subtree
+  // mounts on BOTH entry paths — "opened while already signed in" (loading →
+  // authenticated) and "just signed in" (unauthenticated → authenticated, App
+  // swaps SignIn for this) — so one mount effect covers both. Without it a fresh
+  // sign-in runs no cycle until the hourly alarm, leaving status at "last sync
+  // never" over an empty store. `requestSync` messages the background (KICK_SYNC);
+  // the worker's single-flight coalesces this with any alarm/startup cycle, so an
+  // extra kick per popup open is cheap. This is the "KICK_SYNC from the popup"
+  // freshness trigger background.ts anticipates, now wired beyond post-write.
+  useEffect(() => {
+    requestSync();
+  }, [requestSync]);
 
   if (view === 'sync') return <SyncDetail onBack={() => setView('flow')} />;
   return (

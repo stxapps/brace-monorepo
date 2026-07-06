@@ -1,4 +1,11 @@
-import { EXTRACTIONS_PREFIX, FILES_PREFIX, LINKS_PREFIX, SETTINGS_PREFIX } from '@stxapps/shared';
+import {
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  LINKS_PREFIX,
+  LISTS_PREFIX,
+  SETTINGS_PREFIX,
+  TAGS_PREFIX,
+} from '@stxapps/shared';
 import {
   getSession,
   isFirstSyncDone,
@@ -20,20 +27,28 @@ import {
 // popup / options page can render status without mounting the sync engine.
 //
 // SELECTIVE SYNC: the extension materializes `links/` + `extractions/` (+ lazy
-// `files/`) for the library, plus `settings/` — it still skips downloading
-// `tags/`/`lists/`/`pins/` blobs. `settings/` is pulled because the popup/options
-// ThemeProvider resolves the synced theme (and links layout / serverExtraction)
-// through `useSettings()` → `readSettingsGeneral()`, which reads `settings/general.enc`
-// out of the local store; without it materialized here that read is always undefined
-// and the synced theme silently falls back to the default (the same file the pre-paint
-// FOUC script's localStorage mirror is warmed from). It's a single small blob, so the
-// cost is negligible. The cursor still advances across ALL ops (the engine filters
-// downloads, not the op pull), so the next cycle resumes correctly.
+// `files/`) for the library, plus `settings/`, `lists/`, and `tags/` — it still
+// skips downloading `pins/` blobs (a browse-only concern the popup never reads).
+// `settings/` is pulled because the popup/options ThemeProvider resolves the synced
+// theme (and links layout / serverExtraction) through `useSettings()` →
+// `readSettingsGeneral()`, which reads `settings/general.enc` out of the local store;
+// without it materialized here that read is always undefined and the synced theme
+// silently falls back to the default (the same file the pre-paint FOUC script's
+// localStorage mirror is warmed from). `lists/` and `tags/` are pulled because the
+// popup's save Editor (Editor.tsx) lets you pick a list and tags: its shared
+// ListSelect / TagsField pickers read the options from the local store
+// (`useLists()` → `readLists()`, `useTags()` → `readTags()`), so without those blobs
+// materialized the editor shows only the system lists and zero existing tags. All
+// three are small blob sets, so the cost is negligible. The cursor still advances
+// across ALL ops (the engine filters downloads, not the op pull), so the next cycle
+// resumes correctly.
 const pathFilter = (path: string): boolean =>
   path.startsWith(LINKS_PREFIX) ||
   path.startsWith(EXTRACTIONS_PREFIX) ||
   path.startsWith(FILES_PREFIX) ||
-  path.startsWith(SETTINGS_PREFIX);
+  path.startsWith(SETTINGS_PREFIX) ||
+  path.startsWith(LISTS_PREFIX) ||
+  path.startsWith(TAGS_PREFIX);
 
 function buildDeps(): SyncDeps | null {
   // Synchronous read of the in-memory mirror the api client's authFetch reads —

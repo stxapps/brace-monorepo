@@ -806,9 +806,19 @@ For an extension whose job is extraction + save, the minimum working set is:
 - **lazily / never: `files/`.** Heavy content is on-demand for **every** client
   already; the extension fetches a `files/` blob only to **upgrade** an existing
   screenshot/archive, never routinely.
-- **skip entirely: `tags/` `lists/` `pins/` `settings/`** — none are inputs to
-  extraction. (If the extension later grows a browse/library UI it'll want these
-  too, but that's a UI decision, not an extraction requirement.)
+- **pulled for the popup UI, not for extraction: `settings/` `lists/` `tags/`.**
+  None are extraction inputs — they ride along because the popup renders more than a
+  headless extractor. `settings/` feeds the ThemeProvider (`useSettings()` →
+  `readSettingsGeneral()` resolves the synced theme / links layout). `lists/` and
+  `tags/` feed the save **Editor**'s list/tag pickers (the shared `ListSelect` /
+  `TagsField`, whose options come from the local store via `useLists()` →
+  `readLists()` and `useTags()` → `readTags()`) — without them the editor shows only
+  the system lists and zero existing tags. These are the "if the extension grows a
+  browse/library UI it'll want these too" namespaces, now realized: a UI decision,
+  not an extraction requirement. All three are small blob sets, so the cost is
+  negligible.
+- **skip entirely: `pins/`** — a browse-only ordering concern the popup never reads,
+  and not an extraction input.
 
 The cursor still advances across **all** ops (it's the global high-water mark);
 selective sync only changes which blobs get downloaded, not how the cursor moves.
