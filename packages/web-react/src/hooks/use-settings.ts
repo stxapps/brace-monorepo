@@ -89,7 +89,10 @@ export function useSettings(): Settings {
   // where a per-render identity churns the effect needlessly — and is a latent render
   // loop for any consumer that both deps on it and sets state from it. Keyed on the
   // raw liveQuery values, so identity only changes when a source actually re-emits.
-  const syncTheme = useMemo(() => coerceThemeState(general?.theme ?? DEFAULT_THEME), [general?.theme]);
+  const syncTheme = useMemo(
+    () => coerceThemeState(general?.theme ?? DEFAULT_THEME),
+    [general?.theme],
+  );
   const themeSource = local?.themeSource ?? 'sync';
   const localTheme = useMemo(() => coerceThemeState(local?.theme ?? DEFAULT_THEME), [local?.theme]);
   const theme = themeSource === 'local' ? localTheme : syncTheme;
