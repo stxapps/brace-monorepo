@@ -21,68 +21,56 @@ import {
   CircleCheck,
   Download,
   Loader2,
-  RefreshCw,
   Trash2,
   Upload,
 } from 'lucide-react';
 
-import { useSync } from '@stxapps/web-react';
+import {
+  formatSyncedAt,
+  getSyncPhase,
+  SYNC_PHASE_LABELS,
+  usePendingChangesCount,
+  useSync,
+} from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
-// A coarse "N min ago" for the last-synced line — good enough for a status
-// blurb, no date lib needed.
-function formatSyncedAt(ts: number): string {
-  const min = Math.floor((Date.now() - ts) / 60000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hr ago`;
-  return new Date(ts).toLocaleDateString();
-}
-
-// The sync status card: collapses the two sync dimensions (storeStatus gate +
-// bgSyncStatus indicator) into one line with an icon, an optional detail, and
-// the single relevant action (Sync now / Retry). Sync is status-based, not a
-// percentage, so there's no progress bar.
+// The sync status card: collapses the two sync dimensions into one phase
+// (web-react's shared getSyncPhase — same derivation as the extension popup)
+// with an icon, an optional detail, and the single relevant action (Sync now /
+// Retry). Sync is status-based, not a percentage, so there's no progress bar;
+// the pending-changes line is the "how much is left" signal instead.
 function SyncStatus() {
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync, retryInitialSync } =
     useSync();
+  const pendingCount = usePendingChangesCount();
+  const phase = getSyncPhase(storeStatus, bgSyncStatus);
+  const isError = phase === 'initial-error' || phase === 'cycle-error';
 
-  let icon = <RefreshCw className="size-4 text-muted-foreground" />;
-  let text = 'Up to date';
-  let detail: string | null = null;
-  let tone: 'muted' | 'error' = 'muted';
-  let action: { label: string; onClick: () => void } | null = null;
+  const icon = isError ? (
+    <CircleAlert className="size-4 text-destructive" />
+  ) : phase === 'idle' ? (
+    <CircleCheck className="size-4 text-muted-foreground" />
+  ) : (
+    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+  );
 
-  if (storeStatus === 'checking') {
-    icon = <Loader2 className="size-4 animate-spin text-muted-foreground" />;
-    text = 'Checking your data…';
-  } else if (storeStatus === 'syncing-initial') {
-    icon = <Loader2 className="size-4 animate-spin text-muted-foreground" />;
-    text = 'Setting up this device…';
-  } else if (storeStatus === 'error') {
-    icon = <CircleAlert className="size-4 text-destructive" />;
-    text = 'Initial sync failed';
-    tone = 'error';
-    action = { label: 'Retry', onClick: retryInitialSync };
-  } else if (bgSyncStatus === 'syncing') {
-    icon = <Loader2 className="size-4 animate-spin text-muted-foreground" />;
-    text = 'Syncing…';
-  } else if (bgSyncStatus === 'error') {
-    icon = <CircleAlert className="size-4 text-destructive" />;
-    text = 'Sync failed';
-    detail = lastError;
-    tone = 'error';
-    action = { label: 'Retry', onClick: requestSync };
-  } else {
-    icon = <CircleCheck className="size-4 text-muted-foreground" />;
-    text = lastSyncAt ? `Last synced ${formatSyncedAt(lastSyncAt)}` : 'Up to date';
-    action = { label: 'Sync now', onClick: requestSync };
-  }
+  const text =
+    phase === 'idle' && lastSyncAt
+      ? `Last synced ${formatSyncedAt(lastSyncAt)}`
+      : SYNC_PHASE_LABELS[phase];
+  const detail = phase === 'cycle-error' ? lastError : null;
+  const action =
+    phase === 'initial-error'
+      ? { label: 'Retry', onClick: retryInitialSync }
+      : phase === 'cycle-error'
+        ? { label: 'Retry', onClick: requestSync }
+        : phase === 'idle'
+          ? { label: 'Sync now', onClick: requestSync }
+          : null;
 
   return (
     <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
@@ -90,12 +78,15 @@ function SyncStatus() {
         <span className="mt-0.5 shrink-0">{icon}</span>
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-medium">Sync</span>
-          <span
-            className={`text-sm ${tone === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}
-          >
+          <span className={`text-sm ${isError ? 'text-destructive' : 'text-muted-foreground'}`}>
             {text}
           </span>
           {detail && <span className="wrap-break-words text-sm text-destructive">{detail}</span>}
+          {pendingCount > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
+            </span>
+          )}
         </div>
       </div>
       {action && (

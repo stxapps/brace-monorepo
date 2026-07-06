@@ -11,7 +11,9 @@
 // main pane shows the BulkEditToolbar); search is still an `onClick` stub.
 
 import {
+  CircleAlert,
   LifeBuoy,
+  Loader2,
   LogOut,
   MoreHorizontal,
   RefreshCw,
@@ -22,7 +24,7 @@ import {
 import Link from 'next/link';
 
 import { ALL_LABEL, flattenTree } from '@stxapps/shared';
-import { useLists, useSignOut, useSync, useTags } from '@stxapps/web-react';
+import { getSyncPhase, useLists, useSignOut, useSync, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -56,21 +58,61 @@ function useSelectionLabel(): string {
 // actions that don't warrant their own toolbar slot. Sign out goes through the
 // useSignOut mutation (server revocation, then local wipe) rather than the bare
 // auth-provider endSession primitive, which only drops the local session.
+//
+// The Sync item adapts to the sync phase, and a failed cycle also surfaces as a
+// dot on the trigger — the topbar is the links page's only always-visible sync
+// error surface (the full status card lives in Settings → Data). Only errors get
+// the dot: a spinner there would flicker on every edit's sub-second cycle.
 function MoreOptionsMenu() {
-  const { requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, requestSync, retryInitialSync } = useSync();
   const signOut = useSignOut();
+  const phase = getSyncPhase(storeStatus, bgSyncStatus);
+  const syncError = phase === 'initial-error' || phase === 'cycle-error';
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="More options">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="relative"
+          aria-label={syncError ? 'More options (sync failed)' : 'More options'}
+        >
           <MoreHorizontal className="size-4" />
+          {syncError && (
+            <span
+              aria-hidden="true"
+              className="absolute top-1 right-1 size-1.5 rounded-full bg-destructive"
+            />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuItem onSelect={() => requestSync()}>
-          <RefreshCw className="size-4" />
-          Sync
+        <DropdownMenuItem
+          onSelect={(e) => {
+            // Keep the menu open: the Syncing… → settled transition on this item
+            // IS the click's feedback (requestSync coalesces, so re-clicks are safe).
+            e.preventDefault();
+            if (phase === 'initial-error') retryInitialSync();
+            else requestSync();
+          }}
+        >
+          {phase === 'syncing' ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Syncing…
+            </>
+          ) : syncError ? (
+            <>
+              <CircleAlert className="size-4 text-destructive" />
+              Sync failed — Retry
+            </>
+          ) : (
+            <>
+              <RefreshCw className="size-4" />
+              Sync
+            </>
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href={`/settings/${DEFAULT_SECTION_ID}`}>

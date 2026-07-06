@@ -1,23 +1,35 @@
-import { type BgSyncStatus, type StoreStatus, useAuth, useSync } from '@stxapps/web-react';
+import {
+  formatSyncedAt,
+  getSyncPhase,
+  SYNC_PHASE_LABELS,
+  type SyncPhase,
+  useAuth,
+  usePendingChangesCount,
+  useSync,
+} from '@stxapps/web-react';
 
 // The two sync surfaces of the popup: a glanceable pill that sits under the save flow
 // (SyncPill), and the detail view it opens (SyncDetail). Sync lives here — the popup's
 // operational surface — rather than in the Settings page, which is now durable
 // configuration only (theme + account). Both read the same useSync() seam brace-web
 // uses; in the extension the popup provider tree feeds it from the background's
-// storage mirror, so there's no separate storage subscription here.
+// storage mirror, so there's no separate storage subscription here. The two-field
+// status collapses through web-react's shared getSyncPhase, same as brace-web's
+// Settings→Data card — only the wording differs per surface.
 
-// The at-a-glance label. Error wins, then in-flight, then the settled "ok" state — a
-// single word the pill can show without the caller knowing the two-field split.
-function syncLabel(store: StoreStatus, bg: BgSyncStatus, lastError: string | null): string {
-  if (lastError || store === 'error' || bg === 'error') return 'Error';
-  if (store === 'syncing-initial' || bg === 'syncing') return 'Syncing…';
-  if (store === 'checking') return 'Checking…';
-  return 'Synced ✓';
-}
+// The pill's at-a-glance word per phase — shorter than the shared labels since it
+// shares a row with the "Sync" caption.
+const PILL_LABELS: Record<SyncPhase, string> = {
+  checking: 'Checking…',
+  'initial-syncing': 'Syncing…',
+  'initial-error': 'Error',
+  syncing: 'Syncing…',
+  'cycle-error': 'Error',
+  idle: 'Synced ✓',
+};
 
 export function SyncPill({ onClick }: { onClick: () => void }) {
-  const { storeStatus, bgSyncStatus, lastError } = useSync();
+  const { storeStatus, bgSyncStatus } = useSync();
   return (
     <button
       type="button"
@@ -26,7 +38,7 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
     >
       <span>Sync</span>
       <span className="text-muted-foreground">
-        {syncLabel(storeStatus, bgSyncStatus, lastError)} ›
+        {PILL_LABELS[getSyncPhase(storeStatus, bgSyncStatus)]} ›
       </span>
     </button>
   );
@@ -34,9 +46,12 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
 
 export function SyncDetail({ onBack }: { onBack: () => void }) {
   const { username } = useAuth();
-  // All four fields, same as the old Settings status section that lived here before.
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError } = useSync();
-  const lastSync = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'never';
+  // Queued local edits the next cycle will push — live from the shared Dexie
+  // store, not the background's mirror.
+  const pendingCount = usePendingChangesCount();
+  const phase = getSyncPhase(storeStatus, bgSyncStatus);
+  const lastSync = lastSyncAt ? formatSyncedAt(lastSyncAt) : 'never';
 
   return (
     <div className="flex w-85 flex-col gap-3 p-4">
@@ -53,12 +68,12 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
           <span>{username ?? '—'}</span>
         </div>
         <div className="flex justify-between py-0.5 text-sm">
-          <span>Store</span>
-          <span>{storeStatus}</span>
+          <span>Status</span>
+          <span>{SYNC_PHASE_LABELS[phase]}</span>
         </div>
         <div className="flex justify-between py-0.5 text-sm">
-          <span>Last cycle</span>
-          <span>{bgSyncStatus}</span>
+          <span>Pending changes</span>
+          <span>{pendingCount}</span>
         </div>
         <div className="flex justify-between py-0.5 text-sm">
           <span>Last sync</span>
@@ -67,7 +82,7 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
         {lastError && (
           <div className="flex justify-between py-0.5 text-sm">
             <span>Last error</span>
-            <span>{lastError}</span>
+            <span className="text-destructive">{lastError}</span>
           </div>
         )}
       </section>
