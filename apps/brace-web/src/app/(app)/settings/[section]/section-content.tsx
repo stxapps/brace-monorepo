@@ -5,9 +5,11 @@
 // 'use client'. A section adds its own 'use client' when it grows interactivity.
 
 import { SETTINGS_SECTIONS, type SettingsSectionId } from '../sections';
+import { DataSection } from './_data/data-section';
 import { ExtractionSection } from './_extraction/extraction-section';
 import { ListsSection } from './_lists/lists-section';
 import { MiscSection } from './_misc/misc-section';
+import { TagsSection } from './_tags/tags-section';
 
 function Placeholder({ id }: { id: SettingsSectionId }) {
   const label = SETTINGS_SECTIONS.find((s) => s.id === id)?.label ?? id;
@@ -22,9 +24,10 @@ function Placeholder({ id }: { id: SettingsSectionId }) {
 const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
   account: () => <Placeholder id="account" />,
   subscription: () => <Placeholder id="subscription" />,
-  lists: () => <ListsSection />,
-  tags: () => <Placeholder id="tags" />,
+  data: () => <DataSection />,
   extraction: () => <ExtractionSection />,
+  lists: () => <ListsSection />,
+  tags: () => <TagsSection />,
   misc: () => <MiscSection />,
   about: () => <Placeholder id="about" />,
 };

@@ -36,9 +36,27 @@ not modal forms, so the invariants below apply loosely (they hold no snapshot
 draft; each keystroke commits or reverts in place):
 
 - `apps/brace-web/.../settings/[section]/_lists/lists-section.tsx` — create /
-  rename / reorder / reparent / delete lists.
+  rename / reorder / **reparent** / delete lists. Nesting _is_ the UI here: drag
+  with live depth projection, a "Move to" submenu, and collapse toggles.
 - `apps/brace-web/.../settings/[section]/_tags/tags-section.tsx` — the tag
-  counterpart (create / rename / delete).
+  counterpart **minus nesting**: create / rename / **reorder** (drag or up/down) /
+  delete, over one flat ranked group.
+
+  **Lists nest, tags are deliberately flat — and that's a UI decision, not a
+  schema one.** Tags carry the _same_ `parentId`/`rank` fields as lists
+  (`entities.ts` — both are the same ranked-tree entity), so the store could nest
+  them. The tags section chooses not to: a link belongs to exactly **one** list
+  (a location → a hierarchy earns its keep) but has **many** tags (flat labels →
+  a second hierarchy would only blur "where it lives" vs. "what it's about" and
+  duplicate the list tree). So `tags-section` drops everything nesting brings —
+  depth projection, the "Move to" reparent submenu, collapse toggles, and the
+  system-entity guard (every tag is deletable; there are no system tags) — and
+  reorders with a plain `arrayMove` over `useTags`'s top level, which _is_ the
+  whole set precisely because nothing nests tags (`buildTree` also re-roots any
+  dangling parent). The asymmetry lives only in these two sections + the pickers;
+  if tag nesting is ever wanted, the schema, `buildTree`, and `useTagMutations`
+  (`move` already takes a `parentId`) already support it — only this section and
+  `tags-command` would change.
 
 All link writes go through **one op** — `useLinkMutations` (`create` / `update` /
 `saveCustomImage`) — and taxonomy writes through `useListMutations` /
