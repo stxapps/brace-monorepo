@@ -1,12 +1,5 @@
-import {
-  formatSyncedAt,
-  getSyncPhase,
-  SYNC_PHASE_LABELS,
-  type SyncPhase,
-  useAuth,
-  usePendingChangesCount,
-  useSync,
-} from '@stxapps/web-react';
+import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS, type SyncPhase } from '@stxapps/shared';
+import { useAuth, usePendingChangesCount, useSync } from '@stxapps/web-react';
 
 // The two sync surfaces of the popup: a glanceable pill that sits under the save flow
 // (SyncPill), and the detail view it opens (SyncDetail). Sync lives here — the popup's
@@ -14,7 +7,7 @@ import {
 // configuration only (theme + account). Both read the same useSync() seam brace-web
 // uses; in the extension the popup provider tree feeds it from the background's
 // storage mirror, so there's no separate storage subscription here. The two-field
-// status collapses through web-react's shared getSyncPhase, same as brace-web's
+// status collapses through @stxapps/shared's getSyncPhase, same as brace-web's
 // Settings→Data card — only the wording differs per surface.
 
 // The pill's at-a-glance word per phase — shorter than the shared labels since it

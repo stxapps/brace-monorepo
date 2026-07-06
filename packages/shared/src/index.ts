@@ -16,6 +16,7 @@ export * from './sync/extraction';
 export * from './sync/items';
 export * from './sync/paths';
 export * from './sync/rank';
+export * from './sync/status';
 export * from './sync/system-lists';
 export * from './sync/tree';
 export * from './theme/theme';

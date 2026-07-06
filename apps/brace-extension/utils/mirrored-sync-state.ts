@@ -1,4 +1,4 @@
-import type { BgSyncStatus, StoreStatus } from '@stxapps/web-react';
+import type { BgSyncStatus, StoreStatus } from '@stxapps/shared';
 
 // The background's sync-health MIRROR in browser.storage.local. Distinct from the
 // runtime.sendMessage command protocol in messages.ts: this is a broadcast channel —

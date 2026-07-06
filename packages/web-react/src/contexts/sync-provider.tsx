@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { useApiClient } from '@stxapps/react';
+import type { BgSyncStatus, StoreStatus } from '@stxapps/shared';
 
 import { getSession } from '../data/session-store';
 import { isFirstSyncDone } from '../data/sync-store';
@@ -38,21 +39,10 @@ import { useAuth } from './auth-provider';
 //                  failed background cycle coexists with a usable store (that's
 //                  the point of local-first), so it must not leave 'ready'.
 
-// The gate's phases — named for the LOCAL STORE, not the sync runs: on a
-// returning visit no initial sync runs at all, yet the store is 'ready'.
-export type StoreStatus =
-  | 'checking' // reading the flag from IndexedDB
-  | 'syncing-initial' // first-ever pull on this device, UI is blocked
-  | 'ready' // local store is usable; background sync may still be running
-  | 'error'; // initial pull failed; offer retry
-
-// The indicator's phases. Only post-'ready' cycles report here — while the gate
-// blocks, the decrypting screen IS the progress UI.
-export type BgSyncStatus =
-  | 'idle' // no cycle in flight; the last one (if any) succeeded
-  | 'syncing' // a background cycle is in flight
-  | 'error'; // the last cycle failed; requestSync retries (flips back to 'syncing')
-
+// StoreStatus (the gate) and BgSyncStatus (the indicator) are the shared,
+// platform-free sync vocabulary — defined in @stxapps/shared so a native client
+// speaks the same language — and imported above. SyncProvider is one concrete
+// producer of them.
 interface SyncContextValue {
   storeStatus: StoreStatus;
   bgSyncStatus: BgSyncStatus;

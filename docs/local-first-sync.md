@@ -122,6 +122,35 @@ a content gateway. The signed URL is an **AWS SigV4 presign of R2's S3 endpoint*
 from inside the Worker but can't mint a URL the browser can use directly; the S3
 access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` / `lib/env.ts`).
 
+### sync status: two fields, one phase (shared vocabulary)
+
+What the engine is doing surfaces to the UI as **two fields, never one enum**:
+`storeStatus` (the gate — can the app render local data at all? durable, stays
+`ready` while cycles come and go) and `bgSyncStatus` (the indicator — health of
+the current/last background cycle, which fails _without_ leaving `ready`, because
+a failed cycle coexists with a usable store — that's the point of local-first).
+Every status surface collapses the two into one `SyncPhase` the same way, via
+`getSyncPhase`.
+
+That vocabulary — the `StoreStatus` / `BgSyncStatus` / `SyncPhase` types,
+`getSyncPhase`, the default `SYNC_PHASE_LABELS`, and `formatSyncedAt` — lives in
+**`@stxapps/shared` (`sync/status.ts`)**, not in the platform-web layer. It's pure
+data + pure derivation with no React and no browser API, so a client that
+re-implements the engine on a non-IndexedDB store (the future native app) still
+speaks the same status language and collapses phases identically. The concrete
+providers are the platform layer's job: `web-react`'s `SyncProvider` drives the
+web engine and produces the two fields; `ExternalSyncProvider` takes them from an
+out-of-page context (the extension's background worker, via its
+`browser.storage` mirror); a native app would write its own producer. **Shared
+owns the vocabulary; each platform owns its producer.**
+
+Labels split the same way. `SYNC_PHASE_LABELS` in shared is the _default_ wording;
+each surface layers its own presentation on top of the phase — icons, actions, and
+short labels (e.g. the extension popup's cramped `PILL_LABELS` keeps its own
+`Synced ✓` / `Error` words next to the "Sync" caption). Those per-surface label
+maps stay with their surface — they're presentation, not vocabulary, and have no
+second consumer.
+
 ### storage layout
 
 **Cloudflare R2** (private bucket; all access via signed URLs). One entity = one

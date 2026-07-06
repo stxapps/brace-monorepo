@@ -25,13 +25,8 @@ import {
   Upload,
 } from 'lucide-react';
 
-import {
-  formatSyncedAt,
-  getSyncPhase,
-  SYNC_PHASE_LABELS,
-  usePendingChangesCount,
-  useSync,
-} from '@stxapps/web-react';
+import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared';
+import { usePendingChangesCount, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Label } from '@stxapps/web-ui/components/ui/label';
@@ -39,7 +34,7 @@ import { Label } from '@stxapps/web-ui/components/ui/label';
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
 // The sync status card: collapses the two sync dimensions into one phase
-// (web-react's shared getSyncPhase — same derivation as the extension popup)
+// (@stxapps/shared's getSyncPhase — same derivation as the extension popup)
 // with an icon, an optional detail, and the single relevant action (Sync now /
 // Retry). Sync is status-based, not a percentage, so there's no progress bar;
 // the pending-changes line is the "how much is left" signal instead.

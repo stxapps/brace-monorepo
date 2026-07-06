@@ -23,8 +23,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { ALL_LABEL, flattenTree } from '@stxapps/shared';
-import { getSyncPhase, useLists, useSignOut, useSync, useTags } from '@stxapps/web-react';
+import { ALL_LABEL, flattenTree, getSyncPhase } from '@stxapps/shared';
+import { useLists, useSignOut, useSync, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
