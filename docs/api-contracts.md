@@ -96,6 +96,39 @@ and hands it to the sync engine as `SyncDeps.api`. That's the reason
 it has to be callable from a non-React module too. Both paths share one in-memory
 session mirror, so the bearer token stays consistent.
 
+### transport retry
+
+Layered on the contract client is an optional retry policy in `shared`
+(`api/retry.ts`) — the client-side half of the servers' rate limits (`brace-api`
+and `brace-extractor` both run per-IP/per-user buckets). Those buckets are
+**shared** (other tabs, other devices, a NATed neighbor), so a client can never
+compute its remaining budget up front; the policy is therefore **reactive**: on a
+`429` (honoring the server's `Retry-After`), a `5xx`, or a network blip, back off
+and retry; on a non-429 `4xx` or any non-transport throw, surface it unchanged.
+That classification + backoff math is three pure helpers —
+`isRetryableTransportError`, `retryAfterMsOf`, `jitteredDelayMs` — so **the policy
+is defined once** and every app retries by identical rules.
+
+The _mechanism_ on top of that policy is picked per call site, and the two in the
+codebase differ on purpose:
+
+- **`withRetry(api)` — an inline wrapper.** Wraps an `ApiClient` so every `.call()`
+  retries transparently, blocking in the same async frame until it succeeds or
+  exhausts its tries. The **sync engine** uses it (see
+  [local-first-sync.md](./local-first-sync.md)): it runs off the React tree, so a
+  blocking `Retry-After` wait is fine, and wrapping the client retries at the
+  **call** level — a blip on page 9 of an op-log pull doesn't discard pages 1–8.
+- **the raw helpers — a scheduled re-wake.** A caller inside a React effect loop
+  can't block: it must stay cancellable, visibility-aware, and single-flighted. The
+  **extraction drain** (`ExtractionProvider`, see
+  [link-extraction.md](./link-extraction.md)) imports the three helpers directly
+  and schedules its own backed-off _re-entry_ into the loop rather than wrapping the
+  client — `withRetry`'s blocking wait can't be cancelled by `pause()` or gated on
+  tab visibility.
+
+Don't stack the two: a client wrapped in `withRetry` **and** driven by a re-waking
+loop nests two backoffs against the same bucket. One retry layer per path.
+
 ### adding an endpoint
 
 1. **Contract** — in `packages/shared/src/<area>/endpoints.ts`, define the

@@ -89,6 +89,14 @@ const { ops, oldestUpdatedAt, newestUpdatedAt, hasMore } = await deps.api.call(
 );
 ```
 
+Every one of those calls rides a **retrying** client: the engine wraps `deps.api`
+in `withRetry` (`@stxapps/shared`), so a `429`/`5xx`/network blip is retried at the
+**call** level — keeping already-paged op-log/list work instead of failing the
+whole cycle into an error state. It can afford to block on a `Retry-After` because
+it runs off the React tree; the in-page extraction drain, which can't block, reuses
+the same retry _policy_ by a different _mechanism_ (see
+[api-contracts.md](./api-contracts.md) — _transport retry_).
+
 The whole control plane is **four endpoints**, two per resource — `ops` (the
 op-log entries) and `files` (the R2 objects):
 

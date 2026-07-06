@@ -687,6 +687,17 @@ extraction_), never a substitute for them:
   the button** ("Enrich all _X_ links?") and surfaces progress + controls rather than
   running behind the user's back.
 
+On a **retryable** transport failure (a `429` from the extractor's per-IP cap, a
+`5xx`, a network blip) the drain doesn't fail the job — it schedules a backed-off
+**re-entry** into the loop (`scheduleRetry`). It deliberately does **not** use the
+sync engine's `withRetry` wrapper (see [api-contracts.md](./api-contracts.md) —
+_transport retry_): that blocks inline, but this loop must stay cancellable by
+`pause()`, gated on tab visibility, and single-flighted — so it reuses the shared
+retry _policy_ (`isRetryableTransportError` / `retryAfterMsOf` / `jitteredDelayMs`)
+with its own _mechanism_. The scheduled re-wake is load-bearing for _enrich all_: a
+failed batch writes no facets, so nothing else re-wakes the loop — the retry timer
+is the only thing that resumes it after a `429`.
+
 ### imported links: the bulk path
 
 Bulk import (a `bookmarks.html` export, Pocket/Raindrop/Pinboard, …) is the one
