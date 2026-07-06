@@ -25,11 +25,11 @@ URL + list/tags/note, title/image back-filled later by extraction) and **full
 edit** (every `links/{id}.enc` field, including the `customTitle`/`customImageId`
 overrides). Create collects a strict subset of edit's fields.
 
-| surface | file | kind | fields |
-| --- | --- | --- | --- |
-| extension save editor | `apps/brace-extension/entrypoints/popup/Editor.tsx` | create | list, tags, note (URL is the tab's, read-only) |
-| web quick-add popover | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create | URL, then list/tags/note behind "Advanced" |
-| web edit dialog | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note |
+| surface               | file                                                        | kind      | fields                                         |
+| --------------------- | ----------------------------------------------------------- | --------- | ---------------------------------------------- |
+| extension save editor | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only) |
+| web quick-add popover | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"     |
+| web edit dialog       | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                 |
 
 Two more surfaces edit the taxonomy itself (not links), as inline row editors —
 not modal forms, so the invariants below apply loosely (they hold no snapshot
@@ -70,10 +70,10 @@ The list and tag inputs are **two picker pairs** in
 searchable command body; the body owns the tree/search rendering and is wired
 straight to `web-react`'s live data hook:
 
-| pair | shell | body | data hook |
-| --- | --- | --- | --- |
-| list | `list-select.tsx` (`ListSelect`, a combobox) | `list-command.tsx` (`ListCommand`) | `useLists` |
-| tag | `tags-field.tsx` (`TagsField`, a token combobox) | `tags-command.tsx` (`TagsCommand`) | `useTags` / `useTagMutations` |
+| pair | shell                                            | body                               | data hook                     |
+| ---- | ------------------------------------------------ | ---------------------------------- | ----------------------------- |
+| list | `list-select.tsx` (`ListSelect`, a combobox)     | `list-command.tsx` (`ListCommand`) | `useLists`                    |
+| tag  | `tags-field.tsx` (`TagsField`, a token combobox) | `tags-command.tsx` (`TagsCommand`) | `useTags` / `useTagMutations` |
 
 All three link editors render `ListSelect` + `TagsField`, so the pickers stay
 identical across web quick-add, the extension, and the edit dialog. That's the
@@ -100,7 +100,7 @@ editors:
   menu. Because the pick comes from a `CommandItem` (not a `DropdownMenuItem`,
   which Radix would auto-close), that menu is **controlled** and closes itself on
   select — same pattern as `LinkRowMenu`. Drag-and-drop with depth projection is
-  still the *primary* reparent gesture there; this menu is the keyboard/mouse
+  still the _primary_ reparent gesture there; this menu is the keyboard/mouse
   fallback. So `list-command`'s `root` prop now has two audiences: leave it out
   for link surfaces, opt in for reparenting.
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker

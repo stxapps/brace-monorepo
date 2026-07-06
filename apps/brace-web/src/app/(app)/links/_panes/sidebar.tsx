@@ -188,9 +188,7 @@ function NavItem({
           aria-label={expanded ? 'Collapse' : 'Expand'}
           className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <ChevronRight
-            className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
-          />
+          <ChevronRight className={cn('size-3.5 transition-transform', expanded && 'rotate-90')} />
         </button>
       ) : showSlot ? (
         <span className="size-6 shrink-0" />
@@ -288,9 +286,7 @@ function Section({
         aria-expanded={!isCollapsed}
         className="flex w-full items-center gap-1 rounded-md px-2 pt-3 pb-1 text-muted-foreground/70 transition-colors hover:text-foreground"
       >
-        <ChevronRight
-          className={cn('size-3 transition-transform', !isCollapsed && 'rotate-90')}
-        />
+        <ChevronRight className={cn('size-3 transition-transform', !isCollapsed && 'rotate-90')} />
         <span className="text-xs font-semibold tracking-wide uppercase">{label}</span>
       </button>
       {!isCollapsed && children}
@@ -302,15 +298,7 @@ function Section({
 // link out to the settings section that creates/renames/deletes. Styled like
 // the nav items above but it's an <a>, so it navigates (and Back returns here to
 // keep organizing) rather than calling setSelection.
-function FooterLink({
-  href,
-  icon,
-  label,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-}) {
+function FooterLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
     <Link
       href={href}
@@ -347,9 +335,7 @@ export function Sidebar() {
   const listMatches = filtering
     ? listRows.filter((n) => n.item.name.toLowerCase().includes(q))
     : [];
-  const tagMatches = filtering
-    ? tagRows.filter((n) => n.item.name.toLowerCase().includes(q))
-    : [];
+  const tagMatches = filtering ? tagRows.filter((n) => n.item.name.toLowerCase().includes(q)) : [];
 
   // Keep the active row reachable: expand its collapsed ancestors whenever the
   // selection (or the trees it lives in) changes. Section collapse is left
@@ -460,7 +446,11 @@ export function Sidebar() {
             as noise. Clearing the box brings the band back. */}
         {!filtering && (
           <div className="mt-2 flex flex-col gap-0.5 border-t border-border pt-2">
-            <NavItem icon={<Layers className="size-4" />} label={ALL_LABEL} selection={{ kind: 'all' }} />
+            <NavItem
+              icon={<Layers className="size-4" />}
+              label={ALL_LABEL}
+              selection={{ kind: 'all' }}
+            />
             <div className="my-1 border-t border-border" />
             <FooterLink
               href="/settings/lists"

@@ -17,11 +17,7 @@ import { ChevronsUpDownIcon, X } from 'lucide-react';
 
 import { flattenTree } from '@stxapps/shared';
 import { useTagMutations, useTags } from '@stxapps/web-react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@stxapps/web-ui/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { TagsCommand } from './tags-command';

@@ -95,7 +95,7 @@ function SyncStatus() {
           >
             {text}
           </span>
-          {detail && <span className="text-sm break-words text-destructive">{detail}</span>}
+          {detail && <span className="wrap-break-words text-sm text-destructive">{detail}</span>}
         </div>
       </div>
       {action && (

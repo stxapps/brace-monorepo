@@ -157,7 +157,11 @@ function LinkEditForm({
     // Preview from the resized bytes, not the file, so what the user sees is what
     // gets stored. An object URL over typeless bytes still renders (the <img>
     // sniffs the format — same as the stored-image preview below).
-    setImage({ kind: 'pick', bytes, previewUrl: URL.createObjectURL(new Blob([bytes as BlobPart])) });
+    setImage({
+      kind: 'pick',
+      bytes,
+      previewUrl: URL.createObjectURL(new Blob([bytes as BlobPart])),
+    });
   };
 
   // Does closing now lose anything? Mirrors the field-by-field comparison

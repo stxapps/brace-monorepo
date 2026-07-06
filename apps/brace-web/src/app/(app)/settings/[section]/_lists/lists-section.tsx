@@ -452,11 +452,6 @@ export function ListsSection() {
     run(move(plan.item, plan.parentId, plan.siblings, plan.index));
   };
 
-  const run = (op: Promise<unknown>) => {
-    setError(null);
-    void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-
   const toggle = (id: string) => {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
@@ -474,6 +469,11 @@ export function ListsSection() {
   // no-op.
   const sortGroup = (parentId: string | null, dir: SortDir) =>
     run(reorder(sortedByName(childrenOf(lists, parentId), dir)));
+
+  const run = (op: Promise<unknown>) => {
+    setError(null);
+    void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  };
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">

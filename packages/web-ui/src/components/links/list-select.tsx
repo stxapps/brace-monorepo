@@ -16,11 +16,7 @@ import { useState } from 'react';
 import { ChevronsUpDownIcon } from 'lucide-react';
 
 import { Button } from '@stxapps/web-ui/components/ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@stxapps/web-ui/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 
 import { ListCommand, useListRows } from './list-command';
 

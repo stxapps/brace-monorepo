@@ -2,7 +2,16 @@
 // the nav rail), the topbar/main (name + render the active one). One source of
 // truth keeps the menu, the labels, and the content switch from drifting apart.
 
-import { CreditCard, Database, Hash, Info, Link, List, SlidersHorizontal, User } from 'lucide-react';
+import {
+  CreditCard,
+  Database,
+  Hash,
+  Info,
+  Link,
+  List,
+  SlidersHorizontal,
+  User,
+} from 'lucide-react';
 
 export type SettingsSectionId =
   | 'account'

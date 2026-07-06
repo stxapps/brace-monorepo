@@ -96,11 +96,7 @@ export function ExtractionSection() {
             are sent to the server only while this is on.
           </span>
         </div>
-        <Switch
-          id="server-extraction"
-          checked={serverExtraction}
-          onCheckedChange={setEnabled}
-        />
+        <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
       </div>
 
       {error && (

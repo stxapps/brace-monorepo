@@ -278,11 +278,6 @@ export function TagsSection() {
   // tags, so the top level is the whole set — take its items in rank order.
   const tags = useMemo(() => tree.map((node) => node.item), [tree]);
 
-  const run = (op: Promise<unknown>) => {
-    setError(null);
-    void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
 
@@ -299,6 +294,11 @@ export function TagsSection() {
   const shift = (tag: TagItem, index: number, delta: number) => {
     const siblings = tags.filter((t) => t.id !== tag.id);
     run(move(tag, null, siblings, index + delta));
+  };
+
+  const run = (op: Promise<unknown>) => {
+    setError(null);
+    void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   };
 
   return (

@@ -132,8 +132,7 @@ export function LinkAddPopover() {
   // cheap to retype and the click-away-to-dismiss popover idiom is worth more
   // than guarding it. Only the Advanced fields (note, tags, a non-default list)
   // represent effort worth protecting from a stray outside-click or Escape.
-  const advancedDirty =
-    note.trim() !== '' || tagIds.length > 0 || listId !== defaultListId;
+  const advancedDirty = note.trim() !== '' || tagIds.length > 0 || listId !== defaultListId;
 
   return (
     <Popover
