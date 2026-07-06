@@ -1,5 +1,6 @@
 import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS, type SyncPhase } from '@stxapps/shared';
-import { useAuth, usePendingChangesCount, useSync } from '@stxapps/web-react';
+import { usePendingChangesCount, useSync } from '@stxapps/web-react';
+import { Button } from '@stxapps/web-ui/components/ui/button';
 
 // The two sync surfaces of the popup: a glanceable pill that sits under the save flow
 // (SyncPill), and the detail view it opens (SyncDetail). Sync lives here — the popup's
@@ -38,13 +39,21 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
 }
 
 export function SyncDetail({ onBack }: { onBack: () => void }) {
-  const { username } = useAuth();
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
   // Queued local edits the next cycle will push — live from the shared Dexie
   // store, not the background's mirror.
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   const lastSync = lastSyncAt ? formatSyncedAt(lastSyncAt) : 'never';
+
+  // The one action of this screen. `requestSync` (KICK_SYNC → background runSync)
+  // covers every actionable phase: it re-runs the initial pull when it hasn't
+  // finished and an incremental cycle otherwise, so a single button recovers both
+  // error phases as well as a manual idle sync — no separate retryInitialSync (a
+  // no-op under the popup's ExternalSyncProvider anyway). Hidden while a cycle is
+  // in flight (checking/initial-syncing/syncing) — nothing to trigger.
+  const actionLabel =
+    phase === 'idle' ? 'Sync now' : phase === 'initial-error' || phase === 'cycle-error' ? 'Retry' : null;
 
   return (
     <div className="flex w-85 flex-col gap-3 p-4">
@@ -56,10 +65,6 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
       </div>
 
       <section>
-        <div className="flex justify-between py-0.5 text-sm">
-          <span>Account</span>
-          <span>{username ?? '—'}</span>
-        </div>
         <div className="flex justify-between py-0.5 text-sm">
           <span>Status</span>
           <span>{SYNC_PHASE_LABELS[phase]}</span>
@@ -79,6 +84,12 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
           </div>
         )}
       </section>
+
+      {actionLabel && (
+        <Button variant="outline" size="sm" onClick={() => requestSync()}>
+          {actionLabel}
+        </Button>
+      )}
     </div>
   );
 }
