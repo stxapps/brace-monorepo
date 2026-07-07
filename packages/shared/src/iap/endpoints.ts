@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { API_V1, defineEndpoint } from '../api/endpoint';
-import { PAID_PLANS, PLANS } from './plans';
+import { AVAILABLE_PAID_PLANS, PLANS } from './plans';
 
 // IAP endpoint contracts. Subscription state is a SERVER-DERIVED fact (its
 // writer of record is a payment-provider webhook), so it is deliberately NOT a
@@ -59,8 +59,11 @@ export const iapStatusEndpoint = defineEndpoint({
 // account model mints it server-side, so the webhook's `custom_data.userId`
 // binding must be stamped by the server from the session), and it keeps the
 // purchased price server-authoritative rather than a client-supplied price id.
+// Only plans currently ON SALE are accepted (AVAILABLE_PAID_PLANS, not the full
+// PAID_PLANS catalog): the wire contract itself rejects a checkout for a
+// not-yet-sold plan, so Pro can stay fully specified without being purchasable.
 export const iapCheckoutRequestSchema = z.object({
-  plan: z.enum(PAID_PLANS),
+  plan: z.enum(AVAILABLE_PAID_PLANS),
 });
 export type IapCheckoutRequest = z.infer<typeof iapCheckoutRequestSchema>;
 

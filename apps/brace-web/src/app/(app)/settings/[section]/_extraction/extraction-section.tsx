@@ -20,8 +20,14 @@
 
 import { useState } from 'react';
 import { Pause, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 
-import { useExtraction, useSettingMutations, useSettings } from '@stxapps/web-react';
+import {
+  useEntitlements,
+  useExtraction,
+  useSettingMutations,
+  useSettings,
+} from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Switch } from '@stxapps/web-ui/components/ui/switch';
@@ -56,6 +62,13 @@ export function ExtractionSection() {
   const { serverExtraction } = useSettings();
   const { setServerExtraction } = useSettingMutations();
 
+  // Plan gate: server-side previews are a Plus/Pro entitlement (see
+  // docs/business-model.md — the free tier is metadata-only, and the blob
+  // uploads previews produce are refused server-side anyway). Free accounts see
+  // the upsell instead of the toggle; the synced `serverExtraction` preference
+  // itself is untouched, so it comes back if they upgrade.
+  const { entitlements } = useEntitlements();
+
   // Two-step confirm for "Extract all": the first click reveals the count +
   // Confirm, since draining the whole library can be thousands of paid requests.
   const [confirming, setConfirming] = useState(false);
@@ -77,6 +90,33 @@ export function ExtractionSection() {
     extractAll();
   };
 
+  // Free plan: the whole feature is a Plus/Pro entitlement, so the section is
+  // an upsell instead of controls (after all hooks — no conditional hook calls).
+  if (!entitlements.serverExtraction) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-8">
+        <h2 className="text-xl font-semibold">Link previews</h2>
+        <p className="mt-1 mb-6 text-sm text-muted-foreground">
+          Brace fills in each saved link's title and preview image automatically. Links saved from
+          the Brace extension are previewed right on your device; previews for links saved on the
+          web or added by import are part of the Plus plan.
+        </p>
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-medium">Server-side previews</span>
+            <span className="text-sm text-muted-foreground">
+              Upgrade to fill in titles and preview images for links that weren't previewed on the
+              device that saved them.
+            </span>
+          </div>
+          <Button asChild variant="outline">
+            <Link href="/settings/subscription">See plans</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
       <h2 className="text-xl font-semibold">Link previews</h2>
@@ -94,8 +134,8 @@ export function ExtractionSection() {
           </Label>
           <span className="text-sm font-normal text-muted-foreground">
             Fetch each link on the server to fill in its title and preview image — for links that
-            weren't previewed on the device that saved them. Only the link's URL is sent, never
-            your account or anything else, and only while this is on.
+            weren't previewed on the device that saved them. Only the link's URL is sent, never your
+            account or anything else, and only while this is on.
           </span>
         </div>
         <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />

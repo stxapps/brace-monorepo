@@ -66,27 +66,62 @@ cost, not a new cost category — the storage tables below are unchanged.
 
 ### tiers
 
-Design principle: the free tier limits the things that **cost money or weaken the
-moat** (image/screenshot/archive blobs = the storage tail; AI = compute), never
-the things that are nearly free and build the habit (metadata, sync, encryption).
-Free users then cost cents, and the upgrade triggers are features people feel.
+Two kinds of gate do the work here, and keeping them straight is the whole model:
 
-|                                       | **Free**                       | **Plus** — $24/yr          | **Pro** — $48/yr                  |
-| ------------------------------------- | ------------------------------ | -------------------------- | --------------------------------- |
-| Price                                 | $0                             | $24/yr ($3/mo)             | $48/yr ($5/mo) · lifetime $149    |
-| Saved links                           | 200                            | Unlimited                  | Unlimited                         |
-| E2E encryption                        | ✅                             | ✅                         | ✅                                |
-| Sync across devices                   | ✅ (habit-builder — don't cap) | ✅                         | ✅                                |
-| Extension (save + extract)            | ✅                             | ✅                         | ✅                                |
-| Title + tags + lists/folders          | ✅                             | ✅                         | ✅                                |
-| Preview images (downloaded blob)      | ❌ metadata-only (title/host)  | ✅                         | ✅                                |
-| Read-mode (clean reader text)         | ❌                             | ✅                         | ✅                                |
-| Screenshot capture                    | ❌                             | ✅                         | ✅                                |
-| Full-page archive (offline snapshot)  | ❌                             | last 50 links              | Unlimited                         |
-| Storage quota (blobs)                 | n/a (no blobs)                 | 5 GB                       | 20 GB                             |
-| On-device AI (auto-tag, summary)      | ❌                             | basic (auto-tag, keywords) | full (summaries, semantic search) |
-| Server extraction (`brace-extractor`) | ❌                             | opt-in                     | opt-in                            |
-| Support                               | community/docs                 | email                      | priority email                    |
+- **Cost-defensive gates** protect real cost / the moat — blob storage, byte
+  quota, archive count, `serverExtraction`, AI compute. Enforced where the cost
+  is (server-hard where countable; see [iap.md](./iap.md) and
+  `packages/shared/src/iap/plans.ts`). These are why a free user costs cents.
+- **Value-capture gates** are pure willingness-to-pay for things that cost
+  ~nothing to serve — client-enforced UX. This is where the "extra features"
+  live, and they carry conversion while on-device AI is still parked.
+
+Design principle for the **cost-defensive** gates: the free tier limits the
+things that **cost money or weaken the moat** (image/screenshot/archive blobs =
+the storage tail; AI = compute), never the things that are nearly free and build
+the habit (metadata, sync, encryption). Free users then cost cents, and the
+upgrade triggers are features people feel.
+
+The **value-capture** gates follow a different rule — gate only what passes all
+four tests: costs ~nothing, is **not** in the daily habit loop, signals identity
+to the wedge audience, and reads as "a pro unlocked something" rather than "they
+crippled the basics." Theme, flat tags, flat lists, pin, sort options, sibling
+reorder, multi-select move/tag/delete, and **full data export** all fail that test
+on purpose — so they stay **free for everyone** (see _no lock-in_ below). The
+gated levers all share one shape: **structural depth or bespoke sequence** the
+free library is too small to need.
+
+The two paid tiers then have a spine, not just a longer list:
+
+- **Plus** — the deeply-organized library: _you_ structure it
+  (nested lists, nested tags, per-list link order + locks).
+- **Pro** — the library that organizes and understands itself (automated /
+  dynamic organization + intelligence).
+
+|                                       | **Free**                       | **Plus** — $24/yr | **Pro** — $48/yr _(planned)_    |
+| ------------------------------------- | ------------------------------ | ----------------- | ------------------------------ |
+| Price                                 | $0                             | $24/yr ($3/mo)    | $48/yr ($5/mo) · lifetime $149 |
+| Saved links                           | 200                            | Unlimited         | Unlimited                      |
+| E2E encryption                        | ✅                             | ✅                | ✅                             |
+| Sync across devices                   | ✅ (habit-builder — don't cap) | ✅                | ✅                             |
+| Extension (save + extract)            | ✅                             | ✅                | ✅                             |
+| Theme, flat tags, flat lists, pin     | ✅                             | ✅                | ✅                             |
+| Sort + manual reorder (lists/tags/pins) | ✅                           | ✅                | ✅                             |
+| Multi-select move / tag / delete      | ✅                             | ✅                | ✅                             |
+| Full data export (no lock-in)         | ✅                             | ✅                | ✅                             |
+| Server extraction (`brace-extractor`) | ❌                             | opt-in            | opt-in                         |
+| Preview images (downloaded blob)      | ❌ metadata-only (title/host)  | ✅                | ✅                             |
+| Nested lists                          | ❌                             | ✅                | ✅                             |
+| Nested tags (tag hierarchy)           | ❌                             | ✅                | ✅                             |
+| Per-list manual link ordering         | ❌                             | ✅                | ✅                             |
+| Locks (app lock + per-list hide)      | ❌                             | ✅                | ✅                             |
+| Read-mode (clean reader text)         | ❌                             | ✅                | ✅                             |
+| Screenshot capture                    | ❌                             | ✅                | ✅                             |
+| Full-page archive (offline snapshot)  | ❌                             | last 50 links     | Unlimited                      |
+| Storage quota (blobs)                 | n/a (no blobs)                 | 5 GB              | 20 GB                          |
+| Smart lists / smart tags              | ❌                             | ❌                | ✅                             |
+| Saved searches                        | ❌                             | ❌                | ✅                             |
+| On-device AI (auto-tag, summary)      | ❌                             | ❌                | ⏳ coming (Pro-only when live) |
 
 Why these cuts:
 
@@ -103,11 +138,73 @@ Why these cuts:
   Tune 100–300 after real usage.
 - **Don't cap sync/devices on free** — nearly free for us, and the only thing that
   builds a daily habit. Crippling it just guarantees churn before any paywall.
-- **AI splits the two paid tiers**, not free-vs-paid — a clean second upgrade lever
-  once on-device models are good enough, without betting launch on AI.
+- **The value-capture layer is deliberately small and honest, and split by a
+  bright line: STRUCTURE is gated, cosmetics and basics are not.** Plus gates the
+  hand-structuring levers (nested lists, nested tags, per-list link order) plus
+  locks; Pro gates the automated ones (smart lists/tags, saved searches).
+  Everything habit-loop or table-stakes — theme, flat tags, flat lists, pin, sort,
+  **manual reorder of list/tag siblings and pins**, multi-select move/tag/delete —
+  stays free, because gating those raises churn and earns bad reviews, not
+  upgrades. Note the tag split mirrors the list split: **flat tags are free**
+  (the free tier's core organizing primitive), only tag _hierarchy_ is the lever.
+- **Sibling ordering is free; per-list link ordering is the one that's gated.**
+  Manual reorder of the list/tag trees' **siblings** and of **pins** stays free:
+  at the free tier's scale (≤200 links, a handful of lists/tags) hand-arranging is
+  a cheap habit-loop nicety with ~no willingness-to-pay, and free users already
+  hand-order links via **pins** (core daily-loop, table-stakes) — so paywalling
+  tree order would be an arbitrary, petty line. The exception is per-list manual
+  **link** ordering: a hand-curated sequence only pays off once a list outgrows
+  the free tier's whole library, so it's coupled to unlimited links and sits in
+  the Plus structural spine (next to nested lists / nested tags).
+- **The Plus→Pro spine is structural vs automated organization.** Plus lets you
+  structure the library by hand (nested lists, nested tags, per-list link order)
+  and lock it down; Pro makes it organize itself (smart lists, saved searches).
+  That second half is **deterministic — buildable without waiting on AI**, so Pro
+  isn't hostage to on-device-model timing. That's a readiness point, _not_ a
+  ship-date: Pro is **sequenced after Plus**, not live at launch (see _launch
+  sequencing_).
+- **Locks are the wedge lever, and not a privacy contradiction.** E2E encryption
+  is free for everyone — that's the security substrate. The lock is only the
+  convenience layer over it (biometric quick-lock, hide-a-list), so charging for
+  it isn't charging for privacy.
+- **No lock-in: full data export is free.** This is local-first + E2E — the data
+  already lives on the user's device, so "export" is just serializing what they
+  already hold. Charging to leave would betray exactly the privacy wedge you're
+  courting; instead, easy exit is a trust asset that lowers the risk of trying the
+  app and paradoxically improves retention.
+- **AI is parked, not a current lever.** On-device models aren't good enough yet,
+  so no plan ships AI today; it's marketed as "coming" and, when it lands, belongs
+  wholly to Pro (all intelligence lives in Pro). Plus is already carried by the
+  image-blob upgrade + locks, so nothing bets on AI timing.
 - **Free needs no quota meter:** the _absence of blob features_ is the quota.
 - **Lifetime ($149)** front-loads cash and suits the privacy/PKM crowd, but is a
   long-tail liability under E2E — offer as a launch lever, then retire.
+
+### launch sequencing
+
+The tiers table above is the **destination**, not day one — it's the plan, while
+`AVAILABLE_PAID_PLANS` (in `iap/plans.ts`) and the upgrade-card copy are the
+reality. What ships when:
+
+- **Launch — Free + Plus only.** Plus rests on the keystone (unlimited links +
+  the image-blob paywall + `serverExtraction`), with **locks** as the wedge lever
+  built first — it's what makes the privacy tribe adopt and evangelize. Pro is
+  **not on sale**: `AVAILABLE_PAID_PLANS` is `['plus']`, so the checkout contract
+  and the cards offer Plus alone. Pro stays fully specified as spec-in-waiting
+  (its entitlements, price, and Paddle branch are all in place).
+- **Plus fast-follow — read-mode, then screenshot / archive.** Gated in the table
+  already; each added as it's built. Card copy only ever promises what's live.
+- **Held for feedback — nested tags + per-list link ordering.** Planned Plus
+  levers, in this doc but not yet entitlement fields (see `iap/plans.ts`
+  _DOC-AHEAD-OF-CODE_); gate them if/when demand shows.
+- **Pro — after the app is stable.** Its spine (smart lists / saved searches) is
+  deterministic, so it's buildable without waiting on AI — that independence is
+  why Pro isn't hostage to model timing, _not_ a claim it's live now. AI
+  (`aiTier`) stays parked and is Pro-only when it lands.
+
+The rule this enforces: **never promise in the paywall what isn't built.** Tune
+the table freely as the plan; the cards and `AVAILABLE_PAID_PLANS` gate what a
+customer can actually see and buy.
 
 ### break-even
 

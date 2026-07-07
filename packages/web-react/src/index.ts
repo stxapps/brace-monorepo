@@ -16,6 +16,7 @@ export * from './data/queries';
 export * from './data/session-store';
 export * from './data/sync-store';
 export * from './hooks/use-create-account';
+export * from './hooks/use-entitlements';
 export * from './hooks/use-link-mutations';
 export * from './hooks/use-list-mutations';
 export * from './hooks/use-lists';

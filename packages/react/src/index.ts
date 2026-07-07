@@ -3,4 +3,5 @@ export * from './contexts/extract-client-provider';
 export * from './hooks/use-auth-forms';
 export * from './hooks/use-debounced-value';
 export * from './hooks/use-stable-id';
+export * from './hooks/use-subscription-status';
 export * from './hooks/use-username-available';

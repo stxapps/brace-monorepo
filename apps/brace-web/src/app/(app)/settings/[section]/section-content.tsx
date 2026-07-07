@@ -9,6 +9,7 @@ import { DataSection } from './_data/data-section';
 import { ExtractionSection } from './_extraction/extraction-section';
 import { ListsSection } from './_lists/lists-section';
 import { MiscSection } from './_misc/misc-section';
+import { SubscriptionSection } from './_subscription/subscription-section';
 import { TagsSection } from './_tags/tags-section';
 
 function Placeholder({ id }: { id: SettingsSectionId }) {
@@ -23,7 +24,7 @@ function Placeholder({ id }: { id: SettingsSectionId }) {
 
 const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
   account: () => <Placeholder id="account" />,
-  subscription: () => <Placeholder id="subscription" />,
+  subscription: () => <SubscriptionSection />,
   data: () => <DataSection />,
   extraction: () => <ExtractionSection />,
   lists: () => <ListsSection />,
