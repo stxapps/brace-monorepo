@@ -1,7 +1,7 @@
 import { createExtractClient, type ExtractClient } from '@stxapps/shared';
 
 // App-level binding of the `brace-extractor` client to its OWN origin —
-// `extract.brace.to`, set per environment via `NEXT_PUBLIC_EXTRACT_URL`. This is a
+// `extractor.brace.to`, set per environment via `NEXT_PUBLIC_EXTRACT_URL`. This is a
 // DIFFERENT origin from brace-api's `NEXT_PUBLIC_API_URL` (lib/api-client.ts) on purpose:
 // the extractor is the one component that fetches arbitrary user URLs, kept apart
 // from the blind sync broker so "api.brace.to only ever sees ciphertext" stays

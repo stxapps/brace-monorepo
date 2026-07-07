@@ -16,18 +16,23 @@ how each app gets its per-environment values). This doc owns the
 
 ### topology
 
-Two fully isolated tiers. Each tier is its own Cloudflare account (api + data)
-and its own AWS stack (web), so blast radius is contained, D1/R2 data can never
-cross tiers (they're per-account), and each tier gets its own free-tier limits.
+Two fully isolated tiers. Each tier is its own Cloudflare account (api +
+extractor + data) and its own AWS stack (web), so blast radius is contained,
+D1/R2 data can never cross tiers (they're per-account), and each tier gets its
+own free-tier limits.
 
 ```
 STAGING
   brace-web  ──WXT_/NEXT_PUBLIC_API_URL──▶  brace-api        ──▶  D1 (staging)
   S3 + CloudFront (AWS stack A)             Worker (CF acct A)     R2 (staging)
+  brace-web  ──NEXT_PUBLIC_EXTRACT_URL──▶  brace-extractor        (no D1/R2)
+                                            Worker (CF acct A)
 
 PRODUCTION
   brace-web  ──WXT_/NEXT_PUBLIC_API_URL──▶  brace-api        ──▶  D1 (production)
   S3 + CloudFront (AWS stack B)             Worker (CF acct B)     R2 (production)
+  brace-web  ──NEXT_PUBLIC_EXTRACT_URL──▶  brace-extractor        (no D1/R2)
+                                            Worker (CF acct B)
 
   brace-extension ──▶ Chrome Web Store + Firefox AMO (points at production api)
 ```
@@ -109,6 +114,34 @@ Migration mechanics live next to the code they govern, one per storage layer:
 [`apps/brace-api/src/do/README.md`](../apps/brace-api/src/do/README.md)
 (per-user Durable Object SQLite, migrated in code).
 
+### brace-extractor → Cloudflare Workers _(planned)_
+
+Hono app, **Workers-only** like brace-api, but a **pure function** — no D1, no
+R2, no Durable Objects (see [architecture.md](./architecture.md) and
+[link-extraction.md](./link-extraction.md) — _server extraction_). It `fetch`es
+arbitrary user-supplied URLs, so it runs as a **separate Worker on its own
+origin** (`extractor.brace.to`), never a route on brace-api — that separation is
+what keeps "`api.brace.to` only ever sees ciphertext" code-provable.
+
+- **Same two Cloudflare accounts as brace-api** — one per tier. The extractor
+  deploys into the same tier account as the api; it's just a different Worker
+  name and origin, so no data ever crosses to it (it has no storage bindings).
+- **`wrangler.jsonc`** — named environments per tier; `[vars]` carries its own
+  `CORS_ORIGINS` (the `app.*` app origin + the marketing apex, never `*`) and
+  the rate-limit bindings are the only bindings — no `d1_databases`, no
+  `r2_buckets`.
+- **Custom domain** — Workers custom domain per tier
+  (`extractor.staging.brace.to` / `extractor.brace.to`), auto-provisioned
+  per-host cert like the api.
+
+```bash
+wrangler deploy --env staging      # → CF account A (same account as api staging)
+wrangler deploy --env production   # → CF account B (same account as api production)
+```
+
+Same per-account-token rule as brace-api — the token that deploys the staging
+extractor cannot reach the production account.
+
 ### brace-extension → store publishing _(planned)_
 
 The extension isn't deployed to infra; it's **packaged and published** to the
@@ -130,10 +163,10 @@ Stable custom domains are **required**, not optional: the frontends bake the API
 URL into their bundles, so pointing at `*.workers.dev` / `*.cloudfront.net` would
 mean rebuilding whenever an infra subdomain changes.
 
-| tier         | web (CloudFront)       | api (Worker)           |
-| ------------ | ---------------------- | ---------------------- |
-| `staging`    | `app.staging.brace.to` | `api.staging.brace.to` |
-| `production` | `app.brace.to`         | `api.brace.to`         |
+| tier         | web (CloudFront)       | api (Worker)           | extractor (Worker)           |
+| ------------ | ---------------------- | ---------------------- | ---------------------------- |
+| `staging`    | `app.staging.brace.to` | `api.staging.brace.to` | `extractor.staging.brace.to` |
+| `production` | `app.brace.to`         | `api.brace.to`         | `extractor.brace.to`         |
 
 Staging nests under a `staging.brace.to` subdomain (`<role>.staging.brace.to`)
 rather than going flat (`staging-<role>.brace.to`) — see
@@ -181,10 +214,12 @@ glance tells you the tier:
 | S3 bucket         | `brace-web-staging`                                                                      | `brace-web-production`                                                                            |
 | CloudFront dist   | comment `brace-web-staging`                                                              | comment `brace-web-production`                                                                    |
 | Worker name / env | `brace-api-staging` / `staging`                                                          | `brace-api-production` / `production`                                                             |
+| Extractor Worker  | `brace-extractor-staging` / `staging`                                                    | `brace-extractor-production` / `production`                                                       |
 | D1 databases      | `brace-directory-db-staging`, `brace-accounts-db-1-staging`, `brace-sessions-db-staging` | `brace-directory-db-production`, `brace-accounts-db-1-production`, `brace-sessions-db-production` |
 | R2 bucket         | `brace-user-files-staging`                                                               | `brace-user-files-production`                                                                     |
 | web domain        | `app.staging.brace.to`                                                                   | `app.brace.to`                                                                                    |
 | api domain        | `api.staging.brace.to`                                                                   | `api.brace.to`                                                                                    |
+| extractor domain  | `extractor.staging.brace.to`                                                             | `extractor.brace.to`                                                                              |
 
 `brace-<resource>-<tier>` throughout — the Worker auto-suffixes its `name`
 (`brace-api` → `brace-api-staging` / `brace-api-production`), so the env name
@@ -227,6 +262,9 @@ Current reality and the work to make this doc true:
       vars/secrets; wire custom domains.
 - [ ] AWS: two S3 buckets + two CloudFront distributions + shared CloudFront
       Function; ACM certs; custom domains.
+- [ ] brace-extractor: provision the Worker per tier (no D1/R2); set its
+      `CORS_ORIGINS` var + custom domain (`extractor.*.brace.to`); wire
+      `NEXT_PUBLIC_EXTRACT_URL` into brace-web's per-tier builds.
 - [ ] brace-extension: add `WXT_PUBLIC_API_URL` + `.env.*` + `--mode staging`
       build when it starts calling the api.
 - [ ] CI/CD: pick provider; wire the merge→staging, tag→production flow with

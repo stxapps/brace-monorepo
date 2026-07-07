@@ -38,7 +38,7 @@ the same trees, and bulk edit.
 - **brace-extractor** — Cloudflare Workers + hono server that fetches
   link metadata (title/image; read-mode deferred) for clients that can't reach the
   URL themselves (`brace-web` without an extension, bulk imports). Its **own app on
-  its own origin** `extract.brace.to`, **separate from `brace-api`** (the blind sync
+  its own origin** `extractor.brace.to`, **separate from `brace-api`** (the blind sync
   broker) so that "`api.brace.to` only ever sees ciphertext" stays code-provable —
   the extractor is the one component that fetches arbitrary user URLs. A pure
   function (returns plaintext, holds no key, persists nothing — no D1/R2/DO

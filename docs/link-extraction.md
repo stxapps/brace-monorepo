@@ -849,7 +849,7 @@ realistic one for large imports, so it's a committed app to build, not a someday
 the second opt-in below. It is a **separate app**, not a route in `brace-api`:
 
 - **A new nx app, `brace-extractor` (`type:app`, `platform:worker`), on its own
-  origin `extract.brace.to`** — distinct from the blind sync broker on
+  origin `extractor.brace.to`** — distinct from the blind sync broker on
   `api.brace.to`. The two have **opposite trust and egress postures**: the broker
   only ever touches D1/R2 and ideally reaches nothing outbound; the extractor must
   `fetch` arbitrary, user-supplied URLs. Separate apps let each hold only the
@@ -900,7 +900,7 @@ the second opt-in below. It is a **separate app**, not a route in `brace-api`:
   place) plus an SSRF guard and strict size/time caps; the extractor never learns
   _who_ is asking. The abuse-control upgrade that **preserves** anonymity is blind
   capability tokens (Privacy Pass / VOPRF): `api.brace.to` issues unlinkable
-  tokens to real logged-in users, `extract.brace.to` verifies validity without
+  tokens to real logged-in users, `extractor.brace.to` verifies validity without
   learning which user — deferred, documented as the direction.
 - **Abuse caps are load-bearing, not a v2 nicety.** An anonymous endpoint that
   fetches any URL and streams bytes is an **open proxy / DDoS reflector / bandwidth

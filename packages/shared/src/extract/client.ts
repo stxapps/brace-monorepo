@@ -9,7 +9,7 @@ import {
 // The client binding to `brace-extractor` — the web app's server-tier CAPTURE
 // SOURCE, the counterpart of the extension's active-tab `capture.ts`. It is NOT the
 // `@stxapps/shared` auth client (`createAuthApiClient`): `brace-extractor` is a
-// SEPARATE app on a SEPARATE origin (`extract.brace.to`, not `api.brace.to`) and is
+// SEPARATE app on a SEPARATE origin (`extractor.brace.to`, not `api.brace.to`) and is
 // ANONYMOUS — no bearer token (attaching the account's token would convert the leak
 // from "the server saw this URL" into "the server tied this URL to this account",
 // the strictly-worse leak the design forbids — docs/link-extraction.md "server

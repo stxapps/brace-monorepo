@@ -10,7 +10,7 @@ import { extractRoutes } from './routes/extract';
 import { imageRoutes } from './routes/image';
 
 // brace-extractor — the opt-in, anonymous link-metadata fetcher on its OWN origin
-// (extract.brace.to), kept SEPARATE from the blind sync broker (api.brace.to) so
+// (extractor.brace.to), kept SEPARATE from the blind sync broker (api.brace.to) so
 // that "api.brace.to only ever sees ciphertext" stays code-provable. This is the one
 // component that `fetch`es arbitrary user-supplied URLs. See docs/link-extraction.md.
 

@@ -11,7 +11,7 @@ import { LINK_TITLE_MAX } from '../sync/entities';
 // fetch from. See docs/api-contracts.md and docs/link-extraction.md ("server
 // extraction").
 //
-// brace-extractor is a SEPARATE app on its OWN origin (extract.brace.to), distinct
+// brace-extractor is a SEPARATE app on its OWN origin (extractor.brace.to), distinct
 // from the blind sync broker (api.brace.to) — so these endpoints are never mounted
 // on brace-api. They share the `/v1` version prefix (the version is part of the
 // wire contract, not the origin); a long-lived client can stay pinned to /v1.

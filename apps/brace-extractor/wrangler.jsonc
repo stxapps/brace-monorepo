@@ -1,6 +1,6 @@
 {
   // Cloudflare Workers config for brace-extractor — the opt-in, anonymous link-
-  // metadata fetcher on its OWN origin (extract.brace.to), deliberately SEPARATE
+  // metadata fetcher on its OWN origin (extractor.brace.to), deliberately SEPARATE
   // from the blind sync broker on api.brace.to so that "api.brace.to only ever sees
   // ciphertext" stays code-provable: the extractor is the one component that
   // `fetch`es arbitrary, user-supplied URLs. See docs/link-extraction.md ("server
@@ -131,7 +131,7 @@
           "simple": { "limit": 30, "period": 10 },
         },
       ],
-      // "routes": [{ "pattern": "extract.brace.to", "custom_domain": true }]
+      // "routes": [{ "pattern": "extractor.brace.to", "custom_domain": true }]
       // See the staging note on stripping ?url= from request logs.
     },
   },

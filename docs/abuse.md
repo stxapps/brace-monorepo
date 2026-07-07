@@ -10,7 +10,7 @@ For "I have his IP, ban him":
 - WAF custom rules (Security → WAF → Custom rules).
   Expression-based, e.g. ip.src eq 203.0.113.7 or ip.src in
   {…list…} → Block. More flexible than IP Access Rules: you can
-  scope to a hostname (http.host eq "extract.brace.to") or path,
+  scope to a hostname (http.host eq "extractor.brace.to") or path,
   so you can ban someone from the extractor but not the API.
 
 The key economic point: a WAF block happens before the Worker
@@ -47,7 +47,7 @@ order:
    native bindings can't express: the binding only does 10s/60s
    windows, but WAF rate limiting supports longer periods and —
    importantly — a block duration, e.g. "more than N requests to
-   extract.brace.to in an hour → block that IP for a day." That
+   extractor.brace.to in an hour → block that IP for a day." That
    converts "stranger politely hammering under the limit" into an
    automatic ban with no code. This is the single most direct
    answer to your scenario.
