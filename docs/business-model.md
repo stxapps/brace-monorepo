@@ -98,30 +98,30 @@ The two paid tiers then have a spine, not just a longer list:
 - **Pro** — the library that organizes and understands itself (automated /
   dynamic organization + intelligence).
 
-|                                       | **Free**                       | **Plus** — $24/yr | **Pro** — $48/yr _(planned)_    |
-| ------------------------------------- | ------------------------------ | ----------------- | ------------------------------ |
-| Price                                 | $0                             | $24/yr ($3/mo)    | $48/yr ($5/mo) · lifetime $149 |
-| Saved links                           | 200                            | Unlimited         | Unlimited                      |
-| E2E encryption                        | ✅                             | ✅                | ✅                             |
-| Sync across devices                   | ✅ (habit-builder — don't cap) | ✅                | ✅                             |
-| Extension (save + extract)            | ✅                             | ✅                | ✅                             |
-| Theme, flat tags, flat lists, pin     | ✅                             | ✅                | ✅                             |
-| Sort + manual reorder (lists/tags/pins) | ✅                           | ✅                | ✅                             |
-| Multi-select move / tag / delete      | ✅                             | ✅                | ✅                             |
-| Full data export (no lock-in)         | ✅                             | ✅                | ✅                             |
-| Server extraction (`brace-extractor`) | ❌                             | opt-in            | opt-in                         |
-| Preview images (downloaded blob)      | ❌ metadata-only (title/host)  | ✅                | ✅                             |
-| Nested lists                          | ❌                             | ✅                | ✅                             |
-| Nested tags (tag hierarchy)           | ❌                             | ✅                | ✅                             |
-| Per-list manual link ordering         | ❌                             | ✅                | ✅                             |
-| Locks (app lock + per-list hide)      | ❌                             | ✅                | ✅                             |
-| Read-mode (clean reader text)         | ❌                             | ✅                | ✅                             |
-| Screenshot capture                    | ❌                             | ✅                | ✅                             |
-| Full-page archive (offline snapshot)  | ❌                             | last 50 links     | Unlimited                      |
-| Storage quota (blobs)                 | n/a (no blobs)                 | 5 GB              | 20 GB                          |
-| Smart lists / smart tags              | ❌                             | ❌                | ✅                             |
-| Saved searches                        | ❌                             | ❌                | ✅                             |
-| On-device AI (auto-tag, summary)      | ❌                             | ❌                | ⏳ coming (Pro-only when live) |
+|                                         | **Free**                       | **Plus** — $24/yr | **Pro** — $48/yr _(planned)_   |
+| --------------------------------------- | ------------------------------ | ----------------- | ------------------------------ |
+| Price                                   | $0                             | $24/yr ($3/mo)    | $48/yr ($5/mo) · lifetime $149 |
+| Saved links                             | 200                            | Unlimited         | Unlimited                      |
+| E2E encryption                          | ✅                             | ✅                | ✅                             |
+| Sync across devices                     | ✅ (habit-builder — don't cap) | ✅                | ✅                             |
+| Extension (save + extract)              | ✅                             | ✅                | ✅                             |
+| Theme, flat tags, flat lists, pin       | ✅                             | ✅                | ✅                             |
+| Sort + manual reorder (lists/tags/pins) | ✅                             | ✅                | ✅                             |
+| Multi-select move / tag / delete        | ✅                             | ✅                | ✅                             |
+| Full data export (no lock-in)           | ✅                             | ✅                | ✅                             |
+| Server extraction (`brace-extractor`)   | ❌                             | opt-in            | opt-in                         |
+| Preview images (downloaded blob)        | ❌ metadata-only (title/host)  | ✅                | ✅                             |
+| Nested lists                            | ❌                             | ✅                | ✅                             |
+| Nested tags (tag hierarchy)             | ❌                             | ✅                | ✅                             |
+| Per-list manual link ordering           | ❌                             | ✅                | ✅                             |
+| Locks (app lock + per-list hide)        | ❌                             | ✅                | ✅                             |
+| Read-mode (clean reader text)           | ❌                             | ✅                | ✅                             |
+| Screenshot capture                      | ❌                             | ✅                | ✅                             |
+| Full-page archive (offline snapshot)    | ❌                             | last 50 links     | Unlimited                      |
+| Storage quota (blobs)                   | n/a (no blobs)                 | 5 GB              | 20 GB                          |
+| Smart lists / smart tags                | ❌                             | ❌                | ✅                             |
+| Saved searches                          | ❌                             | ❌                | ✅                             |
+| On-device AI (auto-tag, summary)        | ❌                             | ❌                | ⏳ coming (Pro-only when live) |
 
 Why these cuts:
 

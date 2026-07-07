@@ -41,8 +41,8 @@ device that can sync can ask.
 | web-react | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                        |
 | brace-web | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal                                                                                           |
 
-`purchases` is **global** (DIRECTORY_DB, not an account shard) because webhook
-events after the first arrive keyed by the _provider's_ subscription id with no
+`purchases` is **global** (DIRECTORY*DB, not an account shard) because webhook
+events after the first arrive keyed by the \_provider's* subscription id with no
 username/session to route a shard by — a per-shard table would force the
 forbidden try-every-shard scan. Rows are tiny, bounded per user, and
 money-adjacent (Tier-0 backup set).
