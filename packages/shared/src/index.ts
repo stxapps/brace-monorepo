@@ -11,6 +11,8 @@ export * from './crypto/salt';
 export * from './extract/client';
 export * from './extract/endpoints';
 export * from './extract/retry';
+export * from './iap/endpoints';
+export * from './iap/plans';
 export * from './sync/endpoints';
 export * from './sync/entities';
 export * from './sync/extraction';

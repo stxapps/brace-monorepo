@@ -10,9 +10,9 @@ import type {
 import type { CommitEntry } from '../do/user-data';
 import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
-import { HttpError } from '../lib/errors';
-import { MAX_BYTES, MAX_FILES } from '../lib/quota';
+import { checkPutQuota } from '../lib/quota';
 import { userFilesRepo } from '../r2/user-files';
+import { getEntitlements } from './iap';
 
 // Service layer for the sync endpoints. It holds the POLICY and the cross-store
 // orchestration — TTLs, the quota gate, the op→method mapping, and the R2-then-DO
@@ -53,16 +53,15 @@ export async function signUserFileUrls(
   paths: string[],
 ): Promise<SignedUrl[]> {
   if (op === 'put') {
-    const { fileCount, totalBytes } = await userDataStub(env, userId).usage();
-    // Conservative gate: we can't know each new object's size until it's uploaded,
-    // so bound on current usage plus the requested file count. A re-PUT of an
-    // existing path is counted as new here (harmless over-count near the ceiling).
-    if (fileCount + paths.length > MAX_FILES) {
-      throw new HttpError(403, 'quota_exceeded', 'File-count quota exceeded');
-    }
-    if (totalBytes >= MAX_BYTES) {
-      throw new HttpError(403, 'quota_exceeded', 'Storage quota exceeded');
-    }
+    // The put gate is PLAN-AWARE: limits come from the account's entitlements
+    // (services/iap.ts → the shared entitlementsOf), enforced by checkPutQuota
+    // (lib/quota.ts — free tier: no `files/` blobs, capped `links/`; paid tiers:
+    // byte/count ceilings). The two reads are independent — fetch in parallel.
+    const [usage, entitlements] = await Promise.all([
+      userDataStub(env, userId).usage(),
+      getEntitlements(env, userId),
+    ]);
+    checkPutQuota(entitlements, usage, paths);
   }
 
   const method = op === 'put' ? 'PUT' : 'GET';
@@ -105,8 +104,10 @@ export async function commitOps(
   const resolved = await Promise.all(
     ops.map(async ({ op, path }): Promise<CommitEntry | CommitFailure> => {
       if (op === 'delete') return { op, path, updatedAt: now, size: 0 };
+
       const object = await repo.head(userId, path);
       if (!object) return { path, reason: 'no_object' }; // op-without-object invariant
+
       return { op, path, updatedAt: object.updatedAt, size: object.size };
     }),
   );
@@ -119,6 +120,7 @@ export async function commitOps(
   }
 
   if (entries.length === 0) return { results: [], failed };
+
   const { results } = await userDataStub(env, userId).commitOps(entries);
   return { results, failed };
 }

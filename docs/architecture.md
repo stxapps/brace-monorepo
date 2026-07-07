@@ -12,6 +12,8 @@ a decode cache),
 (typed once in `@stxapps/shared`, shared by server and clients),
 [account.md](./account.md) for the password-derived account model (key
 derivation, username/password rules, the wallet comparison),
+[iap.md](./iap.md) for subscriptions (Paddle checkout + webhook, the
+entitlement fold, and the plan-aware quota gate),
 [link-extraction.md](./link-extraction.md) for how a saved link's
 title/image/screenshot/archive get filled in (privacy-first, clients do the
 work, the `extraction/` entity),

@@ -9,6 +9,8 @@ import {
 } from '@stxapps/shared';
 
 import { app } from '../app';
+import { purchasesRepo } from '../db/repositories/purchases';
+import { newId } from '../lib/ids';
 import { userFileKey } from '../r2/keys';
 import { issueSession } from '../services/session';
 
@@ -36,6 +38,24 @@ describe('sync control plane', () => {
     headers: { 'content-type': 'application/json', ...auth },
     body: JSON.stringify(body),
   });
+
+  // Entitle a test account: the `files/sign` put gate is plan-aware (an account
+  // with no purchase row is FREE — no `files/` blobs), so tests exercising blob
+  // paths grant a plan first via a non-expiring 'manual' purchase.
+  async function grantPlan(userId: string, plan: 'plus' | 'pro'): Promise<void> {
+    await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+      id: newId(),
+      userId,
+      source: 'manual',
+      externalId: `test-grant-${userId}`,
+      plan,
+      status: 'active',
+      providerCustomerId: null,
+      expiresAt: null,
+      canceledAt: null,
+      eventOccurredAt: Date.now(),
+    });
+  }
 
   describe('auth', () => {
     it('rejects every endpoint without a bearer token (401)', async () => {
@@ -279,6 +299,8 @@ describe('sync control plane', () => {
   describe(`POST ${filesSignEndpoint.path}`, () => {
     it('mints PUT URLs scoped to the user’s prefix', async () => {
       const { userId, auth } = await authFor('sync-sign-1');
+      // The batch includes a `files/` blob, so the account needs a paid plan.
+      await grantPlan(userId, 'plus');
       const res = await app.request(
         filesSignEndpoint.path,
         json(auth, { op: 'put', paths: ['links/a.enc', 'files/b.enc'] }),
@@ -292,6 +314,35 @@ describe('sync control plane', () => {
         expect(url).toContain('/v1/files/blob/');
         expect(url).toContain(userFileKey(userId, path));
       }
+    });
+
+    it('free plan: refuses files/ puts (upgrade_required) but signs links/ puts and all gets', async () => {
+      const { auth } = await authFor('sync-sign-free-1');
+
+      // The metadata-only keystone: no `files/` blobs on free.
+      const denied = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['files/x.enc'] }),
+        env,
+      );
+      expect(denied.status).toBe(403);
+      expect(((await denied.json()) as { error: string }).error).toBe('upgrade_required');
+
+      // Link metadata itself stays writable (up to the free cap).
+      const links = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['links/x.enc'] }),
+        env,
+      );
+      expect(links.status).toBe(200);
+
+      // GETs are never plan-gated — reading your own data survives a downgrade.
+      const get = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'get', paths: ['files/x.enc'] }),
+        env,
+      );
+      expect(get.status).toBe(200);
     });
 
     it('mints GET URLs in batch', async () => {

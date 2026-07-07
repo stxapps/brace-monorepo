@@ -5,6 +5,7 @@ import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
+import { iapRoutes, PADDLE_WEBHOOK_PATH } from './routes/iap';
 import { localR2Routes } from './routes/local-r2';
 import { syncRoutes } from './routes/sync';
 
@@ -38,11 +39,23 @@ app.use(
   }),
 );
 
-// Baseline rate limit on EVERY endpoint (standard tier, ~60 req/60s per IP+path;
-// configured in wrangler.jsonc). Sensitive routes stack the 'tight' tier on top
-// at the route level, e.g. rateLimit('tight'). No-ops when the binding is absent
-// (tests / unconfigured env). See middleware/rate-limit.ts.
-app.use('*', rateLimit('standard'));
+// Baseline rate limit on every endpoint EXCEPT the Paddle webhook (standard tier,
+// ~60 req/60s per IP+path; configured in wrangler.jsonc). Sensitive routes stack
+// the 'tight' tier on top at the route level, e.g. rateLimit('tight'). No-ops when
+// the binding is absent (tests / unconfigured env). See middleware/rate-limit.ts.
+//
+// The webhook is exempt from THIS baseline: all of Paddle's deliveries arrive from
+// a small set of Paddle IPs onto this one path, so they'd share a single IP+path
+// bucket — a burst or redelivery storm could 429 legitimate, signed events (which
+// Paddle then just redelivers into the same saturated bucket). It isn't left
+// uncapped, though: it carries the wider 'webhook' tier at the route level
+// (routes/iap.ts) as its sole request cap. Its real auth is the Paddle-Signature
+// HMAC over the raw body, not a request count — an unsigned flood is rejected at
+// that cheap check before any D1/Paddle work.
+const standardRateLimit = rateLimit('standard');
+app.use('*', (c, next) =>
+  c.req.path === PADDLE_WEBHOOK_PATH ? next() : standardRateLimit(c, next),
+);
 
 app.get('/', (c) => {
   return c.json({ message: 'Welcome to brace-api' });
@@ -53,6 +66,10 @@ app.get('/health', (c) => {
 });
 
 app.route('/', authRoutes);
+
+// Subscription surface: status/verify/portal (contract-typed) + the Paddle
+// webhook (HMAC-authenticated, no bearer). See routes/iap.ts and docs/business-model.md.
+app.route('/', iapRoutes);
 
 // Local-first sync control plane (ops/list, ops/commit, files/list, files/sign).
 // All four are protected and namespace every path under the authed user; see

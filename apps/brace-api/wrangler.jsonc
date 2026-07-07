@@ -67,6 +67,14 @@
         "R2_ACCESS_KEY_ID": "local-access-key-id",
         "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
         "R2_USER_FILES_BUCKET": "brace-user-files-dev",
+        // Paddle Billing (routes/iap.ts). Local dev talks to the SANDBOX; the
+        // price ids are your sandbox catalog's pri_… ids (placeholders until the
+        // sandbox products exist). The webhook secret + API key are SECRETS —
+        // put them in .dev.vars locally:
+        //   PADDLE_WEBHOOK_SECRET=pdl_ntfset_…   PADDLE_API_KEY=pdl_sdbx_apikey_…
+        "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
+        "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
       },
       // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
       // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions
@@ -123,6 +131,14 @@
           "namespace_id": "1002",
           "simple": { "limit": 10, "period": 10 },
         },
+        {
+          // WIDE tier — sole limiter for the Paddle webhook, which is exempt from
+          // the 'standard' baseline (all of Paddle's deliveries share one IP+path
+          // bucket). See middleware/rate-limit.ts (`webhook` tier).
+          "name": "API_RATE_LIMIT_WEBHOOK",
+          "namespace_id": "1003",
+          "simple": { "limit": 100, "period": 10 },
+        },
       ],
     },
     "staging": {
@@ -145,6 +161,15 @@
         // bucket below. See docs/deployment.md.
         "R2_ACCOUNT_ID": "TODO: staging Cloudflare account id (same as account_id)",
         "R2_USER_FILES_BUCKET": "brace-user-files-staging",
+        // Paddle Billing — staging uses the Paddle SANDBOX (separate account,
+        // separate pri_… catalog from live). Secrets, set separately:
+        //   wrangler secret put PADDLE_WEBHOOK_SECRET --env staging
+        //   wrangler secret put PADDLE_API_KEY --env staging
+        // Register the webhook in the sandbox dashboard pointing at
+        // https://api.staging.brace.to/v1/iap/paddle/webhook.
+        "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
+        "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
       },
       "d1_databases": [
         {
@@ -191,6 +216,14 @@
           "namespace_id": "1002",
           "simple": { "limit": 10, "period": 10 },
         },
+        {
+          // WIDE tier — sole limiter for the Paddle webhook, which is exempt from
+          // the 'standard' baseline (all of Paddle's deliveries share one IP+path
+          // bucket). See middleware/rate-limit.ts (`webhook` tier).
+          "name": "API_RATE_LIMIT_WEBHOOK",
+          "namespace_id": "1003",
+          "simple": { "limit": 100, "period": 10 },
+        },
       ],
       // Custom domain (needs a real domain on the staging account):
       // "routes": [{ "pattern": "api.staging.brace.to", "custom_domain": true }]
@@ -215,6 +248,14 @@
         // bucket below. See docs/deployment.md.
         "R2_ACCOUNT_ID": "TODO: production Cloudflare account id (same as account_id)",
         "R2_USER_FILES_BUCKET": "brace-user-files-production",
+        // Paddle Billing — LIVE Paddle. Secrets, set separately:
+        //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
+        //   wrangler secret put PADDLE_API_KEY --env production
+        // Register the webhook in the live dashboard pointing at
+        // https://api.brace.to/v1/iap/paddle/webhook.
+        "PADDLE_API_BASE": "https://api.paddle.com",
+        "PADDLE_PRICE_ID_PLUS": "TODO: live pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PRO": "TODO: live pri_… id for Pro (yearly)",
       },
       "d1_databases": [
         {
@@ -260,6 +301,14 @@
           "name": "API_RATE_LIMIT_TIGHT",
           "namespace_id": "1002",
           "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          // WIDE tier — sole limiter for the Paddle webhook, which is exempt from
+          // the 'standard' baseline (all of Paddle's deliveries share one IP+path
+          // bucket). See middleware/rate-limit.ts (`webhook` tier).
+          "name": "API_RATE_LIMIT_WEBHOOK",
+          "namespace_id": "1003",
+          "simple": { "limit": 100, "period": 10 },
         },
       ],
       // "routes": [{ "pattern": "api.brace.to", "custom_domain": true }]

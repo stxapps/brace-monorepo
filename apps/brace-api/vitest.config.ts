@@ -43,6 +43,10 @@ export default defineConfig(async () => {
             DIRECTORY_MIGRATIONS: directoryMigrations,
             ACCOUNTS_MIGRATIONS: accountsMigrations,
             SESSIONS_MIGRATIONS: sessionsMigrations,
+            // In deployed envs this is a wrangler SECRET (never in wrangler.jsonc),
+            // so the test pool provides a known value for the webhook signature
+            // tests (routes/iap.spec.ts) to sign with.
+            PADDLE_WEBHOOK_SECRET: 'test-webhook-secret',
           },
         },
       }),

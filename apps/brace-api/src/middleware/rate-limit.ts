@@ -21,6 +21,17 @@ export const RATE_LIMIT_TIERS = {
   standard: 'API_RATE_LIMIT',
   // Stricter tier for sensitive/expensive endpoints (~10 req / 10s ≈ 1/s).
   tight: 'API_RATE_LIMIT_TIGHT',
+  // WIDE tier, sole limiter for the Paddle webhook (configured ~100 req / 10s).
+  // All of Paddle's deliveries arrive from a small set of Paddle IPs onto one
+  // path, so they share a single IP+path bucket — far too much for the 60/60s
+  // `standard` baseline, which a redelivery storm after an outage would trip
+  // (Paddle then just redelivers into the same saturated bucket). The webhook is
+  // EXEMPT from `standard` and carries this tier instead: wide enough that real
+  // Paddle bursts never 429, tight enough to bound an attacker who finds the URL
+  // to ~10 cheap signature checks/sec/IP (the HMAC over the raw body is the real
+  // auth — see routes/iap.ts). Per-IP, like `standard` (the caller is anonymous
+  // Paddle — no session to key on).
+  webhook: 'API_RATE_LIMIT_WEBHOOK',
 } as const satisfies Record<string, keyof Bindings>;
 
 export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
@@ -33,6 +44,7 @@ export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS;
 export const RATE_LIMIT_PERIODS: Record<RateLimitTier, number> = {
   standard: 60,
   tight: 10,
+  webhook: 10,
 };
 
 // The counter key. Per-IP + per-path by default: each (caller, endpoint) pair

@@ -68,11 +68,25 @@ export type Bindings = {
   R2_SECRET_ACCESS_KEY: string;
   R2_USER_FILES_BUCKET: string;
 
+  // --- Paddle Billing (IAP) ------------------------------------------------
+  // Paddle is the web checkout provider (docs/business-model.md); brace-api
+  // consumes its webhook + portal API (routes/iap.ts, services/iap.ts).
+  // PADDLE_API_BASE + the price ids are non-secret `vars` (sandbox and live
+  // Paddle mint different pri_… ids, so they're per-env); the webhook secret
+  // and API key are SECRETS (`wrangler secret put PADDLE_WEBHOOK_SECRET /
+  // PADDLE_API_KEY --env …`; locally in .dev.vars).
+  PADDLE_API_BASE: string;
+  PADDLE_PRICE_ID_PLUS: string;
+  PADDLE_PRICE_ID_PRO: string;
+  PADDLE_WEBHOOK_SECRET: string;
+  PADDLE_API_KEY: string;
+
   // --- Rate limiting — native binding, one binding per volume "tier" -------
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"
   // is expressed as the tight tier (10 req / 10s). Counters are per-colo.
   API_RATE_LIMIT: RateLimit; // standard tier
   API_RATE_LIMIT_TIGHT: RateLimit; // tight tier (sensitive endpoints)
+  API_RATE_LIMIT_WEBHOOK: RateLimit; // wide tier (sole limiter for the Paddle webhook)
 };
 
 // The session resolved by the auth guard (middleware/auth.ts) and read by

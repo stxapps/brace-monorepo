@@ -11,6 +11,13 @@ import type { Bindings } from '../lib/env';
 import { fileSizesRepo, type FileUsage } from './repositories/file-sizes';
 import { type OpKind, opLogsRepo } from './repositories/op-logs';
 
+// `FileUsage` is the DO's public usage contract — re-exported here so consumers
+// (lib/quota.ts) depend on the DO boundary, not its private repository layer. It
+// stays identical to the repo shape because `usage()` returns it verbatim; if the
+// RPC ever needs to trim a repo-internal field (the way listOps drops op-log
+// `seq`), split it into a distinct type here at that point.
+export type { FileUsage };
+
 // One mutation ready to record — what the service hands the DO after resolving
 // each op against R2. `updatedAt`/`size` are sourced per kind in services/sync.ts:
 // a put carries R2's `LastModified` + reported size; a delete carries the worker's
@@ -141,6 +148,7 @@ export class UserDataDO extends DurableObject<Bindings> {
     const results = entries.map(({ op, path, updatedAt, size }) => {
       if (op === 'put') sizes.set(path, size);
       else sizes.remove(path);
+
       ops.append(op, path, updatedAt);
       return { path, updatedAt };
     });

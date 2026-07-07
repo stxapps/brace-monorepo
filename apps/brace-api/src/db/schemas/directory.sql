@@ -31,3 +31,45 @@ CREATE TABLE IF NOT EXISTS usernames (
   created_at    INTEGER NOT NULL          -- when the name was claimed (audit only; never updated — claim/release only, no in-place mutation)
 );
 CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);
+
+-- Subscription purchases — one row per provider subscription (see
+-- docs/business-model.md for the tiers and services/iap.ts for the fold to an
+-- entitled plan). GLOBAL (here, not an account shard) because webhook events
+-- after the first are keyed by the PROVIDER's id — `UNIQUE(source, external_id)`
+-- — with no username/session in hand to route a shard by; a per-shard table
+-- would force the forbidden try-every-shard scan. Rows are tiny and bounded per
+-- user (a handful, ever), and money-adjacent state belongs in the Tier-0 backup
+-- set anyway. `user_id` has NO FK (users live in the shards) and is written once
+-- at first sight of the subscription, never overwritten by later events.
+--
+-- source:      'paddle' | 'appstore' | 'playstore' | 'manual' (a server-side
+--              grant — comps / lifetime deals — with no provider to verify).
+-- external_id: the provider's subscription identity — Paddle subscription id,
+--              App Store originalTransactionId, Play purchase token; a minted
+--              id for 'manual'. The webhook upsert key.
+-- plan/status: normalized (shared PLANS; 'active'|'trialing'|'past_due'|
+--              'paused'|'canceled'), mapped from provider vocab at the webhook
+--              edge so the fold never sees provider-specific states.
+-- provider_customer_id: Paddle customer id (ctm_…), needed to mint customer-
+--              portal sessions. NULL for other sources.
+-- expires_at:  epoch ms the paid period runs to; NULL = non-expiring
+--              (manual/lifetime). canceled_at: when cancellation was scheduled
+--              (period end) — entitled until expires_at, but willRenew=false.
+-- event_occurred_at: provider event time last applied — the out-of-order
+--              webhook guard (an upsert loses to a newer stored event).
+CREATE TABLE IF NOT EXISTS purchases (
+  id                   TEXT PRIMARY KEY,  -- server-minted (newId())
+  user_id              TEXT NOT NULL,
+  source               TEXT NOT NULL,
+  external_id          TEXT NOT NULL,
+  plan                 TEXT NOT NULL,
+  status               TEXT NOT NULL,
+  provider_customer_id TEXT,
+  expires_at           INTEGER,
+  canceled_at          INTEGER,
+  event_occurred_at    INTEGER NOT NULL,
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL,
+  UNIQUE (source, external_id)
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_user_id ON purchases(user_id);

@@ -5,8 +5,10 @@ tiering, infra cost, and break-even. Companion to the product/architecture docs 
 see [link-extraction.md](./link-extraction.md) for why extraction (and its heavy
 image/screenshot/archive blobs) is the main storage line item,
 [local-first-sync.md](./local-first-sync.md) for the blind-broker data path that
-keeps server cost low, and [deployment.md](./deployment.md) for the Cloudflare
-(R2/D1/Workers) infrastructure these numbers are priced against.
+keeps server cost low, [deployment.md](./deployment.md) for the Cloudflare
+(R2/D1/Workers) infrastructure these numbers are priced against, and
+[iap.md](./iap.md) for how the tiers below are implemented (Paddle
+subscriptions, the entitlement fold, and which limit is enforced where).
 
 All figures are **planning estimates**, not committed prices. Flex the assumptions.
 

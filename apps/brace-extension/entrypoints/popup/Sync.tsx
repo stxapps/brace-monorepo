@@ -53,7 +53,11 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
   // no-op under the popup's ExternalSyncProvider anyway). Hidden while a cycle is
   // in flight (checking/initial-syncing/syncing) — nothing to trigger.
   const actionLabel =
-    phase === 'idle' ? 'Sync now' : phase === 'initial-error' || phase === 'cycle-error' ? 'Retry' : null;
+    phase === 'idle'
+      ? 'Sync now'
+      : phase === 'initial-error' || phase === 'cycle-error'
+        ? 'Retry'
+        : null;
 
   return (
     <div className="flex w-85 flex-col gap-3 p-4">

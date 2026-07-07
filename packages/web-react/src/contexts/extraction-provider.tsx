@@ -407,7 +407,11 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         // re-fire — the job would stall on the first 429. A non-retryable 4xx still just stops.
         // Gated like the auto drain (don't self-resume a hidden tab's incidental work), but
         // extract-all — explicit + finite — resumes even while hidden.
-        if (!cancelled && isRetryableTransportError(err) && (visibleRef.current || extractingAllRef.current)) {
+        if (
+          !cancelled &&
+          isRetryableTransportError(err) &&
+          (visibleRef.current || extractingAllRef.current)
+        ) {
           scheduleRetry(err);
         }
       } finally {
