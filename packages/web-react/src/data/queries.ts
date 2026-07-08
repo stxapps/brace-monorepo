@@ -149,6 +149,15 @@ export interface LinksResult {
   limit: number;
 }
 
+// --- query composition -------------------------------------------------------
+
+// Pure query-grammar transforms live in query-compose.ts (no Dexie/decode, so
+// they're unit-testable without loading this read engine). Re-exported here so
+// queries.ts stays the single read-layer facade — `excludeLists` folds a set of
+// list ids (e.g. lock coverage) out of a query while preserving readRest's fast
+// path; see that file and use-links for the policy that drives it.
+export { excludeLists } from './query-compose';
+
 // --- decode ------------------------------------------------------------------
 
 // Decode one `items` record into a typed entity (with its path), or `undefined`

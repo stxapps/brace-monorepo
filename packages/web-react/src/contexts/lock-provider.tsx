@@ -15,6 +15,7 @@ import type { TreeNode } from '@stxapps/shared';
 import { createLockVerifier, verifyLockPassword } from '@stxapps/web-crypto';
 
 import type { LockRecord } from '../data/db';
+import { computeCoverage } from '../data/lock-coverage';
 import { APP_LOCK_ID, deleteLock, putLock, readLocks } from '../data/lock-store';
 import type { ListItem } from '../data/queries';
 import { useLists } from '../hooks/use-lists';
@@ -48,46 +49,6 @@ import { useSync } from './sync-provider';
 export interface ListLockInfo {
   locked: boolean;
   hideList: boolean;
-}
-
-interface Coverage {
-  lockedListIds: ReadonlySet<string>;
-  hiddenListIds: ReadonlySet<string>;
-  // Covered list id → the covering lock row's id (nearest locked self-or-ancestor).
-  coveringLockIds: ReadonlyMap<string, string>;
-}
-
-const EMPTY_COVERAGE: Coverage = {
-  lockedListIds: new Set(),
-  hiddenListIds: new Set(),
-  coveringLockIds: new Map(),
-};
-
-// Walk the list forest resolving each list's covering lock. `ancestorLockId` is
-// the nearest locked ancestor's lock row (it wins as the covering lock — you must
-// open the outermost door first; an inner lock takes over on the recompute after
-// that unlock). `ancestorHidden` propagates hide from any locked ancestor, and a
-// list's OWN locked hide flag applies even under a non-hiding ancestor lock.
-function walkCoverage(
-  nodes: TreeNode<ListItem>[],
-  lockRows: ReadonlyMap<string, LockRecord>,
-  unlockedIds: ReadonlySet<string>,
-  ancestorLockId: string | null,
-  ancestorHidden: boolean,
-  out: { locked: Set<string>; hidden: Set<string>; covering: Map<string, string> },
-): void {
-  for (const node of nodes) {
-    const own = lockRows.get(node.item.id);
-    const ownActive = own !== undefined && !unlockedIds.has(own.id) ? own : undefined;
-    const lockId = ancestorLockId ?? ownActive?.id ?? null;
-    const isHidden = ancestorHidden || (ownActive?.hideList ?? false);
-    if (lockId !== null) {
-      out.locked.add(node.item.id);
-      out.covering.set(node.item.id, lockId);
-      if (isHidden) out.hidden.add(node.item.id);
-    }
-    walkCoverage(node.children, lockRows, unlockedIds, lockId, isHidden, out);
-  }
 }
 
 export interface Locks {
@@ -164,16 +125,10 @@ export function LockProvider({ children }: { children: ReactNode }) {
     });
   }, [storeStatus, locks, lists]);
 
-  const coverage = useMemo<Coverage>(() => {
-    if (listLockRows.size === 0) return EMPTY_COVERAGE;
-    const out = {
-      locked: new Set<string>(),
-      hidden: new Set<string>(),
-      covering: new Map<string, string>(),
-    };
-    walkCoverage(lists, listLockRows, unlockedIds, null, false, out);
-    return { lockedListIds: out.locked, hiddenListIds: out.hidden, coveringLockIds: out.covering };
-  }, [lists, listLockRows, unlockedIds]);
+  const coverage = useMemo(
+    () => computeCoverage(lists, listLockRows, unlockedIds),
+    [lists, listLockRows, unlockedIds],
+  );
 
   const listLocks = useMemo(() => {
     const infos = new Map<string, ListLockInfo>();
