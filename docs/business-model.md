@@ -68,26 +68,34 @@ cost, not a new cost category — the storage tables below are unchanged.
 
 Two kinds of gate do the work here, and keeping them straight is the whole model:
 
-- **Cost-defensive gates** protect real cost / the moat — blob storage, byte
-  quota, archive count, `serverExtraction`, AI compute. Enforced where the cost
-  is (server-hard where countable; see [iap.md](./iap.md) and
+- **Cost-defensive gates** protect real cost / the moat — heavy blob storage
+  (screenshot / read-mode / archive, _not_ the free preview image), byte quota,
+  archive count, `serverExtraction`, AI compute. Enforced where the cost is
+  (server-hard where countable; see [iap.md](./iap.md) and
   `packages/shared/src/iap/plans.ts`). These are why a free user costs cents.
 - **Value-capture gates** are pure willingness-to-pay for things that cost
   ~nothing to serve — client-enforced UX. This is where the "extra features"
-  live, and they carry conversion while on-device AI is still parked.
+  live, and they carry conversion while on-device AI is still parked. The
+  **preview image is _not_ one of these**: the client extracts it for free and it's
+  table-stakes for a modern bookmark app, so it stays **free for everyone** (see the
+  keystone note below) — gating a zero-cost daily-loop basic would cost more in
+  first-impression bounce than it wins in conversion.
 
 Design principle for the **cost-defensive** gates: the free tier limits the
-things that **cost money or weaken the moat** (image/screenshot/archive blobs =
-the storage tail; AI = compute), never the things that are nearly free and build
-the habit (metadata, sync, encryption). Free users then cost cents, and the
-upgrade triggers are features people feel.
+things that **cost money or weaken the moat** (screenshot / read-mode / archive
+blobs + `serverExtraction` = the storage / fetch tail; AI = compute), never the
+things that are nearly free and build the habit (metadata, sync, encryption — and
+the client-extracted preview image, which costs us ~nothing and is table-stakes, so
+free users **see** it). Free users then cost cents, and the upgrade triggers are
+features people feel — not a crippled daily view.
 
 The **value-capture** gates follow a different rule — gate only what passes all
 four tests: costs ~nothing, is **not** in the daily habit loop, signals identity
 to the wedge audience, and reads as "a pro unlocked something" rather than "they
 crippled the basics." Theme, flat tags, flat lists, pin, sort options, sibling
-reorder, multi-select move/tag/delete, and **full data export** all fail that test
-on purpose — so they stay **free for everyone** (see _no lock-in_ below). The
+reorder, multi-select move/tag/delete, **client-extracted preview images**, and
+**full data export** all fail that test on purpose — so they stay **free for
+everyone** (see _no lock-in_ below). The
 gated levers all share one shape: **structural depth or bespoke sequence** the
 free library is too small to need.
 
@@ -102,6 +110,7 @@ The two paid tiers then have a spine, not just a longer list:
 | --------------------------------------- | ------------------------------ | ----------------- | ------------------------------ |
 | Price                                   | $0                             | $24/yr ($3/mo)    | $48/yr ($5/mo) · lifetime $149 |
 | Saved links                             | 200                            | Unlimited         | Unlimited                      |
+| Storage quota (blobs)                   | preview imgs only (≤200)       | 5 GB              | 20 GB                          |
 | E2E encryption                          | ✅                             | ✅                | ✅                             |
 | Sync across devices                     | ✅ (habit-builder — don't cap) | ✅                | ✅                             |
 | Extension (save + extract)              | ✅                             | ✅                | ✅                             |
@@ -111,12 +120,12 @@ The two paid tiers then have a spine, not just a longer list:
 | Multi-select move / tag / delete        | ✅                             | ✅                | ✅                             |
 | Full data export (no lock-in)           | ✅                             | ✅                | ✅                             |
 | Search (words, all links)               | ✅                             | ✅                | ✅                             |
+| Preview images (downloaded blob)        | ✅ (client-extracted)          | ✅                | ✅                             |
 | Server extraction (`brace-extractor`)   | ❌                             | opt-in            | opt-in                         |
-| Preview images (downloaded blob)        | ❌ metadata-only (title/host)  | ✅                | ✅                             |
 | Nested lists                            | ❌                             | ✅                | ✅                             |
 | Locks (app lock + per-list hide)        | ❌                             | ✅                | ✅                             |
 | Search editor (fields, lists, tags)     | ❌                             | ✅                | ✅                             |
-| Read-mode (clean reader text)           | ❌                             | ✅                | ✅                             |
+| Read-mode (clean reader text)           | ❌                             | ▹ planned         | ▹ planned                     |
 | Table layout (custom columns)           | ❌                             | ▹ planned         | ▹ planned                      |
 | Screenshot capture                      | ❌                             | ▹ planned         | ▹ planned                      |
 | Full-page archive (offline snapshot)    | ❌                             | ▹ planned         | ▹ planned                      |
@@ -124,21 +133,28 @@ The two paid tiers then have a spine, not just a longer list:
 | Per-list manual link ordering           | ❌                             | ▹ planned         | ▹ planned                      |
 | Smart lists / smart tags                | ❌                             | ❌                | ▹ planned                      |
 | Saved searches (persist queries)        | ❌                             | ❌                | ▹ planned                      |
-| On-device AI (auto-tag, summary)        | ❌                             | ❌                | ▹ planned                      |
-| Storage quota (blobs)                   | n/a (no blobs)                 | 5 GB              | 20 GB                          |
+| AI (auto-tag, summary, semantci search) | ❌                             | ❌                | ▹ planned                      |
 
 ▹ **planned** = held for feedback, not committed even as the destination — gate
 if/when demand shows (see _launch sequencing_).
 
 Why these cuts:
 
-- **The image-blob paywall is the keystone.** Free users store only metadata
-  (~2 KB/link); a 200-link free user is ~400 KB total, so a million free users
-  cost pocket change. The free experience is still useful (encrypted sync + save +
-  tags + extension) — it just looks like a text list. That visual gap _is_ the
-  upsell.
-- **Read-mode / screenshot / archive** are the other heavy blobs, gated for the
-  same cost reason. Archive is metered (50 → unlimited) because full-page snapshots
+- **The free tier is genuinely good — and that's the point; the keystone paywall
+  is scale + heavy blobs, not the preview image.** A client (extension / expo)
+  extracts the preview image itself at **zero cost to us** (the expensive,
+  abuse-exposed `brace-extractor` path never runs), and a thumbnail-less library
+  looks broken next to every competitor — so withholding it would lose more to
+  first-impression bounce than it wins in conversion, and it's misaligned with the
+  wedge (privacy / PKM / research users convert on **scale and structure**, not
+  thumbnails). So free **shows** the client-extracted image (encrypted, ~tens of
+  KB/link — a maxed 200-link free user is ~16 MB, ~0.3¢/yr, so a million cost pocket
+  change). What actually drives Free→Plus is the honest, load-bearing set: the
+  **200-link cap** (scale), nested lists/tags + per-list order (structure), **locks**
+  (the wedge lever), and the genuinely-costly server/compute tail below.
+- **Read-mode / screenshot / archive** are the heavy blobs — and unlike the free
+  preview image these are the true _storage_ gate (server-fetched / compute-side),
+  gated for cost. Archive is metered (50 → unlimited) because full-page snapshots
   are the single biggest storage line item; the Plus→Pro jump is "permanent offline
   library."
 - **200 free links** is enough to evaluate seriously but past "free forever."
@@ -197,9 +213,14 @@ Why these cuts:
   app and paradoxically improves retention.
 - **AI is parked, not a current lever.** On-device models aren't good enough yet,
   so no plan ships AI today; it's marketed as "coming" and, when it lands, belongs
-  wholly to Pro (all intelligence lives in Pro). Plus is already carried by the
-  image-blob upgrade + locks, so nothing bets on AI timing.
-- **Free needs no quota meter:** the _absence of blob features_ is the quota.
+  wholly to Pro (all intelligence lives in Pro). Plus is already carried by
+  unlimited links + locks + the heavy-blob upgrades (read-mode / archive), so
+  nothing bets on AI timing.
+- **Free needs no user-facing quota meter:** the only blob it stores is the
+  client-extracted preview image, bounded by the 200-link cap (× a per-image byte
+  ceiling, the same one `brace-extractor`'s `safeFetch` enforces); every _heavier_
+  blob (screenshot / read-mode / archive) is still absent, so there is nothing to
+  surface in a quota UI.
 - **Lifetime ($149)** front-loads cash and suits the privacy/PKM crowd, but is a
   long-tail liability under E2E — offer as a launch lever, then retire.
 
@@ -210,7 +231,7 @@ The tiers table above is the **destination**, not day one — it's the plan, whi
 reality. What ships when:
 
 - **Launch — Free + Plus only.** Plus rests on the keystone (unlimited links +
-  the image-blob paywall + `serverExtraction`), with **locks** as the wedge lever
+  `serverExtraction` + the heavy-blob upgrades), with **locks** as the wedge lever
   built first — it's what makes the privacy tribe adopt and evangelize. Pro is
   **not on sale**: `AVAILABLE_PAID_PLANS` is `['plus']`, so the checkout contract
   and the cards offer Plus alone. Pro stays fully specified as spec-in-waiting
@@ -245,7 +266,7 @@ Assumptions (all editable):
 | Payment fees                | 2.9% + $0.30/yr        | annual billing = one charge/yr    |
 | **Net revenue / paid sub**  | **~$27.7/yr**          | after Stripe                      |
 | Infra / paid sub            | ~$2/yr                 | heavy blob user; most lighter     |
-| Infra / free sub            | ~$0.05/yr              | metadata-only, mostly sync ops    |
+| Infra / free sub            | ~$0.05/yr              | metadata + preview imgs, sync ops |
 | **Contribution / paid sub** | **~$25.7/yr**          | net rev − infra                   |
 | Fixed baseline              | ~$500/yr               | Workers paid plan, domains, tools |
 | Free→paid conversion        | 2% (cons.) – 4% (opt.) | typical prosumer freemium         |
@@ -271,8 +292,10 @@ How to read it:
   bookmark-app graveyard is the whole game — point every lever (extension store
   presence, a sharp wedge audience, privacy-tribe word-of-mouth) at it.
 - **Conversion is a 2× lever.** 2%→4% halves the free base required (128k→64k).
-  This is why the free tier is deliberately a little bare (metadata-only, no
-  thumbnail) — the visual + read-mode gap drives conversion.
+  Conversion rests on the load-bearing gates — the 200-link cap (scale), structure
+  (nested lists/tags), locks, and the heavy-blob upgrades (read-mode / archive) —
+  **not** on crippling the daily view: free shows client-extracted thumbnails, so the
+  free tier looks alive and forms the habit that retention depends on.
 - **Pricing leverages the count.** At the original $10–12/yr every "paid subs"
   number roughly **doubles** (~5,000 for a modest salary vs ~2,560). That's the
   concrete argument for $24/$48 — same customers, half the mountain.
@@ -320,10 +343,13 @@ ship. The build advantage is real; **point it at a sharp audience, not "everyone
 
 ### related risks (tracked elsewhere / open)
 
-- **The web-only gap is a conversion leak.** A free web-only user (no extension)
-  gets bare URLs _and_ no images — a steep first impression next to competitors'
-  auto-thumbnails (see [link-extraction.md](./link-extraction.md) — _the web-only
-  gap_). Onboarding must push the extension hard on day one.
+- **The web-only gap is a conversion leak.** Free users _with_ the extension get
+  client-extracted thumbnails for free, but a web-only user (no extension) gets bare
+  URLs and no images — a steep first impression next to competitors' auto-thumbnails
+  (see [link-extraction.md](./link-extraction.md) — _the web-only gap_). The remedy
+  is the growth lever the model already leans on: onboarding must push the extension
+  hard on day one (installing it _is_ what unlocks images), with opt-in
+  `serverExtraction` as the no-extension fallback.
 - **E2E is a moat and a cage.** It blocks server-side full-text search, good
   cloud AI today, and account recovery. Password-loss = unrecoverable data is the
   #1 support/trust issue — a clear recovery-key UX is part of the product (see
