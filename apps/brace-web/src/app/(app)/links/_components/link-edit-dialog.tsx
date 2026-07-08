@@ -34,7 +34,6 @@ import {
   readFileBytes,
   resizeImage,
   useLinkMutations,
-  useLocks,
 } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -92,9 +91,6 @@ function LinkEditForm({
   onClose: () => void;
 }) {
   const { update, saveCustomImage, deleteCustomImage } = useLinkMutations();
-  // Hidden (locked+hideList) lists stay out of the picker — same rule as the
-  // sidebar, the row menu's Move to, and the add popover.
-  const { hiddenListIds } = useLocks();
 
   // The extraction supplies the fallbacks the overrides sit above: the
   // placeholder title and the image shown after "Reset to extracted". Live, so
@@ -321,12 +317,14 @@ function LinkEditForm({
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-list">List</Label>
-              {/* No Trash target: trashing is the menu's Remove, never a "move". */}
+              {/* No Trash target: trashing is the menu's Remove, never a "move".
+                  Locked/hidden lists stay pickable — hiding only declutters the
+                  sidebar, it never blocks filing into a list you know exists. */}
               <ListSelect
                 id="edit-list"
                 value={listId}
                 onValueChange={setListId}
-                excludeIds={[TRASH_ID, ...hiddenListIds]}
+                excludeIds={[TRASH_ID]}
               />
             </div>
 

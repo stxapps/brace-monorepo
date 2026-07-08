@@ -36,7 +36,11 @@ import { useSync } from './sync-provider';
 //   - lockedListIds → merged into the link query's `lists.none` (the app's
 //     use-links), so every read path — browse, Show All, tags, search, pins —
 //     excludes covered links uniformly;
-//   - hiddenListIds → pruned from the sidebar tree and the list pickers.
+//   - hiddenListIds → pruned from the sidebar tree only (a pure navigation
+//     declutter). The link editors' list pickers deliberately do NOT prune these:
+//     hiding a list never blocks filing a link into a list you know exists, and
+//     the pickers must stay consistent with the extension, which — locks being
+//     device-local — can't know a web device's hidden lists anyway.
 
 // A list lock's row state, for settings/sidebar chrome (does this list have its
 // own lock, is it currently engaged, does it hide) — distinct from COVERAGE,

@@ -472,12 +472,15 @@ function SortableRow({
         />
       </div>
 
-      {/* Lock chrome: locked/unlocked state, plus the hide flag while it's
-          relevant (a hidden list is only hidden while locked). This row is the
-          hidden list's reveal path — it never leaves this settings page. */}
+      {/* Lock chrome: locked/unlocked state, plus the collapse flag while it's
+          relevant (a list is only collapsed from the sidebar while locked). The
+          flag declutters the sidebar only — the list stays pickable in the link
+          editors, and this row is always its reveal/unlock path. */}
       {lock && (
         <span className="flex shrink-0 items-center gap-1.5 px-1 text-muted-foreground">
-          {lock.hideList && lock.locked && <EyeOff className="size-3.5" aria-label="Hidden" />}
+          {lock.hideList && lock.locked && (
+            <EyeOff className="size-3.5" aria-label="Collapsed from sidebar" />
+          )}
           {lock.locked ? (
             <Lock className="size-3.5" aria-label="Locked" />
           ) : (
@@ -711,7 +714,7 @@ export function ListsSection() {
           title="Lock list"
           description="This list will be locked on this device only. If you forget the password, sign out to remove all locks on this device."
           submitLabel="Lock"
-          checkboxLabel="Hide this list while locked"
+          checkboxLabel="Also collapse this list from the sidebar while locked"
           onSubmit={async (password, hideList) => {
             await addListLock(lockDialog.listId, password, { hideList });
           }}

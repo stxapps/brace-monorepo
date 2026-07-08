@@ -79,6 +79,21 @@ All three link editors render `ListSelect` + `TagsField`, so the pickers stay
 identical across web quick-add, the extension, and the edit dialog. That's the
 point of the pairing — one picker over one live tree, no drift.
 
+**Locked and hidden lists stay pickable — the pickers filter only `TRASH_ID`.**
+They deliberately do **not** prune the lock model's `hiddenListIds`. Hiding a
+list is a pure **sidebar** declutter (`_panes/sidebar.tsx`, `pruneHidden` over
+`useLocks().hiddenListIds`); it never blocks filing a link into a list you know
+exists. Two reasons the pickers must ignore it: (1) locks are **device-local**
+(the `LockRecord` model, see `lock-provider.tsx`), so the extension editor can't
+know a web device's hidden lists — pruning them web-side would just make the two
+apps' pickers disagree; (2) hide was never a content guarantee anyway. That's
+what a **lock** is: `lockedListIds` folds into the link query's `lists.none`, so
+a locked list's _links_ drop out of every read path (browse, Show All, tags,
+search, pins) until unlocked — but the list stays selectable as a *destination*.
+So: lock gates a list's contents; hide only tidies the sidebar; neither touches
+what the pickers offer. Don't re-add `hiddenListIds` to any picker's
+`excludeIds` — it looks like a privacy fix but only breaks web/extension parity.
+
 **The coupling to watch** — the reason an editor change reaches beyond the
 editors:
 

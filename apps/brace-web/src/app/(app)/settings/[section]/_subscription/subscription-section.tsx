@@ -54,10 +54,7 @@ const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[] }> = 
   },
   pro: {
     blurb: 'The permanent offline library',
-    features: [
-      'Everything in Plus',
-      'Full on-device AI — summaries & semantic search',
-    ],
+    features: ['Everything in Plus', 'Full on-device AI — summaries & semantic search'],
   },
 };
 
