@@ -125,7 +125,7 @@ The two paid tiers then have a spine, not just a longer list:
 | Nested lists                            | ❌                             | ✅                | ✅                             |
 | Locks (app lock + per-list hide)        | ❌                             | ✅                | ✅                             |
 | Search editor (fields, lists, tags)     | ❌                             | ✅                | ✅                             |
-| Read-mode (clean reader text)           | ❌                             | ▹ planned         | ▹ planned                     |
+| Read-mode (clean reader text)           | ❌                             | ▹ planned         | ▹ planned                      |
 | Table layout (custom columns)           | ❌                             | ▹ planned         | ▹ planned                      |
 | Screenshot capture                      | ❌                             | ▹ planned         | ▹ planned                      |
 | Full-page archive (offline snapshot)    | ❌                             | ▹ planned         | ▹ planned                      |
@@ -133,7 +133,7 @@ The two paid tiers then have a spine, not just a longer list:
 | Per-list manual link ordering           | ❌                             | ▹ planned         | ▹ planned                      |
 | Smart lists / smart tags                | ❌                             | ❌                | ▹ planned                      |
 | Saved searches (persist queries)        | ❌                             | ❌                | ▹ planned                      |
-| AI (auto-tag, summary, semantci search) | ❌                             | ❌                | ▹ planned                      |
+| AI (auto-tag, summary, semantic search) | ❌                             | ❌                | ▹ planned                      |
 
 ▹ **planned** = held for feedback, not committed even as the destination — gate
 if/when demand shows (see _launch sequencing_).
