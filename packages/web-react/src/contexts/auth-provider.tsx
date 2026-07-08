@@ -72,15 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUsername(s.username);
           setStatus('authenticated');
         } else {
-          // A stored-but-expired session is an 'expired' reason (the user had a
-          // session that lapsed); no session at all stays null (a direct visit).
-          // Same wipe as endSession: the local store holds DECRYPTED bookmarks, so
-          // an expired session must drop them too — otherwise the next account
-          // on this device could read the previous user's plaintext.
-          if (s) {
-            void Promise.allSettled([clearSession(), clearSyncData()]);
-            setReason('expired');
-          }
+          // Same wipe as endSession, run whenever we resolve to signed-out — not
+          // only on an expired session. The local store holds DECRYPTED bookmarks
+          // (and lock verifiers), so any residue must go before the next account
+          // signs in on this device. Running it in the no-session case too closes
+          // the interrupted-exit gap: endSession's wipe is five independent
+          // .clear()s, not one transaction, so a tab closed mid-clear can leave
+          // plaintext behind with no session row; this catches it on next load
+          // (a guest reaches /sign-in only unauthenticated, and only after a fresh
+          // load, so this always runs first). clearSession with no session is a
+          // no-op. A stored-but-expired session additionally records 'expired' so
+          // AuthGuard resumes the user at /sign-in?next=; no session at all stays
+          // null (a direct visit).
+          void Promise.allSettled([clearSession(), clearSyncData()]);
+          if (s) setReason('expired');
           setUsername(null);
           setStatus('unauthenticated');
         }

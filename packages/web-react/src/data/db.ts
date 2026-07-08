@@ -215,7 +215,7 @@ export interface LocalSettingsRecord {
 // (lock-provider), so every lock re-engages on reload — nothing here tracks it.
 export interface LockRecord {
   // `APP_LOCK_ID` for the app lock, else the locked list's id (stable across
-  // renames, unlike the old client's name key). One row per lock.
+  // renames). One row per lock.
   id: string;
   kind: 'app' | 'list';
   // The verifier pair (base64) — see LockVerifier in @stxapps/web-crypto.
