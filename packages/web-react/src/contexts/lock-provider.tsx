@@ -214,10 +214,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
     [markUnlocked],
   );
 
-  const unlockApp = useCallback(
-    (password: string) => unlock(APP_LOCK_ID, password),
-    [unlock],
-  );
+  const unlockApp = useCallback((password: string) => unlock(APP_LOCK_ID, password), [unlock]);
 
   const unlockList = useCallback(
     async (listId: string, password: string) => {
