@@ -107,21 +107,28 @@ The two paid tiers then have a spine, not just a longer list:
 | Extension (save + extract)              | ✅                             | ✅                | ✅                             |
 | Theme, flat tags, flat lists, pin       | ✅                             | ✅                | ✅                             |
 | Sort + manual reorder (lists/tags/pins) | ✅                             | ✅                | ✅                             |
+| Layouts (card, list)                    | ✅                             | ✅                | ✅                             |
 | Multi-select move / tag / delete        | ✅                             | ✅                | ✅                             |
 | Full data export (no lock-in)           | ✅                             | ✅                | ✅                             |
+| Search (words, all links)               | ✅                             | ✅                | ✅                             |
 | Server extraction (`brace-extractor`)   | ❌                             | opt-in            | opt-in                         |
 | Preview images (downloaded blob)        | ❌ metadata-only (title/host)  | ✅                | ✅                             |
 | Nested lists                            | ❌                             | ✅                | ✅                             |
-| Nested tags (tag hierarchy)             | ❌                             | ✅                | ✅                             |
-| Per-list manual link ordering           | ❌                             | ✅                | ✅                             |
 | Locks (app lock + per-list hide)        | ❌                             | ✅                | ✅                             |
+| Search editor (fields, lists, tags)     | ❌                             | ✅                | ✅                             |
 | Read-mode (clean reader text)           | ❌                             | ✅                | ✅                             |
-| Screenshot capture                      | ❌                             | ✅                | ✅                             |
-| Full-page archive (offline snapshot)    | ❌                             | last 50 links     | Unlimited                      |
+| Table layout (custom columns)           | ❌                             | ▹ planned         | ▹ planned                      |
+| Screenshot capture                      | ❌                             | ▹ planned         | ▹ planned                      |
+| Full-page archive (offline snapshot)    | ❌                             | ▹ planned         | ▹ planned                      |
+| Nested tags (tag hierarchy)             | ❌                             | ▹ planned         | ▹ planned                      |
+| Per-list manual link ordering           | ❌                             | ▹ planned         | ▹ planned                      |
+| Smart lists / smart tags                | ❌                             | ❌                | ▹ planned                      |
+| Saved searches (persist queries)        | ❌                             | ❌                | ▹ planned                      |
+| On-device AI (auto-tag, summary)        | ❌                             | ❌                | ▹ planned                      |
 | Storage quota (blobs)                   | n/a (no blobs)                 | 5 GB              | 20 GB                          |
-| Smart lists / smart tags                | ❌                             | ❌                | ✅                             |
-| Saved searches                          | ❌                             | ❌                | ✅                             |
-| On-device AI (auto-tag, summary)        | ❌                             | ❌                | ⏳ coming (Pro-only when live) |
+
+▹ **planned** = held for feedback, not committed even as the destination — gate
+if/when demand shows (see _launch sequencing_).
 
 Why these cuts:
 
@@ -156,6 +163,22 @@ Why these cuts:
   **link** ordering: a hand-curated sequence only pays off once a list outgrows
   the free tier's whole library, so it's coupled to unlimited links and sits in
   the Plus structural spine (next to nested lists / nested tags).
+- **Search is a three-rung ladder, split by structure — not by whether you can
+  search at all.** Free gets real word search across the _whole_ library
+  (title / url / host); gating that would cripple a daily-loop basic and earn bad
+  reviews (the same trap as capping sort/pins). Plus gets the **structured query
+  editor** — field-scoped (url vs title), multi-list / multi-tag, boolean — which
+  is client-side so it costs nothing and couples to unlimited links the same way
+  per-list ordering does. Pro persists those queries as **saved searches**, the
+  automated rung next to smart lists. Basic → structure-by-hand → automated mirrors
+  the Free → Plus → Pro spine exactly.
+- **Layouts: the customizable table is the lever, not the view.** Card and list
+  layouts are free — a bare view mode is cosmetic, and cosmetics stay free. The Plus
+  gate is the **table with user-chosen, reorderable columns**: a power/density tool
+  for the research/PKM wedge, client-rendered so ~free, outside the casual daily loop
+  (casual users live in cards), and it reads as "a pro unlocked a grid," not "they
+  crippled the basics." It's a desktop power view — on narrow viewports it falls back
+  to the list layout rather than fighting horizontal scroll.
 - **The Plus→Pro spine is structural vs automated organization.** Plus lets you
   structure the library by hand (nested lists, nested tags, per-list link order)
   and lock it down; Pro makes it organize itself (smart lists, saved searches).
@@ -194,9 +217,12 @@ reality. What ships when:
   (its entitlements, price, and Paddle branch are all in place).
 - **Plus fast-follow — read-mode, then screenshot / archive.** Gated in the table
   already; each added as it's built. Card copy only ever promises what's live.
-- **Held for feedback — nested tags + per-list link ordering.** Planned Plus
-  levers, in this doc but not yet entitlement fields (see `iap/plans.ts`
-  _DOC-AHEAD-OF-CODE_); gate them if/when demand shows.
+- **Held for feedback — nested tags + per-list link ordering** (marked ▹ in the
+  table). Planned Plus levers, in this doc but not yet entitlement fields (see
+  `iap/plans.ts` _DOC-AHEAD-OF-CODE_); gate them if/when demand shows.
+- **Plus value-capture fast-follows — search editor + table layout.** Client-only,
+  cost-free levers (a client gate, no quota to meter), shipped as each is built. Like
+  every gate, the card copy only ever promises what's live.
 - **Pro — after the app is stable.** Its spine (smart lists / saved searches) is
   deterministic, so it's buildable without waiting on AI — that independence is
   why Pro isn't hostage to model timing, _not_ a claim it's live now. AI
