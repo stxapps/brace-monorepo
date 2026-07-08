@@ -17,7 +17,6 @@ import {
   LogOut,
   MoreHorizontal,
   RefreshCw,
-  Search,
   Settings,
   SquarePen,
 } from 'lucide-react';
@@ -36,6 +35,7 @@ import {
 
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 import { LinkAddPopover } from '../_components/link-add-popover';
+import { SearchBar } from '../_components/search-bar';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
@@ -45,6 +45,9 @@ function useSelectionLabel(): string {
   const tags = useTags();
 
   if (selection.kind === 'all') return ALL_LABEL;
+  // A text search or compound/multi filter has no single-axis name — title the
+  // view generically rather than borrowing a stale list/tag name.
+  if (selection.kind === 'none') return 'Search';
   if (selection.kind === 'list') {
     // Look the name up in the merged list tree — so a renamed system list shows
     // its override name, not the code default. Flatten since the match may be at
@@ -145,14 +148,13 @@ export function Topbar() {
   const { bulkEditing, enterBulkEdit, exitBulkEdit } = useLinksViewState();
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
-      <h1 className="truncate text-lg font-semibold">{label}</h1>
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+      <h1 className="max-w-[12rem] shrink truncate text-lg font-semibold">{label}</h1>
 
-      <div className="flex items-center gap-2">
+      <SearchBar />
+
+      <div className="flex shrink-0 items-center gap-2">
         <LinkAddPopover />
-        <Button variant="ghost" size="icon-sm" aria-label="Search">
-          <Search className="size-4" />
-        </Button>
         <Button
           variant={bulkEditing ? 'secondary' : 'ghost'}
           size="icon-sm"

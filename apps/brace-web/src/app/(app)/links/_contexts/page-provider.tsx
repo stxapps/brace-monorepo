@@ -24,16 +24,17 @@ import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/n
 import { ALL_ID, DEFAULT_LIST_ID } from '@stxapps/shared';
 import type { LinkQuery } from '@stxapps/web-react';
 
-// What the main pane is filtered to. `all` is the unfiltered Show-All view;
-// `list`/`tag` carry the selected entity's bare id (a system constant or a user
-// entity id — the same id a link stores in `link.listId` / `link.tagIds`).
+// The single-axis view the sidebar highlights and the topbar names — a lossy
+// PROJECTION of `query` onto one axis (via `selectionFromQuery`; never set
+// directly). `all` is the unfiltered Show-All view; `list`/`tag` carry the selected
+// entity's bare id (the same id a link stores in `link.listId` / `link.tagIds`);
+// `none` is "no single-axis highlight" — a text search or a compound/multi filter
+// the sidebar can't point at one row for (so nothing is highlighted).
 export type Selection =
   | { kind: 'all' }
+  | { kind: 'none' }
   | { kind: 'list'; id: string }
   | { kind: 'tag'; id: string };
-
-// Shown when `/links` has no param: the default inbox, My List.
-const DEFAULT_SELECTION: Selection = { kind: 'list', id: DEFAULT_LIST_ID };
 
 // The canonical URL for a selection. The default (My List) is the bare `/links`,
 // so the page's home carries no query noise; everything else is one opaque id.
@@ -41,23 +42,59 @@ const DEFAULT_SELECTION: Selection = { kind: 'list', id: DEFAULT_LIST_ID };
 // URL-safe literals but encoding is harmless and keeps the builder uniform.
 function hrefForSelection(selection: Selection): string {
   if (selection.kind === 'all') return `/links?list=${ALL_ID}`;
+  if (selection.kind === 'none') return '/links'; // no target axis → home (default inbox)
   if (selection.kind === 'tag') return `/links?tag=${encodeURIComponent(selection.id)}`;
   if (selection.id === DEFAULT_LIST_ID) return '/links';
   return `/links?list=${encodeURIComponent(selection.id)}`;
+}
+
+// The inverse of `parseLinkQuery`: serialize a full `LinkQuery` back to the canonical
+// URL the search editor commits (`setQuery`). Emits the bare relation for the common
+// case (`list`/`tag` → `any`, `text`/`url`/`title` → `all`) and the suffixed forms for
+// the rest, as REPEATED keys — the exact grammar `parseLinkQuery` reads back, so the
+// URL round-trips. Word arrays are re-lowercased/trimmed by `words()` on read, so we
+// serialize them as-is. An empty query collapses to `/links` (which parseLinkQuery
+// then reads as the default inbox — an emptied search returns home).
+function hrefForQuery(query: LinkQuery): string {
+  const params = new URLSearchParams();
+  const append = (key: string, values: readonly string[]) => {
+    for (const value of values) params.append(key, value);
+  };
+
+  append('list', query.lists.any); // bare `list` = list-any
+  append('list-none', query.lists.none);
+  append('tag', query.tags.any); // bare `tag` = tag-any
+  append('tag-all', query.tags.all);
+  append('tag-none', query.tags.none);
+  for (const [field, clause] of [
+    ['text', query.text],
+    ['url', query.url],
+    ['title', query.title],
+  ] as const) {
+    append(field, clause.all); // bare `text`/`url`/`title` = *-all
+    append(`${field}-any`, clause.any);
+    append(`${field}-none`, clause.none);
+  }
+  if (query.sort === 'createdAt') params.set('sort', 'created'); // `updatedAt` is the default
+
+  const qs = params.toString();
+  return qs ? `/links?${qs}` : '/links';
 }
 
 // The URL → `LinkQuery` grammar (data layer owns `LinkQuery`; this maps the URL
 // onto it). Each filterable field carries a relation in its param NAME:
 //   list / list-any / list-none           (a link is in one list: no `all`)
 //   tag  / tag-any  / tag-all  / tag-none
-//   url  / url-all  / url-any  / url-none  (substring words)
+//   text / text-all / text-any / text-none (words over the combined url⊕title)
+//   url  / url-all  / url-any  / url-none  (substring words, url only)
 //   title/ title-all/ title-any/ title-none
 //   sort = created | updated               (ordering, default updated)
 // The bare name is sugar for the common relation: `list`/`tag` → `any` (include),
-// `url`/`title` → `all` (must contain every word). Clauses AND across fields.
-// Values are REPEATED keys (`?tag=a&tag=b`), never `+` (decodes to space) or
-// comma (breaks on ids containing one). Today's UI only ever emits the bare
-// forms; the suffixed forms make hand-built advanced deep links work already.
+// `text`/`url`/`title` → `all` (must contain every word). Clauses AND across fields.
+// Values are REPEATED keys (`?tag=a&tag=b` / `?text=foo&text=bar`), never `+`
+// (decodes to space) or comma (breaks on ids containing one). `setSimpleQuery`
+// emits only the bare `list`/`tag` forms; `setQuery` (the search editor) emits the
+// suffixed forms, which hand-built advanced deep links already relied on.
 const FILTER_KEYS = [
   'list',
   'list-any',
@@ -66,6 +103,10 @@ const FILTER_KEYS = [
   'tag-any',
   'tag-all',
   'tag-none',
+  'text',
+  'text-all',
+  'text-any',
+  'text-none',
   'url',
   'url-all',
   'url-any',
@@ -96,6 +137,12 @@ function parseLinkQuery(searchParams: ReadonlyURLSearchParams): LinkQuery {
       all: searchParams.getAll('tag-all'),
       none: searchParams.getAll('tag-none'),
     },
+    // Basic search: `text` (bare) → `all` sugar, matched over the combined url⊕title.
+    text: {
+      all: words([...searchParams.getAll('text'), ...searchParams.getAll('text-all')]),
+      any: words(searchParams.getAll('text-any')),
+      none: words(searchParams.getAll('text-none')),
+    },
     url: {
       all: words([...searchParams.getAll('url'), ...searchParams.getAll('url-all')]),
       any: words(searchParams.getAll('url-any')),
@@ -121,13 +168,48 @@ function parseLinkQuery(searchParams: ReadonlyURLSearchParams): LinkQuery {
   return query;
 }
 
+// Project a `LinkQuery` onto the single-axis `Selection` the sidebar/topbar read —
+// the inverse view of the same URL. Only a PLAIN single-axis query maps to a
+// highlight; a text search or any compound/multi filter is `none` (no row to point
+// at). Deriving off `query` (not the raw params) is what makes this honest: `query`
+// carries the default-inbox injection (bare `/links` → `lists.any = [My List]`), so
+// the default view highlights My List, while a global search — which has a text
+// clause — resolves to `none` instead of a stale list highlight.
+function selectionFromQuery(q: LinkQuery): Selection {
+  // Any substring-text predicate (basic `text`, or field-scoped url/title) → search.
+  const textTerms =
+    q.text.all.length + q.text.any.length + q.text.none.length +
+    q.url.all.length + q.url.any.length + q.url.none.length +
+    q.title.all.length + q.title.any.length + q.title.none.length;
+  if (textTerms > 0) return { kind: 'none' };
+
+  // Exclusions or tag-`all` are compound filters with no single highlight.
+  if (q.lists.none.length > 0 || q.tags.all.length > 0 || q.tags.none.length > 0) {
+    return { kind: 'none' };
+  }
+
+  const lists = q.lists.any.length;
+  const tags = q.tags.any.length;
+  if (lists === 1 && tags === 0) return { kind: 'list', id: q.lists.any[0] };
+  if (lists === 0 && tags === 1) return { kind: 'tag', id: q.tags.any[0] };
+  if (lists === 0 && tags === 0) return { kind: 'all' }; // Show All
+  return { kind: 'none' }; // multi-list, list+tag combo, etc.
+}
+
 interface LinksPageContextValue {
   // The single-axis sidebar/topbar view state (what's highlighted / named).
   selection: Selection;
-  setSelection: (selection: Selection) => void;
+  // Navigation: commit a SIMPLE query — one list/tag/all axis — as the canonical
+  // clean URL (the sidebar). Named for what it writes (a query), not for the
+  // derived `selection` you read back: selection is a projection, never set directly.
+  setSimpleQuery: (selection: Selection) => void;
+  // Commit an ARBITRARY query — the whole grammar (text/url/title words, multi
+  // list/tag, none) — as the URL (the search editor). Both setters write the URL,
+  // the single source of truth, and let `query`/`selection` re-derive from it.
+  setQuery: (query: LinkQuery) => void;
   // The full filter the main pane reads through (`readLinks`). Derived from the
   // same URL as `selection`, but expresses the whole grammar (and/or/none across
-  // lists, tags, and url/title words), not just the single selected axis.
+  // lists, tags, and text/url/title words), not just the single selected axis.
   query: LinkQuery;
 }
 
@@ -137,34 +219,27 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // The URL is the source of truth; selection is derived, not stored. `tag` wins
-  // over `list` if both are somehow present (they're mutually exclusive in
-  // practice), and an absent `list` falls back to the default inbox.
-  const selection = useMemo<Selection>(() => {
-    const tag = searchParams.get('tag');
-    if (tag) return { kind: 'tag', id: tag };
-
-    const list = searchParams.get('list');
-    if (list === ALL_ID) return { kind: 'all' };
-    if (list) return { kind: 'list', id: list };
-    return DEFAULT_SELECTION;
-  }, [searchParams]);
-
   // The main pane's full filter — same URL, the whole grammar. Memoized on the
   // params so its identity is stable across renders (it's a useLiveQuery dep in
   // useLinks); a new object only when the URL actually changes.
   const query = useMemo<LinkQuery>(() => parseLinkQuery(searchParams), [searchParams]);
 
-  // push (not replace) so the back button steps through the lists you visited —
+  // Selection is a derived PROJECTION of the query — not a separate read of the URL
+  // — so it can never disagree with what the main pane shows: a global search
+  // resolves to `none` (no highlight), not a stale list. See selectionFromQuery.
+  const selection = useMemo<Selection>(() => selectionFromQuery(query), [query]);
+
+  // push (not replace) so the back button steps through the views you visited —
   // the deep-link/history behavior the URL approach is for.
-  const setSelection = useCallback(
+  const setSimpleQuery = useCallback(
     (next: Selection) => router.push(hrefForSelection(next)),
     [router],
   );
+  const setQuery = useCallback((next: LinkQuery) => router.push(hrefForQuery(next)), [router]);
 
   const value = useMemo(
-    () => ({ selection, setSelection, query }),
-    [selection, setSelection, query],
+    () => ({ selection, setSimpleQuery, setQuery, query }),
+    [selection, setSimpleQuery, setQuery, query],
   );
 
   return <LinksPageContext.Provider value={value}>{children}</LinksPageContext.Provider>;

@@ -4,10 +4,11 @@ How the link views read from the local store fast, stay live, and paginate at a
 few-thousand-link scale. See [architecture.md](./architecture.md) for the package
 layering and [local-first-sync.md](./local-first-sync.md) for how those links got
 into IndexedDB in the first place (encrypted blob per file → decrypted local
-store). This doc is about the **read** edge: `apps/brace-web/src/data/queries.ts`
+store). This doc is about the **read** edge: `packages/web-react/src/data/queries.ts`
 (the typed read layer), the indexes in `data/db.ts` that serve it, the
 `data/decode-cache.ts` memo, and the virtualized layouts under
-`app/(app)/links/_layouts/`.
+`app/(app)/links/_layouts/`. The URL⇄`LinkQuery` grammar and the write path that
+produce the queries this edge reads live in [search.md](./search.md).
 
 The decisive constraint is **scale on one device**: a user can save several
 thousand links, all resident in IndexedDB, and the UI reads from that store on
@@ -54,11 +55,15 @@ anything else (multi-list, `none`, text words) walks the all-links ordered index
 and filters/decodes lazily, stopping at the page. **Text predicates live inside the
 blobs, so they can never be index-served** — they're always a JS post-filter, and
 the total is non-exact under search. Note the one cross-record wrinkle from the
-writer-split: a `url` word matches on the decoded **link**, but a `title` word now
-matches on the decoded **extraction** — so the title post-filter **joins the
-co-keyed `extractions/` record** (same `{id}`) and decodes it too. That join is the
-deliberate cost of keeping `links/` user-only; it falls only on text search (and on
-row display, for the title/image), never on the index-served browse path.
+writer-split: a `url` word matches on the decoded **link**, a `title` word matches on
+the decoded **extraction**, and a basic `text` word matches the **combined url⊕title**
+haystack (so it reads both). Any clause that touches the resolved title — a `title`
+**or** a `text` clause, gated by `needsExtractionJoin` — **joins the co-keyed
+`extractions/` record** (same `{id}`) and decodes it too. That join is the deliberate
+cost of keeping `links/` user-only; it falls only on text search (and on row display,
+for the title/image), never on the index-served browse path. (`text` is the basic
+"words, all links" clause; `url`/`title` are the field-scoped advanced clauses — the
+grammar that names them is [search.md](./search.md).)
 
 **Why not project a `displayTitle` column onto the link record instead?** It would
 make `title` index-/scan-served again, but it would have to be derived from a

@@ -159,8 +159,12 @@ function listIcon(id: string): React.ReactNode {
 
 function isActive(current: Selection, candidate: Selection): boolean {
   if (current.kind !== candidate.kind) return false;
-  if (current.kind === 'all') return true;
-  return current.id === (candidate as Exclude<Selection, { kind: 'all' }>).id;
+  // Entity axes match by id; `all`/`none` carry none, so a kind match is enough
+  // (candidate rows are only ever list/tag/all — `none` never highlights a row).
+  if (current.kind === 'list' || current.kind === 'tag') {
+    return current.id === (candidate as { id: string }).id;
+  }
+  return true;
 }
 
 function NavItem({
@@ -193,7 +197,7 @@ function NavItem({
   // false so they don't carry a phantom indent.
   showSlot?: boolean;
 }) {
-  const { selection: current, setSelection } = useLinksPage();
+  const { selection: current, setSimpleQuery } = useLinksPage();
   const active = isActive(current, selection);
 
   return (
@@ -216,7 +220,7 @@ function NavItem({
       ) : null}
       <button
         type="button"
-        onClick={() => setSelection(selection)}
+        onClick={() => setSimpleQuery(selection)}
         aria-current={active ? 'true' : undefined}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
@@ -327,7 +331,7 @@ function Section({
 // A footer navigation link (Manage lists / tags). Not a filter selection — a
 // link out to the settings section that creates/renames/deletes. Styled like
 // the nav items above but it's an <a>, so it navigates (and Back returns here to
-// keep organizing) rather than calling setSelection.
+// keep organizing) rather than calling setSimpleQuery.
 function FooterLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
     <Link

@@ -28,7 +28,11 @@ sync/device split shared with link-layout, and the pre-paint FOUC script), and
 extension and web) and the list/tag taxonomy UI — the shared `ListSelect`/
 `TagsField` pickers, the invariants every editor upholds (copy-to-draft, input
 validation, close guard), how the sidebar and the row menu's "Move to" couple to
-the same trees, and bulk edit.
+the same trees, and bulk edit, and [search.md](./search.md) for the links-page
+search subsystem (the URL⇄`LinkQuery` grammar, the `setSimpleQuery`/`setQuery`
+writers, `selection` as a derived projection with a `none` state, and the
+basic-box + advanced-popover UI — the read-side evaluation lives in
+client-queries.md, the tiering in business-model.md).
 
 ### apps
 

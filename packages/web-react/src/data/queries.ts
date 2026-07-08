@@ -120,9 +120,31 @@ export type LinkSort = 'updatedAt' | 'createdAt';
 export interface LinkQuery {
   lists: ListClause;
   tags: Clause;
+  // Basic search: substring words matched against the COMBINED url⊕title haystack
+  // (host lives inside url), so a word may land in EITHER field — the "search
+  // words, all links" free rung, one clause behind one box. `url`/`title` below are
+  // the field-scoped (advanced) counterparts; `text` ANDs with them and with
+  // lists/tags like every other clause. It carries the title half, so — like a
+  // `title` clause — it forces the link↔extraction join (see needsExtractionJoin).
+  text: Clause;
   url: Clause;
   title: Clause;
   sort: LinkSort;
+}
+
+// A blank query — every clause empty, default sort. The base the search UI builds
+// on (spread + fill the fields it sets), so callers never hand-assemble the full
+// clause shape (and can't drift from it when a field is added). A factory, not a
+// shared const, so no caller can mutate a shared clause array.
+export function emptyQuery(): LinkQuery {
+  return {
+    lists: { any: [], none: [] },
+    tags: { any: [], all: [], none: [] },
+    text: { any: [], all: [], none: [] },
+    url: { any: [], all: [], none: [] },
+    title: { any: [], all: [], none: [] },
+    sort: 'updatedAt',
+  };
 }
 
 // One page of results. `total` is the exact match count ONLY when it's a cheap
@@ -563,7 +585,7 @@ function clauseEmpty(c: Clause): boolean {
 }
 
 function hasTextClause(q: LinkQuery): boolean {
-  return !clauseEmpty(q.url) || !clauseEmpty(q.title);
+  return !clauseEmpty(q.url) || !clauseEmpty(q.title) || !clauseEmpty(q.text);
 }
 
 // Predicates the indexed COLUMNS can answer without decoding the blob — list id
@@ -594,8 +616,12 @@ function wordsMatch(haystack: string, c: Clause): boolean {
   return true;
 }
 
-function hasTitleClause(q: LinkQuery): boolean {
-  return !clauseEmpty(q.title);
+// A query needs the link↔extraction JOIN when it filters on the resolved title: the
+// `title` clause (field-scoped) or the `text` clause (whose haystack includes the
+// title). Both read `extraction.title`, which lives in `extractions/`, so neither can
+// run in the sync walk — they force the join and drop the exact count.
+function needsExtractionJoin(q: LinkQuery): boolean {
+  return !clauseEmpty(q.title) || !clauseEmpty(q.text);
 }
 
 // The URL text predicate — on the decoded LINK (url lives in `links/`), so it can run
@@ -613,6 +639,15 @@ function urlMatches(link: LinkItem, q: LinkQuery): boolean {
 // `none`-only term passes (nothing excluded).
 function titleMatches(link: LinkItem, extraction: Extraction | undefined, q: LinkQuery): boolean {
   return wordsMatch(link.customTitle ?? extraction?.title ?? '', q.title);
+}
+
+// The BASIC-search predicate — words matched against the combined url⊕title haystack
+// (host is already inside url), so a word may match in either half. Needs the
+// extraction join for the title half, like `titleMatches`; an empty title half is
+// fine (wordsMatch passes a `none`-only clause and fails an `any`/`all` one).
+function textMatches(link: LinkItem, extraction: Extraction | undefined, q: LinkQuery): boolean {
+  const title = link.customTitle ?? extraction?.title ?? '';
+  return wordsMatch(`${link.url} ${title}`, q.text);
 }
 
 // The compound index + record column backing each sort dimension. Both
@@ -682,7 +717,7 @@ async function finishFromCandidates(
     };
   }
 
-  if (hasTitleClause(q)) return finishWithTitleSearch(survivors, q, limit);
+  if (needsExtractionJoin(q)) return finishWithExtractionSearch(survivors, q, limit);
 
   // url-only text: filter on the decoded link, no extraction join needed.
   const links: LinkItem[] = [];
@@ -696,13 +731,14 @@ async function finishFromCandidates(
   return { links: links.slice(0, limit), total: undefined, hasMore: links.length > limit };
 }
 
-// Finish a TITLE-search page. Title lives in `extractions/`, so it can't be filtered in
-// the sync walk: take the column-filtered survivor records (already in sort order), apply
-// the url clause on the decoded link, bulk-join their extractions, then apply the title
-// clause and page. Materializes the survivor set — title search is already non-exact / a
-// scan — so the cost is bounded by the column+url survivors (the whole library only for a
-// bare title search, which is exactly the old behavior's cost plus the extraction reads).
-async function finishWithTitleSearch(
+// Finish an EXTRACTION-dependent search page (a `title` and/or `text` clause). The
+// resolved title lives in `extractions/`, so it can't be filtered in the sync walk:
+// take the column-filtered survivor records (already in sort order), apply the url
+// clause on the decoded link, bulk-join their extractions, then apply the title + text
+// clauses and page. Materializes the survivor set — this search is already non-exact /
+// a scan — so the cost is bounded by the column+url survivors (the whole library only
+// for a bare title/text search, plus the extraction reads).
+async function finishWithExtractionSearch(
   survivors: ItemRecord[],
   q: LinkQuery,
   limit: number,
@@ -717,7 +753,7 @@ async function finishWithTitleSearch(
   for (let i = 0; i < urlPassed.length; i++) {
     const exRecord = exRecords[i];
     const extraction = exRecord ? decodeCachedExtraction(exRecord) : undefined;
-    if (titleMatches(urlPassed[i], extraction, q)) {
+    if (titleMatches(urlPassed[i], extraction, q) && textMatches(urlPassed[i], extraction, q)) {
       links.push(urlPassed[i]);
       if (links.length > limit) break; // one past the page → hasMore
     }
@@ -751,7 +787,11 @@ async function readRest(
   exclude: Set<string>,
 ): Promise<RestResult> {
   const index = SORT_INDEXES[query.sort];
-  const onlyLists = clauseEmpty(query.tags) && clauseEmpty(query.url) && clauseEmpty(query.title);
+  const onlyLists =
+    clauseEmpty(query.tags) &&
+    clauseEmpty(query.url) &&
+    clauseEmpty(query.title) &&
+    clauseEmpty(query.text);
 
   if (onlyLists && query.lists.none.length === 0) {
     if (query.lists.any.length === 1) {
@@ -771,19 +811,20 @@ async function readRest(
     return finishFromCandidates(candidates, query, limit, exclude);
   }
 
-  // A title clause can't be filtered in the sync walk (title lives in `extractions/`):
-  // gather every column-filtered survivor in sort order, then join + filter + page.
-  if (hasTitleClause(query)) {
+  // A title/text clause can't be filtered in the sync walk (the resolved title lives in
+  // `extractions/`): gather every column-filtered survivor in sort order, then join +
+  // filter + page.
+  if (needsExtractionJoin(query)) {
     const survivors = await db.items
       .where(index.type)
       .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
       .reverse()
       .filter((record) => !exclude.has(record.path) && columnMatches(record, query))
       .toArray();
-    return finishWithTitleSearch(survivors, query, limit);
+    return finishWithExtractionSearch(survivors, query, limit);
   }
 
-  // No positive tag clause and no title clause: walk all links newest-first, filtering
+  // No positive tag clause and no title/text clause: walk all links newest-first, filtering
   // as we go on columns + url (decoded link). The `filter` stops once `limit + 1` pass
   // (one past the page detects `hasMore`), so it touches a bounded slice, not the library.
   const records = await db.items
@@ -829,17 +870,19 @@ async function readPinnedOverlay(
     passed.push(link);
   }
 
-  if (!hasTitleClause(query)) {
+  if (!needsExtractionJoin(query)) {
     return { links: passed, paths: new Set(passed.map((l) => l.path)) };
   }
 
-  // Title clause: join each pinned link's extraction (pins are few) and apply the filter.
+  // Title/text clause: join each pinned link's extraction (pins are few) and apply the filter.
   const exRecords = await db.items.bulkGet(passed.map((l) => extractionPathForLink(l.path)));
   const links: LinkItem[] = [];
   passed.forEach((link, i) => {
     const exRecord = exRecords[i];
     const extraction = exRecord ? decodeCachedExtraction(exRecord) : undefined;
-    if (titleMatches(link, extraction, query)) links.push(link);
+    if (titleMatches(link, extraction, query) && textMatches(link, extraction, query)) {
+      links.push(link);
+    }
   });
   return { links, paths: new Set(links.map((l) => l.path)) };
 }

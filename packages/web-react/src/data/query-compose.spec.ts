@@ -5,6 +5,7 @@ import { excludeLists } from './query-compose';
 const q = (any: string[], none: string[] = []): LinkQuery => ({
   lists: { any, none },
   tags: { any: [], all: [], none: [] },
+  text: { any: [], all: [], none: [] },
   url: { any: [], all: [], none: [] },
   title: { any: [], all: [], none: [] },
   sort: 'updatedAt',
