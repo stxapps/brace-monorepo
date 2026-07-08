@@ -27,7 +27,7 @@ import { useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
 
 import { DEFAULT_LIST_ID, LINK_NOTE_MAX, normalizeUrl, TRASH_ID } from '@stxapps/shared';
-import { readLinkByUrlKey, useLinkMutations } from '@stxapps/web-react';
+import { readLinkByUrlKey, useLinkMutations, useLocks } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -51,6 +51,10 @@ function useDefaultListId(): string {
 export function LinkAddPopover() {
   const { create } = useLinkMutations();
   const defaultListId = useDefaultListId();
+  // Hidden (locked+hideList) lists stay out of the picker, like the sidebar and
+  // the row menu's Move to. Locked-but-visible lists remain targets — filing
+  // into a locked drawer is fine; the link just won't show until unlock.
+  const { hiddenListIds } = useLocks();
 
   const [open, setOpen] = useState(false);
   const [openAdvanced, setOpenAdvanced] = useState(false);
@@ -210,7 +214,7 @@ export function LinkAddPopover() {
                   id="link-list"
                   value={listId}
                   onValueChange={setListId}
-                  excludeIds={[TRASH_ID]}
+                  excludeIds={[TRASH_ID, ...hiddenListIds]}
                 />
               </div>
 

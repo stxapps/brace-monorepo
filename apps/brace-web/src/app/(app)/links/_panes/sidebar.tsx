@@ -35,6 +35,7 @@ import {
   Inbox,
   Layers,
   ListFilter,
+  Lock,
   Settings2,
   Trash2,
 } from 'lucide-react';
@@ -49,7 +50,7 @@ import {
   type TreeItem,
   type TreeNode,
 } from '@stxapps/shared';
-import { useLists, useTags } from '@stxapps/web-react';
+import { useLists, useLocks, useTags } from '@stxapps/web-react';
 import { BraceIcon } from '@stxapps/web-ui/components/icons/brace-icon';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -116,6 +117,23 @@ function useCollapsedIds() {
   return { collapsed, toggle, expand };
 }
 
+// Drop the currently-hidden lists (a locked lock with hideList — lock-provider's
+// closure set, so a hidden parent takes its subtree with it structurally too).
+// The lists stay reachable in Settings → Lists, which is the reveal path.
+function pruneHidden<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  hiddenIds: ReadonlySet<string>,
+): TreeNode<T>[] {
+  if (hiddenIds.size === 0) return nodes;
+  return nodes
+    .filter((node) => !hiddenIds.has(node.item.id))
+    .map((node) =>
+      node.children.length > 0
+        ? { ...node, children: pruneHidden(node.children, hiddenIds) }
+        : node,
+    );
+}
+
 // Ids on the path from the root down to (not including) `id` — the parents that
 // must be expanded for `id`'s row to be visible.
 function ancestorIds<T extends TreeItem>(nodes: TreeNode<T>[], id: string): string[] {
@@ -149,6 +167,7 @@ function NavItem({
   icon,
   label,
   selection,
+  badge,
   depth = 0,
   expanded,
   onToggle,
@@ -157,6 +176,8 @@ function NavItem({
   icon: React.ReactNode;
   label: string;
   selection: Selection;
+  // Trailing chrome after the label — the list rows' lock marker.
+  badge?: React.ReactNode;
   // Tree nesting level — indents the row one step per level (16px, matching
   // the list pickers' indent). Applied to the whole row so the chevron indents
   // with the label.
@@ -205,6 +226,11 @@ function NavItem({
       >
         <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>
         <span className="truncate">{label}</span>
+        {badge && (
+          <span className="ml-auto flex shrink-0 items-center text-muted-foreground/70">
+            {badge}
+          </span>
+        )}
       </button>
     </div>
   );
@@ -218,12 +244,14 @@ function NavTree<T extends TreeItem & { name: string }>({
   nodes,
   iconFor,
   selectionFor,
+  badgeFor,
   collapsed,
   onToggle,
 }: {
   nodes: TreeNode<T>[];
   iconFor: (id: string) => React.ReactNode;
   selectionFor: (id: string) => Selection;
+  badgeFor?: (id: string) => React.ReactNode;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
 }) {
@@ -238,6 +266,7 @@ function NavTree<T extends TreeItem & { name: string }>({
               icon={iconFor(node.item.id)}
               label={node.item.name}
               selection={selectionFor(node.item.id)}
+              badge={badgeFor?.(node.item.id)}
               depth={node.depth}
               expanded={hasChildren ? !isCollapsed : undefined}
               onToggle={hasChildren ? () => onToggle(node.item.id) : undefined}
@@ -248,6 +277,7 @@ function NavTree<T extends TreeItem & { name: string }>({
                 nodes={node.children}
                 iconFor={iconFor}
                 selectionFor={selectionFor}
+                badgeFor={badgeFor}
                 collapsed={collapsed}
                 onToggle={onToggle}
               />
@@ -317,13 +347,24 @@ export function Sidebar() {
   const lists = useLists();
   const tags = useTags();
   const { selection } = useLinksPage();
+  const { hiddenListIds, listLocks } = useLocks();
   const { collapsed, toggle, expand } = useCollapsedIds();
   const [filter, setFilter] = useState('');
+
+  // What the Lists section actually renders: the tree minus the hidden lists
+  // (locked + hideList). Their LINKS are excluded separately at the query layer
+  // (use-links); this is the navigation half of hiding.
+  const visibleLists = useMemo(() => pruneHidden(lists, hiddenListIds), [lists, hiddenListIds]);
+
+  // A lock marker on rows that carry their OWN engaged lock (children a lock
+  // merely covers stay unmarked — the locked ancestor is the visual cue).
+  const listBadge = (id: string) =>
+    listLocks.get(id)?.locked ? <Lock className="size-3.5" aria-label="Locked" /> : undefined;
 
   // Flattened once for the count gate and the filter matches. When filtering we
   // show a flat list of matches (hierarchy and collapse ignored) — the usual
   // find-in-list behavior.
-  const listRows = useMemo(() => flattenTree(lists), [lists]);
+  const listRows = useMemo(() => flattenTree(visibleLists), [visibleLists]);
   const tagRows = useMemo(() => flattenTree(tags), [tags]);
   const showFilter = listRows.length + tagRows.length >= FILTER_MIN_ITEMS;
 
@@ -386,6 +427,7 @@ export function Sidebar() {
                   icon={listIcon(node.item.id)}
                   label={node.item.name}
                   selection={{ kind: 'list', id: node.item.id }}
+                  badge={listBadge(node.item.id)}
                 />
               ))
             ) : (
@@ -393,9 +435,10 @@ export function Sidebar() {
             )
           ) : (
             <NavTree
-              nodes={lists}
+              nodes={visibleLists}
               iconFor={listIcon}
               selectionFor={(id) => ({ kind: 'list', id })}
+              badgeFor={listBadge}
               collapsed={collapsed}
               onToggle={toggle}
             />

@@ -28,6 +28,7 @@ import {
   type LinkView,
   useExtraction,
   useLinkMutations,
+  useLocks,
   usePinMutations,
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
@@ -151,6 +152,9 @@ export function LinkRowMenu({
 }) {
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
+  // Hidden (locked+hideList) lists stay out of Move to — a hidden list mustn't
+  // be discoverable from a link menu; the sidebar prunes them the same way.
+  const { hiddenListIds } = useLocks();
   // Report open/close so a background sync won't repaint the row (moving or
   // unmounting this trigger) while the menu is open — see view-state-provider. Track
   // our own open state so an unmount-while-open (e.g. a layout switch) releases
@@ -227,7 +231,7 @@ export function LinkRowMenu({
               <DropdownMenuSubContent className="w-64 p-0">
                 <ListCommand
                   value={link.listId}
-                  excludeIds={[TRASH_ID]}
+                  excludeIds={[TRASH_ID, ...hiddenListIds]}
                   disabledIds={[link.listId]}
                   onSelect={(listId) => {
                     void update(link, { listId });

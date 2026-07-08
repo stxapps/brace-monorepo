@@ -30,7 +30,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { type LinkItem, type LinksResult, readLinks, useSync } from '@stxapps/web-react';
+import {
+  type LinkItem,
+  type LinkQuery,
+  type LinksResult,
+  readLinks,
+  useLocks,
+  useSync,
+} from '@stxapps/web-react';
 
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
@@ -62,6 +69,43 @@ export interface UseLinksResult {
   applyPending: () => void;
 }
 
+// Fold the currently-locked lists (lock-provider's coverage set — descendants
+// included) into the query, so EVERY read path — Show All, tag views, text
+// search, the pinned overlay, hand-built deep links — excludes their links
+// through the one grammar primitive that already does exclusion, `lists.none`.
+// This is the lock's enforcement edge; the main pane's lock pane is just chrome.
+//
+// The merge is shaped to keep the single-list index fast path (readRest bails to
+// the filtered walk whenever `lists.none` is non-empty, losing the exact count):
+//   - no locks → the SAME query reference (identity matters: it keys the live
+//     query and the page-identity checks below);
+//   - a positive list filter already excludes everything outside it, so locked
+//     ids are REMOVED from `any` instead of added to `none` — an unlocked
+//     single-list view stays on the fast path even while other lists are locked;
+//   - if that empties `any` (every requested list is locked), the query must
+//     match NOTHING — not fall through to "no list filter" — so the locked ids
+//     stay in `any` AND go into `none`, which columnMatches resolves to zero;
+//   - only the no-positive-filter views (Show All, tags, search) pay the `none`
+//     clause.
+function excludeLockedLists(query: LinkQuery, lockedListIds: ReadonlySet<string>): LinkQuery {
+  if (lockedListIds.size === 0) return query;
+
+  if (query.lists.any.length > 0) {
+    const any = query.lists.any.filter((id) => !lockedListIds.has(id));
+    if (any.length === query.lists.any.length) return query;
+    if (any.length > 0) return { ...query, lists: { ...query.lists, any } };
+    return {
+      ...query,
+      lists: { any: query.lists.any, none: [...query.lists.none, ...query.lists.any] },
+    };
+  }
+
+  return {
+    ...query,
+    lists: { ...query.lists, none: [...query.lists.none, ...lockedListIds] },
+  };
+}
+
 // A cheap content fingerprint: equal iff the rendered page would look the same.
 // Lets us tell a real update from a re-run that returns identical content — a
 // write to an unrelated record (or another list) still re-fires the live query,
@@ -72,10 +116,21 @@ function signatureOf(result: LinksResult): string {
 }
 
 export function useLinks(): UseLinksResult {
-  const { query } = useLinksPage();
+  const { query: urlQuery } = useLinksPage();
+  const { lockedListIds } = useLocks();
   const { localWriteNonce } = useSync();
   const { engaged } = useLinksViewState();
   const [limit, setLimit] = useState(PAGE_SIZE);
+
+  // The query the reads actually run — the URL query with locked lists folded in
+  // (see excludeLockedLists). Memoized so its identity is stable like the URL
+  // query's: it changes only when the URL or the locked set changes (an unlock
+  // reads as a page change below and repaints immediately — the user's own
+  // action). `lockedListIds` is identity-stable from lock-provider's memo.
+  const query = useMemo(
+    () => excludeLockedLists(urlQuery, lockedListIds),
+    [urlQuery, lockedListIds],
+  );
 
   // Reset pagination when the view changes: a new query is a fresh page and should
   // start at PAGE_SIZE, not inherit a grown "show more" limit from the previous

@@ -109,6 +109,9 @@ export async function clearSyncData(): Promise<void> {
     db.syncMeta.clear(),
     db.pendingOps.clear(),
     db.localSettings.clear(),
+    // Locks are device-local passwords for this account's session; wiping them
+    // here IS the "forgot a lock password → sign out" recovery path (db.ts).
+    db.locks.clear(),
   ]);
   clearDecodeCache(); // drop decoded-link plaintext too — mirrors this items wipe (decode-cache.ts)
 }

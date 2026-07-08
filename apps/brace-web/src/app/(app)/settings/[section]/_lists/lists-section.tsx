@@ -42,9 +42,13 @@ import {
   ChevronRight,
   ChevronUp,
   CornerUpRight,
+  EyeOff,
   Folder,
   GripVertical,
   Inbox,
+  KeyRound,
+  Lock,
+  LockOpen,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -53,7 +57,14 @@ import {
 } from 'lucide-react';
 
 import { ARCHIVE_ID, isSystemListId, MY_LIST_ID, TRASH_ID } from '@stxapps/shared';
-import { type ListItem, useListMutations, useLists } from '@stxapps/web-react';
+import {
+  type ListItem,
+  type ListLockInfo,
+  useListMutations,
+  useLists,
+  useLockMutations,
+  useLocks,
+} from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -76,6 +87,8 @@ import {
   type Projection,
 } from './dnd-helpers';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
+
+import { LockPasswordDialog } from '@/components/lock-password-dialog';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
 
@@ -129,7 +142,8 @@ function RenameField({
   );
 }
 
-// The per-row overflow menu: rename, reorder within siblings, reparent, delete.
+// The per-row overflow menu: rename, reorder within siblings, reparent, lock
+// (device-local — see the LockRecord model in web-react's db.ts), delete.
 // Rename just refocuses the inline RenameField (the name is edited in place, not
 // in the menu) — it's here so the kebab is a complete inventory of row actions,
 // since the field reads as static text until hovered. Move-to embeds the shared
@@ -137,26 +151,38 @@ function RenameField({
 // with reparent-specific wiring: `root` adds the "Top level" target
 // (parentId === null), `excludeIds` rules out invalid parents (the row's own
 // subtree — no cycles — plus no-children containers), and the current parent
-// stays visible-but-disabled. Delete is hidden for system lists.
+// stays visible-but-disabled. The lock items fire page-level dialog intents
+// (the password prompt is one hoisted LockPasswordDialog, not per-row). Delete
+// is hidden for system lists.
 function RowActions({
   row,
   excludeIds,
+  lock,
   onFocusName,
   onMoveUp,
   onMoveDown,
   onMoveTo,
   onSortChildren,
+  onAddLock,
+  onUnlock,
+  onRemoveLock,
   onDelete,
 }: {
   row: ListRow;
   // Parent ids the row may NOT move under (forbiddenParentIds): its subtree +
   // no-children containers. Passed to ListCommand's excludeIds.
   excludeIds: readonly string[];
+  // The row's OWN lock (lock-provider's listLocks), undefined when unlocked-able
+  // — i.e. no lock exists yet.
+  lock: ListLockInfo | undefined;
   onFocusName: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
   onSortChildren: (dir: SortDir) => void;
+  onAddLock: () => void;
+  onUnlock: () => void;
+  onRemoveLock: () => void;
   onDelete: () => void;
 }) {
   const isFirst = row.index === 0;
@@ -236,6 +262,25 @@ function RowActions({
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+        )}
+        <DropdownMenuSeparator />
+        {/* Lock inventory: no lock → offer one; locked → unlock (reveals a
+            hidden list until reload); any lock → remove (password-gated). */}
+        {lock === undefined ? (
+          <DropdownMenuItem onSelect={onAddLock}>
+            <Lock className="size-4" /> Lock list…
+          </DropdownMenuItem>
+        ) : (
+          <>
+            {lock.locked && (
+              <DropdownMenuItem onSelect={onUnlock}>
+                <LockOpen className="size-4" /> Unlock…
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={onRemoveLock}>
+              <KeyRound className="size-4" /> Remove lock…
+            </DropdownMenuItem>
+          </>
         )}
         {deletable && (
           <>
@@ -329,24 +374,32 @@ function SortableRow({
   renderDepth,
   collapsedIds,
   excludeIds,
+  lock,
   onToggle,
   onRename,
   onMoveUp,
   onMoveDown,
   onMoveTo,
   onSortChildren,
+  onAddLock,
+  onUnlock,
+  onRemoveLock,
   onDelete,
 }: {
   row: ListRow;
   renderDepth: number;
   collapsedIds: ReadonlySet<string>;
   excludeIds: readonly string[];
+  lock: ListLockInfo | undefined;
   onToggle: () => void;
   onRename: (name: string) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
   onSortChildren: (dir: SortDir) => void;
+  onAddLock: () => void;
+  onUnlock: () => void;
+  onRemoveLock: () => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -419,14 +472,32 @@ function SortableRow({
         />
       </div>
 
+      {/* Lock chrome: locked/unlocked state, plus the hide flag while it's
+          relevant (a hidden list is only hidden while locked). This row is the
+          hidden list's reveal path — it never leaves this settings page. */}
+      {lock && (
+        <span className="flex shrink-0 items-center gap-1.5 px-1 text-muted-foreground">
+          {lock.hideList && lock.locked && <EyeOff className="size-3.5" aria-label="Hidden" />}
+          {lock.locked ? (
+            <Lock className="size-3.5" aria-label="Locked" />
+          ) : (
+            <LockOpen className="size-3.5" aria-label="Unlocked" />
+          )}
+        </span>
+      )}
+
       <RowActions
         row={row}
         excludeIds={excludeIds}
+        lock={lock}
         onFocusName={focusName}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
         onMoveTo={onMoveTo}
         onSortChildren={onSortChildren}
+        onAddLock={onAddLock}
+        onUnlock={onUnlock}
+        onRemoveLock={onRemoveLock}
         onDelete={onDelete}
       />
     </li>
@@ -436,9 +507,17 @@ function SortableRow({
 export function ListsSection() {
   const lists = useLists();
   const { create, rename, move, destroy, reorder } = useListMutations();
+  const { listLocks, unlockList } = useLocks();
+  const { addListLock, removeListLock } = useLockMutations();
 
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
   const [error, setError] = useState<string | null>(null);
+  // The pending lock intent from a row's kebab — drives the single hoisted
+  // LockPasswordDialog below (same page-level pattern as LinkDestroyConfirm).
+  const [lockDialog, setLockDialog] = useState<{
+    mode: 'add' | 'unlock' | 'remove';
+    listId: string;
+  } | null>(null);
 
   // Drag state: the row being dragged, the row it's over, and the horizontal
   // pointer offset that drives the projected depth. All null/0 when idle.
@@ -600,6 +679,7 @@ export function ListsSection() {
                     renderDepth={renderDepth}
                     collapsedIds={collapsedIds}
                     excludeIds={excludeIds}
+                    lock={listLocks.get(row.item.id)}
                     onToggle={() => toggle(row.item.id)}
                     onRename={(name) => run(rename(row.item, name))}
                     onMoveUp={() =>
@@ -613,6 +693,9 @@ export function ListsSection() {
                       run(move(row.item, parentId, dest, dest.length));
                     }}
                     onSortChildren={(dir) => sortGroup(row.item.id, dir)}
+                    onAddLock={() => setLockDialog({ mode: 'add', listId: row.item.id })}
+                    onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
+                    onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
                     onDelete={() => run(destroy(row.item))}
                   />
                 );
@@ -621,6 +704,45 @@ export function ListsSection() {
           </SortableContext>
         </DndContext>
       </div>
+
+      {lockDialog?.mode === 'add' && (
+        <LockPasswordDialog
+          onOpenChange={(open) => !open && setLockDialog(null)}
+          title="Lock list"
+          description="This list will be locked on this device only. If you forget the password, sign out to remove all locks on this device."
+          submitLabel="Lock"
+          checkboxLabel="Hide this list while locked"
+          onSubmit={async (password, hideList) => {
+            await addListLock(lockDialog.listId, password, { hideList });
+          }}
+        />
+      )}
+      {lockDialog?.mode === 'unlock' && (
+        <LockPasswordDialog
+          onOpenChange={(open) => !open && setLockDialog(null)}
+          title="Unlock list"
+          description="Enter the password to unlock this list until the app reloads."
+          submitLabel="Unlock"
+          onSubmit={async (password) => {
+            if (!(await unlockList(lockDialog.listId, password))) {
+              throw new Error('Password is not correct. Please try again.');
+            }
+          }}
+        />
+      )}
+      {lockDialog?.mode === 'remove' && (
+        <LockPasswordDialog
+          onOpenChange={(open) => !open && setLockDialog(null)}
+          title="Remove lock"
+          description="Enter the password to remove the lock from this list."
+          submitLabel="Remove"
+          onSubmit={async (password) => {
+            if (!(await removeListLock(lockDialog.listId, password))) {
+              throw new Error('Password is not correct. Please try again.');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

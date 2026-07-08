@@ -17,6 +17,15 @@ export const passwordSchema = z
   .min(8, 'Password must be at least 8 characters')
   .max(128, 'Password must be at most 128 characters');
 
+// Lock passwords (the device-local app/list locks) are a convenience gate over
+// already-decrypted local data, not the account credential — so no minimum-length
+// policy, just non-empty and the same ceiling as the account password. Kept here
+// with the other credential rules so every client validates identically.
+export const lockPasswordSchema = z
+  .string()
+  .min(1, 'Please enter a password')
+  .max(128, 'Password must be at most 128 characters');
+
 export const signInSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,

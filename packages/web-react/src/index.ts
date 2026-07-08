@@ -5,10 +5,12 @@
 // ApiClientProvider (the seam these modules read through useApiClient / SyncDeps.api).
 export * from './contexts/auth-provider';
 export * from './contexts/extraction-provider';
+export * from './contexts/lock-provider';
 export * from './contexts/sync-provider';
 export * from './data/db';
 export * from './data/decode-cache';
 export * from './data/local-settings-store';
+export * from './data/lock-store';
 export * from './data/mutations';
 export * from './data/pending-store';
 export * from './data/projection';

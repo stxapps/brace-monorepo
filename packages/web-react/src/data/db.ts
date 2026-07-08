@@ -202,11 +202,36 @@ export interface LocalSettingsRecord {
   theme: ThemeState;
 }
 
+// One device-local lock — the app lock or a per-list lock. Like `localSettings`,
+// these rows DELIBERATELY never sync (no path, no op-log entry, no R2 object) and
+// are wiped on sign-out by `clearSyncData`, which is what makes "forgot a lock
+// password → sign out, sign back in with the account password" the recovery path.
+//
+// A lock is a UI gate over already-decrypted local data (a shoulder-surfing
+// deterrent, not encryption — everything in `items` is plaintext to anyone with
+// the device), so what's stored is a one-way password VERIFIER
+// (@stxapps/web-crypto lock-verifier), never the password or a reversible copy.
+// Whether a lock is currently UNLOCKED is in-memory React state only
+// (lock-provider), so every lock re-engages on reload — nothing here tracks it.
+export interface LockRecord {
+  // `APP_LOCK_ID` for the app lock, else the locked list's id (stable across
+  // renames, unlike the old client's name key). One row per lock.
+  id: string;
+  kind: 'app' | 'list';
+  // The verifier pair (base64) — see LockVerifier in @stxapps/web-crypto.
+  salt: string;
+  hash: string;
+  // List locks only: while locked, also hide the list (and its subtree) from the
+  // sidebar and the list pickers — not just gate its links.
+  hideList?: boolean;
+}
+
 class BraceDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
   items!: EntityTable<ItemRecord, 'path'>;
   pendingOps!: Table<PendingOpRecord, [string, string]>;
   localSettings!: EntityTable<LocalSettingsRecord, 'id'>;
+  locks!: EntityTable<LockRecord, 'id'>;
 
   constructor() {
     super('brace-data');
@@ -243,6 +268,8 @@ class BraceDb extends Dexie {
       // Device-local settings — a single row keyed by the constant `id`. No sync
       // bookkeeping, so just the primary key.
       localSettings: 'id',
+      // Device-local locks — one row per lock, keyed by APP_LOCK_ID / list id.
+      locks: 'id',
     });
   }
 }

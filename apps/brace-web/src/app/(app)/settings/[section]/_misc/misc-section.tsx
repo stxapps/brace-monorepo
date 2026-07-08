@@ -9,6 +9,11 @@
 //   - Device → the off-sync localSettings store, this device only (wiped on sign-out).
 // Each tab shows the same controls bound to that source's value, so switching tabs
 // both changes which value applies and reveals it for editing.
+//
+// It also owns the APP LOCK — inherently device-only (locks never sync; wiped on
+// sign-out — see LockRecord in web-react's db.ts), so no Sync/Device tabs: just
+// set/remove, both through LockPasswordDialog. The lock itself is enforced by
+// AppLockGate in the (app) layout.
 
 import { useState } from 'react';
 import { Clock, LayoutGrid, List, Monitor, Moon, Sun, Table } from 'lucide-react';
@@ -23,13 +28,18 @@ import {
 import {
   type LinksLayoutSource,
   type ThemeSource,
+  useLockMutations,
+  useLocks,
   useSettingMutations,
   useSettings,
 } from '@stxapps/web-react';
+import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
+
+import { LockPasswordDialog } from '@/components/lock-password-dialog';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> =
   {
@@ -213,6 +223,9 @@ export function MiscSection() {
     setSyncTheme,
     setLocalTheme,
   } = useSettingMutations();
+  const { appLock } = useLocks();
+  const { setAppLock, removeAppLock } = useLockMutations();
+  const [lockDialog, setLockDialog] = useState<'set' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Surface a failed write (e.g. the synced write with no active account) rather
@@ -296,6 +309,51 @@ export function MiscSection() {
           </TabsContent>
         </Tabs>
       </section>
+
+      <section className="mt-10">
+        <h3 className="text-base font-medium">App lock</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Lock the whole app with a password on this device only — it engages every time the app
+          loads. If you forget the password, sign out and sign back in with your account password;
+          signing out removes all locks on this device.
+        </p>
+        <div className="mt-4">
+          {appLock.exists ? (
+            <Button variant="outline" onClick={() => setLockDialog('remove')}>
+              Remove app lock…
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={() => setLockDialog('set')}>
+              Set app lock…
+            </Button>
+          )}
+        </div>
+      </section>
+
+      {lockDialog === 'set' && (
+        <LockPasswordDialog
+          onOpenChange={(open) => !open && setLockDialog(null)}
+          title="Set app lock"
+          description="Create a password to lock this app on this device. It takes effect the next time the app loads."
+          submitLabel="Set lock"
+          onSubmit={async (password) => {
+            await setAppLock(password);
+          }}
+        />
+      )}
+      {lockDialog === 'remove' && (
+        <LockPasswordDialog
+          onOpenChange={(open) => !open && setLockDialog(null)}
+          title="Remove app lock"
+          description="Enter your app lock password to remove it."
+          submitLabel="Remove"
+          onSubmit={async (password) => {
+            if (!(await removeAppLock(password))) {
+              throw new Error('Password is not correct. Please try again.');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

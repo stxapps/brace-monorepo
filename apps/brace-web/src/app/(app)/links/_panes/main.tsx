@@ -8,12 +8,20 @@
 // dialogs the row menus + toolbar drive through view-state-provider (edit /
 // delete-permanently): one instance each, OUTSIDE the virtualized rows, so a
 // sync repaint can never unmount them mid-interaction.
+//
+// A LOCKED selected list swaps the whole body for the lock pane BEFORE the data
+// hook mounts (UnlockedMain is a separate component precisely so useLinks never
+// runs while locked): the locked list's links are neither read nor rendered.
+// Deep links that merely INCLUDE a locked list (?list-any=…, tags, search) don't
+// swap — their queries exclude the locked links instead (use-links).
 
-import { useSettings } from '@stxapps/web-react';
+import { useLocks, useSettings } from '@stxapps/web-react';
 
 import { BulkEditToolbar } from '../_components/bulk-edit-toolbar';
 import { LinkDestroyConfirm } from '../_components/link-destroy-confirm';
 import { LinkEditDialog } from '../_components/link-edit-dialog';
+import { ListLockPane } from '../_components/list-lock-pane';
+import { useLinksPage } from '../_contexts/page-provider';
 import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';
@@ -27,6 +35,23 @@ const LAYOUTS: Record<string, (props: LinkLayoutProps) => React.ReactNode> = {
 };
 
 export function Main() {
+  const { selection } = useLinksPage();
+  const { isListLocked } = useLocks();
+
+  if (selection.kind === 'list' && isListLocked(selection.id)) {
+    return (
+      <main className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          <ListLockPane listId={selection.id} />
+        </div>
+      </main>
+    );
+  }
+
+  return <UnlockedMain />;
+}
+
+function UnlockedMain() {
   const { linksLayout } = useSettings();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
 
