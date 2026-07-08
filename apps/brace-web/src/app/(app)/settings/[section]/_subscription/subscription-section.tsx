@@ -49,15 +49,13 @@ const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[] }> = 
       'Unlimited saved links',
       'Preview images',
       'App lock & hidden lists',
-      '5 GB storage',
+      'Advanced search',
     ],
   },
   pro: {
     blurb: 'The permanent offline library',
     features: [
       'Everything in Plus',
-      'Unlimited offline archives',
-      '20 GB storage',
       'Full on-device AI — summaries & semantic search',
     ],
   },

@@ -20,13 +20,13 @@
 //   - COST-DEFENSIVE (maxLinks, blobFiles, maxArchivedLinks, maxFiles, maxBytes,
 //     serverExtraction) — protect real cost / the moat; server-hard where
 //     countable.
-//   - VALUE-CAPTURE (locks, nestedLists, smartLists, savedSearches, aiTier) —
-//     pure willingness-to-pay for things that cost ~nothing to serve; all
-//     client-enforced. Their spine: Plus unlocks STRUCTURAL organization
-//     (nested lists today, plus the tag-hierarchy + per-list-link-order levers
-//     the doc plans — see the DOC-AHEAD-OF-CODE note below) + privacy; Pro
-//     unlocks AUTOMATED / dynamic organization + intelligence (it arranges
-//     itself).
+//   - VALUE-CAPTURE (locks, nestedLists, searchEditor, smartLists,
+//     savedSearches, aiTier) — pure willingness-to-pay for things that cost
+//     ~nothing to serve; all client-enforced. Their spine: Plus unlocks
+//     STRUCTURAL organization (nested lists today, plus the tag-hierarchy +
+//     per-list-link-order levers the doc plans — see the DOC-AHEAD-OF-CODE note
+//     below) + the structured search editor + privacy; Pro unlocks AUTOMATED /
+//     dynamic organization + intelligence (it arranges itself).
 // What is deliberately NOT an entitlement stays free for everyone: theme, FLAT
 // tags, flat lists, pin, sort options, MANUAL reorder of list/tag SIBLINGS (and
 // of pinned links), multi-select move/tag/delete, and full data export — habit-
@@ -112,6 +112,15 @@ export type Entitlements = {
   // quick-lock, hide-a-list), not the security substrate, so gating it is not
   // gating privacy.
   locks: boolean;
+  // Structured search editor (Plus+) — the middle rung of the search ladder.
+  // Free already gets real word search across the WHOLE library (title / url /
+  // host); that basic rung is NOT gated (gating it would cripple a daily-loop
+  // basic). This gates only the EDITOR: field-scoped (url vs title), multi-list
+  // / multi-tag, boolean queries. Client-side, so it costs ~nothing to serve,
+  // and it couples to unlimited links the same way per-list ordering does. Pro
+  // then persists these queries as `savedSearches` — Basic → structure-by-hand
+  // → automated mirrors the Free → Plus → Pro spine.
+  searchEditor: boolean;
   // Smart lists & smart tags (Pro) — the "it organizes itself" half of the Pro
   // story. A saved RULE that auto-POPULATES from metadata the user already set
   // (domain, existing tags, dates): a smart list is a query promoted to the
@@ -155,8 +164,9 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     maxFiles: 5_000,
     maxBytes: 100 * MIB,
     serverExtraction: false,
-    locks: false,
     nestedLists: false,
+    locks: false,
+    searchEditor: false,
     smartLists: false,
     savedSearches: false,
     aiTier: 'none',
@@ -168,12 +178,12 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     maxFiles: 200_000,
     maxBytes: 5 * GIB,
     serverExtraction: true,
-    // Plus = structural organization (nesting) + privacy.
-    locks: true,
+    // Plus = structural organization.
     nestedLists: true,
+    locks: true,
+    searchEditor: true,
     smartLists: false,
     savedSearches: false,
-    // Parked until on-device AI is good enough; flips to Pro when it ships.
     aiTier: 'none',
   },
   pro: {
@@ -183,8 +193,9 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
     maxFiles: 200_000,
     maxBytes: 20 * GIB,
     serverExtraction: true,
-    locks: true,
     nestedLists: true,
+    locks: true,
+    searchEditor: true,
     // Pro = automated / dynamic organization + intelligence (it arranges itself).
     smartLists: true,
     savedSearches: true,
