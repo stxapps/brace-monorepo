@@ -3,11 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { FREE_SUBSCRIPTION_STATUS, useSubscriptionStatus } from '@stxapps/react';
-import {
-  type Entitlements,
-  entitlementsOf,
-  type SubscriptionStatus,
-} from '@stxapps/shared';
+import { type Entitlements, entitlementsOf, type SubscriptionStatus } from '@stxapps/shared';
 
 import { readCachedStatus, writeCachedStatus } from '../data/subscription-store';
 

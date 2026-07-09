@@ -62,7 +62,6 @@ files behind CloudFront.
   `connect-src` must name that tier's api + extractor origins; keep the two
   policies otherwise identical. Roll out as `Content-Security-Policy-Report-Only`
   first, then enforce. Known constraints to bake in:
-
   - `script-src` needs `'wasm-unsafe-eval'` (hash-wasm Argon2).
   - a static export can't mint per-request nonces, so Next's inline bootstrap
     scripts need either a build-time hash union (regenerated each deploy) or

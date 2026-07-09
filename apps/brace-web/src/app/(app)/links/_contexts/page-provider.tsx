@@ -178,9 +178,15 @@ function parseLinkQuery(searchParams: ReadonlyURLSearchParams): LinkQuery {
 function selectionFromQuery(q: LinkQuery): Selection {
   // Any substring-text predicate (basic `text`, or field-scoped url/title) → search.
   const textTerms =
-    q.text.all.length + q.text.any.length + q.text.none.length +
-    q.url.all.length + q.url.any.length + q.url.none.length +
-    q.title.all.length + q.title.any.length + q.title.none.length;
+    q.text.all.length +
+    q.text.any.length +
+    q.text.none.length +
+    q.url.all.length +
+    q.url.any.length +
+    q.url.none.length +
+    q.title.all.length +
+    q.title.any.length +
+    q.title.none.length;
   if (textTerms > 0) return { kind: 'none' };
 
   // Exclusions or tag-`all` are compound filters with no single highlight.

@@ -89,7 +89,7 @@ know a web device's hidden lists — pruning them web-side would just make the t
 apps' pickers disagree; (2) hide was never a content guarantee anyway. That's
 what a **lock** is: `lockedListIds` folds into the link query's `lists.none`, so
 a locked list's _links_ drop out of every read path (browse, Show All, tags,
-search, pins) until unlocked — but the list stays selectable as a *destination*.
+search, pins) until unlocked — but the list stays selectable as a _destination_.
 So: lock gates a list's contents; hide only tidies the sidebar; neither touches
 what the pickers offer. Don't re-add `hiddenListIds` to any picker's
 `excludeIds` — it looks like a privacy fix but only breaks web/extension parity.

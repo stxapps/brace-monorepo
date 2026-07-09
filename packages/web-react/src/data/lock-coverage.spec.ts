@@ -66,11 +66,7 @@ describe('computeCoverage', () => {
     });
 
     it('un-hides the subtree once the lock is unlocked', () => {
-      const coverage = computeCoverage(
-        lists,
-        rows(listLock('parent', true)),
-        new Set(['parent']),
-      );
+      const coverage = computeCoverage(lists, rows(listLock('parent', true)), new Set(['parent']));
       expect(coverage.hiddenListIds.size).toBe(0);
     });
 

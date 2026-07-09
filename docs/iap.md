@@ -93,14 +93,14 @@ Store-bought subscriptions (future) are managed in their store.
 The E2E trust split, spelled out (matches the business model's principle: hard
 walls exactly where the cost is):
 
-| limit                                | enforced                                                                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap + the 200-link cap)                |
-| free: 200 `links/`                   | **server-hard** (namespace count in the DO size map) + client UX                                                                                  |
-| free: preview-image `files/` blobs   | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
-| Plus archive meter (last 50)         | client-only — an archive is indistinguishable from any other `files/` blob server-side; bytes backstop                                            |
-| read-mode / screenshot / AI gates    | client-only (they run on-device), backstopped by the blob rules                                                                                   |
-| extractor access (plan-gated opt-in) | client + IP rate limits for now (the extractor is anonymous by design); a brace-api-minted signed entitlement token is the upgrade path if abused |
+| limit                                     | enforced                                                                                                                                                                                                                      |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap + the 200-link cap)                                                                                                 |
+| free: 200 `links/`                        | **server-hard** (namespace count in the DO size map) + client UX                                                                                                                                                              |
+| free: preview-image `files/` blobs        | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
+| Plus archive meter (last 50)              | client-only — an archive is indistinguishable from any other `files/` blob server-side; bytes backstop                                                                                                                        |
+| read-mode / screenshot / AI gates         | client-only (they run on-device), backstopped by the blob rules                                                                                                                                                               |
+| extractor access (plan-gated opt-in)      | client + IP rate limits for now (the extractor is anonymous by design); a brace-api-minted signed entitlement token is the upgrade path if abused                                                                             |
 
 Error codes at the gate: `upgrade_required` (a **plan** gate — client maps to
 the paywall) vs `quota_exceeded` (a **capacity** gate on an entitled plan —

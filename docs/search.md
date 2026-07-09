@@ -46,7 +46,7 @@ sort = created | updated               (ordering, default updated)
 - Two derivations bake into the parse: `?list=all` (`ALL_ID`) is **dropped** from the
   lists clause (Show All is the absence of a list filter, not a filter), and a URL
   with **no filter params at all** injects the default inbox (`lists.any =
-  [My List]`). This injection is load-bearing for the projection below.
+[My List]`). This injection is load-bearing for the projection below.
 
 **`text` is the basic rung; `url`/`title` are the advanced rungs.** `text` matches
 its words against the **combined `url ⊕ title` haystack** (host lives inside url), so
@@ -65,11 +65,11 @@ The read direction is **many→one and lossy** (many URLs collapse onto one
 — the intents are small and specific. So there are two writers, shaped by intent, not
 a single symmetric `setQuery`:
 
-- **`setSimpleQuery(selection)`** — navigation. Commits a *simple* query (one
+- **`setSimpleQuery(selection)`** — navigation. Commits a _simple_ query (one
   list/tag/all axis) as the **canonical clean URL** (`hrefForSelection`: `/links`,
   `?list=all`, `?tag=x`). The sidebar's writer — it shouldn't have to assemble a full
   `LinkQuery` with empty clauses just to say "list X". (Renamed from `setSelection`:
-  it writes a *query*; `selection` is what you read back, never what you set.)
+  it writes a _query_; `selection` is what you read back, never what you set.)
 - **`setQuery(query)`** — the full grammar. Serializes an arbitrary `LinkQuery` back
   to the URL (`hrefForQuery`, the inverse of `parseLinkQuery` — bare relations for the
   common case, suffixed forms for the rest, repeated keys). The **search editor's**
@@ -139,7 +139,7 @@ ladder") and `packages/shared/src/iap/plans.ts` (`searchEditor`).
 - **The Plus gate lives in the form, not the write path.** Free users see the trigger
   (visible, not hidden) but opening it presents the upgrade path instead of the
   fields — so the query grammar and URL contract stay tier-agnostic (a Plus user's
-  advanced deep link still *parses* for a free user; they just can't *build* one).
+  advanced deep link still _parses_ for a free user; they just can't _build_ one).
 
 ### deferred, on purpose
 

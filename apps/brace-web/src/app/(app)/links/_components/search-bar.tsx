@@ -45,8 +45,12 @@ function words(raw: string): string[] {
 // the view. Plain navigation (a list or tag picked in the sidebar) does NOT light it.
 function hasAdvancedFilters(q: LinkQuery): boolean {
   const textish =
-    q.url.all.length + q.url.any.length + q.url.none.length +
-    q.title.all.length + q.title.any.length + q.title.none.length;
+    q.url.all.length +
+    q.url.any.length +
+    q.url.none.length +
+    q.title.all.length +
+    q.title.any.length +
+    q.title.none.length;
   if (textish > 0) return true;
   if (q.lists.none.length > 0 || q.lists.any.length > 1) return true;
   if (q.tags.all.length > 0 || q.tags.none.length > 0 || q.tags.any.length > 1) return true;
@@ -200,10 +204,7 @@ function AdvancedSearch() {
         <Button variant="ghost" size="icon-sm" aria-label="Advanced search" className="relative">
           <SlidersHorizontal className="size-4" />
           {hasAdvancedFilters(query) && (
-            <span
-              aria-hidden
-              className="absolute top-1 right-1 size-1.5 rounded-full bg-primary"
-            />
+            <span aria-hidden className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />
           )}
         </Button>
       </PopoverTrigger>
@@ -288,7 +289,7 @@ export function SearchBar() {
     <div className="flex min-w-0 flex-1 items-center gap-1">
       <form
         role="search"
-        className="relative min-w-0 max-w-md flex-1"
+        className="relative max-w-md min-w-0 flex-1"
         onSubmit={(e) => {
           e.preventDefault();
           submitBasic();

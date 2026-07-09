@@ -31,7 +31,7 @@ describe('checkPutQuota', () => {
   });
 
   it('rejects a free links/ put that would exceed maxLinks (upgrade_required)', () => {
-    const at = usage({ linkCount: free.maxLinks! });
+    const at = usage({ linkCount: free.maxLinks || undefined });
     try {
       checkPutQuota(free, at, ['links/a.enc']);
       throw new Error('expected checkPutQuota to throw');
@@ -43,9 +43,7 @@ describe('checkPutQuota', () => {
   });
 
   it('does not cap links/ puts on paid plans (maxLinks null)', () => {
-    expect(() =>
-      checkPutQuota(plus, usage({ linkCount: 10_000 }), ['links/a.enc']),
-    ).not.toThrow();
+    expect(() => checkPutQuota(plus, usage({ linkCount: 10_000 }), ['links/a.enc'])).not.toThrow();
   });
 
   it('rejects when the byte quota is already reached (quota_exceeded)', () => {
