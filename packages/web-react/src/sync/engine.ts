@@ -142,6 +142,12 @@ const rerunRequests = new Set<string>();
 // then pull. Non-blocking — failures surface a quiet retry, they don't gate the
 // UI. Routes itself to the download-authoritative fallback when the op log can't
 // answer (wiped, compacted past the cursor, or behind it).
+//
+// REJECTS on a failed cycle — that's the contract every caller is written
+// against: the web SyncProvider's rejection branch sets bgSyncStatus 'error',
+// the extension's runSync catch does the same via storage, and the export flow
+// downgrades a failed pre-export refresh to a warning. Coalesced callers share
+// the in-flight promise, so they share its rejection too — all of them handle it.
 export function runIncrementalSync(deps: SyncDeps): Promise<void> {
   const key = deps.username;
   const inflight = inflightSyncs.get(key);
@@ -153,8 +159,6 @@ export function runIncrementalSync(deps: SyncDeps): Promise<void> {
     try {
       await incrementalSyncOnce(deps);
       while (rerunRequests.delete(key)) await incrementalSyncOnce(deps);
-    } catch (error) {
-      console.error('[sync] incremental sync failed', error);
     } finally {
       inflightSyncs.delete(key);
       rerunRequests.delete(key);
@@ -215,6 +219,60 @@ export async function loadEntityContent(
   const data = await decryptEntity(deps.encryptionKey, blob);
   await db.items.update(path, { data });
   return data;
+}
+
+// Batch counterpart of loadEntityContent, for a caller that needs MANY `files/`
+// blobs resident at once (the export flow's download phase). Same semantics per
+// path — fetch, decrypt, persist into the local store so re-runs are resumable
+// and offline reads work — but signed in SIGN_BATCH pages (one `files/sign` call
+// per ~1000 paths instead of one per file) and fetched at the engine's download
+// fan-out. Already-resident bytes are skipped (and don't count toward progress);
+// a path that's unknown locally or 404s on GET (deleted on another device, the
+// delete op not yet pulled) lands in `missingPaths` for the caller to report —
+// never a thrown error, mirroring loadEntityContent. Any other failure rejects.
+export async function loadEntityContents(
+  deps: SyncDeps,
+  paths: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ missingPaths: string[] }> {
+  deps = withRetryDeps(deps);
+
+  const records = await db.items.bulkGet(paths);
+  const missingPaths: string[] = [];
+  const wanted: string[] = [];
+  paths.forEach((path, i) => {
+    const rec = records[i];
+    if (!rec) missingPaths.push(path);
+    else if (!rec.data) wanted.push(path);
+  });
+
+  const total = wanted.length;
+  let done = 0;
+  const reportOne = (): void => {
+    done += 1;
+    onProgress?.(done, total);
+  };
+  onProgress?.(done, total);
+  for (const batch of chunk(wanted, SIGN_BATCH)) {
+    const urls = await signPaths(deps.api, 'get', batch);
+    await mapLimit(batch, DOWNLOAD_CONCURRENCY, async (path) => {
+      const url = urls.get(path);
+      const blob = url
+        ? await getBlob(url).catch((err: unknown) => {
+            if (err instanceof BlobRequestError && err.status === 404) return undefined;
+            throw err;
+          })
+        : undefined;
+      if (blob) {
+        const data = await decryptEntity(deps.encryptionKey, blob);
+        await db.items.update(path, { data });
+      } else {
+        missingPaths.push(path);
+      }
+      reportOne();
+    });
+  }
+  return { missingPaths };
 }
 
 // --- the cycle: incremental -------------------------------------------------

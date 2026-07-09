@@ -9,9 +9,10 @@
 // local `view` swap inside this one section, self-contained in `_data/` like
 // the other sections.
 //
-// NOTE: the import / export / delete-all ACTIONS are stubbed — the buttons are
-// wired to `// TODO` handlers and the progress/result UI isn't built yet. Only
-// the shell (navigation, sync status, the delete confirm gate) is real.
+// NOTE: the import / delete-all ACTIONS are stubbed — those buttons are wired
+// to `// TODO` handlers. Export is real: format choice (ExportView), the
+// locked-lists exclusion warning, progress, and the result line, all over
+// web-react's useExport → data/export.ts.
 
 import { useState } from 'react';
 import {
@@ -20,16 +21,29 @@ import {
   CircleAlert,
   CircleCheck,
   Download,
+  FileText,
+  Globe,
   Loader2,
+  Lock,
+  Package,
+  Sheet,
   Trash2,
   Upload,
 } from 'lucide-react';
 
 import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared';
-import { usePendingChangesCount, useSync } from '@stxapps/web-react';
+import {
+  type ExportFormat,
+  type ExportState,
+  useExport,
+  useLocks,
+  usePendingChangesCount,
+  useSync,
+} from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Label } from '@stxapps/web-ui/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
@@ -160,22 +174,165 @@ function ImportView({ onBack }: { onBack: () => void }) {
   );
 }
 
+// The four export formats. Three destinations (browsers, LinkWarden, Karakeep)
+// share the Netscape HTML serializer, so they're one option with the
+// destinations named in its hint — not three options producing identical files.
+const EXPORT_FORMAT_OPTIONS: {
+  value: ExportFormat;
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    value: 'brace',
+    label: 'Brace backup',
+    hint: 'Everything — links, lists, tags, pins, files, and settings — as a .zip you can import back into Brace.',
+    icon: <Package className="size-4" />,
+  },
+  {
+    value: 'netscape',
+    label: 'HTML bookmarks',
+    hint: 'For web browsers (Chrome, Firefox, Safari), LinkWarden, and Karakeep. Links in Trash aren’t included.',
+    icon: <Globe className="size-4" />,
+  },
+  {
+    value: 'csv',
+    label: 'CSV',
+    hint: 'For Raindrop.io and spreadsheets. Links in Trash aren’t included.',
+    icon: <Sheet className="size-4" />,
+  },
+  {
+    value: 'text',
+    label: 'Plain text',
+    hint: 'Just the URLs, one per line — opens in any text editor.',
+    icon: <FileText className="size-4" />,
+  },
+];
+
+const EXPORT_STEP_LABELS: Record<'sync' | 'gather' | 'files' | 'assemble', string> = {
+  sync: 'Refreshing from the server…',
+  gather: 'Gathering links…',
+  files: 'Downloading files…',
+  assemble: 'Packaging…',
+};
+
+// The one-line receipt under the export button: progress while running, the
+// counts + any warnings when done, the failure when errored.
+function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCount: number }) {
+  if (state.phase === 'idle') return null;
+
+  if (state.phase === 'running') {
+    const counts =
+      state.done !== undefined && state.total !== undefined && state.total > 0
+        ? ` (${state.done} of ${state.total})`
+        : '';
+    return (
+      <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        {EXPORT_STEP_LABELS[state.step]}
+        {counts}
+      </p>
+    );
+  }
+
+  if (state.phase === 'error') {
+    return (
+      <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+        <CircleAlert className="mt-0.5 size-4 shrink-0" />
+        <span className="wrap-break-words">Export failed: {state.message}</span>
+      </p>
+    );
+  }
+
+  const { outcome } = state;
+  const warnings: string[] = [];
+  if (outcome.syncFailed) {
+    warnings.push(
+      'Couldn’t refresh from the server first — this is this device’s copy of your data.',
+    );
+  }
+  if (outcome.missingFileCount > 0) {
+    warnings.push(
+      `${outcome.missingFileCount} ${outcome.missingFileCount === 1 ? 'file' : 'files'} couldn’t be downloaded and ${outcome.missingFileCount === 1 ? 'was' : 'were'} left out.`,
+    );
+  }
+  if (excludedCount > 0) {
+    warnings.push(
+      `${excludedCount} locked ${excludedCount === 1 ? 'list was' : 'lists were'} not included.`,
+    );
+  }
+  return (
+    <div className="mt-3 flex items-start gap-2 text-sm">
+      <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <span className="text-muted-foreground">
+        Exported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
+        {outcome.fileCount > 0
+          ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
+          : ''}
+        .{warnings.map((warning) => ` ${warning}`).join('')}
+      </span>
+    </div>
+  );
+}
+
 function ExportView({ onBack }: { onBack: () => void }) {
-  const onExport = () => {
-    // TODO: implement export — gather all data and download it as a text file.
-  };
+  const [format, setFormat] = useState<ExportFormat>('brace');
+  const { lockedListIds } = useLocks();
+  const { state, run } = useExport();
+  const running = state.phase === 'running';
+  const lockedCount = lockedListIds.size;
+
   return (
     <div>
       <BackLink onBack={onBack} />
       <h2 className="text-xl font-semibold">Export all data</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Download all your data to your device as a text file. This may take a few minutes for a
-        large library.
+        Download a copy of your data to your device. Pick a format for where it’s going. This
+        may take a few minutes for a large library.
       </p>
-      <Button variant="outline" onClick={onExport}>
-        <Download className="size-4" />
-        Export all data
-      </Button>
+
+      <RadioGroup
+        value={format}
+        onValueChange={(v) => setFormat(v as ExportFormat)}
+        disabled={running}
+      >
+        {EXPORT_FORMAT_OPTIONS.map((option) => (
+          <Label
+            key={option.value}
+            htmlFor={`export-${option.value}`}
+            className="flex items-start gap-3 rounded-lg border border-border p-3 has-data-checked:border-primary has-data-checked:bg-muted/40"
+          >
+            <RadioGroupItem id={`export-${option.value}`} value={option.value} className="mt-0.5" />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="flex items-center gap-2 font-medium">
+                {option.icon}
+                {option.label}
+              </span>
+              <span className="text-sm font-normal text-muted-foreground">{option.hint}</span>
+            </span>
+          </Label>
+        ))}
+      </RadioGroup>
+
+      {lockedCount > 0 && (
+        <p className="mt-4 flex items-start gap-2 rounded-lg border border-border p-3 text-sm text-muted-foreground">
+          <Lock className="mt-0.5 size-4 shrink-0" />
+          <span>
+            {lockedCount} locked {lockedCount === 1 ? 'list' : 'lists'} — and the links inside{' '}
+            {lockedCount === 1 ? 'it' : 'them'} — won&apos;t be included. Unlock{' '}
+            {lockedCount === 1 ? 'it' : 'them'} first if you want everything.
+          </span>
+        </p>
+      )}
+
+      <div className="mt-6">
+        <Button variant="outline" onClick={() => run(format, lockedListIds)} disabled={running}>
+          <Download className="size-4" />
+          Export all data
+        </Button>
+      </div>
+
+      <ExportStatus state={state} excludedCount={lockedCount} />
     </div>
   );
 }
@@ -265,7 +422,7 @@ export function DataSection() {
             <ActionRow
               icon={<Download className="size-5" />}
               title="Export all data"
-              description="Download everything as a text file."
+              description="Download everything as a backup or bookmarks file."
               onClick={() => setView('export')}
             />
             <ActionRow

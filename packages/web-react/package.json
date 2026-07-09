@@ -23,6 +23,7 @@
     "@stxapps/react": "*",
     "@stxapps/shared": "*",
     "@stxapps/web-crypto": "*",
+    "@zip.js/zip.js": "^2.8.26",
     "dexie": "^4.4.3",
     "dexie-react-hooks": "^4.4.0",
     "zod": "^4.4.3"
