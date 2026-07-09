@@ -13,19 +13,20 @@
 // contrast, edits the FULL current query in place (WYSIWYG on the URL) — it snapshots
 // the committed query on open, so it can refine what's already active.
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Lock, Search, SlidersHorizontal, X } from 'lucide-react';
-import Link from 'next/link';
 
 import { flattenTree } from '@stxapps/shared';
 import { emptyQuery, type LinkQuery, useEntitlements, useLists, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
+import { Field, FieldLabel } from '@stxapps/web-ui/components/ui/field';
 import { Input } from '@stxapps/web-ui/components/ui/input';
-import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 
 import { useLinksPage } from '../_contexts/page-provider';
+
+import { usePaywall } from '@/contexts/paywall-provider';
 
 // Split a raw field value into lowercased, trimmed words — the same normalization
 // parseLinkQuery applies on read-back, done here so a multi-word field becomes the
@@ -80,34 +81,6 @@ function initDraft(q: LinkQuery): Draft {
   };
 }
 
-function TextField({
-  label,
-  value,
-  placeholder,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  placeholder?: string;
-  onChange: (value: string) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="flex flex-col gap-1">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
-      <Input
-        id={id}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-8"
-      />
-    </div>
-  );
-}
-
 function MultiCheckList({
   label,
   options,
@@ -142,21 +115,20 @@ function MultiCheckList({
 }
 
 // The Plus gate: field-scoped + multi-list/tag search is the `searchEditor`
-// entitlement (docs/business-model.md). Free users see the trigger — visible, not
-// hidden — but opening it presents the upgrade path rather than the fields.
-function LockedGate() {
+// entitlement (docs/business-model.md). Free users get the FULL editor to try —
+// visible and interactive (a banner names it as Plus) — and the gate fires only
+// when they press Search, which routes to the paywall instead of committing. This
+// "let them build, then upgrade at the payoff" beats hiding the fields: the wall
+// lands at peak intent, and nothing sensitive is thrown away (unlike locks, which
+// gate before their password dialog).
+function LockedBanner() {
   return (
-    <div className="flex flex-col items-start gap-2">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Lock className="size-4" /> Advanced search
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Field-scoped search across URL and title, with multi-list and multi-tag filters, is a Plus
-        feature. Basic word search stays free.
-      </p>
-      <Button asChild size="sm" className="mt-1">
-        <Link href="/settings/subscription">Upgrade to Plus</Link>
-      </Button>
+    <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+      <Lock className="mt-0.5 size-3.5 shrink-0" />
+      <span>
+        A <span className="font-medium text-foreground">Plus</span> feature. Build your query, then
+        upgrade to run it.
+      </span>
     </div>
   );
 }
@@ -164,15 +136,24 @@ function LockedGate() {
 function AdvancedSearch() {
   const { query, setQuery } = useLinksPage();
   const { entitlements } = useEntitlements();
+  const paywall = usePaywall();
   const lists = useLists();
   const tags = useTags();
 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => initDraft(query));
+  // True while the paywall is layered over an OPEN popover (free user pressed
+  // Search). We keep the popover open underneath so "Not now" returns the user to
+  // their built query, untouched — hence we ignore Radix's close requests while
+  // gated, and clear it from the paywall's onDismiss.
+  const [gated, setGated] = useState(false);
 
   // Snapshot the committed query into the draft each time the popover opens, so it
-  // edits the CURRENT query rather than a stale one.
+  // edits the CURRENT query rather than a stale one. While gated, refuse close
+  // requests (a focus-out to the modal paywall) so the popover — and the draft —
+  // survive a "Not now".
   const onOpenChange = (next: boolean) => {
+    if (gated && !next) return;
     if (next) setDraft(initDraft(query));
     setOpen(next);
   };
@@ -187,6 +168,15 @@ function AdvancedSearch() {
   );
 
   const apply = () => {
+    // The gate: a free user built a query to try the feature — pressing Search is
+    // the payoff moment, so route to the paywall instead of committing. Keep the
+    // popover open behind it (gated) so backing out with "Not now" leaves their
+    // query exactly as they built it.
+    if (!entitlements.searchEditor) {
+      setGated(true);
+      paywall.show('searchEditor', () => setGated(false));
+      return;
+    }
     const q = emptyQuery();
     q.sort = query.sort; // ordering isn't a search field — keep the active sort
     q.text.all = words(draft.text);
@@ -208,50 +198,72 @@ function AdvancedSearch() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="max-h-[70vh] w-80 overflow-y-auto">
-        {entitlements.searchEditor ? (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm font-medium">Advanced search</p>
-            <TextField
-              label="Text (URL or title)"
+      <PopoverContent
+        align="end"
+        className="max-h-[70vh] w-80 overflow-y-auto"
+        // Belt-and-suspenders with the onOpenChange guard: the modal paywall's
+        // focus grab must not dismiss the popover underneath it.
+        onInteractOutside={(e) => gated && e.preventDefault()}
+        onFocusOutside={(e) => gated && e.preventDefault()}
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-medium">Advanced search</p>
+          {!entitlements.searchEditor && <LockedBanner />}
+          <Field className="gap-1">
+            <FieldLabel htmlFor="adv-text" className="text-xs font-normal text-muted-foreground">
+              Text (URL or title)
+            </FieldLabel>
+            <Input
+              id="adv-text"
               value={draft.text}
               placeholder="words anywhere"
-              onChange={(text) => setDraft((d) => ({ ...d, text }))}
+              onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
+              className="h-8"
             />
-            <TextField
-              label="URL contains"
+          </Field>
+          <Field className="gap-1">
+            <FieldLabel htmlFor="adv-url" className="text-xs font-normal text-muted-foreground">
+              URL contains
+            </FieldLabel>
+            <Input
+              id="adv-url"
               value={draft.url}
-              onChange={(url) => setDraft((d) => ({ ...d, url }))}
+              onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+              className="h-8"
             />
-            <TextField
-              label="Title contains"
+          </Field>
+          <Field className="gap-1">
+            <FieldLabel htmlFor="adv-title" className="text-xs font-normal text-muted-foreground">
+              Title contains
+            </FieldLabel>
+            <Input
+              id="adv-title"
               value={draft.title}
-              onChange={(title) => setDraft((d) => ({ ...d, title }))}
+              onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              className="h-8"
             />
-            <MultiCheckList
-              label="Lists"
-              options={listOptions}
-              value={draft.lists}
-              onChange={(l) => setDraft((d) => ({ ...d, lists: l }))}
-            />
-            <MultiCheckList
-              label="Tags"
-              options={tagOptions}
-              value={draft.tags}
-              onChange={(t) => setDraft((d) => ({ ...d, tags: t }))}
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setDraft(initDraft(emptyQuery()))}>
-                Clear
-              </Button>
-              <Button size="sm" onClick={apply}>
-                Search
-              </Button>
-            </div>
+          </Field>
+          <MultiCheckList
+            label="Lists"
+            options={listOptions}
+            value={draft.lists}
+            onChange={(l) => setDraft((d) => ({ ...d, lists: l }))}
+          />
+          <MultiCheckList
+            label="Tags"
+            options={tagOptions}
+            value={draft.tags}
+            onChange={(t) => setDraft((d) => ({ ...d, tags: t }))}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setDraft(initDraft(emptyQuery()))}>
+              Clear
+            </Button>
+            <Button size="sm" onClick={apply}>
+              Search
+            </Button>
           </div>
-        ) : (
-          <LockedGate />
-        )}
+        </div>
       </PopoverContent>
     </Popover>
   );

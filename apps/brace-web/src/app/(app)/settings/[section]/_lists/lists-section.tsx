@@ -60,6 +60,7 @@ import { ARCHIVE_ID, isSystemListId, MY_LIST_ID, TRASH_ID } from '@stxapps/share
 import {
   type ListItem,
   type ListLockInfo,
+  useEntitlements,
   useListMutations,
   useLists,
   useLockMutations,
@@ -89,6 +90,7 @@ import {
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 import { LockPasswordDialog } from '@/components/lock-password-dialog';
+import { usePaywall } from '@/contexts/paywall-provider';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
 
@@ -509,6 +511,8 @@ function SortableRow({
 
 export function ListsSection() {
   const lists = useLists();
+  const { entitlements } = useEntitlements();
+  const paywall = usePaywall();
   const { create, rename, move, destroy, reorder } = useListMutations();
   const { listLocks, unlockList } = useLocks();
   const { addListLock, removeListLock } = useLockMutations();
@@ -578,6 +582,15 @@ export function ListsSection() {
     const current = rows.find((r) => r.item.id === plan.item.id);
     // Skip a true no-op: dropped back where it started (same parent, same slot).
     if (current && current.parentId === plan.parentId && current.index === plan.index) return;
+
+    // Nesting (landing under a parent) is the `nestedLists` Plus lever — sibling
+    // reorder at any level and flattening to the top level stay free. A free user
+    // can drag to a nested slot (we don't clamp the projection), but the drop
+    // routes to the paywall and the row snaps back rather than nesting.
+    if (plan.parentId !== null && !entitlements.nestedLists) {
+      paywall.show('nestedLists');
+      return;
+    }
 
     run(move(plan.item, plan.parentId, plan.siblings, plan.index));
   };
@@ -692,11 +705,26 @@ export function ListsSection() {
                       run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
                     }
                     onMoveTo={(parentId) => {
+                      // Moving UNDER a list nests it (the Plus lever); moving to
+                      // "Top level" (null) flattens and stays free — so a
+                      // downgraded user can always un-nest.
+                      if (parentId !== null && !entitlements.nestedLists) {
+                        paywall.show('nestedLists');
+                        return;
+                      }
                       const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
                       run(move(row.item, parentId, dest, dest.length));
                     }}
                     onSortChildren={(dir) => sortGroup(row.item.id, dir)}
-                    onAddLock={() => setLockDialog({ mode: 'add', listId: row.item.id })}
+                    onAddLock={() =>
+                      // Gate at the affordance, before any password dialog: a free
+                      // user never types a secret into a form that can't submit.
+                      // Unlock/remove stay open below so a downgraded (ex-Plus)
+                      // user can always reach their existing locks.
+                      entitlements.locks
+                        ? setLockDialog({ mode: 'add', listId: row.item.id })
+                        : paywall.show('locks')
+                    }
                     onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
                     onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
                     onDelete={() => run(destroy(row.item))}

@@ -3,6 +3,7 @@ import { ExtractionProvider, LockProvider, SyncProvider } from '@stxapps/web-rea
 import { AppLockGate } from '@/components/app-lock-gate';
 import { AuthGuard } from '@/components/auth-guard';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
+import { PaywallProvider } from '@/contexts/paywall-provider';
 
 // Guard for the signed-in app (/links, /settings, …). Three gates, in order:
 //   AuthGuard       — "do you have a session?" (client-side: the session lives
@@ -27,7 +28,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <LockProvider>
             <AppLockGate>
               <InitialSyncGate>
-                <div className="min-h-screen">{children}</div>
+                <PaywallProvider>
+                  <div className="min-h-screen">{children}</div>
+                </PaywallProvider>
               </InitialSyncGate>
             </AppLockGate>
           </LockProvider>

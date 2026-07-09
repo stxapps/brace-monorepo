@@ -149,7 +149,7 @@ export function Topbar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-      <h1 className="max-w-[12rem] shrink truncate text-lg font-semibold">{label}</h1>
+      <h1 className="max-w-48 shrink truncate text-lg font-semibold">{label}</h1>
 
       <SearchBar />
 

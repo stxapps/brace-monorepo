@@ -111,7 +111,7 @@ export function ExtractionSection() {
             </span>
           </div>
           <Button asChild variant="outline">
-            <Link href="/settings/subscription">See plans</Link>
+            <Link href="/settings/subscription">Upgrade to Plus</Link>
           </Button>
         </div>
       </div>

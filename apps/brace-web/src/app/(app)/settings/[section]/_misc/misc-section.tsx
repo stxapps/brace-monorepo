@@ -28,6 +28,7 @@ import {
 import {
   type LinksLayoutSource,
   type ThemeSource,
+  useEntitlements,
   useLockMutations,
   useLocks,
   useSettingMutations,
@@ -40,6 +41,7 @@ import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 
 import { LockPasswordDialog } from '@/components/lock-password-dialog';
+import { usePaywall } from '@/contexts/paywall-provider';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> =
   {
@@ -225,6 +227,8 @@ export function MiscSection() {
   } = useSettingMutations();
   const { appLock } = useLocks();
   const { setAppLock, removeAppLock } = useLockMutations();
+  const { entitlements } = useEntitlements();
+  const paywall = usePaywall();
   const [lockDialog, setLockDialog] = useState<'set' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -319,11 +323,18 @@ export function MiscSection() {
         </p>
         <div className="mt-4">
           {appLock.exists ? (
+            // Remove stays open even for a free (downgraded) account, so an
+            // existing lock is never stranded — mirrors list unlock/remove.
             <Button variant="outline" onClick={() => setLockDialog('remove')}>
               Remove app lock…
             </Button>
           ) : (
-            <Button variant="outline" onClick={() => setLockDialog('set')}>
+            // Setting a new lock is the `locks` Plus lever — gate at the button,
+            // before any password dialog (nothing sensitive is typed then thrown).
+            <Button
+              variant="outline"
+              onClick={() => (entitlements.locks ? setLockDialog('set') : paywall.show('locks'))}
+            >
               Set app lock…
             </Button>
           )}
