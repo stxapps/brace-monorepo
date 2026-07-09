@@ -76,6 +76,16 @@ export function hostFromText(text: string): string {
   }
 }
 
+// The DISPLAY url for a link that has no title — the title-line fallback across
+// every layout. Unlike `hostFromText`, it KEEPS THE PATH, so several untitled
+// links from the same site (e.g. three medium.com articles) stay distinguishable
+// instead of all collapsing to the bare host. Only a leading `https://` is
+// stripped for readability; a plain `http://` is kept so the insecure scheme
+// stays visible. Everything else (path, query, fragment) is left untouched.
+export function displayUrl(url: string): string {
+  return url.replace(/^https:\/\//, '');
+}
+
 // A canonical DEDUP IDENTITY KEY for a URL — "are these two links the same
 // resource?" — NOT something to display or store as the link's url. Two inputs
 // that a human would call the same page collapse to the same key.

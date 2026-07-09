@@ -27,8 +27,11 @@ description: How to build, launch, and drive this repo's apps to verify a change
   `List actions`), sidebar rows are buttons named by list name.
 - `playwright-core` has no Testing Library helpers (`getByDisplayValue` doesn't
   exist) — use attribute selectors for the uncontrolled inputs.
-- Layouts render a link's host/title, not the raw URL — assert on distinct
-  hosts (example.com vs example.org), not paths.
+- Layouts render a link's title, falling back to the URL with a leading
+  `https://` stripped (host + path, via `displayUrl`) when there's no title;
+  the host also shows on a secondary line/column. So untitled links ARE
+  distinguishable by path — asserting on distinct paths (or distinct hosts)
+  both work.
 
 ## Gotchas
 

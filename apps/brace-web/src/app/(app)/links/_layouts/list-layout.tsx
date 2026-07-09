@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { hostFromText } from '@stxapps/shared';
+import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -116,7 +116,7 @@ export function ListLayout({
                     <span className="flex items-center gap-1.5">
                       {pinned && <PinnedBadge />}
                       <span className="truncate text-sm font-medium">
-                        {link.title || hostFromText(link.url)}
+                        {link.title || displayUrl(link.url)}
                       </span>
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">

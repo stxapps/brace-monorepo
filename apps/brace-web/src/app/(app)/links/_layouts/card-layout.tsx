@@ -8,7 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { hostFromText } from '@stxapps/shared';
+import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -130,7 +130,7 @@ export function CardLayout({
                           </span>
                         </div>
                         <span className="line-clamp-3 text-sm font-medium">
-                          {link.title || hostFromText(link.url)}
+                          {link.title || displayUrl(link.url)}
                         </span>
                       </a>
                       <div className="absolute top-1 right-1">
