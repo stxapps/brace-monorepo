@@ -8,16 +8,22 @@
 //
 // What's enforceable where is deliberately asymmetric (the E2E trust model):
 // content is opaque to the server, but PATHS are not — so the server can hard-
-// enforce anything countable blind (total bytes, object counts, the `links/` /
-// `files/` namespaces), while per-feature gates (read-mode, screenshot, the
-// archive meter) are client-enforced UX backed by the blob rules. That matches
-// the business model on purpose: the hard walls sit exactly where the cost is
-// (blob storage), and a client-side bypass can only ever unlock features that
-// cost ~nothing to serve.
+// enforce anything COUNTABLE blind (total bytes, object counts, the `links/`
+// count), while per-feature gates (read-mode, screenshot, the archive meter) are
+// client-enforced UX backed by the blob rules. What the server CANNOT do is tell
+// one `files/` blob from another: a preview image, a screenshot, and an archive
+// are all opaque `files/{id}.enc` under the same namespace, so there is no
+// server-visible signal to allow the free preview image while denying a heavy
+// blob. The free tier therefore stores `files/` blobs (client-extracted preview
+// images — see docs/business-model.md "tiers"), bounded server-hard only by the
+// byte/count backstop (maxBytes, maxFiles) and the 200-link cap; the heavy-blob
+// distinction is client-enforced. That matches the business model on purpose:
+// the hard walls sit exactly where a blind server CAN count the cost, and a
+// client-side bypass can only ever unlock features that cost ~nothing to serve.
 //
 // So the entitlements below split into two kinds of gate (see the same split in
 // docs/business-model.md "tiers"):
-//   - COST-DEFENSIVE (maxLinks, blobFiles, maxArchivedLinks, maxFiles, maxBytes,
+//   - COST-DEFENSIVE (maxLinks, maxArchivedLinks, maxFiles, maxBytes,
 //     serverExtraction) — protect real cost / the moat; server-hard where
 //     countable.
 //   - VALUE-CAPTURE (locks, nestedLists, searchEditor, smartLists,
@@ -74,11 +80,6 @@ export type Entitlements = {
   // but past "free forever"). Server-hard: brace-api counts `links/` paths in
   // the user's size map at `files/sign`. `null` on paid plans.
   maxLinks: number | null;
-  // Whether the plan may store `files/` blobs AT ALL (preview images, read-mode
-  // content, screenshots, archives — every heavy blob rides this namespace).
-  // Server-hard: free-tier `files/` puts are rejected at `files/sign`. This one
-  // gate is what makes the free tier metadata-only.
-  blobFiles: boolean;
   // Full-page-archive meter (Plus keeps the last 50; Pro unlimited). CLIENT-
   // enforced only: an archive is indistinguishable from any other `files/` blob
   // server-side; the byte quota is the backstop.
@@ -88,8 +89,10 @@ export type Entitlements = {
   // at 2-3 files each stays well under it.
   maxFiles: number;
   // Total stored bytes (the storage quota row in the tiers table). The real
-  // server-hard wall for paid plans; on free it's a backstop only, since
-  // metadata-only usage is ~2 KB/link.
+  // server-hard wall on EVERY plan — including free, where it (with maxFiles and
+  // the 200-link cap) is the only backstop on preview-image blob storage now
+  // that free stores `files/` blobs. A maxed 200-link free library of client-
+  // extracted preview images is ~16 MB, well under the free ceiling.
   maxBytes: number;
   // Whether the account MAY opt in to `brace-extractor` (the separate synced
   // `serverExtraction` preference in settingsGeneralSchema is the user's opt-in;
@@ -157,10 +160,10 @@ const GIB = 1024 * MIB;
 const ENTITLEMENTS: Record<Plan, Entitlements> = {
   free: {
     maxLinks: 200,
-    blobFiles: false,
     maxArchivedLinks: 0,
-    // 200 links at ~2 KB metadata is ~400 KB; these are pure abuse backstops
-    // (lists/tags/pins/extractions ride along, never legitimately near this).
+    // A maxed 200-link library of client-extracted preview images is ~16 MB;
+    // maxFiles here is a pure abuse backstop (links + preview-image blobs +
+    // lists/tags/pins/extractions ride along, never legitimately near this).
     maxFiles: 5_000,
     maxBytes: 100 * MIB,
     serverExtraction: false,
@@ -173,7 +176,6 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
   },
   plus: {
     maxLinks: null,
-    blobFiles: true,
     maxArchivedLinks: 50,
     maxFiles: 200_000,
     maxBytes: 5 * GIB,
@@ -188,7 +190,6 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
   },
   pro: {
     maxLinks: null,
-    blobFiles: true,
     maxArchivedLinks: null,
     maxFiles: 200_000,
     maxBytes: 20 * GIB,

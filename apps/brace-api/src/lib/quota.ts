@@ -11,9 +11,12 @@
 // services/iap.ts. This module owns only the GATE — which entitlement blocks
 // which put, and with which error code:
 //
-//  - 'upgrade_required' (403) — a PLAN gate: the free tier storing any `files/`
-//    blob (the metadata-only keystone) or exceeding its saved-link cap. The
-//    client maps this code to the paywall/upsell UI.
+//  - 'upgrade_required' (403) — a PLAN gate: the free tier exceeding its
+//    saved-link cap (`maxLinks`). The client maps this code to the paywall/upsell
+//    UI. NOTE: the free tier DOES store `files/` blobs (client-extracted preview
+//    images) — there is no per-namespace plan gate, because the server can't tell
+//    a preview image from a heavy blob; free blob storage is bounded only by the
+//    byte/count backstop below (see docs/business-model.md "tiers").
 //  - 'quota_exceeded' (403) — a CAPACITY gate on an otherwise-entitled plan
 //    (byte ceiling, object-count backstop). The client maps it to "storage full".
 //
@@ -21,7 +24,7 @@
 // ops/commit ungated — so an over-quota account (e.g. after a downgrade) is
 // read-only-plus-delete, never data-loss or lock-out.
 
-import { type Entitlements, FILES_PREFIX, LINKS_PREFIX } from '@stxapps/shared';
+import { type Entitlements, LINKS_PREFIX } from '@stxapps/shared';
 
 import type { FileUsage } from '../do/user-data';
 import { HttpError } from './errors';
@@ -30,14 +33,6 @@ import { HttpError } from './errors';
 // is unknown until uploaded, so the byte check is on CURRENT usage, and a re-PUT
 // of an existing path counts as new (harmless over-count near a ceiling).
 export function checkPutQuota(ent: Entitlements, usage: FileUsage, paths: string[]): void {
-  if (!ent.blobFiles && paths.some((p) => p.startsWith(FILES_PREFIX))) {
-    throw new HttpError(
-      403,
-      'upgrade_required',
-      'Storing images, page content, and archives requires a paid plan',
-    );
-  }
-
   if (ent.maxLinks !== null) {
     const newLinks = paths.filter((p) => p.startsWith(LINKS_PREFIX)).length;
     if (newLinks > 0 && usage.linkCount + newLinks > ent.maxLinks) {

@@ -62,11 +62,12 @@ export function ExtractionSection() {
   const { serverExtraction } = useSettings();
   const { setServerExtraction } = useSettingMutations();
 
-  // Plan gate: server-side previews are a Plus/Pro entitlement (see
-  // docs/business-model.md — the free tier is metadata-only, and the blob
-  // uploads previews produce are refused server-side anyway). Free accounts see
-  // the upsell instead of the toggle; the synced `serverExtraction` preference
-  // itself is untouched, so it comes back if they upgrade.
+  // Plan gate: opting in to `brace-extractor` is a Plus/Pro entitlement (the
+  // `serverExtraction` gate — see docs/business-model.md "tiers"). This is a
+  // client-enforced UX gate: free stores client-extracted preview images fine,
+  // but the paid, abuse-exposed SERVER extraction path is what's gated. Free
+  // accounts see the upsell instead of the toggle; the synced `serverExtraction`
+  // preference itself is untouched, so it comes back if they upgrade.
   const { entitlements } = useEntitlements();
 
   // Two-step confirm for "Extract all": the first click reveals the count +

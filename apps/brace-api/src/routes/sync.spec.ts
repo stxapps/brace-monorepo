@@ -299,7 +299,6 @@ describe('sync control plane', () => {
   describe(`POST ${filesSignEndpoint.path}`, () => {
     it('mints PUT URLs scoped to the user’s prefix', async () => {
       const { userId, auth } = await authFor('sync-sign-1');
-      // The batch includes a `files/` blob, so the account needs a paid plan.
       await grantPlan(userId, 'plus');
       const res = await app.request(
         filesSignEndpoint.path,
@@ -316,19 +315,21 @@ describe('sync control plane', () => {
       }
     });
 
-    it('free plan: refuses files/ puts (upgrade_required) but signs links/ puts and all gets', async () => {
+    it('free plan: signs files/ puts (preview images), links/ puts, and all gets', async () => {
       const { auth } = await authFor('sync-sign-free-1');
 
-      // The metadata-only keystone: no `files/` blobs on free.
-      const denied = await app.request(
+      // Free stores `files/` blobs now — client-extracted preview images. There
+      // is no per-namespace plan gate (the server can't tell a preview image from
+      // a heavy blob); free blob storage is bounded only by the byte/count
+      // backstop, exercised as a pure function in lib/quota.spec.ts.
+      const files = await app.request(
         filesSignEndpoint.path,
         json(auth, { op: 'put', paths: ['files/x.enc'] }),
         env,
       );
-      expect(denied.status).toBe(403);
-      expect(((await denied.json()) as { error: string }).error).toBe('upgrade_required');
+      expect(files.status).toBe(200);
 
-      // Link metadata itself stays writable (up to the free cap).
+      // Link metadata is writable too (up to the free cap).
       const links = await app.request(
         filesSignEndpoint.path,
         json(auth, { op: 'put', paths: ['links/x.enc'] }),

@@ -95,9 +95,9 @@ walls exactly where the cost is):
 
 | limit                                | enforced                                                                                                                                          |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| storage bytes (5/20 GiB)             | **server-hard** — `files/sign`                                                                                                                    |
-| free: no `files/` blobs at all       | **server-hard** — the metadata-only keystone; one namespace check gates every preview/read-mode/screenshot/archive blob                           |
+| storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap + the 200-link cap)                |
 | free: 200 `links/`                   | **server-hard** (namespace count in the DO size map) + client UX                                                                                  |
+| free: preview-image `files/` blobs   | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
 | Plus archive meter (last 50)         | client-only — an archive is indistinguishable from any other `files/` blob server-side; bytes backstop                                            |
 | read-mode / screenshot / AI gates    | client-only (they run on-device), backstopped by the blob rules                                                                                   |
 | extractor access (plan-gated opt-in) | client + IP rate limits for now (the extractor is anonymous by design); a brace-api-minted signed entitlement token is the upgrade path if abused |
@@ -140,9 +140,12 @@ covers comps/lifetime grants (non-expiring rows) meanwhile.
   the create editors don't pre-check it yet; a local count check + upsell dialog
   beats a silent sync failure. Same for surfacing `upgrade_required` from the
   sync engine.
-- **Extraction gating beyond the settings toggle** — client extractors (the
-  extension) should skip blob-producing facets on free accounts rather than
-  let the server refuse the upload.
+- **Extraction gating beyond the settings toggle** — free stores the preview
+  image, but the HEAVY blob facets (read-mode / screenshot / archive) are
+  client-gated: since the server no longer refuses any `files/` put (it can't
+  tell a preview image from a heavy blob), client extractors must skip those
+  heavier facets on free accounts themselves — the bytes/count quota is only a
+  backstop, not the feature gate.
 - **Store verifiers** — with brace-expo.
 - **Privacy note** — payment inherently deanonymizes (Paddle holds email +
   payment identity). brace-api stores only `userId ↔ subscription id ↔ ctm_…`;
