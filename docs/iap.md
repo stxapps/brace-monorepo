@@ -127,9 +127,12 @@ covers comps/lifetime grants (non-expiring rows) meanwhile.
   `…/v1/iap/paddle/webhook`, subscribed to `subscription.*` events.
 - **brace-web** (`.env.*`): `NEXT_PUBLIC_PADDLE_ENV` +
   `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (client tokens are public by design).
-- **CSP note**: when brace-web's CSP ships (see [account.md](./account.md) open
-  items), Paddle.js needs `script-src`/`frame-src` allowances for
-  `*.paddle.com`.
+- **CSP note**: when brace-web's CSP ships (it lives in the **CloudFront response
+  headers policy**, not Next or Cloudflare — brace-web is a static export), it
+  must allow Paddle's origins: `script-src`/`frame-src`/`connect-src`/`img-src`/
+  `style-src` all need `https://*.paddle.com` (one wildcard covers sandbox +
+  live). Concrete directives + the `connect-src` exfiltration-widening tradeoff
+  are in [deployment.md](./deployment.md#brace-web--aws-s3--cloudfront-planned).
 
 ### open follow-ups
 

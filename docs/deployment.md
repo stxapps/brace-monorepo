@@ -54,17 +54,47 @@ files behind CloudFront.
   attaching the security headers, chiefly the **CSP** that
   [account.md](./account.md) names as the XSS mitigation for the bearer token +
   encryption key in IndexedDB. With `output: 'export'` there is no Next server,
-  so `next.config` `headers()` never runs — CloudFront is the only place these
-  headers can be set. Per tier (not shared) because `connect-src` must name
-  that tier's api origin; keep the two policies otherwise identical. Roll out
-  as `Content-Security-Policy-Report-Only` first, then enforce. Known
-  constraints to bake in: `script-src` needs `'wasm-unsafe-eval'` (hash-wasm
-  Argon2); a static export can't mint per-request nonces, so Next's inline
-  bootstrap scripts need either a build-time hash union (regenerated each
-  deploy) or `'unsafe-inline'` with `connect-src` as the load-bearing
-  exfiltration block; `worker-src 'self'` covers the Argon2 worker and the
-  serwist service worker; `frame-ancestors` only works from a real header
-  (ignored in `<meta>`), another reason this lives at CloudFront.
+  so `next.config` `headers()` never runs — **CloudFront (AWS) is the only place
+  these headers can be set** for brace-web. (Note: only brace-api / brace-extractor
+  run on **Cloudflare** Workers, and they serve JSON, not HTML — no CSP concern
+  there. So the app's CSP is a CloudFront artifact, _not_ a Cloudflare one, even
+  though the backend is on Cloudflare.) Per tier (not shared) because
+  `connect-src` must name that tier's api + extractor origins; keep the two
+  policies otherwise identical. Roll out as `Content-Security-Policy-Report-Only`
+  first, then enforce. Known constraints to bake in:
+
+  - `script-src` needs `'wasm-unsafe-eval'` (hash-wasm Argon2).
+  - a static export can't mint per-request nonces, so Next's inline bootstrap
+    scripts need either a build-time hash union (regenerated each deploy) or
+    `'unsafe-inline'` with `connect-src` as the load-bearing exfiltration block.
+  - `worker-src 'self'` covers the Argon2 worker and the serwist service worker.
+  - `connect-src` is pinned to `'self'` + that tier's **api** origin + **extractor**
+    origin (see [account.md](./account.md) — it's the exfiltration block that makes
+    `'unsafe-inline'` on `script-src` survivable). Adding any host here widens
+    that block, so add deliberately (Paddle needs it — below).
+  - `frame-ancestors` only works from a real header (ignored in `<meta>`),
+    another reason this lives at CloudFront.
+  - **Paddle.js** (the subscription checkout — see [iap.md](./iap.md)) is loaded
+    from Paddle's CDN and opens its checkout as an overlay `<iframe>`, so the
+    policy must allow Paddle's origins. All the relevant hosts (`cdn.paddle.com`,
+    `buy.paddle.com`, `checkout-service.paddle.com`, and their `sandbox-*` peers)
+    are one label under `paddle.com`, so a single `https://*.paddle.com` per
+    directive covers **both** the sandbox env (staging) and live env (production)
+    — the Paddle allowances are therefore **identical across tiers** (only the
+    api/extractor `connect-src` hosts differ per tier). Add:
+    - `script-src https://*.paddle.com` — loads `paddle.js`.
+    - `frame-src https://*.paddle.com` — embeds the checkout overlay iframe.
+    - `connect-src https://*.paddle.com` — `paddle.js` XHR/fetch (price preview,
+      init) from the brace-web origin. This is the one that widens the
+      exfiltration block above; it's the price of overlay checkout. (The checkout
+      iframe itself runs on Paddle's origin under Paddle's own CSP — the parent
+      policy governs only loading it and the SDK's own calls.)
+    - `img-src https://*.paddle.com` and `style-src https://*.paddle.com` — the
+      SDK injects a styled overlay container + spinner on the parent page.
+
+  > These mirror Paddle's official CSP guidance for Paddle Billing; re-check it
+  > against Paddle's docs at integration time, and prefer the `Report-Only`
+  > rollout to catch any host the SDK adds before enforcing.
 
 Deploy (per tier):
 
