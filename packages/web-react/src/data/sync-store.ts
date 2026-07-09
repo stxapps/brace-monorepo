@@ -6,7 +6,6 @@
 // has one owner. Deliberately tiny and side-effect-light — no network, no React.
 
 import { db, type SyncMetaRecord } from './db';
-import { clearDecodeCache } from './decode-cache';
 
 // The bookkeeping row for an account, or undefined if this device has never
 // synced (nor created) it.
@@ -92,26 +91,4 @@ export async function resetCursor(
   syncCursorPath: string,
 ): Promise<void> {
   await db.syncMeta.update(username, { syncCursorUpdatedAt, syncCursorPath });
-}
-
-// Tear down synced data on sign-out: wipe ALL tables — data, bookkeeping, and the
-// device-local settings. The local store holds DECRYPTED bookmarks, so a second
-// user on the same device must not read the first's plaintext; `localSettings`
-// is wiped for the same reason (and because the "Device" layout choice is meant to
-// be cleared on sign-out — see LocalSettingsRecord in db.ts). Deliberately not
-// account-scoped: `items` carries no owner column (see PendingOpRecord in db.ts),
-// so a scoped clear would leave the previous account's plaintext behind. Called
-// from auth-provider's endSession (and so the onSessionInvalid path) alongside
-// clearSession.
-export async function clearSyncData(): Promise<void> {
-  await Promise.all([
-    db.items.clear(),
-    db.syncMeta.clear(),
-    db.pendingOps.clear(),
-    db.localSettings.clear(),
-    // Locks are device-local passwords for this account's session; wiping them
-    // here IS the "forgot a lock password → sign out" recovery path (db.ts).
-    db.locks.clear(),
-  ]);
-  clearDecodeCache(); // drop decoded-link plaintext too — mirrors this items wipe (decode-cache.ts)
 }

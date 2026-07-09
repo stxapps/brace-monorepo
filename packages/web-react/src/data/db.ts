@@ -152,7 +152,7 @@ export interface ItemRecord {
 // two ops for the same file.
 export interface PendingOpRecord {
   // Whose queue. NOT live multi-account support: sign-out wipes ALL tables
-  // (sync-store's clearSyncData — decrypted data doesn't outlive the session), and
+  // (clearData in clear-data.ts — decrypted data doesn't outlive the session), and
   // `items` isn't account-scoped at all, so only one account's data is ever
   // resident. The scoping is (a) schema future-proofing — adding a key column
   // later means a copy-everything IDB migration on users' devices — and (b)
@@ -173,7 +173,7 @@ export interface PendingOpRecord {
 // Device-local settings that DELIBERATELY never sync — the off-sync counterpart
 // to the synced `settings/general.enc` file. Unlike everything in `items`, these
 // rows have no path, no op-log entry, and no R2 object: the sync engine never
-// touches this table, and `clearSyncData` (sync-store.ts) wipes it on sign-out so
+// touches this table, and `clearData` (clear-data.ts) wipes it on sign-out so
 // a second user on the device can't inherit the first's preferences.
 //
 // A single row (constant `id`) holds the Settings "Device" tab choices. Each
@@ -204,7 +204,7 @@ export interface LocalSettingsRecord {
 
 // One device-local lock — the app lock or a per-list lock. Like `localSettings`,
 // these rows DELIBERATELY never sync (no path, no op-log entry, no R2 object) and
-// are wiped on sign-out by `clearSyncData`, which is what makes "forgot a lock
+// are wiped on sign-out by `clearData`, which is what makes "forgot a lock
 // password → sign out, sign back in with the account password" the recovery path.
 //
 // A lock is a UI gate over already-decrypted local data (a shoulder-surfing

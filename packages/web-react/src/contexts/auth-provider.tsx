@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 
+import { clearData } from '../data/clear-data';
 import {
   clearSession,
   loadSession,
@@ -18,7 +19,6 @@ import {
   saveSession,
   type SessionRecord,
 } from '../data/session-store';
-import { clearSyncData } from '../data/sync-store';
 
 // App-level auth state. Web-only (like the session store it reads): account
 // creation / sign-in happen on the web app, and the extension inherits the
@@ -84,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // no-op. A stored-but-expired session additionally records 'expired' so
           // AuthGuard resumes the user at /sign-in?next=; no session at all stays
           // null (a direct visit).
-          void Promise.allSettled([clearSession(), clearSyncData()]);
+          void Promise.allSettled([clearSession(), clearData()]);
           if (s) setReason('expired');
           setUsername(null);
           setStatus('unauthenticated');
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // device read the previous user's plaintext. One active session per device
     // (see session-store), so a full wipe is correct; both clears run regardless
     // of which one rejects. Covers the onSessionInvalid (expired) path too.
-    await Promise.allSettled([clearSession(), clearSyncData()]);
+    await Promise.allSettled([clearSession(), clearData()]);
     setUsername(null);
     setReason(reason);
     setStatus('unauthenticated');

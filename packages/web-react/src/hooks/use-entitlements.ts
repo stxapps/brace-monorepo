@@ -7,47 +7,16 @@ import {
   type Entitlements,
   entitlementsOf,
   type SubscriptionStatus,
-  subscriptionStatusSchema,
 } from '@stxapps/shared';
+
+import { readCachedStatus, writeCachedStatus } from '../data/subscription-store';
 
 // The web apps' entitlement read: wraps @stxapps/react's useSubscriptionStatus
 // (the query on `GET /v1/iap/status`) with a device-local LAST-KNOWN copy, so an
 // offline or cold start keeps the account's plan instead of flashing free and
-// re-locking features until the network answers. localStorage (not Dexie): the
-// value is a tiny JSON blob wanted SYNCHRONOUSLY at first render for
-// placeholderData, and it's per-device cache — not user data, not synced.
-//
-// Trust model: this cache only gates CLIENT-side feature UX; everything that
-// costs money is re-checked server-side at `files/sign` regardless (see
-// brace-api lib/quota.ts). A stale cached plan therefore fails soft in both
-// directions — an expired subscription keeps client features offline for a
-// while (they cost ~nothing), and a fresh upgrade unlocks as soon as the status
-// query lands.
-
-const STORAGE_KEY = 'brace.subscriptionStatus';
-
-function readCachedStatus(): SubscriptionStatus | null {
-  try {
-    const raw = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    // Parsed through the wire schema so a stale/corrupt shape degrades to null,
-    // never a crash or a malformed plan string reaching entitlementsOf.
-    const parsed = subscriptionStatusSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
-// Drop the cached copy — called from the sign-out path so the next account on
-// this device doesn't inherit the previous account's plan.
-export function clearCachedSubscriptionStatus(): void {
-  try {
-    globalThis.localStorage?.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage unavailable — nothing cached to clear.
-  }
-}
+// re-locking features until the network answers. The persisted copy lives in the
+// data layer (subscription-store.ts, localStorage-backed); this hook is only the
+// reactive glue — seed the placeholder, persist each fresh answer, apply defaults.
 
 export type UseEntitlementsResult = {
   // The folded subscription state (plan + display fields for the settings UI).
@@ -73,12 +42,7 @@ export function useEntitlements(): UseEntitlementsResult {
   // Persist each fresh answer as the device's last-known copy.
   useEffect(() => {
     if (query.data === undefined || !query.isSuccess) return;
-    try {
-      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(query.data));
-    } catch {
-      // Storage unavailable (private mode, quota) — skip persistence, the
-      // in-memory query cache still serves this session.
-    }
+    writeCachedStatus(query.data);
   }, [query.data, query.isSuccess]);
 
   const subscription = query.data ?? cached ?? FREE_SUBSCRIPTION_STATUS;

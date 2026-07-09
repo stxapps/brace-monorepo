@@ -1,8 +1,8 @@
 // Memoized decoded links, keyed by `items` path and versioned by the record's
 // blob-write timestamp. Lives in its OWN module — not in queries.ts — so the
-// sign-out wipe (sync-store's clearSyncData) can clear it without the write/sync
+// sign-out wipe (clearData in clear-data.ts) can clear it without the write/sync
 // layer having to import the read layer: this module depends on nothing but a
-// type, so both queries.ts (the writer/reader of the cache) and sync-store.ts
+// type, so both queries.ts (the writer/reader of the cache) and clear-data.ts
 // (the clearer) can point at it without inverting the layering.
 //
 // Why cache at all: decoding a link (parseBlob → JSON.parse + zod) is the costliest
@@ -137,7 +137,7 @@ export function dropCachedExtraction(path: string): void {
   extractionCache.drop(path);
 }
 
-// Drop every cached decode (both caches) — called from clearSyncData on sign-out
+// Drop every cached decode (both caches) — called from clearData on sign-out
 // (alongside the `items` wipe it mirrors), so a second user on the same device can't
 // read the first's decoded data.
 export function clearDecodeCache(): void {

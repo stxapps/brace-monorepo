@@ -3,8 +3,8 @@
 // Read/write helpers over the device-local `locks` table (see LockRecord in
 // db.ts) — the same species as local-settings-store.ts: no network, no sync
 // bookkeeping, no React (lock-provider adds reactivity via useLiveQuery and owns
-// the in-memory unlocked state). Wiped on sign-out by clearSyncData
-// (sync-store.ts), which is the "forgot a lock password" recovery path.
+// the in-memory unlocked state). Wiped on sign-out by clearData
+// (clear-data.ts), which is the "forgot a lock password" recovery path.
 
 import { db, type LockRecord } from './db';
 

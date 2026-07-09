@@ -6,7 +6,6 @@ import { useApiClient } from '@stxapps/react';
 import { signOutEndpoint } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
-import { clearCachedSubscriptionStatus } from './use-entitlements';
 
 // Web-only: it reaches for the web auth context + the configured api client, so it
 // can't live in the platform-agnostic @stxapps/react (same reasoning as
@@ -36,12 +35,10 @@ export function useSignOut() {
       // state to unauthenticated). No reason arg, so this records the default
       // 'signed-out' — AuthGuard sees a deliberate sign-out and sends the user home
       // to '/', not /sign-in?next=. This is the step that actually signs the user
-      // out client-side.
+      // out client-side. endSession also runs clearData, which wipes every
+      // device-local per-account cache — including the last-known subscription copy
+      // — so the next account here doesn't inherit this one's state (clear-data.ts).
       await endSession();
-
-      // Drop the device's last-known subscription copy (use-entitlements) so the
-      // next account signing in here doesn't inherit this account's plan.
-      clearCachedSubscriptionStatus();
     },
   });
 }
