@@ -4,6 +4,7 @@ export * from './api/retry';
 export * from './async/pool';
 export * from './auth/credentials';
 export * from './auth/endpoints';
+export * from './crypto/contract-vectors';
 export * from './crypto/doors';
 export * from './crypto/encoding';
 export * from './crypto/params';

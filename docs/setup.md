@@ -49,6 +49,17 @@ Flag notes:
 
 - npx nx add @nx/expo
 - npx nx g @nx/expo:app brace-expo --directory=apps/brace-expo --importPath=@stxapps/brace-expo
+- `packages/expo-crypto` was written by hand (no generator): the usual lib
+  files following the other packages' conventions, PLUS the Expo native module
+  pieces `create-expo-module` would scaffold — `expo-module.config.json`,
+  `ios/BraceFileCrypto.podspec` + Swift, `android/build.gradle` + Kotlin.
+  Native code is picked up by Expo autolinking from the workspace symlink in
+  `node_modules` during `npx expo prebuild` (dev client required — not Expo Go).
+- Note: `jest-expo` ships a bin literally named `jest`, colliding with the real
+  jest CLI in `node_modules/.bin` — whichever npm links last wins. The root
+  `postinstall` (`tools/scripts/fix-jest-bin.mjs`) re-points the bin at the
+  real jest 30 deterministically (every project, including brace-expo with the
+  jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
 #### docs (future)
 

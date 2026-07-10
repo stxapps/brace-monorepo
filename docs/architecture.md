@@ -59,7 +59,9 @@ client-queries.md, the tiering in business-model.md).
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
   per-response byte ceiling, timeout, content-type allowlist. See
   [link-extraction.md](./link-extraction.md) — _server extraction_.
-- **brace-expo** (future) — Expo mobile app
+- **brace-expo** — Expo mobile app (scaffolded; the crypto/account layer is
+  `@stxapps/expo-crypto` below — the rest of the local-first client is still
+  to come)
 - **brace-docs** (future) — Next.js docs site
 
 ### libs
@@ -85,6 +87,27 @@ client-queries.md, the tiering in business-model.md).
 - web-only crypto-global primitives: KDF, AES-256-GCM, and id minting
   (`newId`, a `crypto.randomUUID()` wrapper; brace-api keeps its own copy since
   it's `platform:worker` and can't import this `platform:web` package)
+
+#### @stxapps/expo-crypto
+
+- used by brace-expo only
+- expo-only crypto — the `platform:expo` sibling of `web-crypto`: the same
+  account derivation pipeline (docs/account.md) and AES-256-GCM primitives,
+  implemented on React Native. Heavy compute runs **native**: Argon2id, HKDF,
+  and AES-GCM go through `react-native-quick-crypto` (C++ JSI/Nitro); Ed25519
+  stays on the same `@noble/ed25519` as web (signing is microseconds, and
+  sharing the library makes credential drift structurally impossible). Also
+  ships the **`BraceFileCrypto` Expo native module** (`ios/` Swift CryptoKit,
+  `android/` Kotlin `javax.crypto`, autolinked by `expo prebuild`): whole-file
+  encrypt/decrypt path-to-path in the native layer, reading/writing the frozen
+  v1 blob frame — file bytes never enter the JS heap; the app stores content
+  DECRYPTED on device (the Dexie-`data` analogue) and e.g. `expo-image` renders
+  straight from the plaintext `file://` path. The frozen parameters stay in
+  `shared`; the golden vectors (`shared` `crypto/contract-vectors.ts`) are asserted by
+  both this package's and `web-crypto`'s specs, so "web and native derive
+  identical keys/blobs" is CI-proven. One deliberate divergence: the account's
+  `encryptionKey` is raw bytes, not a non-extractable `CryptoKey` (native has
+  no such handle) — at-rest protection is `expo-secure-store`'s job.
 
 #### @stxapps/web-react
 
@@ -121,12 +144,16 @@ platform-agnostic `react` can't reach it. `web-crypto` itself depends only on
   forms (`components/auth/*`) do: they pair the shared field UI with the
   `useSignIn` / `useCreateAccount` submit hooks that live in `web-react`.
 - `web-crypto` may import `shared` only.
+- `expo-crypto` is the `platform:expo` sibling of `web-crypto` (same crypto
+  layer): it may import `shared` only. Only `brace-expo` (and future
+  `platform:expo` React-logic packages) can consume it.
 - `web-react` is the web-only sibling of `react` (same React-logic layer, but
   `platform:web`): it may import `shared`, `react`, and `web-crypto`. Apps and
   `web-ui` (for the auth forms) consume it; it must not import `web-ui`.
 - Apps may import any package; **packages must never import an app.**
 - `web-ui`, `web-crypto`, and `web-react` are web-only — do not import them from
-  code meant to run on Expo/native (`react` and `shared` stay platform-agnostic).
+  code meant to run on Expo/native; `expo-crypto` is expo-only — do not import
+  it from web/worker code (`react` and `shared` stay platform-agnostic).
 
 These rules are **enforced at lint time** by `@nx/enforce-module-boundaries`
 (config in `eslint.config.mjs`) — an illegal import fails `npm run lint`.
@@ -139,6 +166,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | react           | `type:react`  | `platform:agnostic` |
 | web-ui          | `type:ui`     | `platform:web`      |
 | web-crypto      | `type:crypto` | `platform:web`      |
+| expo-crypto     | `type:crypto` | `platform:expo`     |
 | web-react       | `type:react`  | `platform:web`      |
 | brace-web       | `type:app`    | `platform:web`      |
 | brace-extension | `type:app`    | `platform:web`      |
@@ -151,9 +179,9 @@ Enforcement is driven by two tag dimensions set in each project's
   below `react` so React logic can build on it, and is also consumed directly by
   apps (`app` → `crypto` → `shared`).
 - **platform** enforces portability: `agnostic` may depend only on `agnostic`;
-  `web`/`worker` may also use `agnostic` but not each other. (`worker` is the
-  Cloudflare Workers runtime — web-standards, not Node — see `bundling
-brace-api` below.)
+  `web`/`worker`/`expo` may also use `agnostic` but never each other. (`worker`
+  is the Cloudflare Workers runtime — web-standards, not Node — see `bundling
+brace-api` below; `expo` is React Native/Hermes — no DOM, no Web Crypto.)
 
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.

@@ -8,4 +8,4 @@
 //   - apps/brace-web/jest.config.cts → next/jest (overrides preset, patched there)
 //
 // vitest-based projects (brace-api) don't need this — esbuild handles ESM.
-module.exports = ['fractional-indexing'];
+module.exports = ['fractional-indexing', '@noble/ed25519'];

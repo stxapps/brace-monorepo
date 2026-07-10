@@ -52,9 +52,11 @@ export default [
               sourceTag: 'type:shared',
               onlyDependOnLibsWithTags: ['type:shared'],
             },
-            // Platform: agnostic code must stay portable; web/worker may also
-            // use agnostic libs. This keeps web-only libs (ui, crypto) out of
-            // the Cloudflare Workers api and out of platform-agnostic packages.
+            // Platform: agnostic code must stay portable; web/worker/expo may
+            // also use agnostic libs but never each other's. This keeps
+            // web-only libs (ui, web-crypto) out of the Cloudflare Workers api
+            // and out of the Expo app, and expo-only libs out of everything
+            // that isn't Expo.
             {
               sourceTag: 'platform:agnostic',
               onlyDependOnLibsWithTags: ['platform:agnostic'],
@@ -66,6 +68,10 @@ export default [
             {
               sourceTag: 'platform:worker',
               onlyDependOnLibsWithTags: ['platform:worker', 'platform:agnostic'],
+            },
+            {
+              sourceTag: 'platform:expo',
+              onlyDependOnLibsWithTags: ['platform:expo', 'platform:agnostic'],
             },
           ],
         },

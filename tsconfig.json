@@ -29,6 +29,9 @@
     },
     {
       "path": "./apps/brace-expo"
+    },
+    {
+      "path": "./packages/expo-crypto"
     }
   ]
 }

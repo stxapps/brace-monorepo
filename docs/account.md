@@ -8,8 +8,11 @@ needs. See [architecture.md](./architecture.md) for package layering,
 [api-contracts.md](./api-contracts.md) for how the create-account endpoint is
 typed, and [local-first-sync.md](./local-first-sync.md) for what the derived
 encryption key protects. The crypto implementation lives in
-`@stxapps/web-crypto`; the frozen parameters and validators live in
-`@stxapps/shared` (`crypto/params.ts`, `auth/credentials.ts`).
+`@stxapps/web-crypto` (web + extension) and `@stxapps/expo-crypto` (the Expo
+client — native Argon2id/HKDF/AES-GCM via react-native-quick-crypto, plus the
+`BraceFileCrypto` native module for file-level encryption); the frozen
+parameters and validators live in `@stxapps/shared` (`crypto/params.ts`,
+`auth/credentials.ts`).
 
 ### the model: a password-derived wallet, with extra doors
 
@@ -179,11 +182,16 @@ under each chosen door.
   identifier — see [the two identifiers](#the-two-identifiers).
 
 These parameters are a **frozen cross-platform contract** in `crypto/params.ts`:
-web, extension, and the future Expo client must all use the exact same
+web, extension, and the Expo client must all use the exact same
 `APP_SALT`, `ARGON2_PARAMS`, HKDF labels, AEAD scheme, and `canonicalizeUsername`
 rule, or a door fails to unwrap the DEK and the user is locked out. **They can
 never change once real users exist.** (The DEK is random, so it is _not_ part of
 the frozen contract — only the machinery that derives KEKs and unwraps it is.)
+The contract is pinned by **golden vectors** (`crypto/contract-vectors.ts` in
+`@stxapps/shared` — salt, KEK, wrapped door, derived keys, signature, packed
+blob, generated once from the real web pipeline): both `web-crypto`'s and
+`expo-crypto`'s specs assert the same vectors, so a platform that drifts fails
+CI instead of locking users out.
 
 ### username — rules and why
 
