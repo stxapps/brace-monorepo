@@ -43,7 +43,7 @@ describe('createAccount', () => {
 
     // (1) the username is now claimed in the global directory, pointing at this user
     const claim = await usernamesRepo(env.DIRECTORY_DB).findByUsername('alice');
-    expect(claim).toEqual({ username: 'alice', userId, accountDbId: '1' });
+    expect(claim).toEqual({ username: 'alice', userId, accountDbId: '1', deletedAt: null });
 
     // (2) the user row + its door committed in the accounts shard
     const shard = accountsDb(env, '1');

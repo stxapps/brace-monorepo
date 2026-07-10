@@ -67,6 +67,13 @@ export function sessionsRepo(db: D1Database) {
       await db.prepare(`DELETE FROM sessions WHERE id = ?`).bind(id).run();
     },
 
+    // Revoke EVERY session for a user — account deletion (and a future "sign out
+    // everywhere"). Indexed by idx_sessions_user_id, so it's a range delete, not
+    // a scan.
+    async deleteByUserId(userId: string): Promise<void> {
+      await db.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run();
+    },
+
     // Housekeeping: drop expired rows so the sessions table stays small. Call
     // from a scheduled handler (cron trigger) once that's wired.
     async deleteExpired(now: number = Date.now()): Promise<void> {

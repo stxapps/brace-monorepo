@@ -12,7 +12,11 @@ function link(over: Partial<ExportLinkRow> = {}): ExportLinkRow {
   };
 }
 
-function folder(name: string, links: ExportLinkRow[] = [], children: ExportFolder[] = []): ExportFolder {
+function folder(
+  name: string,
+  links: ExportLinkRow[] = [],
+  children: ExportFolder[] = [],
+): ExportFolder {
   return { name, links, children };
 }
 
@@ -31,7 +35,9 @@ describe('toNetscapeHtml', () => {
 
   it('nests child folders inside their parent and links inside folders', () => {
     const html = toNetscapeHtml(
-      bundle([folder('Parent', [link()], [folder('Child', [link({ url: 'https://example.com/b' })])])]),
+      bundle([
+        folder('Parent', [link()], [folder('Child', [link({ url: 'https://example.com/b' })])]),
+      ]),
     );
     const parent = html.indexOf('<H3>Parent</H3>');
     const a = html.indexOf('https://example.com/a');
@@ -54,7 +60,9 @@ describe('toNetscapeHtml', () => {
   });
 
   it('writes tag names into TAGS and omits the attribute when tagless', () => {
-    const tagged = toNetscapeHtml(bundle([folder('L', [link({ tagNames: ['work', 'read later'] })])]));
+    const tagged = toNetscapeHtml(
+      bundle([folder('L', [link({ tagNames: ['work', 'read later'] })])]),
+    );
     expect(tagged).toContain('TAGS="work,read later"');
     const untagged = toNetscapeHtml(bundle([folder('L', [link()])]));
     expect(untagged).not.toContain('TAGS=');
@@ -63,10 +71,9 @@ describe('toNetscapeHtml', () => {
   it('escapes HTML in titles, folder names, urls, and tags', () => {
     const html = toNetscapeHtml(
       bundle([
-        folder(
-          '<b>&"Lists"',
-          [link({ url: 'https://example.com/?a=1&b="2"', title: 'A <i>&</i> B', tagNames: ['<t>'] })],
-        ),
+        folder('<b>&"Lists"', [
+          link({ url: 'https://example.com/?a=1&b="2"', title: 'A <i>&</i> B', tagNames: ['<t>'] }),
+        ]),
       ]),
     );
     expect(html).toContain('<H3>&lt;b&gt;&amp;&quot;Lists&quot;</H3>');

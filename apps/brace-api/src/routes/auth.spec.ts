@@ -4,15 +4,20 @@ import { describe, expect, it } from 'vitest';
 import {
   bytesToHex,
   checkUsernameEndpoint,
+  deleteAccountEndpoint,
   passwordDoorEndpoint,
   signInEndpoint,
   signOutEndpoint,
 } from '@stxapps/shared';
 
 import { app } from '../app';
+import { accountKeysRepo } from '../db/repositories/account-keys';
+import { purchasesRepo } from '../db/repositories/purchases';
 import { sessionsRepo } from '../db/repositories/sessions';
 import { usernamesRepo } from '../db/repositories/usernames';
-import { hashToken } from '../lib/ids';
+import { usersRepo } from '../db/repositories/users';
+import { hashToken, newId } from '../lib/ids';
+import { userFileKey } from '../r2/keys';
 import { createAccount } from '../services/account';
 import { issueSession } from '../services/session';
 
@@ -253,6 +258,219 @@ describe('auth routes', () => {
       const res = await post({ authorization: 'Bearer not-a-real-token' });
 
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe(`POST ${deleteAccountEndpoint.path}`, () => {
+    // Seed a full account THROUGH the service (directory claim + shard rows +
+    // session), returning everything a delete-account call needs: the session's
+    // bearer header and the keypair to sign the fresh proof with.
+    async function seedFullAccount(username: string) {
+      const kp = await newKeyPair();
+      const { userId, session } = await createAccount(env, {
+        username,
+        publicKey: kp.publicKey,
+        doors: [{ doorType: 'password', ...door }],
+      });
+      return {
+        ...kp,
+        userId,
+        token: session.token,
+        auth: { authorization: `Bearer ${session.token}` },
+      };
+    }
+
+    const signedBody = async (keyPair: CryptoKeyPair, payload: string) => ({
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ payload, signature: await sign(keyPair, payload) }),
+    });
+
+    const deletePayload = (username: string, publicKey: string) =>
+      JSON.stringify({ action: 'delete-account', username, publicKey, timestamp: Date.now() });
+
+    it('tears the account down: data, doors, user row, sessions, tombstone', async () => {
+      const acct = await seedFullAccount('goodbye');
+      // Something in the data plane, so the wipe half is observable too.
+      await env.USER_FILES.put(userFileKey(acct.userId, 'links/x.enc'), 'ciphertext');
+
+      const req = await signedBody(acct.keyPair, deletePayload('goodbye', acct.publicKey));
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ ok: true });
+
+      // Shard rows gone — credential and doors together (the cryptographic kill).
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
+      expect(await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserId(acct.userId)).toEqual([]);
+      // Every session revoked — the token that made this very call is dead.
+      expect(
+        await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(acct.token)),
+      ).toBeNull();
+      // Data plane wiped.
+      expect(await env.USER_FILES.head(userFileKey(acct.userId, 'links/x.enc'))).toBeNull();
+      // Directory row TOMBSTONED, not deleted: still present (occupied), marked.
+      const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername('goodbye');
+      expect(entry).not.toBeNull();
+      expect(entry?.deletedAt).not.toBeNull();
+    });
+
+    it('keeps the tombstoned username occupied and sign-in opaque', async () => {
+      const acct = await seedFullAccount('tombstoned');
+      const req = await signedBody(acct.keyPair, deletePayload('tombstoned', acct.publicKey));
+      await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      // Availability: taken, forever.
+      const avail = await app.request(`${checkUsernameEndpoint.path}?username=tombstoned`, {}, env);
+      await expect(avail.json()).resolves.toEqual({ available: false });
+      // The pre-auth door fetch answers like a name that never existed.
+      const doorRes = await app.request(
+        `${passwordDoorEndpoint.path}?username=tombstoned`,
+        {},
+        env,
+      );
+      expect(doorRes.status).toBe(404);
+      // A re-claim (create-account) loses to the tombstone's PK — clean 409.
+      const kp = await newKeyPair();
+      const claimed = await usernamesRepo(env.DIRECTORY_DB).claim({
+        username: 'tombstoned',
+        userId: 'u_newcomer',
+        accountDbId: '1',
+      });
+      expect(claimed).toBe(false);
+      void kp;
+    });
+
+    it('rejects the call without a bearer token', async () => {
+      const acct = await seedFullAccount('nobearer');
+      const req = await signedBody(acct.keyPair, deletePayload('nobearer', acct.publicKey));
+
+      const res = await app.request(deleteAccountEndpoint.path, req, env);
+
+      expect(res.status).toBe(401);
+      // Nothing was torn down.
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).not.toBeNull();
+    });
+
+    it('rejects a valid signature whose key is not the stored credential', async () => {
+      // A stolen bearer token + a self-signed proof: the signature is internally
+      // valid, so this isolates the load-bearing stored-credential check.
+      const acct = await seedFullAccount('stolentoken');
+      const thief = await newKeyPair();
+      const req = await signedBody(thief.keyPair, deletePayload('stolentoken', thief.publicKey));
+
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(401);
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).not.toBeNull();
+    });
+
+    it('rejects a proof for a DIFFERENT account riding this session', async () => {
+      // Account B signs a perfectly valid proof for B — but the bearer session
+      // names A, so the proof→session binding refuses it and neither account is
+      // touched.
+      const a = await seedFullAccount('bindinga');
+      const b = await seedFullAccount('bindingb');
+      const req = await signedBody(b.keyPair, deletePayload('bindingb', b.publicKey));
+
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...a.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(401);
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(a.userId)).not.toBeNull();
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(b.userId)).not.toBeNull();
+    });
+
+    it('rejects a sign-in proof replayed here (action mismatch)', async () => {
+      const acct = await seedFullAccount('actionbound');
+      const payload = JSON.stringify({
+        action: 'sign-in',
+        username: 'actionbound',
+        publicKey: acct.publicKey,
+        timestamp: Date.now(),
+      });
+      const req = await signedBody(acct.keyPair, payload);
+
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(400);
+    });
+
+    it('refuses with 409 while the subscription would keep billing', async () => {
+      const acct = await seedFullAccount('stillbilling');
+      // A renewing Paddle subscription: active, period end in the future, not
+      // canceled ⇒ willRenew — the gate case.
+      await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+        id: newId(),
+        userId: acct.userId,
+        source: 'paddle',
+        externalId: `sub-${acct.userId}`,
+        plan: 'plus',
+        status: 'active',
+        providerCustomerId: 'ctm_test',
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        canceledAt: null,
+        eventOccurredAt: Date.now(),
+      });
+
+      const req = await signedBody(acct.keyPair, deletePayload('stillbilling', acct.publicKey));
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(409);
+      await expect(res.json()).resolves.toMatchObject({ error: 'subscription_active' });
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).not.toBeNull();
+    });
+
+    it('allows deletion once the subscription is canceled (entitlement forfeited)', async () => {
+      const acct = await seedFullAccount('canceledsub');
+      // Canceled but still inside the paid period: entitled, willRenew false —
+      // billing already ended, so deletion proceeds.
+      const end = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+        id: newId(),
+        userId: acct.userId,
+        source: 'paddle',
+        externalId: `sub-${acct.userId}`,
+        plan: 'plus',
+        status: 'canceled',
+        providerCustomerId: 'ctm_test',
+        expiresAt: end,
+        canceledAt: Date.now(),
+        eventOccurredAt: Date.now(),
+      });
+
+      const req = await signedBody(acct.keyPair, deletePayload('canceledsub', acct.publicKey));
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
     });
   });
 });

@@ -15,6 +15,8 @@
 // alongside clearSession — so this is the ONE teardown choke point every sign-out
 // path (deliberate, expired-token, and the signed-out resolution guard) funnels
 // through; anything that must not outlive an account on this device belongs here.
+// (delete-all-data.ts wipes a SUBSET while staying signed in — synced stores yes,
+// identity/device stores no; keep the two aligned when adding a store here.)
 
 import { db } from './db';
 import { clearDecodeCache } from './decode-cache';

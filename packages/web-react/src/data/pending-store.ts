@@ -43,3 +43,10 @@ export async function clearPendingPaths(username: string, paths: string[]): Prom
   if (paths.length === 0) return;
   await db.pendingOps.bulkDelete(paths.map((path) => [username, path] as [string, string]));
 }
+
+// Drop an account's WHOLE queue — the delete-all-data flow, which abandons
+// every unsynced local change on purpose (the user is deleting everything, so
+// pushing them first would be wasted work the wipe immediately undoes).
+export async function clearPendingOps(username: string): Promise<void> {
+  await db.pendingOps.where('username').equals(username).delete();
+}

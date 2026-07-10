@@ -12,7 +12,11 @@ function link(over: Partial<ExportLinkRow> = {}): ExportLinkRow {
   };
 }
 
-function folder(name: string, links: ExportLinkRow[] = [], children: ExportFolder[] = []): ExportFolder {
+function folder(
+  name: string,
+  links: ExportLinkRow[] = [],
+  children: ExportFolder[] = [],
+): ExportFolder {
   return { name, links, children };
 }
 

@@ -20,7 +20,8 @@ import { parseEpoch } from './epoch';
 // One scan, four alternatives: folder header, link anchor, list open, list close.
 // [\s\S]*? for inner text because titles can contain newlines; \b after the tag
 // name so <address>/<abbr> never match as <a>.
-const TOKEN_RE = /<h3\b([^>]*)>([\s\S]*?)<\/h3\s*>|<a\b([^>]*)>([\s\S]*?)<\/a\s*>|<dl\b[^>]*>|<\/dl\s*>/gi;
+const TOKEN_RE =
+  /<h3\b([^>]*)>([\s\S]*?)<\/h3\s*>|<a\b([^>]*)>([\s\S]*?)<\/a\s*>|<dl\b[^>]*>|<\/dl\s*>/gi;
 
 // One double-quoted attribute out of a tag's attribute text, case-insensitive.
 // Netscape files quote every attribute value; unquoted values don't occur.
@@ -58,7 +59,9 @@ function unescapeHtml(value: string): string {
 // Inner text of a tokenized element → display text: drop any nested markup
 // (Firefox can nest e.g. <img> inside anchors), unescape, collapse whitespace.
 function innerText(value: string): string {
-  return unescapeHtml(value.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
+  return unescapeHtml(value.replace(/<[^>]*>/g, ''))
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function parseNetscapeHtml(text: string): ImportedLink[] {

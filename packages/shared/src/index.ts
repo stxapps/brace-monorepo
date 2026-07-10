@@ -8,6 +8,7 @@ export * from './crypto/doors';
 export * from './crypto/encoding';
 export * from './crypto/params';
 export * from './crypto/salt';
+export * from './data/endpoints';
 export * from './export/bundle';
 export * from './export/csv';
 export * from './export/netscape';

@@ -167,7 +167,10 @@ class ListResolver {
   readonly created: RawEntityEntry[] = [];
   private readonly now: number;
 
-  constructor(lists: { id: string; name: string; parentId: string | null; rank: string }[], now: number) {
+  constructor(
+    lists: { id: string; name: string; parentId: string | null; rank: string }[],
+    now: number,
+  ) {
     this.now = now;
     for (const list of lists) {
       const siblings = this.childrenOf.get(list.parentId) ?? [];
@@ -224,7 +227,10 @@ class TagResolver {
   readonly created: RawEntityEntry[] = [];
   private readonly now: number;
 
-  constructor(tags: { id: string; name: string; parentId: string | null; rank: string }[], now: number) {
+  constructor(
+    tags: { id: string; name: string; parentId: string | null; rank: string }[],
+    now: number,
+  ) {
     this.now = now;
     for (const tag of tags) this.idByName.set(tag.name.trim().toLowerCase(), tag.id);
     this.rootSiblings = tags.filter((tag) => tag.parentId === null).sort(compareRank);
@@ -536,9 +542,7 @@ async function parseInteropZip(byName: Map<string, FileEntry>): Promise<Imported
     .filter(([name]) => {
       const base = name.slice(name.lastIndexOf('/') + 1);
       return (
-        INTEROP_ZIP_ENTRY_RE.test(name) &&
-        !name.startsWith('__MACOSX/') &&
-        !base.startsWith('.')
+        INTEROP_ZIP_ENTRY_RE.test(name) && !name.startsWith('__MACOSX/') && !base.startsWith('.')
       );
     })
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));

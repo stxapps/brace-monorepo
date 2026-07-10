@@ -5,6 +5,7 @@ import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
 import { rateLimit } from './middleware/rate-limit';
 import { authRoutes } from './routes/auth';
+import { dataRoutes } from './routes/data';
 import { iapRoutes, PADDLE_WEBHOOK_PATH } from './routes/iap';
 import { localR2Routes } from './routes/local-r2';
 import { syncRoutes } from './routes/sync';
@@ -75,6 +76,10 @@ app.route('/', iapRoutes);
 // All four are protected and namespace every path under the authed user; see
 // routes/sync.ts and docs/local-first-sync.md.
 app.route('/', syncRoutes);
+
+// Data lifecycle (delete-all). Protected, destructive, whole-namespace — beside
+// the sync plane, not in it. See routes/data.ts and docs/data-lifecycle.md.
+app.route('/', dataRoutes);
 
 // DEV-ONLY blob proxy (routes/local-r2.ts). Always mounted but self-gates to 404
 // off the local miniflare env, so it's inert in staging/prod (which presign R2

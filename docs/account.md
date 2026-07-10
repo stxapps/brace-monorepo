@@ -206,6 +206,13 @@ username feasible later if we want it (re-wrap + update the `UNIQUE` handle),
 rather than "create a new account and migrate." Until that's built, treat it as
 effectively permanent.
 
+On **account deletion** the username is **tombstoned, never released**: the
+directory row stays (with `deleted_at` set), so the handle can't be
+re-registered and mistaken for the previous owner, and sign-in answers for it
+exactly as for a name that never existed. Release-after-cooldown is a policy we
+can loosen into later — never the reverse. See
+[data-lifecycle.md](./data-lifecycle.md).
+
 ### password — rules and entropy
 
 `passwordSchema` enforces **8–128** characters. Read these as a _length_ floor
@@ -462,7 +469,9 @@ sessions in **`SESSIONS_DB`** (high-churn, not Tier-0). Mirrored in
 CREATE TABLE usernames (
   username      TEXT PRIMARY KEY,        -- canonical (trim→NFKC→lowercase)
   user_id       TEXT NOT NULL,
-  account_db_id TEXT NOT NULL            -- e.g. '1' ⇒ ACCOUNTS_DB_1
+  account_db_id TEXT NOT NULL,           -- e.g. '1' ⇒ ACCOUNTS_DB_1
+  created_at    INTEGER NOT NULL,        -- when the name was claimed
+  deleted_at    INTEGER                  -- non-NULL = tombstone (account deleted, name stays occupied)
 );
 CREATE INDEX idx_usernames_user_id ON usernames(user_id);
 

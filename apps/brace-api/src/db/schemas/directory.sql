@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS usernames (
   username      TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL,
   account_db_id TEXT NOT NULL,
-  created_at    INTEGER NOT NULL          -- when the name was claimed (audit only; never updated — claim/release only, no in-place mutation)
+  created_at    INTEGER NOT NULL,         -- when the name was claimed (audit only; never updated)
+  deleted_at    INTEGER                   -- non-NULL = TOMBSTONE: the account was deleted, the name stays occupied (see docs/data-lifecycle.md). The PK keeps re-claims failing; user_id is retained so a delete-account retry can still bind the name to its (gone) account. Releasing tombstones after a cooldown is a future policy loosen — never the reverse.
 );
 CREATE INDEX IF NOT EXISTS idx_usernames_user_id ON usernames(user_id);
 

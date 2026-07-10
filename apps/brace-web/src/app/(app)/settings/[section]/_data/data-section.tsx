@@ -9,11 +9,13 @@
 // local `view` swap inside this one section, self-contained in `_data/` like
 // the other sections.
 //
-// NOTE: the delete-all ACTION is stubbed — its button is wired to a `// TODO`
-// handler. Export is real: format choice (ExportView), the locked-lists
-// exclusion warning, progress, and the result line, all over web-react's
-// useExport → data/export.ts. Import is real too: a picked file, auto-detected
+// All three actions are real. Export: format choice (ExportView), the
+// locked-lists exclusion warning, progress, and the result line, over
+// web-react's useExport → data/export.ts. Import: a picked file, auto-detected
 // format, progress, and the result line, over useImport → data/import.ts.
+// Delete-all: checkbox gate + one server wipe call + the local wipe, over
+// useDeleteAllData → data/delete-all-data.ts (see docs/data-lifecycle.md —
+// the account itself is untouched; deleting THAT lives in the Account section).
 
 import { useRef, useState } from 'react';
 import {
@@ -34,9 +36,11 @@ import {
 
 import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared';
 import {
+  type DeleteAllState,
   type ExportFormat,
   type ExportState,
   type ImportState,
+  useDeleteAllData,
   useExport,
   useImport,
   useLocks,
@@ -227,7 +231,9 @@ function ImportStatus({ state }: { state: ImportState }) {
     );
   }
   if (outcome.syncFailed) {
-    notes.push('Couldn’t refresh from the server first — duplicates were checked against this device’s copy.');
+    notes.push(
+      'Couldn’t refresh from the server first — duplicates were checked against this device’s copy.',
+    );
   }
   return (
     <div className="mt-3 flex items-start gap-2 text-sm">
@@ -261,9 +267,9 @@ function ImportView({ onBack }: { onBack: () => void }) {
       <h2 className="text-xl font-semibold">Import data</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
         Import from a file — a Brace backup (.zip), an HTML bookmarks file (web browsers,
-        LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain
-        list of links. The format is detected automatically; links you already have are
-        skipped. Large imports may take a few minutes.
+        LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of
+        links. The format is detected automatically; links you already have are skipped. Large
+        imports may take a few minutes.
       </p>
       <input
         ref={inputRef}
@@ -395,8 +401,8 @@ function ExportView({ onBack }: { onBack: () => void }) {
       <BackLink onBack={onBack} />
       <h2 className="text-xl font-semibold">Export all data</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Download a copy of your data to your device. Pick a format for where it’s going. This
-        may take a few minutes for a large library.
+        Download a copy of your data to your device. Pick a format for where it’s going. This may
+        take a few minutes for a large library.
       </p>
 
       <RadioGroup
@@ -445,10 +451,53 @@ function ExportView({ onBack }: { onBack: () => void }) {
   );
 }
 
+// The one-line receipt under the delete button: a single spinner while running
+// (the wipe is one server call — no per-item progress to show), the count when
+// done, the failure when errored (the endpoint is idempotent, so the retry is
+// just clicking again).
+function DeleteStatus({ state }: { state: DeleteAllState }) {
+  if (state.phase === 'idle') return null;
+
+  if (state.phase === 'running') {
+    return (
+      <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Deleting all your data…
+      </p>
+    );
+  }
+
+  if (state.phase === 'error') {
+    return (
+      <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+        <CircleAlert className="mt-0.5 size-4 shrink-0" />
+        <span className="wrap-break-words">
+          Delete failed: {state.message} Nothing was removed from this device — please try again.
+        </span>
+      </p>
+    );
+  }
+
+  const { deletedCount } = state.outcome;
+  return (
+    <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+      <CircleCheck className="mt-0.5 size-4 shrink-0" />
+      <span>
+        {deletedCount === 0
+          ? 'There was no data to delete.'
+          : `All your data has been deleted (${deletedCount} ${deletedCount === 1 ? 'item' : 'items'}).`}
+      </span>
+    </p>
+  );
+}
+
 function DeleteView({ onBack }: { onBack: () => void }) {
+  const { state, run } = useDeleteAllData();
   const [confirmed, setConfirmed] = useState(false);
   // Reveal the "tick the box first" nudge only after a click without the box.
   const [nudge, setNudge] = useState(false);
+  const running = state.phase === 'running';
+  const done = state.phase === 'done';
 
   const onDelete = () => {
     if (!confirmed) {
@@ -456,7 +505,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       return;
     }
     setNudge(false);
-    // TODO: implement delete-all — wipe all links, lists, tags, and settings.
+    run();
   };
 
   return (
@@ -465,11 +514,12 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       <h2 className="text-xl font-semibold">Delete all data</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Delete all your data — every saved link in every list, all your lists and tags, and all your
-        settings.
+        settings — from all your devices.
       </p>
       <p className="mt-3 text-sm text-muted-foreground">
-        This removes your data only, not your account — you can still sign in. It may take a few
-        minutes.
+        This removes your data only, not your account — you can still sign in. If another device has
+        changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
+        exporting a copy first.
       </p>
       <p className="mt-3 text-sm font-medium text-destructive">This action cannot be undone.</p>
 
@@ -480,6 +530,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
         <Checkbox
           id="delete-confirm"
           checked={confirmed}
+          disabled={running || done}
           onCheckedChange={(v) => {
             setConfirmed(v === true);
             setNudge(false);
@@ -496,11 +547,13 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       )}
 
       <div className="mt-6">
-        <Button variant="destructive" onClick={onDelete}>
+        <Button variant="destructive" onClick={onDelete} disabled={running || done}>
           <Trash2 className="size-4" />
           Delete all data
         </Button>
       </div>
+
+      <DeleteStatus state={state} />
     </div>
   );
 }

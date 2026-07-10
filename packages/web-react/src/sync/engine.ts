@@ -138,6 +138,17 @@ export async function runInitialSync(deps: SyncDeps): Promise<void> {
 const inflightSyncs = new Map<string, Promise<void>>();
 const rerunRequests = new Set<string>();
 
+// Wait for an in-flight cycle (if any) to settle WITHOUT starting one — unlike
+// calling runIncrementalSync, which kicks a fresh cycle when idle. For callers
+// that need the engine quiescent before doing something destructive (the
+// delete-all flow: a cycle that already read the pending queue could otherwise
+// re-push ops after the server wipe). Swallows the cycle's rejection — the
+// waiter only cares that it's over, not how it went (the cycle's own callers
+// handle the error).
+export async function awaitInflightSync(username: string): Promise<void> {
+  await inflightSyncs.get(username)?.catch(() => undefined);
+}
+
 // A returning-visit sync (docs flow #2 + "a sync cycle"): reconcile, then push,
 // then pull. Non-blocking — failures surface a quiet retry, they don't gate the
 // UI. Routes itself to the download-authoritative fallback when the op log can't

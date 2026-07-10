@@ -2,12 +2,15 @@ import { DOOR_PASSWORD, type DoorType } from '@stxapps/shared';
 
 import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
+import { sessionsRepo } from '../db/repositories/sessions';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
+import { getSubscriptionStatus } from './iap';
 import { type IssuedSession, issueSession } from './session';
+import { deleteAllUserData } from './sync';
 
 // Account creation under the DEK door model, across separate databases. The root
 // of an account is a random DEK (generated client-side, never sent); the client
@@ -132,7 +135,12 @@ export async function getPasswordDoor(
   username: string,
 ): Promise<{ wrappedDek: Uint8Array; iv: Uint8Array }> {
   const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(username);
-  if (!entry) throw new HttpError(404, 'not_found', 'No account for that username');
+  // A tombstone (deleted account — the name stays occupied) answers exactly like
+  // a name that never existed: there is no door to serve, and the deleted state
+  // shouldn't be distinguishable from absent on this pre-auth path.
+  if (!entry || entry.deletedAt !== null) {
+    throw new HttpError(404, 'not_found', 'No account for that username');
+  }
 
   const password = await accountKeysRepo(
     accountsDb(env, entry.accountDbId),
@@ -156,13 +164,16 @@ export async function signIn(
   const invalid = () => new HttpError(401, 'invalid_credentials', 'Incorrect username or password');
 
   const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(input.username);
-  if (!entry) throw invalid();
+  // A tombstone is an expected miss (the account was deleted; the name stays
+  // occupied) — same opaque answer, no error log.
+  if (!entry || entry.deletedAt !== null) throw invalid();
 
   const user = await usersRepo(accountsDb(env, entry.accountDbId)).findById(entry.userId);
   if (!user) {
     // The directory points at a user row that must exist (both are Tier-0, written
-    // together). A dangling pointer is a server-side inconsistency, not a caller
-    // error — log it for observability but still answer opaquely.
+    // together; a deleted account is tombstoned above, not dangling). A dangling
+    // pointer is a server-side inconsistency, not a caller error — log it for
+    // observability but still answer opaquely.
     console.error('signIn: directory references missing user', entry.userId);
     throw invalid();
   }
@@ -174,4 +185,80 @@ export async function signIn(
 
   const session = await issueSession(env, { id: user.id, accountDbId: entry.accountDbId });
   return { userId: user.id, session };
+}
+
+// The full account teardown (POST /v1/auth/delete-account). The route verified
+// the fresh signed proof (verifyAuthProof over deleteAccountPayloadSchema) and
+// resolved the bearer session; this owns the proof→account binding, the
+// load-bearing publicKey check, the subscription gate, and the teardown itself.
+// See docs/data-lifecycle.md.
+//
+// Steps are ordered so EVERY crash window is finishable by retrying with the
+// still-live session (sessions go last for exactly that reason), and each step
+// is idempotent:
+//   gate → wipe data (DO + R2) → tombstone the username → delete doors + user
+//   (one atomic shard batch — the credential and its keys leave together, the
+//   same pairing create-account writes them with) → revoke every session.
+// The tombstone lands BEFORE the shard delete so the retry path can always
+// recognize an in-progress deletion: a tombstoned entry with the user row gone
+// is a resumed teardown (finish the remaining steps), while a missing user row
+// WITHOUT a tombstone stays what it always was — a server-side inconsistency to
+// log and answer opaquely. From the tombstone on, sign-in is already refused.
+//
+// Deliberately NOT deleted: `purchases` rows (money-adjacent audit state — a
+// provider id + our random userId, no personal data; late provider webhooks for
+// a deleted account just log-and-drop in applyPaddleEvent), and the username row
+// itself (the tombstone — the handle stays occupied so nobody can re-register it
+// and be mistaken for the previous owner).
+export async function deleteAccount(
+  env: Bindings,
+  session: { userId: string; accountDbId: string },
+  proof: { username: string; publicKey: string },
+): Promise<void> {
+  const invalid = () => new HttpError(401, 'invalid_credentials', 'Incorrect username or password');
+
+  // Bind the proof to the SESSION's account: the signed username must resolve to
+  // the authed user, so a valid proof for account A riding a session for account
+  // B (or a replay against the wrong account) dies here.
+  const directory = usernamesRepo(env.DIRECTORY_DB);
+  const entry = await directory.findByUsername(proof.username);
+  if (!entry || entry.userId !== session.userId) throw invalid();
+
+  // THE load-bearing check, same as sign-in: the proof's publicKey must equal
+  // the STORED credential — a bearer token alone must never be enough to erase
+  // an account. A missing user row under a tombstone is the one sanctioned
+  // exception: that's a crashed teardown resuming (the doors are already gone,
+  // so there is no stored credential left to compare — and nothing left for the
+  // check to protect).
+  const shard = accountsDb(env, session.accountDbId);
+  const user = await usersRepo(shard).findById(session.userId);
+  if (user) {
+    if (proof.publicKey !== user.publicKey) throw invalid();
+  } else if (entry.deletedAt === null) {
+    console.error('deleteAccount: directory references missing user', session.userId);
+    throw invalid();
+  }
+
+  // Refuse while a subscription would keep billing: renewing, or in dunning
+  // (grace — the provider is still retrying charges). A canceled-but-entitled
+  // subscription passes — the user already ended billing, and holding deletion
+  // until the paid period runs out would be hostile (the client's copy says the
+  // remaining time is forfeited). Cancellation happens in the Paddle portal
+  // (POST /v1/iap/portal), never here — deletion must not mutate provider state.
+  const subscription = await getSubscriptionStatus(env, session.userId);
+  if (subscription.status === 'grace' || subscription.willRenew) {
+    throw new HttpError(
+      409,
+      'subscription_active',
+      'Cancel your subscription before deleting your account',
+    );
+  }
+
+  await deleteAllUserData(env, session.userId);
+  await directory.tombstone(proof.username, session.userId);
+  await shard.batch([
+    accountKeysRepo(shard).deleteAllByUserIdStmt(session.userId),
+    usersRepo(shard).deleteStmt(session.userId),
+  ]);
+  await sessionsRepo(env.SESSIONS_DB).deleteByUserId(session.userId);
 }

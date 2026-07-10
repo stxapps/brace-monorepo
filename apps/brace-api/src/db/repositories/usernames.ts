@@ -16,6 +16,10 @@ export type UsernameEntity = {
   userId: string;
   // The accounts shard holding this user's rows (e.g. '1'); resolve via db-routes.
   accountDbId: string;
+  // Non-null = TOMBSTONE: the account was deleted but the name stays occupied
+  // (docs/data-lifecycle.md). Callers branch on it — sign-in treats a tombstone
+  // as "no account" (opaquely), the availability check as taken.
+  deletedAt: number | null;
 };
 
 // Raw row as it sits in D1 (snake_case columns). Internal to this repo.
@@ -23,10 +27,16 @@ type UsernameRow = {
   username: string;
   user_id: string;
   account_db_id: string;
+  deleted_at: number | null;
 };
 
 function toEntity(r: UsernameRow): UsernameEntity {
-  return { username: r.username, userId: r.user_id, accountDbId: r.account_db_id };
+  return {
+    username: r.username,
+    userId: r.user_id,
+    accountDbId: r.account_db_id,
+    deletedAt: r.deleted_at,
+  };
 }
 
 export function usernamesRepo(db: D1Database) {
@@ -36,7 +46,9 @@ export function usernamesRepo(db: D1Database) {
     // form and the per-user salt input.
     async findByUsername(username: string): Promise<UsernameEntity | null> {
       const r = await db
-        .prepare(`SELECT username, user_id, account_db_id FROM usernames WHERE username = ?`)
+        .prepare(
+          `SELECT username, user_id, account_db_id, deleted_at FROM usernames WHERE username = ?`,
+        )
         .bind(canonicalizeUsername(username))
         .first<UsernameRow>();
       return r ? toEntity(r) : null;
@@ -61,11 +73,29 @@ export function usernamesRepo(db: D1Database) {
     // RELEASE a claim — the compensating action when the shard account write fails
     // after a successful claim, so a crash mid-create doesn't orphan the name. The
     // `user_id` guard ensures we only delete OUR claim, never one a (re)created
-    // account legitimately holds.
+    // account legitimately holds. The `deleted_at IS NULL` guard keeps it off
+    // tombstones — a tombstone is a deliberate permanent record, never a
+    // compensatable claim (release is only ever called on the create path, but
+    // the guard makes the invariant structural rather than call-site discipline).
     async release(username: string, userId: string): Promise<void> {
       await db
-        .prepare(`DELETE FROM usernames WHERE username = ? AND user_id = ?`)
+        .prepare(`DELETE FROM usernames WHERE username = ? AND user_id = ? AND deleted_at IS NULL`)
         .bind(canonicalizeUsername(username), userId)
+        .run();
+    },
+
+    // TOMBSTONE the name on account deletion: the row STAYS (so the PK keeps
+    // re-claims failing and the handle can't be re-registered by someone else),
+    // marked deleted. Idempotent — COALESCE keeps the first deletion time on a
+    // retried teardown. The `user_id` guard scopes it to the account being
+    // deleted, mirroring release().
+    async tombstone(username: string, userId: string): Promise<void> {
+      await db
+        .prepare(
+          `UPDATE usernames SET deleted_at = COALESCE(deleted_at, ?)
+            WHERE username = ? AND user_id = ?`,
+        )
+        .bind(Date.now(), canonicalizeUsername(username), userId)
         .run();
     },
   };

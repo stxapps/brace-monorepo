@@ -182,3 +182,54 @@ export const signOutEndpoint = defineEndpoint({
   request: signOutRequestSchema,
   response: signOutResponseSchema,
 });
+
+// --- delete account -----------------------------------------------------------
+
+// The full account teardown: every synced object, every session, the doors
+// (wrapped DEKs — the cryptographic kill), and the account row; the username is
+// tombstoned (stays occupied), and the subscription must not be live (409). See
+// docs/data-lifecycle.md.
+//
+// Guarded by a FRESH signed proof, not just the bearer token: this is the one
+// action where "stolen session token = total, irreversible loss" is
+// unacceptable, so the client must re-enter the password, unwrap the DEK, and
+// sign — the same proof-of-possession machinery as sign-in, bound to its own
+// `action` literal so neither a sign-in nor a create-account proof can be
+// replayed here (and vice versa). The route ALSO requires the bearer token, and
+// the server checks the proof resolves to the SAME account the session names —
+// a signed proof for account A can never tear down account B.
+export const deleteAccountPayloadSchema = z.object({
+  action: z.literal('delete-account'),
+  username: usernameSchema,
+  publicKey: hexBytes(32),
+  timestamp: z.number().int(),
+});
+export type DeleteAccountPayload = z.infer<typeof deleteAccountPayloadSchema>;
+
+// POST body: the signed payload as a raw JSON STRING plus its Ed25519 signature —
+// a string (not a nested object) for the same reason as create-account/sign-in:
+// the server must verify the signature over the same bytes the client signed.
+export const deleteAccountRequestSchema = z.object({
+  payload: z.string(),
+  signature: hexBytes(64),
+});
+export type DeleteAccountRequest = z.infer<typeof deleteAccountRequestSchema>;
+
+export const deleteAccountResponseSchema = z.object({
+  ok: z.literal(true),
+});
+export type DeleteAccountResponse = z.infer<typeof deleteAccountResponseSchema>;
+
+// POST /v1/auth/delete-account → { ok: true }
+// Refuses with 409 `subscription_active` while a subscription would keep
+// billing (renewing, or in dunning) — the user cancels via the Paddle portal
+// first. A canceled-but-still-entitled subscription does NOT block: the user
+// already ended billing, and holding their deletion hostage until the period
+// runs out would be hostile (the remaining paid time is forfeited — the client
+// says so in its copy).
+export const deleteAccountEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/delete-account`,
+  request: deleteAccountRequestSchema,
+  response: deleteAccountResponseSchema,
+});

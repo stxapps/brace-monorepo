@@ -5,6 +5,7 @@
 // 'use client'. A section adds its own 'use client' when it grows interactivity.
 
 import { SETTINGS_SECTIONS, type SettingsSectionId } from '../sections';
+import { AccountSection } from './_account/account-section';
 import { DataSection } from './_data/data-section';
 import { ExtractionSection } from './_extraction/extraction-section';
 import { ListsSection } from './_lists/lists-section';
@@ -23,7 +24,7 @@ function Placeholder({ id }: { id: SettingsSectionId }) {
 }
 
 const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
-  account: () => <Placeholder id="account" />,
+  account: () => <AccountSection />,
   subscription: () => <SubscriptionSection />,
   data: () => <DataSection />,
   extraction: () => <ExtractionSection />,

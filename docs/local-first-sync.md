@@ -117,6 +117,10 @@ over the cap `400`s at the contract before any work runs (the abuse gate). The
 batch caps for the two writes are the same number (`1000`).
 
 All four live in `apps/brace-api/src/routes/sync.ts` (each behind `requireAuth`).
+(One data-plane endpoint sits deliberately OUTSIDE this control plane:
+`POST /v1/data/delete-all` wipes the whole namespace — op log, quota map, R2
+prefix — in one authed call; other devices then converge through the wiped-log
+fallback row below. See [data-lifecycle.md](./data-lifecycle.md).)
 The op-plane endpoints (`ops/list`, `ops/commit`) are thin passthroughs to the
 user's Durable Object; the file-plane logic — paging R2, the quota gate, the
 presigner — is in `services/sync.ts`. The shared contracts are in

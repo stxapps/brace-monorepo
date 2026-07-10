@@ -14,6 +14,10 @@ a decode cache),
 derivation, username/password rules, the wallet comparison),
 [iap.md](./iap.md) for subscriptions (Paddle checkout + webhook, the
 entitlement fold, and the plan-aware quota gate),
+[data-lifecycle.md](./data-lifecycle.md) for the whole-library data actions
+(import/export — client-only by E2E necessity, the format matrix and dedup/
+quota policy — and delete all data & delete account: the server-side wipe,
+multi-device convergence via the sync fallback, and the username tombstone),
 [link-extraction.md](./link-extraction.md) for how a saved link's
 title/image/screenshot/archive get filled in (privacy-first, clients do the
 work, the `extraction/` entity),

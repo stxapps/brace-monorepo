@@ -46,6 +46,14 @@ export function fileSizesRepo(sql: SqlStorage) {
       return row.size;
     },
 
+    // Delete-all-data: drop every recorded size, resetting usage to zero. Runs in
+    // the same DO wipe as the op-log clear (user-data.ts wipeAll) — the R2 objects
+    // the sizes described are deleted right after, so zero is where the map lands
+    // anyway once the namespace is empty.
+    clear(): void {
+      sql.exec(`DELETE FROM file_sizes`);
+    },
+
     // Current file count + byte total + `links/` count for this user, the quota
     // the `put` sign check compares against (once per files/sign put batch, in the
     // user's local DO SQLite). COALESCE so an empty map reports 0, not null. This is

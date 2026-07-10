@@ -124,3 +124,28 @@ export async function commitOps(
   const { results } = await userDataStub(env, userId).commitOps(entries);
   return { results, failed };
 }
+
+// Wipe the user's whole data plane (POST /v1/data/delete-all; also step one of
+// account deletion — services/account.ts). Two halves, and the ORDER is the
+// op-without-object invariant read in the delete direction:
+//
+//   1. DO first — clear the op log + quota map (one wipeAll RPC). With the log
+//      empty, no op can point at an object the next step removes; a crash
+//      between the halves leaves only objects-without-ops, which the R2-listing
+//      fallback heals (vs. the reverse order, where surviving put-ops would 404
+//      every puller). The emptied log is also the multi-device signal: returning
+//      clients route into the download-authoritative fallback and reconcile
+//      against the empty namespace — no new sync machinery.
+//   2. R2 second — delete every object under the user's prefix, paged.
+//
+// Idempotent end to end (both halves no-op on empty), so a failure anywhere is
+// safely retried by just calling again. Returns the R2 delete count — the
+// client's receipt line.
+export async function deleteAllUserData(
+  env: Bindings,
+  userId: string,
+): Promise<{ deletedCount: number }> {
+  await userDataStub(env, userId).wipeAll();
+  const deletedCount = await userFilesRepo(env).deleteAllForUser(userId);
+  return { deletedCount };
+}

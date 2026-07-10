@@ -80,6 +80,27 @@ export function userFilesRepo(env: Bindings) {
       await bucket.delete(paths.map((path) => userFileKey(userId, path)));
     },
 
+    // Delete EVERYTHING under the user's prefix — the R2 half of delete-all-data
+    // (and of account deletion). Loops list()+delete() in 1000-key pages (each is
+    // one subrequest, so even a 100k-object library stays ~200 subrequests, well
+    // inside one Worker invocation). Lists WITHOUT a cursor each pass — deleting a
+    // page invalidates any cursor into the listing, and re-listing from the top
+    // just returns the next surviving keys. Raw keys straight to delete(), no
+    // stripUserPrefix round-trip: everything under the prefix goes, including a
+    // malformed key a path-validating caller could never name. Returns the count
+    // deleted (the client's receipt). Idempotent — an empty prefix deletes 0.
+    async deleteAllForUser(userId: string): Promise<number> {
+      const prefix = userPrefix(userId);
+      let deletedCount = 0;
+      for (;;) {
+        const page = await bucket.list({ prefix, limit: 1000 });
+        if (page.objects.length === 0) return deletedCount;
+        await bucket.delete(page.objects.map((object) => object.key));
+        deletedCount += page.objects.length;
+        if (!page.truncated) return deletedCount;
+      }
+    },
+
     // Mint presigned URLs for the given wire-relative paths, each namespaced under
     // the caller's prefix here — so cross-user signing is structurally impossible
     // (the key can only resolve under `users/{userId}/`). Credentials are assembled

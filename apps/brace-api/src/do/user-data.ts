@@ -160,6 +160,25 @@ export class UserDataDO extends DurableObject<Bindings> {
   usage(): FileUsage {
     return fileSizesRepo(this.sql).usage();
   }
+
+  // RPC: delete-all-data — clear the op log AND the quota map in one serialized
+  // call (POST /v1/data/delete-all; also the first step of account deletion).
+  // This runs BEFORE the R2 objects are deleted, which is the op-without-object
+  // invariant read in the delete direction: wiping the log first means a crash
+  // mid-wipe leaves only objects-without-ops (invisible to incremental pull,
+  // healed/still-listed by the R2 fallback), never surviving put-ops pointing at
+  // 404s for every puller. The emptied log is ALSO the multi-device signal: a
+  // returning client's cursor against null bounds routes it into the download-
+  // authoritative fallback, which reconciles it against the empty namespace.
+  // Clearing the size map here (not after the R2 loop) accepts a transient
+  // undercount if that loop dies mid-way — the visible endpoint failure has the
+  // user retry, and the retry re-zeroes reality; the opposite order would leak
+  // recorded sizes for objects that no longer exist (paths are never reused, so
+  // no later commit would ever free them).
+  wipeAll(): void {
+    opLogsRepo(this.sql).clear();
+    fileSizesRepo(this.sql).clear();
+  }
 }
 
 // Resolve the caller's per-user DO stub. Deterministic: the same userId always

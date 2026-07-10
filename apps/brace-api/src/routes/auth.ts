@@ -8,6 +8,9 @@ import {
   createAccountEndpoint,
   createAccountPayloadSchema,
   type CreateAccountResponse,
+  deleteAccountEndpoint,
+  deleteAccountPayloadSchema,
+  type DeleteAccountResponse,
   hexToBytes,
   passwordDoorEndpoint,
   type PasswordDoorResponse,
@@ -22,7 +25,13 @@ import { verifyAuthProof } from '../lib/auth-proof';
 import type { AppEnv } from '../lib/env';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit } from '../middleware/rate-limit';
-import { createAccount, getPasswordDoor, isUsernameTaken, signIn } from '../services/account';
+import {
+  createAccount,
+  deleteAccount,
+  getPasswordDoor,
+  isUsernameTaken,
+  signIn,
+} from '../services/account';
 import { revokeSession } from '../services/session';
 
 // All routes carry their own '/v1/auth/…' path (from the shared contract,
@@ -145,6 +154,39 @@ export const authRoutes = new Hono<AppEnv>()
       // row; deleting it makes the token stop authenticating immediately.
       await revokeSession(c.env, c.get('session').id);
       const body: SignOutResponse = { ok: true };
+      return c.json(body);
+    },
+  )
+  .post(
+    deleteAccountEndpoint.path,
+    // The most destructive call on the API — irreversible, whole-account. Tight
+    // tier on top of the global limit (the proof verification alone makes it a
+    // brute-force target if the bearer token leaked), and DOUBLE-guarded:
+    // requireAuth names the account, the fresh signed proof proves the caller
+    // still holds the DEK-derived key — a stolen session token alone is never
+    // enough to erase an account.
+    rateLimit('tight'),
+    requireAuth,
+    // Validate the OUTER envelope ({ payload: string, signature }); the inner
+    // signed payload is parsed + validated inside verifyAuthProof, after the
+    // signature is checked over its exact bytes.
+    zValidator('json', deleteAccountEndpoint.request),
+    async (c) => {
+      const { payload, signature } = c.req.valid('json');
+
+      // Proof-of-possession: signature over the exact signed bytes, freshness,
+      // and action === 'delete-account' (a sign-in/create-account proof can't be
+      // replayed here). deleteAccount then binds the proof to the SESSION's
+      // account and runs the load-bearing stored-credential check + the
+      // subscription gate before any teardown.
+      const proof = await verifyAuthProof(payload, signature, deleteAccountPayloadSchema);
+
+      await deleteAccount(c.env, c.get('session'), {
+        username: proof.username,
+        publicKey: proof.publicKey,
+      });
+
+      const body: DeleteAccountResponse = { ok: true };
       return c.json(body);
     },
   );

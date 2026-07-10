@@ -67,6 +67,14 @@ export function accountKeysRepo(db: D1Database) {
       return r ? toEntity(r) : null;
     },
 
+    // Returns the prepared DELETE of EVERY door so account deletion can batch it
+    // atomically with the users delete. This is the cryptographic kill: with all
+    // wrapped DEKs gone, no door can ever recover the DEK, so any stray
+    // ciphertext is permanently unreadable.
+    deleteAllByUserIdStmt(userId: string): D1PreparedStatement {
+      return db.prepare(`DELETE FROM account_keys WHERE user_id = ?`).bind(userId);
+    },
+
     // Returns the prepared INSERT so create-account can batch it atomically with
     // the users/account_keys writes. `version` starts at 1 and is bumped on each
     // re-wrap (e.g. password change) so the row is auditable.

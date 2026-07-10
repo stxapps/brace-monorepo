@@ -74,9 +74,8 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
   const noteCol = header.indexOf('note');
   const tagsCol = header.indexOf('tags');
   // `created` is Raindrop's/ours; `time_added` is Pocket's column for the same.
-  const createdCol = header.indexOf('created') !== -1
-    ? header.indexOf('created')
-    : header.indexOf('time_added');
+  const createdCol =
+    header.indexOf('created') !== -1 ? header.indexOf('created') : header.indexOf('time_added');
 
   // A missing column (col === -1) reads as '' — `at(-1)` semantics would grab
   // the last cell, so index guardedly.

@@ -41,5 +41,12 @@ export function usersRepo(db: D1Database) {
         .prepare(`INSERT INTO users (id, public_key, created_at, updated_at) VALUES (?, ?, ?, ?)`)
         .bind(u.id, u.publicKey, now, now);
     },
+
+    // Returns the prepared DELETE so account deletion can batch it atomically
+    // with the account_keys delete (the credential and its doors leave together,
+    // the same all-or-nothing pairing create-account writes them with).
+    deleteStmt(id: string): D1PreparedStatement {
+      return db.prepare(`DELETE FROM users WHERE id = ?`).bind(id);
+    },
   };
 }

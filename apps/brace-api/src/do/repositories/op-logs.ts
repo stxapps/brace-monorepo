@@ -86,6 +86,16 @@ export function opLogsRepo(sql: SqlStorage) {
       return { oldestUpdatedAt: row.oldest, newestUpdatedAt: row.newest };
     },
 
+    // Delete-all-data: drop every retained row. Safe BECAUSE the log is a
+    // disposable accelerator — a returning client's cursor against the now-null
+    // bounds routes it into the R2-listing fallback (the wiped-log row of the
+    // routing table), which is exactly how other devices learn of the wipe. The
+    // AUTOINCREMENT high-water mark survives (sqlite_sequence isn't reset), so
+    // post-wipe seqs stay strictly increasing — which compaction relies on.
+    clear(): void {
+      sql.exec(`DELETE FROM op_logs`);
+    },
+
     // Push: record a committed mutation AFTER its blob is in R2 (R2-first, log-
     // last — a crash in between leaves an R2 object with no op, which the
     // R2-listing fallback heals; never trust the log for "does this file exist").
