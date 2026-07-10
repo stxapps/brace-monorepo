@@ -12,7 +12,10 @@
 //               their original paths, timestamps preserved.
 //   netscape / csv / text — the interop formats: parsed rows (the pure parsers
 //               in @stxapps/shared import/) become NEW links, their folders and
-//               tag names resolved against — or created in — this library.
+//               tag names resolved against — or created in — this library. A
+//               zip WITHOUT manifest.json routes here too — its .html/.csv/.txt
+//               entries are parsed and concatenated (Pocket's shutdown export
+//               is a zip of part_*.csv files).
 //
 // POLICY (decided here, once):
 //   - Interop imports SKIP DUPLICATES by the canonical URL identity
@@ -411,11 +414,166 @@ function referencedFileIds(entries: BundleEntry[]): Set<string> {
 
 async function importBraceBackup(
   username: string,
-  file: File,
+  byName: Map<string, FileEntry>,
   maxLinks: number | null,
   onProgress: (progress: ImportProgress) => void,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
-  const { BlobReader, TextWriter, Uint8ArrayWriter, ZipReader } = await import('@zip.js/zip.js');
+  // Already loaded by importZip — this re-import just picks the writers off the
+  // cached module.
+  const { TextWriter, Uint8ArrayWriter } = await import('@zip.js/zip.js');
+
+  const manifestEntry = byName.get('manifest.json');
+  if (manifestEntry === undefined) {
+    throw new Error('This zip is not a Brace backup (no manifest.json).');
+  }
+  let manifest: { format?: unknown; version?: unknown };
+  try {
+    manifest = JSON.parse(await manifestEntry.getData(new TextWriter())) as typeof manifest;
+  } catch {
+    throw new Error('This zip is not a Brace backup (unreadable manifest).');
+  }
+  if (manifest.format !== BRACE_BACKUP_FORMAT) {
+    throw new Error('This zip is not a Brace backup (unrecognized format).');
+  }
+  if (typeof manifest.version !== 'number' || manifest.version > BRACE_BACKUP_VERSION) {
+    throw new Error(
+      'This backup was created by a newer version of Brace. Update the app and try again.',
+    );
+  }
+
+  const itemsEntry = byName.get('items.jsonl');
+  const itemsText = itemsEntry === undefined ? '' : await itemsEntry.getData(new TextWriter());
+
+  let invalidCount = 0;
+  const classified: BundleEntry[] = [];
+  for (const line of itemsText.split('\n')) {
+    if (line.trim() === '') continue;
+    const entry = classifyBundleLine(line);
+    if (entry === undefined) invalidCount += 1;
+    else classified.push(entry);
+  }
+
+  // SKIP-EXISTING: a path already in the local store is never touched.
+  const existingRecords = await db.items.bulkGet(classified.map((entry) => entry.path));
+  let skippedCount = 0;
+  const fresh = classified.filter((_, i) => {
+    if (existingRecords[i] === undefined) return true;
+    skippedCount += 1;
+    return false;
+  });
+
+  const existing = await readExistingLinks();
+  const freshLinks = fresh.filter((entry) => entry.kind === 'link');
+  assertUnderQuota(freshLinks.length, existing.count, maxLinks);
+
+  // A pin/extraction whose link is neither imported nor already local is a
+  // dangling satellite — drop it rather than restore garbage.
+  const linkIds = new Set(existing.ids);
+  for (const entry of freshLinks) {
+    linkIds.add(idFromPath(entry.path, LINKS_PREFIX));
+  }
+  const entries = fresh.filter((entry) => {
+    if (entry.kind !== 'pin' && entry.kind !== 'extraction') return true;
+    const prefix = entry.kind === 'pin' ? PINS_PREFIX : EXTRACTIONS_PREFIX;
+    return linkIds.has(idFromPath(entry.path, prefix));
+  });
+
+  onProgress({ step: 'items', done: 0, total: entries.length });
+  for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
+    await bulkWriteEntities(
+      username,
+      entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
+    );
+    onProgress({
+      step: 'items',
+      done: Math.min(i + WRITE_CHUNK, entries.length),
+      total: entries.length,
+    });
+  }
+
+  // The referenced blobs, one at a time (they can be MB-sized media): only
+  // ids with a zip entry and no local record. A ref with no bytes stays a
+  // normal not-yet-materialized lazy blob.
+  const fileIds = [...referencedFileIds(entries)];
+  const filePaths = fileIds.map((id) => pathFromId(id, FILES_PREFIX));
+  const localFiles = await db.items.bulkGet(filePaths);
+  let fileCount = 0;
+  onProgress({ step: 'files', done: 0, total: fileIds.length });
+  for (let i = 0; i < fileIds.length; i++) {
+    const zipEntry = byName.get(`files/${fileIds[i]}`);
+    if (zipEntry !== undefined && localFiles[i]?.data === undefined) {
+      const bytes = await zipEntry.getData(new Uint8ArrayWriter());
+      await bulkWriteEntities(username, [{ path: filePaths[i], data: bytes }]);
+      fileCount += 1;
+    }
+    onProgress({ step: 'files', done: i + 1, total: fileIds.length });
+  }
+
+  return {
+    linkCount: freshLinks.length,
+    listCount: entries.filter((entry) => entry.kind === 'list').length,
+    tagCount: entries.filter((entry) => entry.kind === 'tag').length,
+    fileCount,
+    skippedCount,
+    invalidCount,
+  };
+}
+
+// --- interop zips ------------------------------------------------------------------
+
+// The text entries an interop zip can carry (Pocket's shutdown export is a zip
+// of part_*.csv files; other services zip an HTML bookmarks file the same way).
+const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt)$/i;
+
+// Parse every recognizable text entry and concatenate the rows — the zip-level
+// mirror of the text branch in importAllData. Archiver metadata (__MACOSX/…)
+// and hidden files are skipped; filename order keeps multi-part exports
+// (part_000000.csv, part_000001.csv, …) in sequence.
+async function parseInteropZip(byName: Map<string, FileEntry>): Promise<ImportedLink[]> {
+  const { TextWriter } = await import('@zip.js/zip.js');
+
+  const candidates = [...byName.entries()]
+    .filter(([name]) => {
+      const base = name.slice(name.lastIndexOf('/') + 1);
+      return (
+        INTEROP_ZIP_ENTRY_RE.test(name) &&
+        !name.startsWith('__MACOSX/') &&
+        !base.startsWith('.')
+      );
+    })
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  if (candidates.length === 0) {
+    throw new Error(
+      'This zip is neither a Brace backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
+    );
+  }
+
+  const parsed: ImportedLink[] = [];
+  for (const [name, entry] of candidates) {
+    const text = await entry.getData(new TextWriter());
+    const format = detectTextImportFormat(text, name);
+    parsed.push(
+      ...(format === 'netscape'
+        ? parseNetscapeHtml(text)
+        : format === 'csv'
+          ? parseRaindropCsv(text)
+          : parseUrlText(text)),
+    );
+  }
+  return parsed;
+}
+
+// The zip dispatch: one reader, one entry map. manifest.json marks a Brace
+// backup (restored verbatim); any other zip is treated as a zipped interop
+// export and its text entries become new links.
+async function importZip(
+  username: string,
+  file: File,
+  maxLinks: number | null,
+  nestedLists: boolean,
+  onProgress: (progress: ImportProgress) => void,
+): Promise<Omit<ImportOutcome, 'syncFailed'>> {
+  const { BlobReader, ZipReader } = await import('@zip.js/zip.js');
   const zipReader = new ZipReader(new BlobReader(file));
 
   try {
@@ -426,101 +584,11 @@ async function importBraceBackup(
         .map((entry) => [entry.filename, entry]),
     );
 
-    const manifestEntry = byName.get('manifest.json');
-    if (manifestEntry === undefined) {
-      throw new Error('This zip is not a Brace backup (no manifest.json).');
+    if (byName.has('manifest.json')) {
+      return await importBraceBackup(username, byName, maxLinks, onProgress);
     }
-    let manifest: { format?: unknown; version?: unknown };
-    try {
-      manifest = JSON.parse(await manifestEntry.getData(new TextWriter())) as typeof manifest;
-    } catch {
-      throw new Error('This zip is not a Brace backup (unreadable manifest).');
-    }
-    if (manifest.format !== BRACE_BACKUP_FORMAT) {
-      throw new Error('This zip is not a Brace backup (unrecognized format).');
-    }
-    if (typeof manifest.version !== 'number' || manifest.version > BRACE_BACKUP_VERSION) {
-      throw new Error(
-        'This backup was created by a newer version of Brace. Update the app and try again.',
-      );
-    }
-
-    const itemsEntry = byName.get('items.jsonl');
-    const itemsText = itemsEntry === undefined ? '' : await itemsEntry.getData(new TextWriter());
-
-    let invalidCount = 0;
-    const classified: BundleEntry[] = [];
-    for (const line of itemsText.split('\n')) {
-      if (line.trim() === '') continue;
-      const entry = classifyBundleLine(line);
-      if (entry === undefined) invalidCount += 1;
-      else classified.push(entry);
-    }
-
-    // SKIP-EXISTING: a path already in the local store is never touched.
-    const existingRecords = await db.items.bulkGet(classified.map((entry) => entry.path));
-    let skippedCount = 0;
-    const fresh = classified.filter((_, i) => {
-      if (existingRecords[i] === undefined) return true;
-      skippedCount += 1;
-      return false;
-    });
-
-    const existing = await readExistingLinks();
-    const freshLinks = fresh.filter((entry) => entry.kind === 'link');
-    assertUnderQuota(freshLinks.length, existing.count, maxLinks);
-
-    // A pin/extraction whose link is neither imported nor already local is a
-    // dangling satellite — drop it rather than restore garbage.
-    const linkIds = new Set(existing.ids);
-    for (const entry of freshLinks) {
-      linkIds.add(idFromPath(entry.path, LINKS_PREFIX));
-    }
-    const entries = fresh.filter((entry) => {
-      if (entry.kind !== 'pin' && entry.kind !== 'extraction') return true;
-      const prefix = entry.kind === 'pin' ? PINS_PREFIX : EXTRACTIONS_PREFIX;
-      return linkIds.has(idFromPath(entry.path, prefix));
-    });
-
-    onProgress({ step: 'items', done: 0, total: entries.length });
-    for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
-      await bulkWriteEntities(
-        username,
-        entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
-      );
-      onProgress({
-        step: 'items',
-        done: Math.min(i + WRITE_CHUNK, entries.length),
-        total: entries.length,
-      });
-    }
-
-    // The referenced blobs, one at a time (they can be MB-sized media): only
-    // ids with a zip entry and no local record. A ref with no bytes stays a
-    // normal not-yet-materialized lazy blob.
-    const fileIds = [...referencedFileIds(entries)];
-    const filePaths = fileIds.map((id) => pathFromId(id, FILES_PREFIX));
-    const localFiles = await db.items.bulkGet(filePaths);
-    let fileCount = 0;
-    onProgress({ step: 'files', done: 0, total: fileIds.length });
-    for (let i = 0; i < fileIds.length; i++) {
-      const zipEntry = byName.get(`files/${fileIds[i]}`);
-      if (zipEntry !== undefined && localFiles[i]?.data === undefined) {
-        const bytes = await zipEntry.getData(new Uint8ArrayWriter());
-        await bulkWriteEntities(username, [{ path: filePaths[i], data: bytes }]);
-        fileCount += 1;
-      }
-      onProgress({ step: 'files', done: i + 1, total: fileIds.length });
-    }
-
-    return {
-      linkCount: freshLinks.length,
-      listCount: entries.filter((entry) => entry.kind === 'list').length,
-      tagCount: entries.filter((entry) => entry.kind === 'tag').length,
-      fileCount,
-      skippedCount,
-      invalidCount,
-    };
+    const parsed = await parseInteropZip(byName);
+    return await importInterop(username, parsed, maxLinks, nestedLists, onProgress);
   } finally {
     await zipReader.close();
   }
@@ -554,7 +622,7 @@ export async function importAllData(options: {
   onProgress({ step: 'parse' });
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (isZipBytes(bytes)) {
-    const outcome = await importBraceBackup(deps.username, file, maxLinks, onProgress);
+    const outcome = await importZip(deps.username, file, maxLinks, nestedLists, onProgress);
     return { ...outcome, syncFailed };
   }
 

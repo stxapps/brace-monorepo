@@ -1,8 +1,10 @@
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink } from './bundle';
+import { parseEpoch } from './epoch';
 
 // CSV parser targeting Raindrop.io's export (and export/csv.ts's own output —
-// the two share the url/folder/title/note/tags/created columns). HEADER-DRIVEN,
+// the two share the url/folder/title/note/tags/created columns) plus Pocket's
+// final shutdown export (title/url/time_added/tags/status). HEADER-DRIVEN,
 // not positional: a real Raindrop export carries extra columns (id, excerpt,
 // cover, highlights, favorite) and may reorder them, so each field is looked up
 // by its lowercased header name and unknown columns are ignored. A file whose
@@ -71,7 +73,10 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
   const titleCol = header.indexOf('title');
   const noteCol = header.indexOf('note');
   const tagsCol = header.indexOf('tags');
-  const createdCol = header.indexOf('created');
+  // `created` is Raindrop's/ours; `time_added` is Pocket's column for the same.
+  const createdCol = header.indexOf('created') !== -1
+    ? header.indexOf('created')
+    : header.indexOf('time_added');
 
   // A missing column (col === -1) reads as '' — `at(-1)` semantics would grab
   // the last cell, so index guardedly.
@@ -84,8 +89,10 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
 
     const link: ImportedLink = {
       url,
+      // Comma is Raindrop's separator, pipe is Pocket's; neither occurs in a
+      // tag name, so splitting on both reads either file right.
       tagNames: cell(row, tagsCol)
-        .split(',')
+        .split(/[,|]/)
         .map((name) => name.trim())
         .filter((name) => name !== ''),
       // The slash-joined list path our own export writes and Raindrop's nested
@@ -101,9 +108,11 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
     const note = cell(row, noteCol);
     if (note !== '') link.note = note;
 
-    // ISO 8601 (what export/csv.ts and Raindrop both write); anything
-    // Date.parse can't read is simply no timestamp.
-    const created = Date.parse(cell(row, createdCol));
+    // ISO 8601 (what export/csv.ts and Raindrop both write) or a bare epoch
+    // number (Pocket's time_added, unix seconds); anything neither reads is
+    // simply no timestamp.
+    const createdRaw = cell(row, createdCol);
+    const created = parseEpoch(createdRaw) ?? Date.parse(createdRaw);
     if (!Number.isNaN(created)) link.createdAt = created;
 
     links.push(link);

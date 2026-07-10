@@ -1,5 +1,6 @@
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink } from './bundle';
+import { parseEpoch } from './epoch';
 
 // Netscape Bookmark File parser — the read mirror of export/netscape.ts, and the
 // one importer that covers web browsers (Chrome/Firefox/Safari "Export
@@ -58,19 +59,6 @@ function unescapeHtml(value: string): string {
 // (Firefox can nest e.g. <img> inside anchors), unescape, collapse whitespace.
 function innerText(value: string): string {
   return unescapeHtml(value.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
-}
-
-// A Netscape timestamp attribute → epoch ms. The de-facto convention is epoch
-// SECONDS, but real files also carry ms (some exporters) and µs (Firefox's
-// places exports) — magnitude, not digit count, tells them apart, so a
-// pre-2001 (9-digit-seconds) date still converts right.
-function parseEpoch(value: string | undefined): number | undefined {
-  if (value === undefined || !/^\d+$/.test(value)) return undefined;
-  const n = parseInt(value, 10);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
-  if (n < 1e11) return n * 1000; // seconds (any date before year ~5138)
-  if (n < 1e14) return n; // already milliseconds
-  return Math.floor(n / 1000); // microseconds
 }
 
 export function parseNetscapeHtml(text: string): ImportedLink[] {

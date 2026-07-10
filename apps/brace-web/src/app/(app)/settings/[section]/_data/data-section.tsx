@@ -261,9 +261,9 @@ function ImportView({ onBack }: { onBack: () => void }) {
       <h2 className="text-xl font-semibold">Import data</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
         Import from a file — a Brace backup (.zip), an HTML bookmarks file (web browsers,
-        LinkWarden, Karakeep), a Raindrop.io CSV, or a plain list of links. The format is
-        detected automatically; links you already have are skipped. Large imports may take a few
-        minutes.
+        LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain
+        list of links. The format is detected automatically; links you already have are
+        skipped. Large imports may take a few minutes.
       </p>
       <input
         ref={inputRef}

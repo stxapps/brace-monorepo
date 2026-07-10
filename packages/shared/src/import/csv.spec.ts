@@ -76,6 +76,31 @@ describe('parseRaindropCsv', () => {
     ]);
   });
 
+  it('parses a Pocket shutdown export: time_added epoch seconds, pipe-separated tags', () => {
+    const csv = [
+      'title,url,time_added,tags,status',
+      'Example,https://example.com/a,1700000000,"cooking|recipes",unread',
+      'Old read,https://example.com/b,1500000000,,archive',
+    ].join('\n');
+
+    expect(parseRaindropCsv(csv)).toEqual([
+      {
+        url: 'https://example.com/a',
+        title: 'Example',
+        tagNames: ['cooking', 'recipes'],
+        folderPath: [],
+        createdAt: 1_700_000_000_000,
+      },
+      {
+        url: 'https://example.com/b',
+        title: 'Old read',
+        tagNames: [],
+        folderPath: [],
+        createdAt: 1_500_000_000_000,
+      },
+    ]);
+  });
+
   it('handles quoted fields with embedded newlines, commas, and doubled quotes', () => {
     const csv = 'url,note\nhttps://example.com/a,"a ""b"",\nc"\n';
     expect(parseRaindropCsv(csv)).toEqual([
