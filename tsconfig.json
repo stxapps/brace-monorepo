@@ -26,6 +26,9 @@
     },
     {
       "path": "./apps/brace-extractor"
+    },
+    {
+      "path": "./apps/brace-expo"
     }
   ]
 }

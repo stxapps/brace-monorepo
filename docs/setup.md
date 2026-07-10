@@ -45,10 +45,10 @@ Flag notes:
 - npx shadcn@latest add select -c packages/web-ui
 - npx shadcn@latest add textarea -c packages/web-ui
 
-#### expo (future)
+#### expo
 
 - npx nx add @nx/expo
-- npx nx g @nx/expo:app apps/brace-expo
+- npx nx g @nx/expo:app brace-expo --directory=apps/brace-expo --importPath=@stxapps/brace-expo
 
 #### docs (future)
 

@@ -144,7 +144,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | brace-extension  | `type:app`    | `platform:web`      |
 | brace-api        | `type:app`    | `platform:worker`   |
 | brace-extractor  | `type:app`    | `platform:worker`   |
-| brace-expo (fut) | `type:app`    | `platform:expo`     |
+| brace-expo       | `type:app`    | `platform:expo`     |
 
 - **type** enforces the layering: a project may depend only on its own layer
   and lower ones (`app` → `ui` → `react` → `crypto` → `shared`). `crypto` sits
