@@ -133,18 +133,18 @@ These rules are **enforced at lint time** by `@nx/enforce-module-boundaries`
 Enforcement is driven by two tag dimensions set in each project's
 `package.json` under `nx.tags`:
 
-| project          | type          | platform            |
-| ---------------- | ------------- | ------------------- |
-| shared           | `type:shared` | `platform:agnostic` |
-| react            | `type:react`  | `platform:agnostic` |
-| web-ui           | `type:ui`     | `platform:web`      |
-| web-crypto       | `type:crypto` | `platform:web`      |
-| web-react        | `type:react`  | `platform:web`      |
-| brace-web        | `type:app`    | `platform:web`      |
-| brace-extension  | `type:app`    | `platform:web`      |
-| brace-api        | `type:app`    | `platform:worker`   |
-| brace-extractor  | `type:app`    | `platform:worker`   |
-| brace-expo       | `type:app`    | `platform:expo`     |
+| project         | type          | platform            |
+| --------------- | ------------- | ------------------- |
+| shared          | `type:shared` | `platform:agnostic` |
+| react           | `type:react`  | `platform:agnostic` |
+| web-ui          | `type:ui`     | `platform:web`      |
+| web-crypto      | `type:crypto` | `platform:web`      |
+| web-react       | `type:react`  | `platform:web`      |
+| brace-web       | `type:app`    | `platform:web`      |
+| brace-extension | `type:app`    | `platform:web`      |
+| brace-api       | `type:app`    | `platform:worker`   |
+| brace-extractor | `type:app`    | `platform:worker`   |
+| brace-expo      | `type:app`    | `platform:expo`     |
 
 - **type** enforces the layering: a project may depend only on its own layer
   and lower ones (`app` → `ui` → `react` → `crypto` → `shared`). `crypto` sits
