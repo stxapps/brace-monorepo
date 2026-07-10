@@ -35,7 +35,7 @@ import {
   tagSchema,
 } from '@stxapps/shared';
 
-import { db, type ItemRecord } from './db';
+import { db, type ItemRecord, type PendingOpRecord } from './db';
 import { enqueueDelete } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import type { WithPath } from './queries';
@@ -110,6 +110,44 @@ async function writeEntityWith<T extends object>(
 async function writeEntity<T extends WithPath<object>>(username: string, item: T): Promise<void> {
   const { path, ...entity } = item;
   await writeEntityWith(username, path, () => entity);
+}
+
+// One raw entity to bulk-write: a pre-validated entity blob (JSON-encoded here),
+// or verbatim bytes for a `files/{id}.enc` content record — the same JSON/opaque
+// split writeEntity/writeFile make, batched.
+export interface RawEntityEntry {
+  path: string;
+  data: object | Uint8Array;
+}
+
+// Batched raw put — the bulk-import primitive (data/import.ts). N entities land
+// in ONE rw transaction (items.bulkPut + pendingOps.bulkPut), so a chunk is
+// atomic like any single write and IndexedDB isn't asked for a transaction per
+// link. Unlike writeLink/writeList this does NOT restamp createdAt/updatedAt:
+// the importer provides final values (a Brace-backup restore round-trips the
+// original timestamps), and callers validate each blob against its namespace
+// schema BEFORE calling — the same defensive parity, just hoisted out of the
+// batch. `baseUpdatedAt` per path from its existing record (0 for new), exactly
+// like writeBytesWith.
+export async function bulkWriteEntities(
+  username: string,
+  entries: RawEntityEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const existing = await db.items.bulkGet(entries.map((entry) => entry.path));
+    const records: ItemRecord[] = [];
+    const ops: PendingOpRecord[] = [];
+    for (let i = 0; i < entries.length; i++) {
+      const { path, data } = entries[i];
+      const baseUpdatedAt = existing[i]?.updatedAt ?? 0;
+      const bytes = data instanceof Uint8Array ? data : encoder.encode(JSON.stringify(data));
+      records.push(toItemRecord(path, baseUpdatedAt, bytes));
+      ops.push({ username, path, op: 'put', baseUpdatedAt });
+    }
+    await db.items.bulkPut(records);
+    await db.pendingOps.bulkPut(ops);
+  });
 }
 
 // Delete one entity by path: drop the local record and queue the server delete in

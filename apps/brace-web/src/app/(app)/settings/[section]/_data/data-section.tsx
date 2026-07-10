@@ -9,12 +9,13 @@
 // local `view` swap inside this one section, self-contained in `_data/` like
 // the other sections.
 //
-// NOTE: the import / delete-all ACTIONS are stubbed — those buttons are wired
-// to `// TODO` handlers. Export is real: format choice (ExportView), the
-// locked-lists exclusion warning, progress, and the result line, all over
-// web-react's useExport → data/export.ts.
+// NOTE: the delete-all ACTION is stubbed — its button is wired to a `// TODO`
+// handler. Export is real: format choice (ExportView), the locked-lists
+// exclusion warning, progress, and the result line, all over web-react's
+// useExport → data/export.ts. Import is real too: a picked file, auto-detected
+// format, progress, and the result line, over useImport → data/import.ts.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -35,7 +36,9 @@ import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared
 import {
   type ExportFormat,
   type ExportState,
+  type ImportState,
   useExport,
+  useImport,
   useLocks,
   usePendingChangesCount,
   useSync,
@@ -154,22 +157,127 @@ function BackLink({ onBack }: { onBack: () => void }) {
   );
 }
 
+const IMPORT_STEP_LABELS: Record<'sync' | 'parse' | 'items' | 'files', string> = {
+  sync: 'Refreshing from the server…',
+  parse: 'Reading the file…',
+  items: 'Importing links…',
+  files: 'Importing files…',
+};
+
+// The one-line receipt under the import button: progress while running, the
+// counts + any warnings when done, the failure (quota message verbatim) when
+// errored — the import twin of ExportStatus.
+function ImportStatus({ state }: { state: ImportState }) {
+  if (state.phase === 'idle') return null;
+
+  if (state.phase === 'running') {
+    const counts =
+      state.done !== undefined && state.total !== undefined && state.total > 0
+        ? ` (${state.done} of ${state.total})`
+        : '';
+    return (
+      <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        {IMPORT_STEP_LABELS[state.step]}
+        {counts}
+      </p>
+    );
+  }
+
+  if (state.phase === 'error') {
+    return (
+      <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+        <CircleAlert className="mt-0.5 size-4 shrink-0" />
+        <span className="wrap-break-words">Import failed: {state.message}</span>
+      </p>
+    );
+  }
+
+  const { outcome } = state;
+  const nothingFound =
+    outcome.linkCount === 0 && outcome.fileCount === 0 && outcome.skippedCount === 0;
+  if (nothingFound) {
+    return (
+      <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+        <CircleAlert className="mt-0.5 size-4 shrink-0" />
+        <span>No links were found in that file.</span>
+      </p>
+    );
+  }
+
+  const created: string[] = [];
+  if (outcome.listCount > 0) {
+    created.push(`${outcome.listCount} ${outcome.listCount === 1 ? 'list' : 'lists'}`);
+  }
+  if (outcome.tagCount > 0) {
+    created.push(`${outcome.tagCount} ${outcome.tagCount === 1 ? 'tag' : 'tags'}`);
+  }
+  const notes: string[] = [];
+  if (created.length > 0) notes.push(`Added ${created.join(' and ')}.`);
+  if (outcome.skippedCount > 0) {
+    // "duplicates", not "links": for a Brace-backup merge the count covers every
+    // already-present entity (lists/tags/extractions too), not just links.
+    notes.push(
+      `${outcome.skippedCount} ${outcome.skippedCount === 1 ? 'duplicate was' : 'duplicates were'} skipped.`,
+    );
+  }
+  if (outcome.invalidCount > 0) {
+    notes.push(
+      `${outcome.invalidCount} ${outcome.invalidCount === 1 ? 'entry' : 'entries'} couldn’t be read and ${outcome.invalidCount === 1 ? 'was' : 'were'} left out.`,
+    );
+  }
+  if (outcome.syncFailed) {
+    notes.push('Couldn’t refresh from the server first — duplicates were checked against this device’s copy.');
+  }
+  return (
+    <div className="mt-3 flex items-start gap-2 text-sm">
+      <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <span className="text-muted-foreground">
+        Imported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
+        {outcome.fileCount > 0
+          ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
+          : ''}
+        .{notes.map((note) => ` ${note}`).join('')}
+      </span>
+    </div>
+  );
+}
+
 function ImportView({ onBack }: { onBack: () => void }) {
-  const onChooseFile = () => {
-    // TODO: implement import — read the file, parse links, write to the store.
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { state, run } = useImport();
+  const running = state.phase === 'running';
+
+  const onFilePicked = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset so picking the same file again re-fires the change event.
+    event.target.value = '';
+    if (file) run(file);
   };
+
   return (
     <div>
       <BackLink onBack={onBack} />
       <h2 className="text-xl font-semibold">Import data</h2>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Import from a text file — a plain list of links, or a file exported from another
-        read-it-later app, a bookmark manager, or Brace. Large imports may take a few minutes.
+        Import from a file — a Brace backup (.zip), an HTML bookmarks file (web browsers,
+        LinkWarden, Karakeep), a Raindrop.io CSV, or a plain list of links. The format is
+        detected automatically; links you already have are skipped. Large imports may take a few
+        minutes.
       </p>
-      <Button variant="outline" onClick={onChooseFile}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".zip,.html,.htm,.csv,.txt,text/html,text/csv,text/plain,application/zip"
+        className="hidden"
+        onChange={onFilePicked}
+      />
+      <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={running}>
         <Upload className="size-4" />
         Choose a file
       </Button>
+
+      <ImportStatus state={state} />
     </div>
   );
 }
