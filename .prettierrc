@@ -12,7 +12,7 @@
     {
       "files": ["apps/brace-expo/**", "packages/expo-react/**"],
       "options": {
-        "tailwindConfig": "apps/brace-expo/tailwind.config.js"
+        "tailwindStylesheet": "apps/brace-expo/global.css"
       }
     }
   ]
