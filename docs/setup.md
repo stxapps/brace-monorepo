@@ -68,6 +68,66 @@ Flag notes:
   real jest 30 deterministically (every project, including brace-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
+#### expo-router (brace-expo)
+
+File-based routing, the RN analogue of brace-web's Next.js App Router — routes
+live in `apps/brace-expo/src/app/`, so the two apps share the same
+folder-is-the-route-tree mental model. Added like:
+
+    npx expo install expo-router react-native-screens expo-linking expo-constants
+
+(run inside `apps/brace-expo`; `expo install` picks SDK-54-compatible versions,
+then move each to `*` in the app and pin the real version in the root
+`package.json`, per the normal convention). `react-native-screens`,
+`expo-linking`, and `expo-constants` are required peers; `react-native-safe-area-context`
+was already present. `expo install` also appends the `expo-router` config
+plugin to `app.json`. Wiring (already done):
+
+- **entry point**: `package.json` `"main": "expo-router/entry"` — this
+  **replaces the old `index.js` + `registerRootComponent(App)`**, which were
+  deleted. expo-router's entry sets up the route context itself; there is no
+  hand-written root component anymore.
+- **routes dir**: expo-router auto-detects `src/app` as the app root (it looks
+  for `app/`, then `src/app/`), so **no `EXPO_ROUTER_APP_ROOT`** is needed. The
+  old single `src/app/App.tsx` split into the two conventional route files:
+  `src/app/_layout.tsx` (the root layout — hosts the `QueryClientProvider`,
+  `useQueryManagers()`, `StatusBar`, the `global.css` import, and renders a
+  `<Stack>`) and `src/app/index.tsx` (the Home screen). Safe-area context comes
+  from expo-router's NavigationContainer (react-navigation's
+  `SafeAreaProviderCompat`), so screens use `SafeAreaView` with **no explicit
+  `SafeAreaProvider`** in `_layout`.
+- **babel**: nothing to add — `babel-preset-expo` (already in `.babelrc.js`) has
+  the router transform built in (it's what injects `EXPO_ROUTER_APP_ROOT` and
+  auto-detects `src/app`). Metro also needs no change; the existing
+  `@expo/metro-config` base + the Uniwind/Nx wrappers are enough.
+- **tests must live outside `src/app/`**: every file under the app root is a
+  route, and expo-router's default ignore list only drops
+  `+html`/`+api`/`+middleware`/`+native-intent` — **not `*.spec.*`**, so a spec
+  placed in `src/app/` would be scanned as a bogus route. So the Home-screen
+  test is `src/home-screen.spec.tsx` (a plain colocated `.spec.tsx` a level up),
+  importing the screen from `./app/index`. Keep it a **plain `.spec.tsx`, not a
+  `__tests__/` dir**: jest's broad `**/__tests__/**/*.[jt]s?(x)` glob would also
+  match the `.d.ts` that `typecheck` emits into `out-tsc/`, failing the run with
+  "must contain at least one test"; the `**/?(*.)+(spec|test).[jt]s?(x)` glob a
+  plain `.spec.tsx` uses does not match `.spec.d.ts`.
+  - **Why not just customize the ignore list?** It isn't practically reachable.
+    There are two filters and neither is a usable app-level knob: (1) the
+    bundler filter — the `require.context` regex in expo-router's own
+    `_ctx.*.js` — is hardcoded inside the package (babel only injects
+    `EXPO_ROUTER_APP_ROOT`), and (2) the route-tree `ignore` option in
+    `getRoutesCore` _does_ exist and is fed at runtime from
+    `Constants.expoConfig.extra.router`, but its entries must be `RegExp`
+    objects and that config is read from a **serialized JSON manifest** — a
+    `RegExp` can't survive JSON, so `expo.extra.router.ignore` can't carry one.
+    (That option is really for tooling that calls `getRoutes(context, { ignore })`
+    directly — static export, the `renderRouter` test helper.) There's also no
+    `_private`-file convention; the only non-route markers are the fixed set
+    (`_layout`, `+not-found`, `+html`, `+native-intent`, `+middleware`, `+api`,
+    plus `(group)`/`[param]`). Keeping non-route files out of `src/app/` is the
+    intended pattern. A Metro `resolver.blockList` of `/.*\.spec\.[jt]sx?$/`
+    would also work but is a bundle-wide instrument for what the file layout
+    already solves — don't add it.
+
 #### uniwind + react-native-reusables (brace-expo)
 
 The RN equivalent of the web tailwind + shadcn stack (see architecture.md —
@@ -90,8 +150,9 @@ version split is gone. Wiring (already done):
   babel preset** (Uniwind is Metro-only). `global.css` holds
   `@import 'tailwindcss'; @import 'uniwind';` plus an `@source` line for any
   workspace package the app renders classNames from (the v4 replacement for the
-  old `content` glob), and is imported **once at the top of `App.tsx`** (Uniwind
-  wants it in the app tree, not `index.js`). `metro.config.js` wraps with
+  old `content` glob), and is imported **once at the top of the root
+  `src/app/_layout.tsx`** (Uniwind wants it in the app tree, not the entry).
+  `metro.config.js` wraps with
   `withUniwindConfig(..., { cssEntryFile: './global.css', dtsFile:
 './uniwind-env.d.ts' })` as the **outermost** wrapper (around `withNxMetro`).
   `uniwind-env.d.ts` is **generated by Uniwind** on the first metro run (holds

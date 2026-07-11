@@ -2,6 +2,7 @@
   "name": "@stxapps/brace-expo",
   "version": "0.0.1",
   "private": true,
+  "main": "expo-router/entry",
   "nx": {
     "tags": [
       "type:app",
@@ -22,8 +23,11 @@
     "@testing-library/react-native": "*",
     "expo": "*",
     "expo-build-properties": "*",
+    "expo-constants": "*",
     "expo-file-system": "*",
     "expo-font": "*",
+    "expo-linking": "*",
+    "expo-router": "*",
     "expo-secure-store": "*",
     "expo-splash-screen": "*",
     "expo-sqlite": "*",
@@ -40,6 +44,7 @@
     "react-native-quick-crypto": "*",
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",
+    "react-native-screens": "*",
     "react-native-svg": "*",
     "react-native-svg-transformer": "*",
     "react-native-web": "*",

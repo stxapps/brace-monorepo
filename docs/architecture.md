@@ -62,7 +62,10 @@ client-queries.md, the tiering in business-model.md).
 - **brace-expo** — Expo mobile app. The crypto/account layer is
   `@stxapps/expo-crypto` below; the RN-specific React logic lives in
   `@stxapps/expo-react` below (the local-first data layer is still to come).
-  The client stack mirrors the web apps with the RN equivalents: **Uniwind**
+  The client stack mirrors the web apps with the RN equivalents: **expo-router**
+  for file-based routing (routes in `src/app/`, the analogue of brace-web's
+  Next.js App Router; entry is `expo-router/entry`, not a hand-written
+  `registerRootComponent` — see setup.md), **Uniwind**
   for Tailwind classes (styling — a Metro-plugin, Tailwind **v4** CSS-first
   binding; see the version note below), **react-native-reusables** for
   shadcn-style components (copied into the app via its CLI, like shadcn on web;
