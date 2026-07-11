@@ -4,10 +4,14 @@ module.exports = {
   displayName: '@stxapps/brace-expo',
   preset: 'jest-expo',
   moduleFileExtensions: ['ts', 'js', 'html', 'tsx', 'jsx'],
-  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/testing/setup.ts'],
+  // Never scan build output: `typecheck` (tsc --build) emits declaration files
+  // under out-tsc/, and a `.spec.d.ts` there matches jest's default testMatch —
+  // running it as an empty suite fails with "must contain at least one test".
+  testPathIgnorePatterns: ['/node_modules/', '/out-tsc/'],
   moduleNameMapper: {
     '[.]svg$': '@nx/expo/plugins/jest/svg-mock',
-    '[.]css$': '<rootDir>/src/test-css-mock.js',
+    '[.]css$': '<rootDir>/src/testing/css-mock.js',
   },
   transform: {
     '[.][jt]sx?$': [

@@ -89,44 +89,83 @@ plugin to `app.json`. Wiring (already done):
   hand-written root component anymore.
 - **routes dir**: expo-router auto-detects `src/app` as the app root (it looks
   for `app/`, then `src/app/`), so **no `EXPO_ROUTER_APP_ROOT`** is needed. The
-  old single `src/app/App.tsx` split into the two conventional route files:
-  `src/app/_layout.tsx` (the root layout — hosts the `QueryClientProvider`,
+  root `src/app/_layout.tsx` hosts the `QueryClientProvider`,
   `useQueryManagers()`, `StatusBar`, the `global.css` import, and renders a
-  `<Stack>`) and `src/app/index.tsx` (the Home screen). Safe-area context comes
-  from expo-router's NavigationContainer (react-navigation's
-  `SafeAreaProviderCompat`), so screens use `SafeAreaView` with **no explicit
-  `SafeAreaProvider`** in `_layout`.
+  `<Stack>`. Safe-area context comes from expo-router's NavigationContainer
+  (react-navigation's `SafeAreaProviderCompat`), so screens use `SafeAreaView`
+  with **no explicit `SafeAreaProvider`** in `_layout`.
+- **route tree — mirrors brace-web's `src/app/`.** Same `(group)` syntax as the
+  Next.js App Router (a folder in parens adds **no** URL segment), so the layout
+  is a near 1:1 port:
+
+  ```
+  src/app/
+    _layout.tsx                  root Stack + providers
+    index.tsx                    "/"  public landing (brace-web's page.tsx)
+    (auth)/_layout.tsx           GuestGuard chrome  → TODO once auth lands
+    (auth)/sign-in/index.tsx     /sign-in
+    (auth)/create-account/index.tsx   /create-account
+    (app)/_layout.tsx            AuthGuard + sync/lock providers → TODO
+    (app)/links/index.tsx        /links
+    (app)/settings/index.tsx     /settings  (+ future settings/[section].tsx)
+  ```
+
+  `page.tsx`→`index.tsx` and `layout.tsx`→`_layout.tsx` are the only renames.
+  The auth gating (brace-web's `AuthGuard`/`GuestGuard`/`AuthedHomeRedirect`) is
+  left as `TODO(auth)` comments in the three layouts + the landing — there is
+  nothing to bind to until `@stxapps/expo-react` ships the auth layer; the
+  expo-router idiom will be `<Redirect>` / `<Stack.Protected guard>`.
+
+- **no `_`-private folders — the one real divergence from brace-web.** Every
+  file under the app root becomes a route: expo-router's `getFileMeta` treats
+  only `_layout`, `(group)`, `+api`, `+not-found`, and platform suffixes
+  (`.ios`/`.web`) as special — it has **no** `_`-prefixed private-folder
+  convention, so brace-web's colocated `(app)/links/_components`, `_hooks`,
+  `_panes`, … would each become a bogus route (e.g. `/links/_components/foo`).
+  So route files under `src/app/` stay **thin** and their UI lives **outside**
+  the app root — `src/components/` (e.g. the shared `Screen` placeholder) and,
+  as screens grow, `src/features/<name>/`. This is the same reason specs live
+  outside `src/app/` (below).
 - **babel**: nothing to add — `babel-preset-expo` (already in `.babelrc.js`) has
   the router transform built in (it's what injects `EXPO_ROUTER_APP_ROOT` and
   auto-detects `src/app`). Metro also needs no change; the existing
   `@expo/metro-config` base + the Uniwind/Nx wrappers are enough.
-- **tests must live outside `src/app/`**: every file under the app root is a
-  route, and expo-router's default ignore list only drops
-  `+html`/`+api`/`+middleware`/`+native-intent` — **not `*.spec.*`**, so a spec
-  placed in `src/app/` would be scanned as a bogus route. So the Home-screen
-  test is `src/home-screen.spec.tsx` (a plain colocated `.spec.tsx` a level up),
-  importing the screen from `./app/index`. Keep it a **plain `.spec.tsx`, not a
-  `__tests__/` dir**: jest's broad `**/__tests__/**/*.[jt]s?(x)` glob would also
-  match the `.d.ts` that `typecheck` emits into `out-tsc/`, failing the run with
-  "must contain at least one test"; the `**/?(*.)+(spec|test).[jt]s?(x)` glob a
-  plain `.spec.tsx` uses does not match `.spec.d.ts`.
-  - **Why not just customize the ignore list?** It isn't practically reachable.
-    There are two filters and neither is a usable app-level knob: (1) the
-    bundler filter — the `require.context` regex in expo-router's own
-    `_ctx.*.js` — is hardcoded inside the package (babel only injects
-    `EXPO_ROUTER_APP_ROOT`), and (2) the route-tree `ignore` option in
-    `getRoutesCore` _does_ exist and is fed at runtime from
-    `Constants.expoConfig.extra.router`, but its entries must be `RegExp`
-    objects and that config is read from a **serialized JSON manifest** — a
-    `RegExp` can't survive JSON, so `expo.extra.router.ignore` can't carry one.
-    (That option is really for tooling that calls `getRoutes(context, { ignore })`
-    directly — static export, the `renderRouter` test helper.) There's also no
-    `_private`-file convention; the only non-route markers are the fixed set
-    (`_layout`, `+not-found`, `+html`, `+native-intent`, `+middleware`, `+api`,
-    plus `(group)`/`[param]`). Keeping non-route files out of `src/app/` is the
-    intended pattern. A Metro `resolver.blockList` of `/.*\.spec\.[jt]sx?$/`
-    would also work but is a bundle-wide instrument for what the file layout
-    already solves — don't add it.
+- **specs colocate with their source — _outside_ `src/app/`.** Every file under
+  the app root becomes a route (expo-router's ignore list drops only
+  `+html`/`+api`/`+middleware`/`+native-intent` — **not `*.spec.*`**), so a
+  `.spec.tsx` beside a route file would be scanned as a bogus route. That costs
+  nothing here: the workspace convention is already colocated specs
+  (`foo.spec.ts` next to `foo.ts`, never a central dir), and brace-expo's real UI
+  lives outside `src/app/` anyway (thin routes — see "no `_`-private folders"
+  above). So each spec sits next to its component/feature: the landing UI is
+  `src/components/landing.tsx` with `src/components/landing.spec.tsx` beside it,
+  while the route `src/app/index.tsx` is a thin wrapper that renders `<Landing/>`.
+  Specs thus distribute across `src/components`/`src/features`; they don't pile up
+  in a central folder.
+- **test _infra_ lives in `src/testing/`** (mirroring
+  `packages/expo-crypto/src/testing/`): the jest `setup.ts` (expo / NetInfo /
+  safe-area / uniwind mocks) and `css-mock.js` (the `*.css` → empty-module map),
+  wired from `jest.config.cts` and the tsconfigs. `testing/` is for test
+  **helpers only — never specs** (those colocate, above).
+- **jest ignores build output.** `jest.config.cts` sets
+  `testPathIgnorePatterns: ['/node_modules/', '/out-tsc/']`. Without the
+  `out-tsc/` entry, `typecheck` (`tsc --build`) emits `*.spec.d.ts` under
+  `out-tsc/`, and jest's default testMatch runs that `.d.ts` as an empty suite,
+  failing with "must contain at least one test".
+  - **Could specs live _inside_ `src/app/`?** Only in a `__tests__/` subfolder,
+    never as loose `.spec.tsx`. Metro's default `resolver.blockList` (from
+    `metro-config`'s exclusionList) is `[/\/__tests__\/.*/]`, and expo-router
+    scans routes over Metro's file map (`matchFilesWithContext` →
+    `_fileSystem.matchFiles`), which excludes blocklisted paths — so a
+    `__tests__/` dir is invisible to the router. We don't use that (colocating
+    beside the out-of-`app` source is simpler and matches the convention). Note
+    there is **no** `(test|spec)` blocklist anywhere in Expo/Metro — the only
+    Expo-added blockList entry is `.expo/types`; and the route-tree `ignore`
+    option (`getRoutesCore`, fed from `Constants.expoConfig.extra.router`) can't
+    be used from app config because its entries must be `RegExp` and that config
+    is read from a serialized JSON manifest that can't carry one. The only
+    non-route markers are the fixed set (`_layout`, `+not-found`, `+html`,
+    `+native-intent`, `+middleware`, `+api`, plus `(group)`/`[param]`).
 
 #### uniwind + react-native-reusables (brace-expo)
 
@@ -172,8 +211,8 @@ version split is gone. Wiring (already done):
   / `react-native-worklets` (already installed, SDK 54-pinned at root).
 - jest: `uniwind` is mocked (its className→style bridge needs the Metro
   transform / native runtime — the HOC becomes identity in tests) and `*.css`
-  imports map to an empty module (`src/test-css-mock.js`), alongside the
-  official NetInfo and safe-area-context mocks, all in `src/test-setup.ts` /
+  imports map to an empty module (`src/testing/css-mock.js`), alongside the
+  official NetInfo and safe-area-context mocks, all in `src/testing/setup.ts` /
   `jest.config.cts`.
 
 #### font — Inter (brace-expo)

@@ -64,8 +64,13 @@ client-queries.md, the tiering in business-model.md).
   `@stxapps/expo-react` below (the local-first data layer is still to come).
   The client stack mirrors the web apps with the RN equivalents: **expo-router**
   for file-based routing (routes in `src/app/`, the analogue of brace-web's
-  Next.js App Router; entry is `expo-router/entry`, not a hand-written
-  `registerRootComponent` — see setup.md), **Uniwind**
+  Next.js App Router — the same `(app)`/`(auth)` route groups and
+  `layout`→`_layout`, `page`→`index` renames; entry is `expo-router/entry`, not
+  a hand-written `registerRootComponent`. One divergence: expo-router has **no**
+  `_`-private-folder convention, so unlike brace-web's colocated
+  `_components`/`_panes`, screen code lives **outside** `src/app/` in
+  `src/components`/`src/features` — every file under the app root is a route.
+  See setup.md), **Uniwind**
   for Tailwind classes (styling — a Metro-plugin, Tailwind **v4** CSS-first
   binding; see the version note below), **react-native-reusables** for
   shadcn-style components (copied into the app via its CLI, like shadcn on web;

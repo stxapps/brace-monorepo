@@ -20,7 +20,7 @@
     "**/*.spec.js",
     "**/*.test.jsx",
     "**/*.spec.jsx",
-    "src/test-setup.ts",
+    "src/testing/setup.ts",
     "jest.config.ts",
     "jest.config.cts",
     "src/**/*.spec.ts",
