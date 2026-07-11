@@ -78,8 +78,7 @@ function migrate(sql: SqlStorage): void {
   // with the migration statements.
   sql.exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`);
   const row = sql.exec(`SELECT version FROM schema_version LIMIT 1`).toArray()[0] as
-    | { version: number }
-    | undefined;
+    { version: number } | undefined;
   const current = row ? Number(row.version) : 0;
 
   for (let v = current; v < MIGRATIONS.length; v++) {

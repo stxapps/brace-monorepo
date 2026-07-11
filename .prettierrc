@@ -2,5 +2,18 @@
   "singleQuote": true,
   "printWidth": 100,
   "plugins": ["prettier-plugin-tailwindcss"],
-  "tailwindStylesheet": "packages/web-ui/src/styles.css"
+  "overrides": [
+    {
+      "files": ["apps/brace-web/**", "apps/brace-extension/**", "packages/web-ui/**"],
+      "options": {
+        "tailwindStylesheet": "packages/web-ui/src/styles.css"
+      }
+    },
+    {
+      "files": ["apps/brace-expo/**", "packages/expo-react/**"],
+      "options": {
+        "tailwindConfig": "apps/brace-expo/tailwind.config.js"
+      }
+    }
+  ]
 }

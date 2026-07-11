@@ -14,14 +14,7 @@ import {
 } from 'lucide-react';
 
 export type SettingsSectionId =
-  | 'account'
-  | 'subscription'
-  | 'data'
-  | 'extraction'
-  | 'lists'
-  | 'tags'
-  | 'misc'
-  | 'about';
+  'account' | 'subscription' | 'data' | 'extraction' | 'lists' | 'tags' | 'misc' | 'about';
 
 export interface SettingsSection {
   id: SettingsSectionId;

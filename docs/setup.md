@@ -55,11 +55,52 @@ Flag notes:
   `ios/BraceFileCrypto.podspec` + Swift, `android/build.gradle` + Kotlin.
   Native code is picked up by Expo autolinking from the workspace symlink in
   `node_modules` during `npx expo prebuild` (dev client required — not Expo Go).
+- `packages/expo-react` was also written by hand (no generator), mirroring
+  `web-react`'s package conventions (source-exports `package.json`, `nx.tags`,
+  solution-style tsconfigs) with brace-expo's test setup (`jest-expo` preset +
+  `babel-preset-expo`; the babel file is `.babelrc.cjs`, not `.js`, because
+  the package is `"type": "module"`). Native modules it builds on
+  (`expo-sqlite`, `expo-file-system`, NetInfo) are peerDependencies —
+  brace-expo owns them so Expo autolinking sees them.
 - Note: `jest-expo` ships a bin literally named `jest`, colliding with the real
   jest CLI in `node_modules/.bin` — whichever npm links last wins. The root
   `postinstall` (`tools/scripts/fix-jest-bin.mjs`) re-points the bin at the
   real jest 30 deterministically (every project, including brace-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
+
+#### nativewind + react-native-reusables (brace-expo)
+
+The RN equivalent of the web tailwind + shadcn stack (see architecture.md —
+_brace-expo_). Wiring (already done):
+
+- deps: `nativewind` + `tailwindcss@~3.4.x` pinned **in
+  `apps/brace-expo/package.json` with real versions** — the one deviation from
+  the "app declares `*`, root holds the version" convention, because
+  NativeWind v4 hard-requires Tailwind **v3** (`nativewind/dist/metro/tailwind`
+  throws on v4) while the web projects use Tailwind v4. Consequently **no
+  project relies on a root-hoisted `tailwindcss`**: `brace-web`,
+  `brace-extension`, and `web-ui` each pin `tailwindcss@^4.x` themselves (they
+  get nested v4 copies), and the root `overrides` entry
+  (`nativewind > tailwindcss: ~3.4.19`) keeps nativewind's tailwind edge on v3
+  no matter how npm hoists. If styling breaks after dependency surgery, check
+  `require.resolve('tailwindcss', { paths: [<nativewind dir>] })` resolves v3.
+- config: `tailwind.config.js` (nativewind preset; `content` must list any
+  workspace package the app renders classNames from), `global.css` (tailwind
+  directives, imported once in `index.js`), `.babelrc.js`
+  (`jsxImportSource: 'nativewind'` + `nativewind/babel`), `metro.config.js`
+  (`withNativeWind(..., { input: './global.css' })` wrapping `withNxMetro`),
+  `nativewind-env.d.ts` + `jsxImportSource` in `tsconfig.app.json` for
+  `className` types. NativeWind auto-adds `nativewind-env.d.ts` to the app's
+  solution `tsconfig.json` `include` on first metro run — keep that edit.
+- components come from **react-native-reusables** (the shadcn analogue —
+  same copy-into-the-app model), added like shadcn on web:
+  npx @react-native-reusables/cli@latest add <component>
+  (run inside `apps/brace-expo`; components land in the app, not a package —
+  there is deliberately no `expo-ui` lib while brace-expo is the only expo
+  app). Components that animate will pull in `react-native-reanimated` /
+  `react-native-worklets` (already installed, SDK 54-pinned at root).
+- jest: the official mocks for NetInfo and safe-area-context are wired in
+  `src/test-setup.ts` (the real modules need a native runtime).
 
 #### docs (future)
 

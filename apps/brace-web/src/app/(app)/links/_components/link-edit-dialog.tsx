@@ -71,9 +71,7 @@ export function LinkEditDialog() {
 // What the user has decided about the custom image this session: leave it alone,
 // replace it with picked bytes, or clear the override back to the extracted one.
 type ImageDraft =
-  | { kind: 'keep' }
-  | { kind: 'pick'; bytes: Uint8Array; previewUrl: string }
-  | { kind: 'clear' };
+  { kind: 'keep' } | { kind: 'pick'; bytes: Uint8Array; previewUrl: string } | { kind: 'clear' };
 
 // Order-sensitive equality is fine here: the draft starts FROM link.tagIds, so
 // any reordering means the user removed and re-added — a real edit either way.

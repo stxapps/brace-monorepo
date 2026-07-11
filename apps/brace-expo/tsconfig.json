@@ -1,8 +1,14 @@
 {
   "extends": "../../tsconfig.base.json",
   "files": [],
-  "include": [],
+  "include": ["nativewind-env.d.ts"],
   "references": [
+    {
+      "path": "../../packages/expo-react"
+    },
+    {
+      "path": "../../packages/expo-crypto"
+    },
     {
       "path": "./tsconfig.app.json"
     },

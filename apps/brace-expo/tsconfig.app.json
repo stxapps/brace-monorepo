@@ -5,6 +5,7 @@
     "types": ["node"],
     "rootDir": "src",
     "jsx": "react-jsx",
+    "jsxImportSource": "nativewind",
     "noUnusedLocals": false,
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
   },
@@ -33,6 +34,9 @@
   "references": [
     {
       "path": "../../packages/expo-crypto/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/expo-react/tsconfig.lib.json"
     }
   ]
 }

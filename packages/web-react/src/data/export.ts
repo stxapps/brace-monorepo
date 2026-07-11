@@ -246,8 +246,7 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
 // backup bigger than memory never materializes as one Blob. The blob target is
 // the Safari/Firefox fallback (fine for the common sub-GB library).
 type BraceSaveTarget =
-  | { kind: 'stream'; writable: FileSystemWritableFileStream }
-  | { kind: 'blob' };
+  { kind: 'stream'; writable: FileSystemWritableFileStream } | { kind: 'blob' };
 
 // window.showSaveFilePicker is Chromium-only and not yet in lib.dom — typed
 // locally instead of a global augmentation so nothing else picks it up untyped.

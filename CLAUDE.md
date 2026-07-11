@@ -24,7 +24,7 @@
 
 # Architecture
 
-- Packages: `@stxapps/{shared,react,web-ui}` (more planned). Apps: `brace-web`, `brace-extension`, `brace-api`.
+- Packages: `@stxapps/{shared,react,web-ui,web-crypto,web-react,expo-crypto,expo-react}`. Apps: `brace-web`, `brace-extension`, `brace-api`, `brace-extractor`, `brace-expo`.
 - See @docs/architecture.md for lib responsibilities and dependency rules (respect the layering — packages must never import an app). See @docs/setup.md for scaffold commands.
 
 # Package manager
@@ -32,5 +32,5 @@
 - This monorepo uses **npm** (npm/npx), not pnpm or yarn. The lockfile is `package-lock.json`.
 - Run Nx via `npx nx <target>` or `npm exec nx <target>` (the generic Nx guidance above shows a `pnpm` example — ignore that here).
 - Use the root scripts where they exist: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run dev`, `npm run reset`.
-- **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's **full Nx name — the `@stxapps/*` scope, _not_ the folder name** (`@stxapps/brace-web`, never `brace-web`): `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/brace-web`, `npx nx test @stxapps/brace-api`, `npx nx build @stxapps/brace-web`. Projects: `@stxapps/{shared,react,web-ui,web-crypto,web-react,brace-web,brace-extension,brace-api}` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
+- **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's **full Nx name — the `@stxapps/*` scope, _not_ the folder name** (`@stxapps/brace-web`, never `brace-web`): `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/brace-web`, `npx nx test @stxapps/brace-api`, `npx nx build @stxapps/brace-web`. Projects: `@stxapps/{shared,react,web-ui,web-crypto,web-react,expo-crypto,expo-react,brace-web,brace-extension,brace-api,brace-extractor,brace-expo}` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
 - **After making changes, autofix before checking.** Run the fixer first so `lint`/`typecheck` only report what needs real attention: whole-workspace `npm run fix` (ESLint `--fix` + prettier), or scoped `npx nx lint @stxapps/<project> --fix` for a single project. Then run `npm run lint` and `npm run typecheck` (or their scoped forms).

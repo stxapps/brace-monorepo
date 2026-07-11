@@ -102,6 +102,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@wxt-dev/module-react": "^1.1.5",
+    "tailwindcss": "^4.3.0",
     "wxt": "^0.20.26"
   }
 }

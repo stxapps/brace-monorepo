@@ -60,6 +60,7 @@
   },
   "devDependencies": {
     "@serwist/cli": "^9.5.11",
-    "@tailwindcss/postcss": "^4.3.0"
+    "@tailwindcss/postcss": "^4.3.0",
+    "tailwindcss": "^4.3.0"
   }
 }

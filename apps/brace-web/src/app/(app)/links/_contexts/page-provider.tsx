@@ -31,10 +31,7 @@ import type { LinkQuery } from '@stxapps/web-react';
 // `none` is "no single-axis highlight" — a text search or a compound/multi filter
 // the sidebar can't point at one row for (so nothing is highlighted).
 export type Selection =
-  | { kind: 'all' }
-  | { kind: 'none' }
-  | { kind: 'list'; id: string }
-  | { kind: 'tag'; id: string };
+  { kind: 'all' } | { kind: 'none' } | { kind: 'list'; id: string } | { kind: 'tag'; id: string };
 
 // The canonical URL for a selection. The default (My List) is the bare `/links`,
 // so the page's home carries no query noise; everything else is one opaque id.

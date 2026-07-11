@@ -1,0 +1,44 @@
+{
+  "name": "@stxapps/expo-react",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "tags": [
+      "type:react",
+      "platform:expo"
+    ]
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@stxapps/expo-crypto": "*",
+    "@stxapps/react": "*",
+    "@stxapps/shared": "*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "peerDependencies": {
+    "@react-native-community/netinfo": ">=11.0.0",
+    "@tanstack/react-query": "^5.101.0",
+    "expo-file-system": "*",
+    "expo-sqlite": "*",
+    "react": "^19.0.0",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@react-native-community/netinfo": "11.4.1",
+    "@tanstack/react-query": "^5.101.0",
+    "expo-file-system": "~19.0.23",
+    "expo-sqlite": "~16.0.10",
+    "react": "^19.1.0",
+    "react-native": "0.81.5"
+  }
+}

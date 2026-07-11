@@ -59,9 +59,25 @@ client-queries.md, the tiering in business-model.md).
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
   per-response byte ceiling, timeout, content-type allowlist. See
   [link-extraction.md](./link-extraction.md) — _server extraction_.
-- **brace-expo** — Expo mobile app (scaffolded; the crypto/account layer is
-  `@stxapps/expo-crypto` below — the rest of the local-first client is still
-  to come)
+- **brace-expo** — Expo mobile app. The crypto/account layer is
+  `@stxapps/expo-crypto` below; the RN-specific React logic lives in
+  `@stxapps/expo-react` below (the local-first data layer is still to come).
+  The client stack mirrors the web apps with the RN equivalents: **NativeWind**
+  for Tailwind classes (styling), **react-native-reusables** for shadcn-style
+  components (copied into the app via its CLI, like shadcn on web — there is
+  no `expo-ui` package: with a single expo app, components live in the app
+  until a second expo surface exists), **expo-sqlite + drizzle** as the Dexie
+  analogue (drizzle's `useLiveQuery` ≈ Dexie `liveQuery`),
+  **expo-file-system** for decrypted file blobs (see `expo-crypto`),
+  **FlashList** in place of TanStack Virtual, and the same TanStack Query /
+  react-hook-form / zod as web (TanStack Query's online/focus detection is
+  browser-only, so `expo-react`'s `useQueryManagers` rewires it to
+  NetInfo/AppState). One version quirk, handled in the root `package.json`:
+  NativeWind v4 requires Tailwind **v3** while the web apps use Tailwind
+  **v4**, so no project relies on a root-hoisted `tailwindcss` — brace-expo
+  pins `~3.4.x` and each web project (`brace-web`, `brace-extension`,
+  `web-ui`) pins `^4.x` itself, with a scoped root `overrides` entry keeping
+  nativewind's tailwind edge on v3 (see setup.md).
 - **brace-docs** (future) — Next.js docs site
 
 ### libs
@@ -123,6 +139,20 @@ client-queries.md, the tiering in business-model.md).
   `SyncDeps.api` — the `@stxapps/react` seam each app binds to its own baseUrl —
   so nothing here imports an app's `process.env`.
 
+#### @stxapps/expo-react
+
+- used by brace-expo only
+- expo-only React hooks/contexts/logic — the `platform:expo` sibling of
+  `web-react` (same React-logic layer, but free to use React Native and Expo
+  APIs). Home of the brace-expo local-first stack as it gets built: the
+  expo-sqlite + drizzle store and data layer, the sync-engine bindings, and
+  the editor/auth hooks — plus the RN-specific glue that exists today
+  (`useQueryManagers`, which rewires TanStack Query's browser-only
+  online/focus managers to NetInfo and AppState). Native modules it builds on
+  (`expo-sqlite`, `expo-file-system`, NetInfo) are **peerDependencies** — the
+  app owns them so Expo autolinking sees them (the same pattern `expo-crypto`
+  uses for `react-native-quick-crypto`).
+
 ### dependency rules
 
 Keep the dependency graph acyclic and layered. From lowest to highest:
@@ -150,10 +180,14 @@ platform-agnostic `react` can't reach it. `web-crypto` itself depends only on
 - `web-react` is the web-only sibling of `react` (same React-logic layer, but
   `platform:web`): it may import `shared`, `react`, and `web-crypto`. Apps and
   `web-ui` (for the auth forms) consume it; it must not import `web-ui`.
+- `expo-react` is the `platform:expo` sibling of `web-react` (same React-logic
+  layer): it may import `shared`, `react`, and `expo-crypto`. Only `brace-expo`
+  consumes it.
 - Apps may import any package; **packages must never import an app.**
 - `web-ui`, `web-crypto`, and `web-react` are web-only — do not import them from
-  code meant to run on Expo/native; `expo-crypto` is expo-only — do not import
-  it from web/worker code (`react` and `shared` stay platform-agnostic).
+  code meant to run on Expo/native; `expo-crypto` and `expo-react` are
+  expo-only — do not import them from web/worker code (`react` and `shared`
+  stay platform-agnostic).
 
 These rules are **enforced at lint time** by `@nx/enforce-module-boundaries`
 (config in `eslint.config.mjs`) — an illegal import fails `npm run lint`.
@@ -167,6 +201,7 @@ Enforcement is driven by two tag dimensions set in each project's
 | web-ui          | `type:ui`     | `platform:web`      |
 | web-crypto      | `type:crypto` | `platform:web`      |
 | expo-crypto     | `type:crypto` | `platform:expo`     |
+| expo-react      | `type:react`  | `platform:expo`     |
 | web-react       | `type:react`  | `platform:web`      |
 | brace-web       | `type:app`    | `platform:web`      |
 | brace-extension | `type:app`    | `platform:web`      |
