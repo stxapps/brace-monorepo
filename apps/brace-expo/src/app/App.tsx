@@ -35,7 +35,7 @@ const Home = () => (
       >
         Brace.to
       </Text>
-      <Text className="font-sans text-center text-base text-gray-500 dark:text-gray-400">
+      <Text className="text-center font-sans text-base text-gray-500 dark:text-gray-400">
         Save links to visit later.
       </Text>
     </View>
