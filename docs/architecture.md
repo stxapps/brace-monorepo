@@ -156,10 +156,14 @@ client-queries.md, the tiering in business-model.md).
   `web-react` (same React-logic layer, but free to use React Native and Expo
   APIs). Home of the brace-expo local-first stack as it gets built: the
   expo-sqlite + drizzle store and data layer, the sync-engine bindings, and
-  the editor/auth hooks — plus the RN-specific glue that exists today
-  (`useQueryManagers`, which rewires TanStack Query's browser-only
+  the editor/auth hooks — plus what exists today: the session store
+  (`data/session-store.ts`, web-react's sibling — expo-secure-store-backed
+  since the key is raw bytes; `AFTER_FIRST_UNLOCK` for background sync, plus a
+  sandbox sentinel file so an iOS reinstall doesn't resurrect the Keychain's
+  old session) and `useQueryManagers` (rewires TanStack Query's browser-only
   online/focus managers to NetInfo and AppState). Native modules it builds on
-  (`expo-sqlite`, `expo-file-system`, NetInfo) are **peerDependencies** — the
+  (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
+  **peerDependencies** — the
   app owns them so Expo autolinking sees them (the same pattern `expo-crypto`
   uses for `react-native-quick-crypto`).
 

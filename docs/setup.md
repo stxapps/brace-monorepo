@@ -60,8 +60,8 @@ Flag notes:
   solution-style tsconfigs) with brace-expo's test setup (`jest-expo` preset +
   `babel-preset-expo`; the babel file is `.babelrc.cjs`, not `.js`, because
   the package is `"type": "module"`). Native modules it builds on
-  (`expo-sqlite`, `expo-file-system`, NetInfo) are peerDependencies —
-  brace-expo owns them so Expo autolinking sees them.
+  (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
+  peerDependencies — brace-expo owns them so Expo autolinking sees them.
 - Note: `jest-expo` ships a bin literally named `jest`, colliding with the real
   jest CLI in `node_modules/.bin` — whichever npm links last wins. The root
   `postinstall` (`tools/scripts/fix-jest-bin.mjs`) re-points the bin at the
