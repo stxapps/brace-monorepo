@@ -11,11 +11,10 @@ import {
 } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import type { TreeNode } from '@stxapps/shared';
+import { computeCoverage, type TreeNode } from '@stxapps/shared';
 import { createLockVerifier, verifyLockPassword } from '@stxapps/web-crypto';
 
 import type { LockRecord } from '../data/db';
-import { computeCoverage } from '../data/lock-coverage';
 import { APP_LOCK_ID, deleteLock, putLock, readLocks } from '../data/lock-store';
 import type { ListItem } from '../data/queries';
 import { useLists } from '../hooks/use-lists';

@@ -160,7 +160,14 @@ client-queries.md, the tiering in business-model.md).
   (`data/session-store.ts`, web-react's sibling — expo-secure-store-backed
   since the key is raw bytes; `AFTER_FIRST_UNLOCK` for background sync, plus a
   sandbox sentinel file so an iOS reinstall doesn't resurrect the Keychain's
-  old session) and `useQueryManagers` (rewires TanStack Query's browser-only
+  old session), the first slice of the expo-sqlite + drizzle store
+  (`data/db.ts` — lazy-opened, change-listener on for drizzle's `useLiveQuery`,
+  idempotent DDL per the greenfield no-migrations policy — holding the `locks`
+  table behind `data/lock-store.ts`, web lock-store's sibling; lock verifiers
+  are deliberately NOT in secure-store — they're one-way PBKDF2 pairs gating
+  already-decrypted data, and the pure covering logic both platforms share is
+  `computeCoverage` in `@stxapps/shared` `sync/lock-coverage.ts`), and
+  `useQueryManagers` (rewires TanStack Query's browser-only
   online/focus managers to NetInfo and AppState). Native modules it builds on
   (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
   **peerDependencies** — the

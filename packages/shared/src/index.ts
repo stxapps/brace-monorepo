@@ -28,6 +28,7 @@ export * from './sync/endpoints';
 export * from './sync/entities';
 export * from './sync/extraction';
 export * from './sync/items';
+export * from './sync/lock-coverage';
 export * from './sync/paths';
 export * from './sync/rank';
 export * from './sync/status';

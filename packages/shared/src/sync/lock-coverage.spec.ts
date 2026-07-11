@@ -1,25 +1,16 @@
-import type { TreeNode } from '@stxapps/shared';
-
-import type { LockRecord } from './db';
-import { computeCoverage } from './lock-coverage';
-import type { ListItem } from './queries';
+import { computeCoverage, type CoverageLock } from './lock-coverage';
+import type { TreeItem, TreeNode } from './tree';
 
 // walkCoverage only reads `item.id` and `children`, so a minimal node is enough.
-const node = (id: string, children: TreeNode<ListItem>[] = []): TreeNode<ListItem> => ({
-  item: { id } as ListItem,
+const node = (id: string, children: TreeNode<TreeItem>[] = []): TreeNode<TreeItem> => ({
+  item: { id, parentId: null, rank: '' },
   depth: 0,
   children,
 });
 
-const listLock = (id: string, hideList = false): LockRecord => ({
-  id,
-  kind: 'list',
-  salt: '',
-  hash: '',
-  hideList,
-});
+const listLock = (id: string, hideList = false): CoverageLock => ({ id, hideList });
 
-const rows = (...locks: LockRecord[]) => new Map(locks.map((l) => [l.id, l]));
+const rows = (...locks: CoverageLock[]) => new Map(locks.map((l) => [l.id, l]));
 
 describe('computeCoverage', () => {
   // Case 4: a list whose PARENT is locked must gate when visited directly (e.g.
