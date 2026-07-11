@@ -115,6 +115,41 @@ version split is gone. Wiring (already done):
   official NetInfo and safe-area-context mocks, all in `src/test-setup.ts` /
   `jest.config.cts`.
 
+#### font — Inter (brace-expo)
+
+The web apps load Inter via CSS (`next/font` in brace-web, `@font-face` in
+brace-extension) — neither works on React Native (no DOM cascade, no woff2). The
+native equivalent is **expo-font, embedded at build time via its config plugin**
+(not the runtime `useFonts` hook): the font is registered natively from process
+start, so `fontFamily: 'Inter'` is available at first paint with no async load,
+no splash gate, and no flash. Wiring (already done):
+
+- **asset**: `assets/fonts/InterVariable.ttf` — the same single variable file the
+  web/extension use (as woff2), so one source of truth; the `wght` axis backs the
+  Tailwind font-weight utilities (`font-medium`/`font-semibold`/…). Downloaded as
+  TTF from the [Inter release](https://github.com/rsms/inter/releases) (native
+  can't consume the vendored woff2). Italic isn't embedded yet — add its TTF and a
+  second path to the plugin `fonts` array when a surface needs it.
+- **rename**: upstream `InterVariable.ttf` names its family **"Inter Variable"**,
+  and the expo-font plugin embeds under the font's *internal* name on iOS with no
+  override — so `tools/scripts/rename-inter.py` rewrites the name table to plain
+  **"Inter"** (run once per downloaded release; needs `brew install fonttools` or
+  `pip install fonttools`). This is why the committed TTF isn't byte-identical to
+  upstream. Without it, iOS would need `fontFamily: 'Inter Variable'`.
+- **plugin**: `["expo-font", { "fonts": ["./assets/fonts/InterVariable.ttf"] }]`
+  in `app.json` — picked up on `npx expo prebuild` (the dev client is already
+  required for the expo-crypto native module). Keep `expo-font` in
+  `package.json` dependencies even though nothing imports it in JS: the config
+  plugin resolves from the package.
+- **Uniwind binding**: `global.css` sets `--font-sans: 'Inter'`, so the
+  `font-sans` utility emits `fontFamily: 'Inter'`. RN has no CSS cascade, so
+  `font-sans` is applied where text renders; once the react-native-reusables
+  `Text` component is added, put it in that component's base variant to make
+  Inter the app-wide default.
+- **verify a real build**: the embed only takes effect after a native build
+  (`npx expo prebuild` + run on device/simulator) — it can't be exercised by
+  jest or Metro alone.
+
 #### docs (future)
 
 - npx nx g @nx/next:app apps/brace-docs

@@ -23,6 +23,7 @@
     "expo": "*",
     "expo-build-properties": "*",
     "expo-file-system": "*",
+    "expo-font": "*",
     "expo-secure-store": "*",
     "expo-splash-screen": "*",
     "expo-sqlite": "*",
