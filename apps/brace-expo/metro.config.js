@@ -1,7 +1,7 @@
 const { withNxMetro } = require('@nx/expo');
 const { getDefaultConfig } = require('@expo/metro-config');
 const { mergeConfig } = require('metro-config');
-const { withNativeWind } = require('nativewind/metro');
+const { withUniwindConfig } = require('uniwind/metro');
 
 const defaultConfig = getDefaultConfig(__dirname);
 const { assetExts, sourceExts } = defaultConfig.resolver;
@@ -33,4 +33,8 @@ const nxConfig = withNxMetro(mergeConfig(defaultConfig, customConfig), {
   watchFolders: [],
 });
 
-module.exports = withNativeWind(nxConfig, { input: './global.css' });
+// withUniwindConfig must be the outermost wrapper.
+module.exports = withUniwindConfig(nxConfig, {
+  cssEntryFile: './global.css',
+  dtsFile: './uniwind-env.d.ts',
+});

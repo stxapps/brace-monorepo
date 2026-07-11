@@ -5,7 +5,6 @@
     "types": ["node"],
     "rootDir": "src",
     "jsx": "react-jsx",
-    "jsxImportSource": "nativewind",
     "noUnusedLocals": false,
     "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
   },

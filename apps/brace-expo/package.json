@@ -31,7 +31,6 @@
     "jest-expo": "*",
     "metro-config": "*",
     "metro-resolver": "*",
-    "nativewind": "^4.2.6",
     "react": "*",
     "react-hook-form": "*",
     "react-native": "*",
@@ -44,6 +43,7 @@
     "react-native-svg-transformer": "*",
     "react-native-web": "*",
     "react-native-worklets": "*",
-    "tailwindcss": "~3.4.19"
+    "tailwindcss": "^4.3.0",
+    "uniwind": "*"
   }
 }

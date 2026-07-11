@@ -76,11 +76,6 @@
     "packages/*",
     "apps/*"
   ],
-  "overrides": {
-    "nativewind": {
-      "tailwindcss": "~3.4.19"
-    }
-  },
   "dependencies": {
     "@expo/metro-config": "~54.0.9",
     "@expo/metro-runtime": "~6.1.2",
@@ -109,6 +104,7 @@
     "react-native-svg-transformer": "~1.5.1",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "uniwind": "^1.10.0"
   }
 }

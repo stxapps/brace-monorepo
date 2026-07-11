@@ -2,13 +2,20 @@ import { Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
+import { withUniwind } from 'uniwind';
 
 import { useQueryManagers } from '@stxapps/expo-react';
 
+import '../../global.css';
+
 const queryClient = new QueryClient();
 
+// Core host components (View, Text) accept `className` directly; SafeAreaView is
+// a composite component, so Uniwind's HOC is needed to bridge className→style.
+const StyledSafeAreaView = withUniwind(SafeAreaView);
+
 const Home = () => (
-  <SafeAreaView className="flex-1 bg-white dark:bg-gray-950">
+  <StyledSafeAreaView className="flex-1 bg-white dark:bg-gray-950">
     <View className="flex-1 items-center justify-center gap-2 px-6">
       <Text
         testID="heading"
@@ -21,7 +28,7 @@ const Home = () => (
         Save links to visit later.
       </Text>
     </View>
-  </SafeAreaView>
+  </StyledSafeAreaView>
 );
 
 export const App = () => {

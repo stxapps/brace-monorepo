@@ -1,3 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'uniwind';
+
+/* Workspace packages ship raw TS source, so any package this app renders
+   classNames from must be scanned too — the Tailwind v4 replacement for the
+   old tailwind.config.js `content` glob. */
+@source '../../packages/expo-react/src/**/*.{js,jsx,ts,tsx}';

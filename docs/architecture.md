@@ -62,22 +62,24 @@ client-queries.md, the tiering in business-model.md).
 - **brace-expo** — Expo mobile app. The crypto/account layer is
   `@stxapps/expo-crypto` below; the RN-specific React logic lives in
   `@stxapps/expo-react` below (the local-first data layer is still to come).
-  The client stack mirrors the web apps with the RN equivalents: **NativeWind**
-  for Tailwind classes (styling), **react-native-reusables** for shadcn-style
-  components (copied into the app via its CLI, like shadcn on web — there is
-  no `expo-ui` package: with a single expo app, components live in the app
-  until a second expo surface exists), **expo-sqlite + drizzle** as the Dexie
-  analogue (drizzle's `useLiveQuery` ≈ Dexie `liveQuery`),
+  The client stack mirrors the web apps with the RN equivalents: **Uniwind**
+  for Tailwind classes (styling — a Metro-plugin, Tailwind **v4** CSS-first
+  binding; see the version note below), **react-native-reusables** for
+  shadcn-style components (copied into the app via its CLI, like shadcn on web;
+  the CLI auto-detects Uniwind vs NativeWind and pulls the matching component
+  variant — there is no `expo-ui` package: with a single expo app, components
+  live in the app until a second expo surface exists), **expo-sqlite + drizzle**
+  as the Dexie analogue (drizzle's `useLiveQuery` ≈ Dexie `liveQuery`),
   **expo-file-system** for decrypted file blobs (see `expo-crypto`),
   **FlashList** in place of TanStack Virtual, and the same TanStack Query /
   react-hook-form / zod as web (TanStack Query's online/focus detection is
   browser-only, so `expo-react`'s `useQueryManagers` rewires it to
-  NetInfo/AppState). One version quirk, handled in the root `package.json`:
-  NativeWind v4 requires Tailwind **v3** while the web apps use Tailwind
-  **v4**, so no project relies on a root-hoisted `tailwindcss` — brace-expo
-  pins `~3.4.x` and each web project (`brace-web`, `brace-extension`,
-  `web-ui`) pins `^4.x` itself, with a scoped root `overrides` entry keeping
-  nativewind's tailwind edge on v3 (see setup.md).
+  NetInfo/AppState). Styling is now **Tailwind v4 across the whole workspace**:
+  Uniwind requires Tailwind v4 (unlike NativeWind v4, which pinned Tailwind v3
+  and forced a version split), so every Tailwind consumer — brace-expo plus
+  each web project (`brace-web`, `brace-extension`, `web-ui`) — pins
+  `tailwindcss@^4.x` itself; there is no root `overrides` split anymore
+  (see setup.md).
 - **brace-docs** (future) — Next.js docs site
 
 ### libs

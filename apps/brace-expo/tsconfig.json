@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "files": [],
-  "include": ["nativewind-env.d.ts"],
+  "include": ["uniwind-env.d.ts"],
   "references": [
     {
       "path": "../../packages/expo-react"
