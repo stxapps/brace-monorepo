@@ -65,3 +65,12 @@ let encoder: InstanceType<typeof TextEncoder> | undefined;
 // accepted directly as a Web Crypto `BufferSource`.
 export const utf8 = (s: string): Uint8Array<ArrayBuffer> =>
   new Uint8Array((encoder ??= new TextEncoder()).encode(s));
+
+// The decode direction (entity payload bytes → JSON text), same lazy-singleton
+// rationale as `utf8` above. Like `atob`, Hermes doesn't ship the global itself —
+// on Expo it comes from the winter runtime's TextDecoder polyfill; providing the
+// global is the app runtime's concern, `shared` stays global-free at import time.
+let decoder: InstanceType<typeof TextDecoder> | undefined;
+
+export const bytesToUtf8 = (bytes: Uint8Array): string =>
+  (decoder ??= new TextDecoder()).decode(bytes);

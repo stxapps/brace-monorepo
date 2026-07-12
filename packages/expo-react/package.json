@@ -23,7 +23,8 @@
     "@stxapps/expo-crypto": "*",
     "@stxapps/react": "*",
     "@stxapps/shared": "*",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@react-native-community/netinfo": ">=11.0.0",

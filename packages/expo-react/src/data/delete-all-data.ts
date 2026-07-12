@@ -10,6 +10,7 @@
 
 import { type ApiClient, clearDecodeCache, dataDeleteAllEndpoint } from '@stxapps/shared';
 
+import { awaitInflightSync } from '../sync/engine';
 import { getDb, itemFacetStatuses, items, itemTagIds, locks } from './db';
 import { clearDataFiles } from './file-store';
 import { clearPendingOps } from './pending-store';
@@ -26,13 +27,12 @@ export async function deleteAllData(args: {
 }): Promise<DeleteAllOutcome> {
   const { username, api } = args;
 
-  // Quiesce before destroying, then abandon the queue so a later cycle finds
-  // nothing to re-push (resurrect) after the server wipe. This device's
-  // unsynced changes are deliberately discarded — the user is deleting
-  // everything, so pushing them first would be work the wipe undoes.
-  // TODO(sync-engine): await awaitInflightSync(username) here once the engine
-  // port lands, exactly as web-react's delete-all-data.ts does — until then
-  // there is no cycle to wait out.
+  // Quiesce before destroying: a cycle that already read the pending queue
+  // could re-push (resurrect) ops after the server wipe — wait it out, THEN
+  // abandon the queue so any later cycle finds nothing to push. (This device's
+  // unsynced changes are deliberately discarded: the user is deleting
+  // everything, so pushing them first would be work the wipe undoes.)
+  await awaitInflightSync(username);
   await clearPendingOps(username);
 
   // The server wipe — idempotent, so a failure here leaves everything retryable
