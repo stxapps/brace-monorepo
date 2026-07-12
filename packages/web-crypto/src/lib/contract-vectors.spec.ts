@@ -8,7 +8,6 @@
  * and hash-wasm runs inline via the 'main' Argon2 runner (no Workers in jest).
  */
 import {
-  AES_GCM_IV_BYTES,
   BLOB_FORMAT_V1,
   bytesToHex,
   CRYPTO_CONTRACT_VECTOR as V,
@@ -16,8 +15,8 @@ import {
   hexToBytes,
 } from '@stxapps/shared';
 
-import { decrypt } from './aes';
 import { deriveArgon2Hash, setArgon2Runner } from './argon2';
+import { decryptEntity } from './blob';
 import { createAccount, unlockAccount, WrongPasswordError } from './derive';
 
 // Argon2id at the frozen params (64 MiB, t=3) runs a few times in this suite.
@@ -45,15 +44,14 @@ describe('frozen-contract vectors', () => {
     expect(account.publicKey).toBe(V.publicKeyHex);
     await expect(account.sign(V.signPayload)).resolves.toBe(V.signatureHex);
 
-    // encryptionKey is a non-extractable CryptoKey, so prove it by USE: it
-    // must decrypt the packed v1 contract blob (encrypted under the vector's
-    // raw encryptionKeyHex).
+    // encryptionKey is a non-extractable CryptoKey, so prove it by USE: it must
+    // decrypt the packed v1 contract blob (encrypted under the vector's raw
+    // encryptionKeyHex). Decrypt through the real framer (unpackBlob, inside
+    // decryptEntity) so the golden vector pins the actual wire-format code, not
+    // a hand-inlined slice.
     const packed = hexToBytes(V.blob.packedHex);
     expect(packed[0]).toBe(BLOB_FORMAT_V1);
-    const plaintext = await decrypt(account.encryptionKey, {
-      iv: new Uint8Array(packed.subarray(1, 1 + AES_GCM_IV_BYTES)),
-      ciphertext: new Uint8Array(packed.subarray(1 + AES_GCM_IV_BYTES)),
-    });
+    const plaintext = await decryptEntity(account.encryptionKey, packed);
     expect(new TextDecoder().decode(plaintext)).toBe(V.blob.plaintext);
   });
 

@@ -30,12 +30,12 @@ import {
   type SignOp,
   withRetry,
 } from '@stxapps/shared';
+import { decryptEntity, encryptEntity } from '@stxapps/web-crypto';
 
 import { db, type PendingOpRecord } from '../data/db';
 import { clearPendingPaths, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
-import { decryptEntity, encryptEntity } from './crypto';
 import { BlobRequestError, getBlob, putBlob } from './r2';
 
 // Everything the engine needs to run a sync, passed in by the caller (SyncProvider)

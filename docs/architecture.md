@@ -113,6 +113,13 @@ client-queries.md, the tiering in business-model.md).
 - web-only crypto-global primitives: KDF, AES-256-GCM, and id minting
   (`newId`, a `crypto.randomUUID()` wrapper; brace-api keeps its own copy since
   it's `platform:worker` and can't import this `platform:web` package)
+- also owns the **v1 blob frame** (`blob.ts` — `packBlob`/`unpackBlob` +
+  `encryptEntity`/`decryptEntity`): the `[version(1) || iv(12) || ciphertext+tag]`
+  wire/at-rest layout wrapped around the AES-256-GCM primitive. Lives here (not in
+  `web-react`, whose sync engine is the caller) so the framing sits next to the
+  primitive it frames and the golden-vector spec (below) can assert the real
+  `unpackBlob`. On expo the same frame is produced two ways (see `expo-crypto`);
+  web has no native content path, so this is its only framer.
 
 #### @stxapps/expo-crypto
 
@@ -128,8 +135,13 @@ client-queries.md, the tiering in business-model.md).
   encrypt/decrypt path-to-path in the native layer, reading/writing the frozen
   v1 blob frame — file bytes never enter the JS heap; the app stores content
   DECRYPTED on device (the Dexie-`data` analogue) and e.g. `expo-image` renders
-  straight from the plaintext `file://` path. The frozen parameters stay in
-  `shared`; the golden vectors (`shared` `crypto/contract-vectors.ts`) are asserted by
+  straight from the plaintext `file://` path. The **small ENTITY blobs** take the
+  JS-side path instead: `blob.ts` (`packBlob`/`unpackBlob` + `encryptEntity`/
+  `decryptEntity`, the sibling of `web-crypto`'s) frames the identical v1 layout
+  in JS over the `react-native-quick-crypto` AES — so the same wire frame is
+  produced on whichever side of the JSI boundary suits the payload size (native
+  for `files/` content, JS for KB-sized entity JSON). The frozen parameters stay
+  in `shared`; the golden vectors (`shared` `crypto/contract-vectors.ts`) are asserted by
   both this package's and `web-crypto`'s specs, so "web and native derive
   identical keys/blobs" is CI-proven. One deliberate divergence: the account's
   `encryptionKey` is raw bytes, not a non-extractable `CryptoKey` (native has

@@ -351,7 +351,7 @@ blob, never the remote URL. Three reasons, heaviest first:
   [local-first-sync.md](./local-first-sync.md) — _plaintext typing_) — the same
   rule as `screenshotId` / `pageArchiveId` (its siblings in `extractions/`) and the
   user's `customImageId` in `links/`. A plaintext,
-  externally-mutable `https://…` string is a new pattern the sync/crypto path
+  externally-mutable `https://…` string is a new pattern the sync encryption path
   never sees, and a stored pointer-to-plaintext the encrypted blob isn't.
 
 The cost is real and accepted: a one-time download, the bytes against the

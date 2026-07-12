@@ -736,8 +736,9 @@ changes / password changes re-wrap only the 32-byte DEK and **never re-encrypt
 data**, so the sync layer is entirely oblivious to them.
 
 **Blob wire format.** Every R2 object is the binary frame
-`[version(1) || iv(12) || ciphertext+tag]` — packed/unpacked by the sync
-engine's crypto boundary (`sync/crypto.ts` in web-react). The constants
+`[version(1) || iv(12) || ciphertext+tag]` — packed/unpacked by `blob.ts` in the
+crypto packages (`@stxapps/web-crypto` / `@stxapps/expo-crypto`, next to the
+AES-256-GCM primitive it wraps; the sync engine is the caller). The constants
 (`BLOB_FORMAT_V1`, `AES_GCM_IV_BYTES`) live in `@stxapps/shared`
 (`crypto/params.ts`) because they are a **cross-platform contract** like the
 key-derivation parameters: a blob packed on web must unpack on the extension

@@ -11,6 +11,5 @@ export * from './data/session-store';
 export * from './data/subscription-store';
 export * from './data/sync-store';
 export * from './lib/query-managers';
-export * from './sync/crypto';
 export * from './sync/engine';
 export * from './sync/r2';

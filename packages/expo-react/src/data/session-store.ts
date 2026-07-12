@@ -60,6 +60,14 @@ const SECURE_OPTIONS: SecureStore.SecureStoreOptions = {
 // sandbox (which does die with the app): missing sentinel on load = fresh
 // install, wipe any Keychain leftovers. Android uninstall clears secure-store
 // too, so the sentinel is only ever load-bearing on iOS.
+//
+// This is INSTALL-lifecycle state, not session or account state: it must outlive
+// every sign-out and data-delete for the life of the install. So it sits OUTSIDE
+// the per-account teardown set — neither clearData (clear-data.ts) nor
+// deleteAllData (delete-all-data.ts) nor clearSession touches it. Its only
+// mutators are markInstalled() and the fresh-install branch of loadSession();
+// deleting it elsewhere would re-arm the Keychain wipe on a device that was
+// never reinstalled.
 const INSTALL_SENTINEL = 'brace-install-sentinel';
 
 function installSentinel(): File {

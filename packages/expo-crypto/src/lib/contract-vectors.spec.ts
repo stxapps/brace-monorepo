@@ -4,7 +4,6 @@
 // quick-crypto is shimmed onto Node primitives (see ../testing), so what's
 // under test is OUR mapping/wire-format code, not the native library.
 import {
-  AES_GCM_IV_BYTES,
   BLOB_FORMAT_V1,
   bytesToHex,
   CRYPTO_CONTRACT_VECTOR as V,
@@ -15,6 +14,7 @@ import {
 
 import { decrypt, encrypt } from './aes';
 import { deriveArgon2Hash } from './argon2';
+import { decryptEntity } from './blob';
 import { createAccount, unlockAccount, WrongPasswordError } from './derive';
 
 // Argon2id at the frozen params (64 MiB, t=3) runs a few times in this suite.
@@ -52,10 +52,9 @@ describe('frozen-contract vectors', () => {
     const packed = hexToBytes(V.blob.packedHex);
     expect(packed[0]).toBe(BLOB_FORMAT_V1);
 
-    const iv = packed.subarray(1, 1 + AES_GCM_IV_BYTES);
-    const ciphertext = packed.subarray(1 + AES_GCM_IV_BYTES);
-    const plaintext = await decrypt(hexToBytes(V.encryptionKeyHex), { iv, ciphertext });
-
+    // Decrypt through the real framer (unpackBlob, inside decryptEntity) so the
+    // golden vector pins the actual wire-format code, not a hand-inlined slice.
+    const plaintext = await decryptEntity(hexToBytes(V.encryptionKeyHex), packed);
     expect(new TextDecoder().decode(plaintext)).toBe(V.blob.plaintext);
   });
 });

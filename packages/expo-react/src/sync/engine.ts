@@ -25,7 +25,7 @@
 
 import type { File } from 'expo-file-system';
 
-import { decryptFile, encryptFile } from '@stxapps/expo-crypto';
+import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps/expo-crypto';
 import {
   type ApiClient,
   type CommitResult,
@@ -64,7 +64,6 @@ import {
 import { clearPendingPaths, listPendingOps, type PendingOpRecord } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
-import { decryptEntity, encryptEntity } from './crypto';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
 
 // Everything the engine needs to run a sync, passed in by the caller (the sync
@@ -257,8 +256,14 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
       throw err;
     }
     ensureDataFilesDir();
-    // The native decrypt renames its temp output into place and won't clobber a
-    // stale target (e.g. a leftover from a record that changed server-side).
+    // Clear any stale plaintext first (e.g. a leftover from a record that
+    // changed server-side) so the outcome is deterministic and
+    // platform-independent: the native decrypt does overwrite an existing target
+    // (iOS atomic rename; Android delete-then-retry), but rather than lean on
+    // those matching across every filesystem, we make "plain" absent up front.
+    // It also gives a clean failure state — a decrypt that throws leaves no file
+    // behind, and markItemDataFile (below) only runs on success, so the row and
+    // disk stay consistent as "not downloaded" and the next call redoes the work.
     deleteDataFile(path);
     await decryptFile(enc.uri, plain.uri, deps.encryptionKey);
   } finally {

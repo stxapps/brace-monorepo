@@ -42,6 +42,5 @@ export * from './hooks/use-tags';
 export * from './lib/auth-api-client';
 export * from './lib/resize-image';
 export * from './lib/server-extraction';
-export * from './sync/crypto';
 export * from './sync/engine';
 export * from './sync/r2';
