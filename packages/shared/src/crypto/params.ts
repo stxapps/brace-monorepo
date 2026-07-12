@@ -13,9 +13,15 @@
 // salt is per-user — SHA-256(APP_SALT || canonical username) — so two users who
 // pick the same password still derive different keys (the unique username is the
 // per-user salt). This constant defends against precomputed tables shared across
-// apps/users, while the no-accounts model keeps everything recomputable on any
-// client from (username, password) alone, with nothing salt-related stored
-// server-side.
+// apps/users. The salt is deliberately deterministic and public, not a stored
+// random value: the wrapped password-door blob is served pre-auth to anyone who
+// names a username (docs/account.md — the offline-attack surface), so a random
+// salt would ride in that same response and hide nothing; deriving it instead
+// keeps salt material out of the server's Tier-0 state, lets the client start
+// Argon2id concurrently with the door fetch, and leaves one less frozen value to
+// pin cross-platform. Note (username, password) alone recomputes only the
+// password-KEK — the account root is a random DEK that additionally needs the
+// server-held wrapped door to recover.
 //
 // NOT a secret — it ships in every client bundle; its only job is to be a
 // stable, unique, high-entropy namespace, so it must NEVER CHANGE once real
