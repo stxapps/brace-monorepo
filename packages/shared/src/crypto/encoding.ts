@@ -26,12 +26,15 @@ export function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
 // so merely importing `shared` never assumes those globals exist.
 //
 // Runtime requirement — native `atob`/`btoa` exist on Workers, browsers, and the
-// extension, but Hermes (React Native/Expo) does NOT provide them. These two
-// functions throw `ReferenceError` there unless the app installs a base64 polyfill
-// at startup. Back that polyfill with a NATIVE base64 — on Expo, wire `btoa`/`atob`
-// through `@craftzdog/react-native-buffer`'s Buffer (`Buffer.from(s, 'base64')` /
-// `buf.toString('base64')`), which is C++-fast; prefer it over the pure-JS `base-64`
-// lib, whose per-char loop janks the JS thread on the multi-hundred-KB images below.
+// extension, but Hermes (React Native/Expo) does NOT provide them: Hermes ships
+// `TextEncoder` and Expo's winter runtime installs `TextDecoder`, but neither
+// installs `atob`/`btoa`. So these two functions throw `ReferenceError` there
+// unless the app installs a base64 polyfill at startup. Back that polyfill with a
+// NATIVE base64 — on Expo, wire `btoa`/`atob` through `@craftzdog/react-native-buffer`'s
+// Buffer (`Buffer.from(s, 'base64')` / `buf.toString('base64')`), which is C++-fast;
+// prefer it over the pure-JS `base-64` lib, whose per-char loop janks the JS thread
+// on the multi-hundred-KB images below. brace-expo does exactly this in its
+// bootstrap `src/polyfills.ts` (imported first from the root `_layout.tsx`).
 // We keep the native calls deliberately: they're C++-fast (these carry images) and
 // battle-tested on base64's fiddly padding/tail cases, so the one-line app-level
 // polyfill on the single deficient runtime beats hand-rolling base64 in JS for all

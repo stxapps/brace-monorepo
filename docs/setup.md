@@ -250,6 +250,26 @@ no splash gate, and no flash. Wiring (already done):
   (`npx expo prebuild` + run on device/simulator) — it can't be exercised by
   jest or Metro alone.
 
+#### runtime polyfills (brace-expo)
+
+`@stxapps/shared`'s byte encodings (`crypto/encoding.ts`) call the standard
+`atob`/`btoa`/`TextEncoder`/`TextDecoder` globals. On Hermes/Expo most are
+already present — `TextEncoder` is built into Hermes and Expo's winter runtime
+installs `TextDecoder` (`node_modules/expo/src/winter/runtime.native.ts`) — but
+that runtime installs **neither `atob` nor `btoa`**, and Hermes ships neither
+itself, so `base64ToBytes`/`bytesToBase64` would throw `ReferenceError` on
+native. The app installs them once at startup in **`src/polyfills.ts`**,
+imported for its side effects as the **first line of the root
+`src/app/_layout.tsx`** (before any other import evaluates). They're backed by
+the **native** Buffer (`@craftzdog/react-native-buffer`, C++-fast) rather than
+the pure-JS `base-64` lib, since the images that flow through base64 are
+multi-hundred-KB — see the rationale in `packages/shared/src/crypto/encoding.ts`.
+`@craftzdog/react-native-buffer` is declared in `apps/brace-expo/package.json`
+so the app doesn't lean on hoist order — as `*`, with the version pinned once at
+the workspace root (`^6.1.2`), the same root-pin + app-`*` convention the other
+RN native deps use (`react-native-quick-base64`, `react-native-quick-crypto`).
+This can only be exercised on a native build, not jest/Metro.
+
 #### docs (future)
 
 - npx nx g @nx/next:app apps/brace-docs
