@@ -4,7 +4,7 @@ module.exports = {
   displayName: '@stxapps/expo-react',
   preset: 'jest-expo',
   moduleFileExtensions: ['ts', 'js', 'html', 'tsx', 'jsx'],
-  setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/testing/setup.ts'],
   transform: {
     '[.][jt]sx?$': [
       'babel-jest',
