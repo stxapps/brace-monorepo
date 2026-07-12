@@ -18,8 +18,9 @@
 // (delete-all-data.ts wipes a SUBSET while staying signed in — synced stores yes,
 // identity/device stores no; keep the two aligned when adding a store here.)
 
+import { clearDecodeCache } from '@stxapps/shared';
+
 import { db } from './db';
-import { clearDecodeCache } from './decode-cache';
 import { clearCachedSubscriptionStatus } from './subscription-store';
 
 export async function clearData(): Promise<void> {

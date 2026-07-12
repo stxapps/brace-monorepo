@@ -24,6 +24,7 @@ export * from './import/csv';
 export * from './import/detect';
 export * from './import/netscape';
 export * from './import/text';
+export * from './sync/decode-cache';
 export * from './sync/endpoints';
 export * from './sync/entities';
 export * from './sync/extraction';

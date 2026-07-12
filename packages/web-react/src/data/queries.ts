@@ -27,9 +27,13 @@ import type {
 import {
   canonicalUrlKey,
   compareRank,
+  dropCachedExtraction,
+  dropCachedLink,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
+  getCachedExtraction,
+  getCachedLink,
   isFacetEligible,
   LINKS_PREFIX,
   linkSchema,
@@ -39,6 +43,8 @@ import {
   PINS_PREFIX,
   pinSchema,
   rekey,
+  setCachedExtraction,
+  setCachedLink,
   SETTINGS_GENERAL_PATH,
   settingsGeneralSchema,
   SYSTEM_LIST_DEFAULTS,
@@ -48,14 +54,6 @@ import {
 } from '@stxapps/shared';
 
 import { db, type ItemRecord } from './db';
-import {
-  dropCachedExtraction,
-  dropCachedLink,
-  getCachedExtraction,
-  getCachedLink,
-  setCachedExtraction,
-  setCachedLink,
-} from './decode-cache';
 import { parseBlob } from './projection';
 
 // The typed item bundles (`WithPath` = decoded entity + its `items` path) and

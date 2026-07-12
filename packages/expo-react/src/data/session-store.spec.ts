@@ -86,11 +86,9 @@ test('saveSession then loadSession round-trips the record, key bytes intact', as
 test('saveSession writes with AFTER_FIRST_UNLOCK and marks the install sentinel', async () => {
   await store.saveSession(record());
 
-  expect(secureStore.setItemAsync).toHaveBeenCalledWith(
-    SESSION_KEY,
-    expect.any(String),
-    { keychainAccessible: 'afterFirstUnlock' },
-  );
+  expect(secureStore.setItemAsync).toHaveBeenCalledWith(SESSION_KEY, expect.any(String), {
+    keychainAccessible: 'afterFirstUnlock',
+  });
   expect(mockFiles.has(SENTINEL_URI)).toBe(true);
 });
 

@@ -18,11 +18,10 @@
 // back afterward (local-wins, the same policy as every fallback) — the UI copy
 // says so.
 
-import { type ApiClient, dataDeleteAllEndpoint } from '@stxapps/shared';
+import { type ApiClient, clearDecodeCache, dataDeleteAllEndpoint } from '@stxapps/shared';
 
 import { awaitInflightSync } from '../sync/engine';
 import { db } from './db';
-import { clearDecodeCache } from './decode-cache';
 import { clearPendingOps } from './pending-store';
 import { seedNewAccount } from './sync-store';
 

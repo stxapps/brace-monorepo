@@ -37,9 +37,7 @@
       [
         "expo-font",
         {
-          "fonts": [
-            "./assets/fonts/InterVariable.ttf"
-          ]
+          "fonts": ["./assets/fonts/InterVariable.ttf"]
         }
       ],
       "expo-router"
