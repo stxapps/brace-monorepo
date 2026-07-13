@@ -2,7 +2,7 @@
   "name": "@stxapps/brace-expo",
   "version": "0.0.1",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.js",
   "nx": {
     "tags": [
       "type:app",
@@ -30,6 +30,7 @@
     "expo-linking": "*",
     "expo-router": "*",
     "expo-secure-store": "*",
+    "expo-share-extension": "*",
     "expo-splash-screen": "*",
     "expo-sqlite": "*",
     "expo-status-bar": "*",

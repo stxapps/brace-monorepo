@@ -4,6 +4,9 @@
   "include": ["uniwind-env.d.ts"],
   "references": [
     {
+      "path": "../../packages/shared"
+    },
+    {
       "path": "../../packages/expo-react"
     },
     {

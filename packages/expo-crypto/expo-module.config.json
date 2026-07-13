@@ -4,6 +4,6 @@
     "modules": ["BraceFileCryptoModule"]
   },
   "android": {
-    "modules": ["to.brace.filecrypto.FileCryptoModule"]
+    "modules": ["to.brace.filecrypto.BraceFileCryptoModule"]
   }
 }

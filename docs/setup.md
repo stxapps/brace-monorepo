@@ -259,8 +259,14 @@ installs `TextDecoder` (`node_modules/expo/src/winter/runtime.native.ts`) — bu
 that runtime installs **neither `atob` nor `btoa`**, and Hermes ships neither
 itself, so `base64ToBytes`/`bytesToBase64` would throw `ReferenceError` on
 native. The app installs them once at startup in **`src/polyfills.ts`**,
-imported for its side effects as the **first line of the root
-`src/app/_layout.tsx`** (before any other import evaluates). They're backed by
+imported for its side effects as the **first line of the native entries**
+(`index.js` and the iOS extension's `index.share.js`), ahead of
+`expo-router/entry` and the share root — so the side effect lands before any app
+code (the router tree, including `_layout.tsx`) evaluates. (This used to be the
+first import of `src/app/_layout.tsx`; it moved to the entries when the
+`index.js` shim was added for the share extension — see
+[share-sheet.md](./share-sheet.md) — which is the true process start and covers
+both bundles, so `_layout.tsx` no longer imports it.) They're backed by
 the **native** Buffer (`@craftzdog/react-native-buffer`, C++-fast) rather than
 the pure-JS `base-64` lib, since the images that flow through base64 are
 multi-hundred-KB — see the rationale in `packages/shared/src/crypto/encoding.ts`.

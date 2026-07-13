@@ -45,7 +45,7 @@ internal class TruncatedBlobException :
 internal class DecryptionFailedException(cause: Throwable?) :
   CodedException("decryption failed — tampered file or wrong key", cause)
 
-class FileCryptoModule : Module() {
+class BraceFileCryptoModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BraceFileCrypto")
 

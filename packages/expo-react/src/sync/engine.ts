@@ -28,6 +28,7 @@ import type { File } from 'expo-file-system';
 import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps/expo-crypto';
 import {
   type ApiClient,
+  chunk,
   type CommitResult,
   FILES_PREFIX,
   filesListEndpoint,
@@ -675,10 +676,4 @@ function newestCursor(...lists: Entry[][]): Entry {
     }
   }
   return { path, updatedAt };
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
 }

@@ -29,6 +29,7 @@ import {
   syncMeta,
 } from './db';
 import { clearDataFiles } from './file-store';
+import { clearShareData } from './share-store';
 
 export async function clearData(): Promise<void> {
   getDb().transaction((tx) => {
@@ -47,5 +48,9 @@ export async function clearData(): Promise<void> {
   });
   // Decrypted `files/` blobs on disk — mirrors the items wipe (file-store.ts).
   clearDataFiles();
+  // The share sheet's App Group artifacts (iOS taxonomy snapshot + outbox) —
+  // they name the account's lists/tags and may hold undrained URLs
+  // (share-store.ts).
+  clearShareData();
   clearDecodeCache(); // drop decoded-link plaintext too (@stxapps/shared decode-cache)
 }

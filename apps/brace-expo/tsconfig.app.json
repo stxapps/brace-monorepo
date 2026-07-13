@@ -32,10 +32,13 @@
   "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
   "references": [
     {
-      "path": "../../packages/expo-crypto/tsconfig.lib.json"
+      "path": "../../packages/shared/tsconfig.lib.json"
     },
     {
       "path": "../../packages/expo-react/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/expo-crypto/tsconfig.lib.json"
     }
   ]
 }

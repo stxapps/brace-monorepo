@@ -10,6 +10,13 @@ import { Stack } from 'expo-router';
 // then SyncProvider → LockProvider → AppLockGate → InitialSyncGate →
 // PaywallProvider. The redirect idiom here is `<Redirect href="/sign-in" />` or
 // `<Stack.Protected guard={isAuthed}>`.
+//
+// TODO(auth): the share sheet's app-side half rides the same providers
+// (docs/share-sheet.md): on launch/foreground and after each sync, call
+// @stxapps/expo-react's drainShareOutbox() (land iOS extension drafts through
+// the write edge) and refreshShareTaxonomy() (rewrite the iOS App Group
+// snapshot when lists/tags/locks change); on Android, kick an inline
+// runIncrementalSync after the share activity saves, once SyncDeps exist here.
 export default function AppLayout() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }

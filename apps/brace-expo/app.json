@@ -40,7 +40,16 @@
           "fonts": ["./assets/fonts/InterVariable.ttf"]
         }
       ],
-      "expo-router"
+      "expo-router",
+      [
+        "expo-share-extension",
+        {
+          "activationRules": [{ "type": "url", "max": 1 }, { "type": "text" }],
+          "height": 520,
+          "excludedPackages": ["expo-dev-client", "expo-splash-screen", "expo-updates"],
+          "preprocessingFile": "./share-extension/preprocessing.js"
+        }
+      ]
     ]
   }
 }

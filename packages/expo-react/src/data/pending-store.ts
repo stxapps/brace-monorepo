@@ -7,42 +7,55 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { getDb, pendingOps } from './db';
+import { type DbTx, getDb, pendingOps } from './db';
 
 // Same shape as web-react's PendingOpRecord (every column NOT NULL, so the
 // drizzle-inferred row already matches it exactly).
 export type PendingOpRecord = typeof pendingOps.$inferSelect;
 
-// The upsert both enqueues share: the composite (username, path) key makes a
-// re-edit before the drain collapse to one op (local last-writer-wins), and a
-// pending put can flip to delete in place.
-function enqueue(record: PendingOpRecord): void {
-  getDb()
-    .insert(pendingOps)
+// The upsert: the composite (username, path) key makes a re-edit before the
+// drain collapse to one op (local last-writer-wins), and a pending put can flip
+// to delete in place. Takes the transaction handle so it rides the caller's
+// transaction — unlike web-react's ambient (zone-scoped) Dexie transactions,
+// expo-sqlite/drizzle has no ambient tx, so a write only participates in the
+// caller's transaction if it goes through that tx handle. This is why there is
+// NO non-tx enqueue: every enqueue is paired with a local-store put in ONE
+// transaction (mutations.ts), so a bare getDb() insert would silently write the
+// queue outside that atomicity.
+function enqueue(tx: DbTx, record: PendingOpRecord): void {
+  tx.insert(pendingOps)
     .values(record)
     .onConflictDoUpdate({ target: [pendingOps.username, pendingOps.path], set: record })
     .run();
 }
 
-// Queue a create/edit for `path`. `baseUpdatedAt` is the path's stored server
+// Queue a create/edit for `path`, in the caller's transaction — for the write
+// edge (mutations.ts), which must enqueue in the SAME transaction as the
+// local-store put so the store and the durable queue can never disagree about
+// whether an edit happened. `baseUpdatedAt` is the path's stored server
 // timestamp at edit time (0 for a brand-new file) — the base reconcile compares
 // against.
-export async function enqueuePut(
+export function enqueuePutTx(
+  tx: DbTx,
   username: string,
   path: string,
   baseUpdatedAt: number,
-): Promise<void> {
-  enqueue({ username, path, op: 'put', baseUpdatedAt });
+): void {
+  enqueue(tx, { username, path, op: 'put', baseUpdatedAt });
 }
 
-// Queue a delete for `path`. The UI removes the local record itself; this only
-// records the intent to delete the server object on the next drain.
-export async function enqueueDelete(
+// Queue a delete for `path`, in the caller's transaction — the delete-edge
+// sibling of enqueuePutTx (mutations.ts's future deleteEntity port). The UI
+// drops the local record in the SAME transaction; this only records the intent
+// to delete the server object on the next drain. `baseUpdatedAt` is the path's
+// stored server timestamp, the reconcile base exactly as on the put path.
+export function enqueueDeleteTx(
+  tx: DbTx,
   username: string,
   path: string,
   baseUpdatedAt: number,
-): Promise<void> {
-  enqueue({ username, path, op: 'delete', baseUpdatedAt });
+): void {
+  enqueue(tx, { username, path, op: 'delete', baseUpdatedAt });
 }
 
 // The full queue for an account, in no particular order — the engine imposes its

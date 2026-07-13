@@ -1,6 +1,7 @@
 const { withNxMetro } = require('@nx/expo');
 const { getDefaultConfig } = require('@expo/metro-config');
 const { mergeConfig } = require('metro-config');
+const { withShareExtension } = require('expo-share-extension/metro');
 const { withUniwindConfig } = require('uniwind/metro');
 
 const defaultConfig = getDefaultConfig(__dirname);
@@ -33,8 +34,10 @@ const nxConfig = withNxMetro(mergeConfig(defaultConfig, customConfig), {
   watchFolders: [],
 });
 
-// withUniwindConfig must be the outermost wrapper.
-module.exports = withUniwindConfig(nxConfig, {
+// withShareExtension points the iOS share-extension target's bundle at
+// index.share.js (docs/share-sheet.md); withUniwindConfig must stay the
+// outermost wrapper.
+module.exports = withUniwindConfig(withShareExtension(nxConfig), {
   cssEntryFile: './global.css',
   dtsFile: './uniwind-env.d.ts',
 });

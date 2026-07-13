@@ -314,6 +314,13 @@ const DDL = `
   );
 `;
 
+// A transaction handle over this database — what the tx-taking store helpers
+// (item-store's putItemsTx, pending-store's enqueuePutTx) accept, so a
+// multi-store write (data/mutations.ts) can compose both into ONE transaction:
+// the local-put + pending-op atomicity web gets from Dexie's multi-table
+// `db.transaction('rw', items, pendingOps, …)`.
+export type DbTx = Parameters<Parameters<ExpoSQLiteDatabase<typeof schema>['transaction']>[0]>[0];
+
 // Opened lazily on first use (not at module load) so merely importing the
 // package barrel never touches the native sqlite module — jest and tooling can
 // import sibling modules without a mock for this one.

@@ -15,6 +15,7 @@
 
 import {
   type ApiClient,
+  chunk,
   type CommitResult,
   FILES_PREFIX,
   filesListEndpoint,
@@ -665,10 +666,4 @@ function newestCursor(...lists: Entry[][]): Entry {
     }
   }
   return { path, updatedAt };
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
 }

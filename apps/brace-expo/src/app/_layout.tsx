@@ -1,8 +1,3 @@
-// Installs the atob/btoa globals Hermes/Expo lacks — must run before any code
-// that decodes base64 (shared's base64ToBytes/bytesToBase64). Kept first, ahead
-// of every other import, so the side effect lands before the app tree evaluates.
-import '../polyfills';
-
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

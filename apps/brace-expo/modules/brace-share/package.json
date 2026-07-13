@@ -1,0 +1,6 @@
+{
+  "name": "brace-share",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Android share target for brace-expo: the translucent ShareActivity hosting the RN share sheet, plus the BraceShare close() module. Local Expo module, autolinked from apps/brace-expo/modules (docs/share-sheet.md); Android-only — iOS uses expo-share-extension."
+}

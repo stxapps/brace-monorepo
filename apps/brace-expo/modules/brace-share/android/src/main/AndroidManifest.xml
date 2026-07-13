@@ -1,0 +1,23 @@
+<!-- Merged into the app manifest at build time (library manifest merge) — this
+     is the whole reason the Android share target needs NO config plugin
+     (docs/share-sheet.md). The activity floats translucent over the CALLER's
+     app: taskAffinity="" keeps it out of Brace's own task, excludeFromRecents
+     keeps the transient sheet out of the app switcher, exported="true" is
+     required for an intent-filter target on API 31+. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <activity
+      android:name="to.brace.share.ShareActivity"
+      android:exported="true"
+      android:theme="@style/BraceShareTheme"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

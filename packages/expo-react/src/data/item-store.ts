@@ -14,7 +14,9 @@
 
 import { eq, inArray } from 'drizzle-orm';
 
-import { getDb, itemFacetStatuses, items, itemTagIds } from './db';
+import { chunk } from '@stxapps/shared';
+
+import { type DbTx, getDb, itemFacetStatuses, items, itemTagIds } from './db';
 import type { ItemRecord } from './projection';
 
 export type ItemRow = typeof items.$inferSelect;
@@ -22,12 +24,6 @@ export type ItemRow = typeof items.$inferSelect;
 // Keep `IN (...)` lists comfortably under SQLite's bound-variable ceiling; the
 // engine's batches (≤1000 paths) split into a couple of chunks.
 const IN_BATCH = 500;
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
 
 // Full-replace row semantics, like Dexie's `put`: every column is set, so a
 // field the record omits is cleared, not kept. `hasDataFile` in particular
@@ -65,6 +61,35 @@ export async function bulkGetItems(paths: string[]): Promise<(ItemRow | undefine
   return paths.map((p) => byPath.get(p));
 }
 
+// The tx-taking body of putItems — for callers that must compose the row +
+// junction upsert into a LARGER transaction (the write edge in mutations.ts
+// puts the record and enqueues its pending op atomically). The invariant is
+// unchanged: junctions are written with their `items` row, replace-then-insert,
+// from the same projected record.
+export function putItemsTx(tx: DbTx, records: ItemRecord[]): void {
+  for (const record of records) {
+    const row = toRow(record);
+    tx.insert(items).values(row).onConflictDoUpdate({ target: items.path, set: row }).run();
+  }
+  for (const paths of chunk(
+    records.map((r) => r.path),
+    IN_BATCH,
+  )) {
+    tx.delete(itemTagIds).where(inArray(itemTagIds.path, paths)).run();
+    tx.delete(itemFacetStatuses).where(inArray(itemFacetStatuses.path, paths)).run();
+  }
+  const tagRows = records.flatMap(
+    (r) => r.itemTagIds?.map((tagId) => ({ path: r.path, tagId })) ?? [],
+  );
+  for (const batch of chunk(tagRows, IN_BATCH)) tx.insert(itemTagIds).values(batch).run();
+  const facetRows = records.flatMap(
+    (r) => r.itemFacetStatuses?.map((token) => ({ path: r.path, token })) ?? [],
+  );
+  for (const batch of chunk(facetRows, IN_BATCH)) {
+    tx.insert(itemFacetStatuses).values(batch).run();
+  }
+}
+
 // Upsert projected records — rows plus their junction rows, one transaction
 // (the invariant this store exists for). Junctions are replace-then-insert so
 // they always mirror the arrays projected from the current bytes; a record
@@ -72,27 +97,7 @@ export async function bulkGetItems(paths: string[]): Promise<(ItemRow | undefine
 export async function putItems(records: ItemRecord[]): Promise<void> {
   if (records.length === 0) return;
   getDb().transaction((tx) => {
-    for (const record of records) {
-      const row = toRow(record);
-      tx.insert(items).values(row).onConflictDoUpdate({ target: items.path, set: row }).run();
-    }
-    for (const paths of chunk(
-      records.map((r) => r.path),
-      IN_BATCH,
-    )) {
-      tx.delete(itemTagIds).where(inArray(itemTagIds.path, paths)).run();
-      tx.delete(itemFacetStatuses).where(inArray(itemFacetStatuses.path, paths)).run();
-    }
-    const tagRows = records.flatMap(
-      (r) => r.itemTagIds?.map((tagId) => ({ path: r.path, tagId })) ?? [],
-    );
-    for (const batch of chunk(tagRows, IN_BATCH)) tx.insert(itemTagIds).values(batch).run();
-    const facetRows = records.flatMap(
-      (r) => r.itemFacetStatuses?.map((token) => ({ path: r.path, token })) ?? [],
-    );
-    for (const batch of chunk(facetRows, IN_BATCH)) {
-      tx.insert(itemFacetStatuses).values(batch).run();
-    }
+    putItemsTx(tx, records);
   });
 }
 

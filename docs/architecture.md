@@ -36,7 +36,11 @@ the same trees, and bulk edit, and [search.md](./search.md) for the links-page
 search subsystem (the URL⇄`LinkQuery` grammar, the `setSimpleQuery`/`setQuery`
 writers, `selection` as a derived projection with a `none` state, and the
 basic-box + advanced-popover UI — the read-side evaluation lives in
-client-queries.md, the tiering in business-model.md).
+client-queries.md, the tiering in business-model.md), and
+[share-sheet.md](./share-sheet.md) for the brace-expo share sheet (share from
+Safari/Chrome → pick list/tags → save; the iOS App Group snapshot/outbox next
+to a separate-process extension vs. Android's in-process translucent share
+activity, and why sync converges either way).
 
 ### apps
 
