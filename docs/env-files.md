@@ -99,6 +99,47 @@ Both throw if the var is unset, mirroring brace-web's missing-`NEXT_PUBLIC_API_U
 guard. The `staging` build is a plain `--mode staging` npm script + Nx target
 (`build:staging`, `build:firefox:staging`) — no Nx `envFile` needed.
 
+### brace-expo — Expo / Metro (implemented)
+
+Expo builds through Metro, which loads `.env` / `.env.<mode>` via `@expo/env`.
+Public vars need the **`EXPO_PUBLIC_`** prefix and are read via
+`process.env.EXPO_PUBLIC_*` — Metro **inlines** them into the JS bundle at build
+time, exactly like brace-web's `NEXT_PUBLIC_` and brace-extension's
+`WXT_PUBLIC_`, so nothing secret belongs here. The mode is `NODE_ENV`: `expo
+start` is `development`, `expo export` / a release build is `production`. Expo has
+**no `--mode` flag** — it only ever auto-selects `development` or `production` by
+`NODE_ENV`:
+
+| command                                     | mode          | env file           |
+| ------------------------------------------- | ------------- | ------------------ |
+| `nx dev @stxapps/brace-expo` (`expo start`) | `development` | `.env.development` |
+| release build / `expo export`               | `production`  | `.env.production`  |
+
+`staging` is the same wrinkle it is for brace-web: a staging build is a
+_production-mode_ build (`NODE_ENV=production`), so Expo won't pick `.env.staging`
+by mode. And unlike brace-web there's no Nx `envFile` seam to lean on — the Expo
+build isn't an `nx build` running a bundler in `process.env`, it's an EAS/`expo
+export` build. So `.env.staging` is selected by the **staging build profile**
+(EAS `eas.json`, or a manual `EXPO_PUBLIC_API_URL=… expo export`), which supplies
+the var and takes precedence over `.env.production`. **That profile isn't set up
+yet** (`eas.json` was removed as unused), so `.env.staging` is committed as the
+single source of the staging URL for when it lands — `.env.development` and
+`.env.production` are the two that work today.
+
+Files in `apps/brace-expo/` (all committed — every value is public):
+
+| file               | used by                                  | loaded by     |
+| ------------------ | ---------------------------------------- | ------------- |
+| `.env.development` | `nx dev @stxapps/brace-expo`             | Expo (auto)   |
+| `.env.production`  | release build / `expo export`            | Expo (auto)   |
+| `.env.staging`     | the staging build profile (EAS — future) | build profile |
+
+Current var: `EXPO_PUBLIC_API_URL` → the matching brace-api URL. It's read once in
+`src/lib/api-client.ts`, which throws if unset (mirroring brace-web's and the
+extension's missing-URL guards) and binds it into `@stxapps/expo-react`'s
+`createAuthApiClient`. Adding a new var = add the line to all three files, same
+deliberate symmetry as the other frontends.
+
 ### brace-api — Hono on Cloudflare Workers
 
 Server-side: config is read at **runtime**, never baked. brace-api runs **only**
@@ -147,6 +188,12 @@ origin(s). Each tier allows **two** web origins: the `app.*` host (the brace-web
 application, this monorepo) and the apex (a separate marketing site in its own
 repo, which also calls the api for public data like stats / health). See
 [deployment.md](./deployment.md#custom-domains) for the host naming scheme.
+
+The `CORS_ORIGINS` column is **web-only**: brace-expo hits the same
+`*_API_URL` per tier, but a native RN `fetch` sends no `Origin` header and
+isn't subject to browser CORS, so the app needs no entry in the allowlist — it
+points at the matching brace-api URL and that's the whole story. (Only the
+browser frontends — brace-web and the marketing apex — need an allowed origin.)
 
 ### what's committed vs ignored
 

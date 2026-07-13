@@ -7,6 +7,9 @@
       "path": "../../packages/shared"
     },
     {
+      "path": "../../packages/react"
+    },
+    {
       "path": "../../packages/expo-react"
     },
     {

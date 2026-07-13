@@ -3,6 +3,9 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { AuthProvider, useQueryManagers } from '@stxapps/expo-react';
+import { ApiClientProvider } from '@stxapps/react';
+
+import { apiClient } from '../lib/api-client';
 
 import '../../global.css';
 
@@ -23,6 +26,13 @@ import '../../global.css';
 // context (react-navigation's SafeAreaProviderCompat), so screens can use
 // `SafeAreaView` without an explicit SafeAreaProvider here.
 //
+// ApiClientProvider hands the shared query/mutation hooks the env-configured
+// client (lib/api-client.ts, bound to EXPO_PUBLIC_API_URL) so they don't hardcode
+// a baseUrl. It wraps AuthProvider — above every route group — because both the
+// `(auth)` public endpoints (username check, sign-in, create-account) and the
+// `(app)` SyncProvider read through it; this mirrors brace-web's root-level
+// ApiClientProvider placement.
+//
 // AuthProvider wraps the whole Stack (mirroring brace-web's root-level placement)
 // so one auth state is shared across every route group: the `(app)` AuthGuard,
 // the `(auth)` GuestGuard, and the landing's future AuthedHomeRedirect all read
@@ -34,10 +44,12 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false }} />
-      </AuthProvider>
+      <ApiClientProvider client={apiClient}>
+        <AuthProvider>
+          <StatusBar style="auto" />
+          <Stack screenOptions={{ headerShown: false }} />
+        </AuthProvider>
+      </ApiClientProvider>
     </QueryClientProvider>
   );
 }

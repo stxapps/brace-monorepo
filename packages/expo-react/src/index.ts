@@ -1,4 +1,5 @@
 export * from './contexts/auth-provider';
+export * from './contexts/sync-provider';
 export * from './data/clear-data';
 export * from './data/db';
 export * from './data/delete-all-data';
@@ -13,6 +14,7 @@ export * from './data/session-store';
 export * from './data/share-store';
 export * from './data/subscription-store';
 export * from './data/sync-store';
+export * from './lib/auth-api-client';
 export * from './lib/query-managers';
 export * from './sync/engine';
 export * from './sync/r2';

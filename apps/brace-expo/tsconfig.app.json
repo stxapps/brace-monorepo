@@ -35,6 +35,9 @@
       "path": "../../packages/shared/tsconfig.lib.json"
     },
     {
+      "path": "../../packages/react/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/expo-react/tsconfig.lib.json"
     },
     {
