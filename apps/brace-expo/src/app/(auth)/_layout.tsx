@@ -1,13 +1,19 @@
 import { Stack } from 'expo-router';
 
+import { GuestGuard } from '../../components/guest-guard';
+
 // The auth group — `/sign-in`, `/create-account`. A `(group)` adds no URL
 // segment (identical semantics to Next.js), so this mirrors brace-web's
 // `src/app/(auth)`: focused screens with no app navigation.
 //
-// TODO(auth): once @stxapps/expo-react ships the auth layer, port brace-web's
-// `(auth)/layout.tsx` GuestGuard — bounce already-authenticated visitors to
-// `/links`. The expo-router idiom is `<Redirect href="/links" />` here (or a
-// `<Stack.Protected guard={!isAuthed}>` around the screens).
+// GuestGuard is now wired: it bounces already-authenticated visitors to `/links`
+// (or the `?next=` AuthGuard stashed) — including right after create-account /
+// sign-in, once setSession flips auth state. It reads the AuthProvider mounted in
+// the root `_layout`.
 export default function AuthLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <GuestGuard>
+      <Stack screenOptions={{ headerShown: false }} />
+    </GuestGuard>
+  );
 }

@@ -132,8 +132,31 @@ export default [
           // so the "obsolete dependency" direction only yields false positives.
           // Keep the valuable guard: imported packages must be declared.
           checkObsoleteDependencies: false,
+          // expo-modules-core is provided by the Expo SDK — a transitive of
+          // `expo`, whose version the root package.json pins (~54). Expo reaches
+          // it via require('expo-modules-core') (e.g. brace-expo's share-host
+          // requireNativeModule), which trips this rule, but the app must NOT
+          // declare its own pinned copy: that would drift from the SDK. Ignoring
+          // it stops --fix from re-adding a pinned version to any app package.json
+          // (same spirit as checkObsoleteDependencies: framework-provided runtime).
+          ignoredDependencies: ['expo-modules-core'],
         },
       ],
+    },
+  },
+  {
+    // Expo local native modules (apps/brace-expo/modules/*) are Kotlin/Gradle +
+    // autolinking manifests, not JS packages — their package.json exists only so
+    // Expo autolinking discovers the module; runtime deps come from the host app.
+    // They aren't separate Nx projects, so @nx/dependency-checks maps them to the
+    // enclosing @stxapps/brace-expo and, on --fix, floods their package.json with
+    // the app's imports. Turn the rule off for these manifests. (Must sit AFTER
+    // the block above so it wins in flat-config order.) Glob is depth-relative
+    // like the '**/*.json' block above — Nx runs `eslint .` from the project
+    // dir, so the path here is `modules/…`, not repo-relative `apps/brace-expo/…`.
+    files: ['**/modules/**/package.json'],
+    rules: {
+      '@nx/dependency-checks': 'off',
     },
   },
   // Must be last: disables ESLint rules that conflict with Prettier formatting.

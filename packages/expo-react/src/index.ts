@@ -1,3 +1,4 @@
+export * from './contexts/auth-provider';
 export * from './data/clear-data';
 export * from './data/db';
 export * from './data/delete-all-data';

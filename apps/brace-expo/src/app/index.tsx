@@ -1,3 +1,4 @@
+import { AuthedHomeRedirect } from '../components/authed-home-redirect';
 import { Landing } from '../components/landing';
 
 // The public landing at `/`, outside both `(app)` and `(auth)` groups — the
@@ -5,9 +6,14 @@ import { Landing } from '../components/landing';
 // lives in `src/components/landing.tsx` (so its spec can colocate — files under
 // the app root become routes), while navigation concerns stay here.
 //
-// TODO(auth): port brace-web's AuthedHomeRedirect — once @stxapps/expo-react
-// ships auth state, bounce already-authenticated visitors from `/` to `/links`
-// (return `<Redirect href="/links" />` when status === 'authenticated').
+// AuthedHomeRedirect (mirroring brace-web's page.tsx) bounces already-authenticated
+// visitors from `/` to `/links` off the AuthProvider in the root `_layout`; it
+// renders null for guests, so the landing hero shows unaffected.
 export default function Index() {
-  return <Landing />;
+  return (
+    <>
+      <AuthedHomeRedirect />
+      <Landing />
+    </>
+  );
 }
