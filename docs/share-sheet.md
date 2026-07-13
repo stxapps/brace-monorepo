@@ -117,28 +117,97 @@ drains the queue on the next sync cycle. The share flow needs `writeLink`,
 `writeTag` (new tags), and `writeExtraction` (title seed); the other siblings
 arrive with their features.
 
-- **Android Add** = mutations writes, then an inline sync kick while the
-  process is alive (one entity, sub-second) — "synced in the background" is
-  genuinely met in phase 1. Backstops: the engine's next-open pass, the
-  existing background task cadence. (The inline kick needs the app's
-  `SyncDeps`/api-client binding, which lands with the auth provider —
-  `TODO(auth)`; until then the pending op drains on next open.)
-- **iOS Add** = outbox write + ✓ + `close()`. Sync happens on next
-  launch/foreground drain, plus opportunistic BGAppRefresh
-  (expo-background-task) — iOS schedules that at its own discretion, which is
-  the honest phase-1 latency story.
+**The sheet dismisses fast; sync is never awaited in-sheet.** The durable
+commit is the local write (the pending op enqueued in the same transaction on
+Android, the outbox file on iOS) — NOT the sync completing. So Add is always
+`write → ✓ → close()`; any sync/upload is fired **best-effort, un-awaited**.
+Never hold the sheet on a "syncing…" spinner: the user shared and wants back to
+the caller, and delivery is guaranteed by the durable record + next-open drain,
+not by the in-sheet kick landing.
+
+- **Android Add** = mutations writes, then an inline sync kick, un-awaited —
+  one entity, sub-second, so it usually lands while the process is alive.
+  **Caveat: the ShareActivity's process may have been spawned just for the
+  share** (main app not running); once the activity `finish()`es and nothing
+  else is foreground, the process is a cached process eligible for reap, which
+  cancels an in-flight sync. So (a) launch the kick on an **application/process
+  scope, not the Activity scope**, or `finish()` cancels it outright; and (b)
+  treat even that as best-effort — a process-scope coroutine still dies on
+  reap. Delivery is guaranteed by the **pending op + next-open drain + the
+  background-task cadence**, never by the inline kick. If a hard "on the server
+  before the user looks elsewhere" guarantee is ever needed, the right tool is
+  **WorkManager** (survives process death, network-constrained, retrying) — an
+  enhancement, since the pending op already makes it lossless. (The inline kick
+  needs the app's `SyncDeps`/api-client binding, which lands with the auth
+  provider — `TODO(auth)`; until then the pending op drains on next open.)
+- **iOS Add** = outbox write + ✓ + `close()`, plus the best-effort upload
+  (phase 2, below). Down-sync happens on next launch/foreground drain, plus
+  opportunistic BGAppRefresh (expo-background-task) — iOS schedules that at its
+  own discretion, which is the honest phase-1 latency story.
 
 ### phase 2 — immediate upload from the iOS extension
 
-Contained and additive, only if next-open latency hurts in practice: the
-extension encrypts the entity blobs (KB-sized JS over react-native-quick-crypto
-— no Argon2, key pre-derived, far under the ~120MB extension memory cap) and
-PUTs them itself. Prerequisites: (a) the encryption key readable from a
-**shared Keychain access group** — expo-secure-store doesn't expose access
-groups, so add an explicit-group read/write to the BraceFileCrypto native
-module in `packages/expo-crypto`; (b) verify quick-crypto links into the
-extension target. The outbox stays the record of truth; the upload is
-best-effort and reconciles by id.
+**The outbox is the record of truth; the upload is a best-effort fast path on
+top of it — not a replacement.** The extension builds the entity, writes the
+outbox file (durable, always), and *then* best-effort encrypts + PUTs it:
+
+```
+tap Add →
+  mint id, build ShareDraft →
+  write outbox/<id>.json         ← durable, always happens
+  best-effort: encrypt + PUT     ← may fail (offline, key read, link error)
+  ✓ + close()
+```
+
+Keeping the outbox even when the upload "works" is what makes the share
+**lossless**: an offline or failed PUT would otherwise drop the link, so the
+outbox is always the thing the main app drains on next open (local write +
+upload) as the fallback. It's safe to have both fire because the design is
+**idempotent by id** (minted in the sheet): extension uploads → main app later
+drains the same outbox item → re-uploads under the same id → last-write-wins,
+no duplicate.
+
+**What the upload actually buys — and what it doesn't.** For the *sharing
+device itself* it buys nothing the next-open drain wouldn't: the phone
+populates its own local store on next open regardless (down-sync pulls back its
+own upload, or the outbox drain writes it). The upload's real payoff is
+**cross-device / web freshness** — your laptop and brace-web see the link
+without waiting for you to reopen the phone app. So this stays contained and
+additive, warranted only once multi-device freshness is a felt need; until
+then outbox + next-open is already correct.
+
+**The upload runs in RN, because the runtime is already warm.** The sheet is
+RN, so at Add time the JS instance is up and the upload is just more work in a
+runtime already paid for — reusing the v1 frame (`blob.ts`), the typed sync
+endpoint contract (`@stxapps/shared`), and the api client, instead of forking
+AES framing + HTTP + endpoint types into Swift for zero latency benefit. (The
+upload's language follows the sheet's language: if the sheet were ever forked
+to native SwiftUI for cold-start reasons — see below — the upload would go
+native with it, on CryptoKit + the v1 frame BraceFileCrypto already produces.)
+
+Prerequisites: (a) the encryption key readable from a **shared Keychain access
+group** — expo-secure-store doesn't expose access groups, so add an
+explicit-group read/write to the BraceFileCrypto native module in
+`packages/expo-crypto` (this native hop happens regardless of upload language);
+(b) verify `react-native-quick-crypto` links into the extension target — if it
+doesn't, the fallback is **not** "go full Swift" but call **BraceFileCrypto**
+(your own autolinked module, which has to link anyway for (a)) for the AES,
+staying in the RN path. The entity blobs are KB-sized (no Argon2, key
+pre-derived, far under the ~120MB cap).
+
+**Invariant that keeps the memory story true: no bytes-heavy work in the
+extension.** The extension handles URLs and KB-sized entity JSON only —
+image/screenshot fetch, decrypt, and encrypt stay in the main app / extractor.
+This is what keeps phase 1 *and* phase 2 comfortably under the ~120MB
+share-extension cap; don't move image work across the process boundary to
+"save a round trip."
+
+**Keep `index.share.js` lean.** Everything the share entry transitively imports
+is init cost paid on every cold share (see the cold-start note in the file map
+below). The extension bundle should pull in `ShareRoot`/`ShareScreen`, the
+pickers, `share-store`, and `mutations` — **not** the router tree, `_layout`'s
+providers, or main-app-only modules. Police this graph actively; it's the one
+real lever on RN cold-start latency.
 
 ### file map
 
