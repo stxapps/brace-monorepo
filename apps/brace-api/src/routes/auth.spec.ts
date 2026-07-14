@@ -532,6 +532,42 @@ describe('auth routes', () => {
       expect(res.status).toBe(200);
       expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
     });
+
+    it('skips the subscription gate on a resumed teardown (already tombstoned)', async () => {
+      // Crash-recovery path: a first delete already tombstoned the directory
+      // entry but didn't finish (here the crash landed before the shard batch,
+      // so the user row is still present). The SAME renewing subscription that
+      // 409s a fresh delete (test above) must NOT strand a committed teardown —
+      // once tombstoned the gate is skipped, so the retry proceeds.
+      const acct = await seedFullAccount('resumedteardown');
+      await usernamesRepo(env.DIRECTORY_DB).tombstone('resumedteardown', acct.userId);
+      await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+        id: newId(),
+        userId: acct.userId,
+        source: 'paddle',
+        externalId: `sub-${acct.userId}`,
+        plan: 'plus',
+        status: 'active',
+        providerCustomerId: 'ctm_test',
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        canceledAt: null,
+        eventOccurredAt: Date.now(),
+      });
+
+      const req = await signedBody(acct.keyPair, deletePayload('resumedteardown', acct.publicKey));
+      const res = await app.request(
+        deleteAccountEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      // Proceeds despite the renewing subscription, and finishes the teardown.
+      expect(res.status).toBe(200);
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
+      expect(
+        await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(acct.token)),
+      ).toBeNull();
+    });
   });
 
   // A DISTINCT door from `door` above, so an upsert/rotation is observable — the

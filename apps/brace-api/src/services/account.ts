@@ -342,13 +342,24 @@ export async function deleteAccount(
   // until the paid period runs out would be hostile (the client's copy says the
   // remaining time is forfeited). Cancellation happens in the Paddle portal
   // (POST /v1/iap/portal), never here — deletion must not mutate provider state.
-  const subscription = await getSubscriptionStatus(env, session.userId);
-  if (subscription.status === 'grace' || subscription.willRenew) {
-    throw new HttpError(
-      409,
-      'subscription_active',
-      'Cancel your subscription before deleting your account',
-    );
+  //
+  // Only gate a FRESH deletion (no tombstone yet). Once tombstoned, the teardown
+  // is committed and the data is already wiped, so the billing check is moot —
+  // and re-running it on a resumed teardown could 409 and strand the remaining
+  // steps (notably the session revoke), leaving live sessions for a deleted
+  // account. A tombstone always implies this account already cleared the gate
+  // once (it's only set below, after this check), so skipping it here can never
+  // weaken a first-time deletion. Matches the "every crash window is finishable
+  // by retrying" invariant above.
+  if (entry.deletedAt === null) {
+    const subscription = await getSubscriptionStatus(env, session.userId);
+    if (subscription.status === 'grace' || subscription.willRenew) {
+      throw new HttpError(
+        409,
+        'subscription_active',
+        'Cancel your subscription before deleting your account',
+      );
+    }
   }
 
   await deleteAllUserData(env, session.userId);
