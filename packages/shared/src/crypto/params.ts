@@ -44,6 +44,13 @@ export const ARGON2_PARAMS = {
 export const HKDF_INFO_AUTH_SEED = 'brace-auth-seed';
 export const HKDF_INFO_ENCRYPTION_KEY = 'brace-encryption-key';
 
+// The RECOVERY door's KEK label. Unlike the password door (Argon2id over a
+// low-entropy secret), the recovery code is already ≥256-bit CSPRNG entropy, so
+// its KEK is a cheap HKDF over the normalized code — this is the `info` that
+// forks it from every other HKDF use. Frozen like the labels above: change it and
+// every existing recovery code stops unwrapping the DEK. See docs/account.md.
+export const HKDF_INFO_RECOVERY_KEK = 'brace-recovery-kek';
+
 // --- encrypted-blob wire format ---------------------------------------------
 //
 // Every synced R2 blob is framed `[version(1) || iv(AES_GCM_IV_BYTES) ||
@@ -71,3 +78,25 @@ export const BLOB_FORMAT_V1 = 0x01;
 // forms; trim + lowercase mirror how the server stores the handle.
 export const canonicalizeUsername = (username: string): string =>
   username.trim().normalize('NFKC').toLowerCase();
+
+// Canonical form of a PASSWORD, folded in before the Argon2id KEK derivation
+// (web-crypto/expo-crypto `derivePasswordKek`). Part of the frozen derivation
+// contract: every platform must apply this identically and forever, or the same
+// password derives a different KEK on another device and locks the user out —
+// and there is NO password reset (docs/account.md), so that lockout is permanent.
+//
+// Deliberately DIFFERENT from canonicalizeUsername, because a password is a
+// secret, not an identifier:
+//   - trim() — kills the unrecoverable "invisible trailing space at signup"
+//     footgun (the input isn't otherwise trimmed on the derivation path).
+//   - normalize('NFC') — canonical composition only, so the SAME-looking password
+//     typed as precomposed 'é' (U+00E9) or decomposed 'e'+U+0301 derives one KEK
+//     across platforms/keyboards. NFC is entropy-preserving.
+//   - NOT NFKC, and NOT toLowerCase — those are for the username handle, where you
+//     WANT aggressive folding so confusables collide. On a password they'd shrink
+//     the password space (NFKC folds ligatures/width/etc.) and destroy case, which
+//     a password must keep. This mirrors RFC 8265's OpaqueString profile.
+// On a plain-ASCII password (e.g. the generated hyphen-joined passphrase) this is
+// a no-op, so it doesn't disturb the ASCII contract vectors.
+export const canonicalizePassword = (password: string): string =>
+  password.trim().normalize('NFC');

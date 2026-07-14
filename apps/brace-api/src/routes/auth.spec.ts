@@ -3,11 +3,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   bytesToHex,
+  changePasswordEndpoint,
   checkUsernameEndpoint,
   deleteAccountEndpoint,
+  DOOR_PASSWORD,
+  DOOR_RECOVERY,
   passwordDoorEndpoint,
+  putRecoveryDoorEndpoint,
+  recoveryDoorEndpoint,
   signInEndpoint,
   signOutEndpoint,
+  signOutOthersEndpoint,
 } from '@stxapps/shared';
 
 import { app } from '../app';
@@ -40,15 +46,15 @@ describe('auth routes', () => {
 
     it('reports a taken username, case-insensitively', async () => {
       // Seed the directory with the canonical (lowercase) form, then query a
-      // different-cased spelling: the lookup canonicalizes, so 'Admin' must
-      // resolve to the stored 'admin' and report unavailable.
+      // different-cased spelling: the lookup canonicalizes, so 'Zoe_42' must
+      // resolve to the stored 'zoe_42' and report unavailable.
       await usernamesRepo(env.DIRECTORY_DB).claim({
-        username: 'admin',
+        username: 'zoe_42',
         userId: 'u_seed',
         accountDbId: '1',
       });
 
-      const res = await app.request(`${usernamePath}?username=Admin`, {}, env);
+      const res = await app.request(`${usernamePath}?username=Zoe_42`, {}, env);
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ available: false });
@@ -58,6 +64,15 @@ describe('auth routes', () => {
     // handler ever touches a binding.
     it('rejects a username that fails the shared validation rules', async () => {
       const res = await app.request(`${usernamePath}?username=no`, {}, env);
+
+      expect(res.status).toBe(400);
+    });
+
+    // The reserved-name blocklist lives in the shared usernameSchema, so it's
+    // enforced at the zValidator server-side too — a reserved handle never reaches
+    // the handler (and any casing collapses to the canonical form first).
+    it('rejects a reserved username at the server', async () => {
+      const res = await app.request(`${usernamePath}?username=Admin`, {}, env);
 
       expect(res.status).toBe(400);
     });
@@ -256,6 +271,51 @@ describe('auth routes', () => {
 
     it('rejects an unknown bearer token', async () => {
       const res = await post({ authorization: 'Bearer not-a-real-token' });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe(`POST ${signOutOthersEndpoint.path}`, () => {
+    const post = (headers: Record<string, string>) =>
+      app.request(
+        signOutOthersEndpoint.path,
+        { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{}' },
+        env,
+      );
+
+    it('revokes the account’s other sessions but keeps the caller’s', async () => {
+      // Two live sessions for the same account: the caller (this device) and one
+      // other device.
+      const mine = await issueSession(env, { id: 'u_soo', accountDbId: '1' });
+      const other = await issueSession(env, { id: 'u_soo', accountDbId: '1' });
+      const mineHash = await hashToken(mine.token);
+      const otherHash = await hashToken(other.token);
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).not.toBeNull();
+
+      const res = await post({ authorization: `Bearer ${mine.token}` });
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ ok: true });
+      // The other device is gone; the caller's own session still authenticates.
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).toBeNull();
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(mineHash)).not.toBeNull();
+    });
+
+    it('leaves OTHER accounts’ sessions untouched', async () => {
+      const mine = await issueSession(env, { id: 'u_soo_a', accountDbId: '1' });
+      const stranger = await issueSession(env, { id: 'u_soo_b', accountDbId: '1' });
+      const strangerHash = await hashToken(stranger.token);
+
+      const res = await post({ authorization: `Bearer ${mine.token}` });
+
+      expect(res.status).toBe(200);
+      // A different user's session is never in scope of this account's revoke.
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(strangerHash)).not.toBeNull();
+    });
+
+    it('rejects a request with no bearer token', async () => {
+      const res = await post({});
 
       expect(res.status).toBe(401);
     });
@@ -471,6 +531,211 @@ describe('auth routes', () => {
 
       expect(res.status).toBe(200);
       expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
+    });
+  });
+
+  // A DISTINCT door from `door` above, so an upsert/rotation is observable — the
+  // stored blob must change to this. Filler bytes; the server never unwraps.
+  const newDoor = { wrappedDek: new Uint8Array(48).fill(3), iv: new Uint8Array(12).fill(4) };
+  const hexDoor = (d: { wrappedDek: Uint8Array; iv: Uint8Array }) => ({
+    wrappedDek: bytesToHex(d.wrappedDek),
+    iv: bytesToHex(d.iv),
+  });
+
+  // Seed a full account (directory + shard rows + session), optionally with a
+  // recovery door too, returning what the authed door-rotation calls need.
+  async function seedSessioned(username: string, withRecovery = false) {
+    const kp = await newKeyPair();
+    const { userId, session } = await createAccount(env, {
+      username,
+      publicKey: kp.publicKey,
+      doors: [
+        { doorType: 'password', ...door },
+        ...(withRecovery ? [{ doorType: 'recovery' as const, ...door }] : []),
+      ],
+    });
+    return { ...kp, userId, token: session.token, auth: { authorization: `Bearer ${session.token}` } };
+  }
+
+  const signedReq = async (keyPair: CryptoKeyPair, payload: string) => ({
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ payload, signature: await sign(keyPair, payload) }),
+  });
+
+  describe(`GET ${recoveryDoorEndpoint.path}`, () => {
+    it('returns the recovery door blob when the account has one', async () => {
+      await seedSessioned('recoveryholder', true);
+
+      const res = await app.request(
+        `${recoveryDoorEndpoint.path}?username=recoveryholder`,
+        {},
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual(hexDoor(door));
+    });
+
+    it('returns 404 when the account skipped recovery (password door only)', async () => {
+      await seedAccount('norecovery');
+
+      const res = await app.request(`${recoveryDoorEndpoint.path}?username=norecovery`, {}, env);
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe(`POST ${changePasswordEndpoint.path}`, () => {
+    const payload = (username: string, publicKey: string) =>
+      JSON.stringify({
+        action: 'change-password',
+        username,
+        publicKey,
+        passwordDoor: hexDoor(newDoor),
+        timestamp: Date.now(),
+      });
+
+    it('re-wraps the password door for a valid proof + bearer', async () => {
+      const acct = await seedSessioned('pwchanger');
+      const req = await signedReq(acct.keyPair, payload('pwchanger', acct.publicKey));
+
+      const res = await app.request(
+        changePasswordEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ ok: true });
+      // The stored password door is now the NEW blob; publicKey untouched.
+      const stored = await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(
+        acct.userId,
+        DOOR_PASSWORD,
+      );
+      expect(stored?.wrappedDek).toEqual(newDoor.wrappedDek);
+      expect(stored?.version).toBe(2); // bumped from 1 on the re-wrap
+      expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toMatchObject({
+        publicKey: acct.publicKey,
+      });
+    });
+
+    it('signs out other devices but keeps the caller’s own session', async () => {
+      const acct = await seedSessioned('pwrevoke');
+      // A second device: another live session for the same account.
+      const other = await issueSession(env, { id: acct.userId, accountDbId: '1' });
+      const otherHash = await hashToken(other.token);
+      const thisHash = await hashToken(acct.token);
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).not.toBeNull();
+
+      const req = await signedReq(acct.keyPair, payload('pwrevoke', acct.publicKey));
+      const res = await app.request(
+        changePasswordEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      // The other device is revoked; the session that made this call survives.
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).toBeNull();
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(thisHash)).not.toBeNull();
+    });
+
+    it('rejects without a bearer token (session-only is never enough)', async () => {
+      const acct = await seedSessioned('pwnobearer');
+      const req = await signedReq(acct.keyPair, payload('pwnobearer', acct.publicKey));
+
+      const res = await app.request(changePasswordEndpoint.path, req, env);
+
+      expect(res.status).toBe(401);
+      const stored = await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(
+        acct.userId,
+        DOOR_PASSWORD,
+      );
+      expect(stored?.wrappedDek).toEqual(door.wrappedDek); // unchanged
+    });
+
+    it('rejects a valid signature whose key is not the stored credential', async () => {
+      const acct = await seedSessioned('pwthief');
+      const thief = await newKeyPair();
+      const req = await signedReq(thief.keyPair, payload('pwthief', thief.publicKey));
+
+      const res = await app.request(
+        changePasswordEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe(`POST ${putRecoveryDoorEndpoint.path}`, () => {
+    const payload = (username: string, publicKey: string) =>
+      JSON.stringify({
+        action: 'put-recovery-door',
+        username,
+        publicKey,
+        recoveryDoor: hexDoor(newDoor),
+        timestamp: Date.now(),
+      });
+
+    it('creates the recovery door when the account had none', async () => {
+      const acct = await seedSessioned('addrecovery'); // password door only
+      expect(
+        await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(acct.userId, DOOR_RECOVERY),
+      ).toBeNull();
+
+      const req = await signedReq(acct.keyPair, payload('addrecovery', acct.publicKey));
+      const res = await app.request(
+        putRecoveryDoorEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      const stored = await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(
+        acct.userId,
+        DOOR_RECOVERY,
+      );
+      expect(stored?.wrappedDek).toEqual(newDoor.wrappedDek);
+      expect(stored?.version).toBe(1);
+    });
+
+    it('replaces (regenerates) an existing recovery door, bumping its version', async () => {
+      const acct = await seedSessioned('regenrecovery', true); // seeded with `door`
+      const req = await signedReq(acct.keyPair, payload('regenrecovery', acct.publicKey));
+
+      const res = await app.request(
+        putRecoveryDoorEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      const stored = await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(
+        acct.userId,
+        DOOR_RECOVERY,
+      );
+      expect(stored?.wrappedDek).toEqual(newDoor.wrappedDek);
+      expect(stored?.version).toBe(2);
+    });
+
+    it('leaves other sessions alone (regenerating a recovery code is not a sign-out)', async () => {
+      const acct = await seedSessioned('recoverykeepssessions', true);
+      const other = await issueSession(env, { id: acct.userId, accountDbId: '1' });
+      const otherHash = await hashToken(other.token);
+
+      const req = await signedReq(acct.keyPair, payload('recoverykeepssessions', acct.publicKey));
+      const res = await app.request(
+        putRecoveryDoorEndpoint.path,
+        { ...req, headers: { ...req.headers, ...acct.auth } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      // Unlike change-password, both devices stay signed in.
+      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).not.toBeNull();
     });
   });
 });

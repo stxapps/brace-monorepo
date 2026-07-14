@@ -30,13 +30,19 @@ import { seedNewAccount } from '../data/sync-store';
 export class UsernameTakenError extends Error {}
 export class UsernameCheckError extends Error {}
 
+// The mutate input is the form values PLUS an optional recovery code minted by
+// the "Secure your account" ceremony. When present it wraps the SAME DEK into a
+// recovery door, submitted alongside the password door; when absent the account
+// starts password-only (recovery is skippable — docs/account.md).
+export type CreateAccountInput = CreateAccountValues & { recoveryCode?: string };
+
 export function useCreateAccount() {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const { setSession } = useAuth();
 
   return useMutation({
-    mutationFn: async (values: CreateAccountValues) => {
+    mutationFn: async (values: CreateAccountInput) => {
       // Canonicalize ONCE at the boundary (trim→NFKC→lowercase) and use that form
       // for everything downstream — the KDF salt, the signed payload, and the
       // client-side stores (session record, syncMeta key). The server and
@@ -67,13 +73,18 @@ export function useCreateAccount() {
       // data, a `sign` closure over the private key (which never leaves
       // @stxapps/web-crypto), and `passwordDoor` — the wrapped DEK to persist
       // server-side.
-      const account = await createAccount(username, values.password);
+      const account = await createAccount(
+        username,
+        values.password,
+        values.recoveryCode ? { recoveryCode: values.recoveryCode } : undefined,
+      );
 
       // Step 3: prove key ownership by signing a timestamped payload — which also
-      // carries the wrapped password door, so the signature covers exactly what
-      // the server persists — then POST it to exchange for a session. The signed
-      // value is the EXACT JSON string the server verifies against, so we stringify
-      // once and both sign and send that string (see createAccountRequestSchema).
+      // carries the wrapped door(s), so the signature covers exactly what the
+      // server persists — then POST it to exchange for a session. The signed value
+      // is the EXACT JSON string the server verifies against, so we stringify once
+      // and both sign and send that string (see createAccountRequestSchema). The
+      // recovery door is included only when the ceremony minted a code.
       const payload = JSON.stringify({
         action: 'create-account',
         username,
@@ -82,6 +93,14 @@ export function useCreateAccount() {
           wrappedDek: bytesToHex(account.passwordDoor.wrappedDek),
           iv: bytesToHex(account.passwordDoor.iv),
         },
+        ...(account.recoveryDoor
+          ? {
+              recoveryDoor: {
+                wrappedDek: bytesToHex(account.recoveryDoor.wrappedDek),
+                iv: bytesToHex(account.recoveryDoor.iv),
+              },
+            }
+          : {}),
         timestamp: Date.now(),
       } satisfies CreateAccountPayload);
       const signature = await account.sign(payload);

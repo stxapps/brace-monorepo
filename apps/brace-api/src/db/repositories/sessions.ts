@@ -67,11 +67,22 @@ export function sessionsRepo(db: D1Database) {
       await db.prepare(`DELETE FROM sessions WHERE id = ?`).bind(id).run();
     },
 
-    // Revoke EVERY session for a user — account deletion (and a future "sign out
-    // everywhere"). Indexed by idx_sessions_user_id, so it's a range delete, not
-    // a scan.
+    // Revoke EVERY session for a user — account deletion (the account is gone, so
+    // the caller's own session goes too). Indexed by idx_sessions_user_id, so it's
+    // a range delete, not a scan.
     async deleteByUserId(userId: string): Promise<void> {
       await db.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(userId).run();
+    },
+
+    // Revoke every OTHER session for a user, keeping the caller's own (exceptId)
+    // alive — change-password's forward-cut-off, and "sign out other devices"
+    // (POST /v1/auth/sign-out-others). Same idx_sessions_user_id range delete.
+    // deleteByUserId is the sibling that spares nothing (account deletion).
+    async deleteByUserIdExcept(userId: string, exceptId: string): Promise<void> {
+      await db
+        .prepare(`DELETE FROM sessions WHERE user_id = ? AND id <> ?`)
+        .bind(userId, exceptId)
+        .run();
     },
 
     // Housekeeping: drop expired rows so the sessions table stays small. Call

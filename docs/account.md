@@ -94,16 +94,31 @@ ciphertext can mount an offline Argon2id attack on a weak password.
 
 | door              | input entropy     | KDF for the KEK                                   | when                   |
 | ----------------- | ----------------- | ------------------------------------------------- | ---------------------- |
-| **password**      | low (user-chosen) | **Argon2id** (memory-hard) over the per-user salt | always (primary)       |
-| **recovery code** | high (CSPRNG)     | **HKDF** (input already high-entropy)             | launch                 |
+| **password**      | low (user-chosen) | **Argon2id** (memory-hard) over the per-user salt | always (primary) — ✅   |
+| **recovery code** | high (CSPRNG)     | **HKDF** (input already high-entropy)             | ✅ built (skippable)    |
 | **passkey**       | high (PRF secret) | **HKDF** over the WebAuthn PRF output             | later, where supported |
 
-- **password door** — `password-KEK = Argon2id(password, salt)`, where
-  `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the per-user
-  salt described below). Memory-hard because the input is low-entropy.
+- **password door** — `password-KEK = Argon2id(canonicalizePassword(password),
+  salt)`, where `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the
+  per-user salt described below). Memory-hard because the input is low-entropy.
+  `canonicalizePassword` (`shared` `crypto/params.ts`) is `trim().normalize('NFC')`
+  — part of the frozen contract, so every platform folds it identically before the
+  KDF. It differs from the username's `NFKC`+`toLowerCase` on purpose: a password
+  is a secret, so we use **canonical** NFC (entropy-preserving, unlike lossy NFKC)
+  and keep case, per RFC 8265's OpaqueString profile. `trim()` closes the
+  unrecoverable "invisible trailing space at signup" lockout (there is no reset);
+  NFC makes a password typed as precomposed `é` vs decomposed `e`+U+0301 derive one
+  KEK across keyboards/platforms. On the ASCII generated passphrase it is a no-op.
+  (The generated passphrase joins its words with **`-`**, not spaces — a hyphen is
+  a single token to keyboards/autocorrect, avoiding the space-re-entry footgun;
+  see `generatePassphrase`.)
 - **recovery code** — generated with `crypto.getRandomValues` (≥256 bits, shown
-  once as grouped base32). Already high-entropy, so a cheap
-  `recovery-KEK = HKDF(recoveryCode, info="brace-recovery-kek")` suffices.
+  once as grouped **Crockford base32**). Already high-entropy, so a cheap
+  `recovery-KEK = HKDF(normalizeRecoveryCode(code), info="brace-recovery-kek")`
+  suffices. The KDF runs over the **normalized** string (uppercase, hyphens
+  dropped, Crockford confusables `O→0`/`I,L→1` repaired), so a code typed with its
+  display grouping still unwraps. Generator + normalizer are in `shared`
+  (`crypto/recovery-code.ts`) so web and native produce/parse the identical form.
 - **passkey** — needs the **WebAuthn PRF extension** (built on `hmac-secret`):
   the authenticator returns a stable per-credential pseudorandom secret, and
   `passkey-KEK = HKDF(prfSecret, …)`. A plain passkey only _signs_ — it can't
@@ -147,6 +162,43 @@ context not already carried by the KEK, so it is the whole AAD. (Defined once as
 Revoking a device is just deleting that door's wrapped blob (plus its `sessions`
 row) — no re-encryption, as long as the DEK itself wasn't exposed.
 
+> **STATUS — door rotation ✅ built; DEK rotation not.** Change-password and
+> generate/regenerate-recovery are wired as tier-1 rotations: prove an existing
+> door (current password **or** recovery code) to recover the DEK, re-wrap it, and
+> `upsert` that one `account_keys` row — the publicKey and data are untouched.
+> **Sessions:** change-password additionally **revokes every other session**
+> (keeping the caller's own — the UI stays signed in on this device) via
+> `sessions.deleteByUserIdExcept`: a password change can't un-leak already-copied
+> data, but it cuts off ongoing access, so whoever had the old password loses both
+> the ability to mint new sessions and any session they'd already minted.
+> Regenerating a recovery code does **not** touch sessions (it isn't a "someone may
+> be in my account" action; it only invalidates the old code). The same
+> except-current primitive backs **"sign out other devices"** (POST
+> `/v1/auth/sign-out-others`, `useSignOutOthers`): session-only (`requireAuth`, no
+> fresh proof — the plural of sign-out, low-harm and reversible), it revokes every
+> other session and keeps the caller's own.
+> Endpoints POST `/v1/auth/change-password` and POST
+> `/v1/auth/recovery-door` (`routes/auth.ts`, `services/account.ts`), each
+> double-guarded like delete-account (bearer token **and** a fresh signed proof, so
+> a stolen session alone can't rotate a door); client crypto
+> `changePasswordDoor` / `regenerateRecoveryDoor` (`web-crypto/derive.ts`), hooks
+> `useChangePassword` / `useRecoveryCode`. **DEK rotation is deferred** (own
+> project) — see the leaked-password note next.
+
+> **A leaked password needs DEK rotation, not a password change.** Changing the
+> password is only a door rotation: the DEK is **unchanged**, and the wrapped blob
+> is served pre-auth, so an attacker who learned the password can still fetch a
+> blob and unwrap the same DEK — deleting the old password-door row server-side
+> can't un-capture a copy they already pulled, and an attacker who already
+> unwrapped the DEK keeps it forever (it derives the credential + encryption key).
+> So the real remedy for a suspected compromise is **DEK rotation** (tier-2): mint
+> a new DEK, re-derive the keypair (**publicKey changes**), **re-encrypt all
+> data**, re-wrap every door, and revoke all sessions. That touches the sync
+> engine, so it is its own project — surfaced later as a settings "Reset account
+> security" action. Honest limit: rotation locks the attacker out going forward
+> but **cannot** re-protect ciphertext they already exfiltrated — which is exactly
+> why steering users to a high-entropy passphrase up front matters most.
+
 ### the derivation pipeline
 
 One synchronous pass, run inside a Web Worker (Argon2id is ~1–3 s of CPU, kept
@@ -188,10 +240,11 @@ rule, or a door fails to unwrap the DEK and the user is locked out. **They can
 never change once real users exist.** (The DEK is random, so it is _not_ part of
 the frozen contract — only the machinery that derives KEKs and unwraps it is.)
 The contract is pinned by **golden vectors** (`crypto/contract-vectors.ts` in
-`@stxapps/shared` — salt, KEK, wrapped door, derived keys, signature, packed
-blob, generated once from the real web pipeline): both `web-crypto`'s and
-`expo-crypto`'s specs assert the same vectors, so a platform that drifts fails
-CI instead of locking users out.
+`@stxapps/shared` — salt, KEK, wrapped password door, **recovery-KEK + wrapped
+recovery door**, derived keys, signature, packed blob, and a **passphrase
+wordlist hash** pin, generated once from the real web pipeline): both
+`web-crypto`'s and `expo-crypto`'s specs assert the same vectors, so a platform
+that drifts fails CI instead of locking users out.
 
 ### username — rules and why
 
@@ -203,6 +256,16 @@ identically on the form and the server:
 | length           | **3–32** chars            | short enough to type, long enough to be distinct            |
 | charset          | `[a-zA-Z0-9_]`            | unambiguous, URL-safe, no Unicode confusables in the handle |
 | canonicalization | `trim → NFKC → lowercase` | one deterministic form (`canonicalizeUsername`)             |
+| reserved names   | `RESERVED_USERNAMES` set  | no account can impersonate the product or a system/role     |
+
+The **length floor is an identity choice, not a security one**: the username is
+the salt, but a salt needs to be _unique_ (the server's `UNIQUE` handle
+guarantees that) not high-entropy, and `APP_SALT` supplies the cross-app
+namespace — so a 3-char handle is a perfectly strong salt and a longer minimum
+would buy no security. The **reserved-name blocklist** _is_ the meaningful
+username hardening: exact-match (so `admin123` is fine) against the CANONICAL
+form, so casing can't smuggle a reserved handle past. It lives in `usernameSchema`
+and therefore holds on the **server** too (every auth endpoint validates it).
 
 The username does double duty: it is the **public handle** (the server's
 case-insensitive `UNIQUE` key) _and_ the **password door's salt input**. Because
@@ -223,14 +286,24 @@ can loosen into later — never the reverse. See
 
 ### password — rules and entropy
 
-`passwordSchema` enforces **8–128** characters. Read these as a _length_ floor
-and a hashing bound, **not** a security guarantee:
+There are **two** length schemas, on purpose — length plays a different role at
+sign-in than at create-time. Read them as a _length_ floor and a hashing bound,
+**not** a security guarantee:
 
-- **min 8** is the absolute minimum the form accepts. It is **not** enough
-  entropy on its own — a human-chosen 8-character password is routinely
-  ~20–30 bits and brute-forceable offline once an attacker has the `publicKey`
-  or any ciphertext (Argon2id slows this, but a determined attacker with a weak
-  target still wins).
+- **`passwordSchema` — sign-in (8–128).** Permissive by design: at sign-in,
+  length is **not** a security control (the credential check is the door's GCM tag
+  failing to unwrap); `min 8` only pre-filters obviously-empty input before an
+  expensive Argon2id. It must **never** be raised above the shortest creatable
+  password, or it locks valid accounts out — and there is no reset.
+- **`newPasswordSchema` — create / change (`NEW_PASSWORD_MIN_LENGTH` = 12 … 128).**
+  The policy floor for the typed-your-own path. A hard length floor is
+  defense-in-depth **behind** the zxcvbn gate (zxcvbn is a heuristic and can be
+  fooled; length can't be tricked past), which matters because a human-chosen
+  8-character password is routinely ~20–30 bits and brute-forceable offline once an
+  attacker has the `publicKey` or any ciphertext. Kept separate from the sign-in
+  schema so tightening it later never strands an existing shorter password. Cheap
+  in UX terms: the default is the generated ~77-bit passphrase, so this only bites
+  users who insist on typing their own.
 - **max 128** bounds the Argon2id input; well above any real passphrase.
 
 Rough entropy targets, for calibration:
@@ -242,29 +315,62 @@ Rough entropy targets, for calibration:
 | 8-word diceware passphrase              | ~103 bits       | strong                             |
 | BIP-39 24-word seed                     | ~256 bits       | wallet reference point             |
 
-> **STATUS — not yet built:** the schema enforces only _length_. There is no
-> _entropy_ gate yet. Before launch, add a strength estimator (e.g. zxcvbn) with
-> a hard floor on estimated entropy, surfaced as a meter on the create-account
-> form. The length rule and the entropy rule are separate concerns.
+> **STATUS — ✅ built (typed path).** On the "type my own" path the create-account
+> form runs **zxcvbn** (`@zxcvbn-ts`, dynamically imported so it stays out of the
+> initial bundle; the CANONICAL password is scored, and the username is fed as a
+> penalty term) and **disables submit below score 3**, with a strength meter
+> (`web-ui/components/auth/password-strength.tsx`) — alongside the
+> `newPasswordSchema` 12-char floor above. The two are kept **consistent**: the
+> meter clamps its score below passing until the length floor is met (via
+> `usePasswordStrength`'s `minLength`), so a too-short password never shows a green
+> "Good/Strong" while the gate blocks it. The **generated** path is ~77 bits by
+> construction and bypasses the gate.
 
 ### generated password (recommended default)
 
-> **STATUS — proposed feature, not yet built.**
+> **STATUS — ✅ built.** The create-account form is a three-step "Secure your
+> account" ceremony (`web-ui/components/auth/create-account-form.tsx`).
 
 The cleanest way to get wallet-grade entropy with better-than-wallet UX is to
 **offer a generated passphrase as the default**, and let users override with
-their own only behind a strength gate:
+their own only behind a strength gate. As built:
 
-- generate **6 words** (default, ~77 bits) from a curated EFF-style wordlist
-  using `crypto.getRandomValues` (a CSPRNG — never `Math.random`);
-- present it like a wallet seed: show it once, "copy" + "I've written this
-  down" confirmation, and a plain "there is no recovery" warning;
-- the words are just a high-entropy `password` — they flow through the password
-  door above, so **no derivation changes are needed**, only UI.
+- **generated 6-word passphrase is the default** (~77 bits), from the BIP-39
+  English wordlist (2048 words = 11 bits each, unbiased 11-bit sampling) via
+  `crypto.getRandomValues` — never `Math.random`. `generatePassphrase` lives in
+  `shared` (`crypto/passphrase.ts`) so native shares it; the wordlist is pinned by
+  a hash golden-vector so it can't silently drift. The words are just a
+  high-entropy `password` and flow through the password door unchanged — **no
+  derivation change**, only UI;
+- presented wallet-style: shown once, **Copy** + an **"I've saved this"** checkbox
+  that gates continuing, a **reveal toggle** instead of a confirm-password field,
+  and a plain "there is no reset" warning. A **"type my own"** escape hatch swaps
+  to the zxcvbn-gated typed path above;
+- a **confirm step** re-enters the password (verifying the user can reproduce it —
+  there is no reset), then a **skippable recovery-code step** (show-once, same
+  wallet panel). Skipping starts the account password-only; a **"no recovery set"
+  nudge** then lives in Settings → Account. The optional recovery door rides in the
+  same signed create-account payload (`createAccountPayloadSchema.recoveryDoor`,
+  threaded by `useCreateAccount`).
 
 This keeps the promise: a user _can_ pick their own username and password (good
 UX), but the **safe path is the default path** (wallet-grade entropy), rather
 than relying on every user to invent a strong secret.
+
+### sign-in with a recovery code
+
+> **STATUS — ✅ built.** The escape hatch when the password is lost.
+
+Sign-in offers a **"Use a recovery code"** path (`sign-in-form.tsx`,
+`useSignInWithRecovery`): the client fetches the recovery door pre-auth (GET
+`/v1/auth/recovery-door`, the twin of the password-door fetch — 404s when the
+account skipped recovery), HKDFs the recovery-KEK over the normalized code,
+unwraps the **same DEK**, and derives the **same keypair** — so the resulting
+session is indistinguishable from a password sign-in (same `action: 'sign-in'`
+proof, same `publicKey`). Because the reason to be here is a forgotten password,
+the intended follow-up is to set a new one (change-password accepts the recovery
+opener). _Nice-to-have not yet wired: forcing that set-new-password step
+immediately after a recovery sign-in; today the user does it from Settings._
 
 ### the two identifiers
 
@@ -685,14 +791,18 @@ The architecture is the decision; the doors are incremental. Doing the DEK
 indirection **before real users exist** is the whole point — afterwards, adding
 it is a re-key migration of every account.
 
-- **Phase 0 — now, pre-launch.** Make the root a random DEK with a **single
-  password door**. UX is identical to direct derivation, but every later door is
-  additive (wrap another copy of the DEK), not a migration.
-- **Phase 1 — launch.** Add the generated **recovery code** as a second door.
-  Weak-ish alone (people misplace codes), but its failure mode is independent of
-  forgetting a password, so it still cuts catastrophic loss.
+- **Phase 0 — ✅ done.** The root is a random DEK with a **single password door**.
+  UX is identical to direct derivation, but every later door is additive (wrap
+  another copy of the DEK), not a migration.
+- **Phase 1 — ✅ done (web).** The generated **recovery code** is a second door
+  (skippable at create, add/replace in Settings), plus the generated-passphrase
+  ceremony, the zxcvbn gate, recovery sign-in, and change-password / recovery-code
+  door management. Expo parity is the remaining slice of this phase.
 - **Phase 2 — later.** Add the **passkey (PRF)** door where supported — the
   platform-synced, per-device door that actually survives.
+- **Also later.** **DEK rotation** (the compromise remedy — see the rotation
+  section) and **expo-crypto / expo-react parity** of the door API + hooks (the
+  `shared` generators already work on both, pinned by the golden vectors).
 
 Messaging shifts from "don't lose your password" to **"lose _all_ your doors and
 the data is gone."**
@@ -705,10 +815,14 @@ the data is gone."**
   (`crypto/params.ts`, `brace.app-salt.v1.…`). It can never change after the
   first real user; a hypothetical rotation mints a `.v2.` constant rather than
   editing it.
-- **Entropy gate** — add the strength meter + hard floor described above.
-- **Generated passphrase** — build the default-generate flow.
-- **No-recovery messaging** — make the "lose all your doors = lose the data"
-  consequence explicit in the create-account UI.
+- **Entropy gate** — ✅ built (zxcvbn score ≥ 3 on the typed path; the meter +
+  hard floor described above).
+- **Generated passphrase** — ✅ built (the "Secure your account" ceremony +
+  skippable recovery code + recovery sign-in + change-password/recovery door
+  management). Remaining: **DEK rotation** (compromise remedy) and **expo parity**.
+- **No-recovery messaging** — ✅ built: the create-account UI states "there is no
+  reset" and the skippable recovery step; a persistent "no recovery set" nudge
+  lives in Settings → Account.
 - **Server credential + key storage and signature verification** — **✅ built**.
   Storage: `createAccount` claims the username in `DIRECTORY_DB`, writes
   `users.public_key` + `account_keys` (wrapped DEK inline) atomically in the shard,

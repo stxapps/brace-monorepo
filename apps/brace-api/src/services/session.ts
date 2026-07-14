@@ -42,3 +42,14 @@ export async function issueSession(
 export async function revokeSession(env: Bindings, sessionId: string): Promise<void> {
   await sessionsRepo(env.SESSIONS_DB).deleteById(sessionId);
 }
+
+// Revoke every OTHER session for the caller's account, keeping the caller's own
+// alive (identified by `session.id`). Backs "sign out other devices" — the plural
+// of revokeSession — and is the same primitive changePasswordDoor reuses to cut
+// off other sessions after a password rotation.
+export async function revokeOtherSessions(
+  env: Bindings,
+  session: { id: string; userId: string },
+): Promise<void> {
+  await sessionsRepo(env.SESSIONS_DB).deleteByUserIdExcept(session.userId, session.id);
+}

@@ -47,6 +47,30 @@ export const CRYPTO_CONTRACT_VECTOR = {
       '9a2b1f5bf9eddb75a0a70ef6411483e2',
   },
 
+  // The RECOVERY door: a fixed recovery code (already in normalized/canonical
+  // form — Crockford base32, uppercase, no separators), its HKDF-derived KEK, and
+  // the DEK wrapped under it. recovery-KEK = HKDF-SHA256(utf8(code), salt=∅,
+  // info=HKDF_INFO_RECOVERY_KEK, 32B); recoveryDoor =
+  // AES-256-GCM(recovery-KEK, DEK, aad = dekWrapAad('recovery')) with this fixed
+  // IV. Wraps the SAME fixed DEK as passwordDoor — both doors open one root.
+  recovery: {
+    code: '40GJ48S44MK2EA1958NJRB9E5WR32CHK6GTKCDSR74X3PF1X7RZG',
+    kekHex: '75d1ee21fc18e61374f71d370aa834f21920d0080e54e272d5ff0c7524edf04e',
+    ivHex: 'c0c1c2c3c4c5c6c7c8c9caca',
+    wrappedDekHex:
+      '318468ba353d26ecb4459756582536eeb8ef0e3ced85eb328a63fd3428f23645' +
+      '7c35cf90434b42505b3ae118e6e4c6a0',
+  },
+
+  // Pins the generated-passphrase wordlist (generatePassphrase). It is NOT a
+  // derivation input, but if the list ever changed, the same click would map to
+  // different words — a silent entropy-space drift across platforms/releases.
+  // sha256 over the newline-joined 2048-word @scure/bip39 English list.
+  wordlist: {
+    length: 2048,
+    sha256Hex: '187db04a869dd9bc7be80d21a86497d692c0db6abd3aa8cb6be5d618ff757fae',
+  },
+
   // A packed v1 sync blob `[BLOB_FORMAT_V1 || iv || ciphertext+tag]` of
   // blobPlaintext (utf-8) under encryptionKeyHex, no AAD — exactly what a
   // client uploads to R2 and what the native file module must produce/consume.

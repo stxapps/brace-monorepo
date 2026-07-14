@@ -36,13 +36,20 @@ export const checkUsernameEndpoint = defineEndpoint({
 const hexBytes = (bytes: number) =>
   z.string().regex(new RegExp(`^[0-9a-f]{${bytes * 2}}$`), `expected ${bytes}-byte lowercase hex`);
 
-// The wrapped password door as it crosses the wire: the AES-256-GCM ciphertext+tag
-// (a 32-byte DEK wraps to 48 bytes) and its 12-byte IV, hex-encoded. `doorType` is
-// implied ('password') — it's the only door minted at create-account.
-export const wirePasswordDoorSchema = z.object({
+// A wrapped door as it crosses the wire: the AES-256-GCM ciphertext+tag (any
+// door wraps the same 32-byte DEK → 48 bytes) and its 12-byte IV, hex-encoded.
+// `doorType` is implied by the endpoint/field it appears in (the wrap AAD binds
+// it cryptographically anyway — see dekWrapAad), so the wire shape is identical
+// for the password, recovery, and (future) passkey doors.
+export const wireDoorSchema = z.object({
   wrappedDek: hexBytes(48),
   iv: hexBytes(12),
 });
+export type WireDoor = z.infer<typeof wireDoorSchema>;
+
+// Back-compat name: the password door has this exact shape. Kept so existing
+// references (createAccount payload, password-door fetch) read intently.
+export const wirePasswordDoorSchema = wireDoorSchema;
 
 // The exact object the client signs to prove it holds the private key for the
 // `publicKey` it's registering (see "the load-bearing sign-in check" in
@@ -57,6 +64,12 @@ export const createAccountPayloadSchema = z.object({
   username: usernameSchema,
   publicKey: hexBytes(32),
   passwordDoor: wirePasswordDoorSchema,
+  // The recovery door is OPTIONAL — the ceremony lets users skip it
+  // (docs/account.md). When present it wraps the SAME DEK as the password door,
+  // and the signature covers it too, so the server persists exactly what was
+  // signed. Absent → the account starts with only a password door (a persistent
+  // "no recovery set" nudge lives in settings).
+  recoveryDoor: wireDoorSchema.optional(),
   timestamp: z.number().int(),
 });
 export type CreateAccountPayload = z.infer<typeof createAccountPayloadSchema>;
@@ -116,6 +129,28 @@ export const passwordDoorEndpoint = defineEndpoint({
   path: `${API_V1}/auth/password-door`,
   request: passwordDoorRequestSchema,
   response: wirePasswordDoorSchema,
+});
+
+// The RECOVERY door's pre-auth fetch — the exact analogue of the password-door
+// fetch, for the "forgot my password" path. The client names a username and gets
+// back that account's recovery-door wrapped DEK, which it unwraps with the
+// recovery code (a cheap HKDF, not Argon2id) to recover the DEK. Same offline-
+// oracle posture as the password door (served pre-auth, rate-limited), but here
+// the code is high-entropy so brute force is infeasible regardless. 404s when the
+// account has no recovery door (it was skipped at create) — indistinguishable, on
+// this pre-auth path, from a missing account.
+export const recoveryDoorRequestSchema = z.object({
+  username: usernameSchema,
+});
+export type RecoveryDoorRequest = z.infer<typeof recoveryDoorRequestSchema>;
+export type RecoveryDoorResponse = z.infer<typeof wireDoorSchema>;
+
+// GET /v1/auth/recovery-door?username=… → { wrappedDek, iv }
+export const recoveryDoorEndpoint = defineEndpoint({
+  method: 'GET',
+  path: `${API_V1}/auth/recovery-door`,
+  request: recoveryDoorRequestSchema,
+  response: wireDoorSchema,
 });
 
 // Step 3: the signed proof the client POSTs to exchange for a session. Mirrors the
@@ -183,6 +218,29 @@ export const signOutEndpoint = defineEndpoint({
   response: signOutResponseSchema,
 });
 
+// Like sign-out, but revokes every OTHER session for the account and KEEPS the
+// caller's own — the body is empty for the same reason (the caller is named by
+// the bearer token). Session-only, deliberately: this is the plural of sign-out
+// (also session-only), touches no doors or credentials, and is low-harm and
+// reversible (the owner just signs back in), so it does NOT require the fresh
+// signed proof that door rotations / delete-account do. It's also the primitive
+// change-password uses server-side to cut off other sessions after a rotation.
+export const signOutOthersRequestSchema = z.object({});
+export type SignOutOthersRequest = z.infer<typeof signOutOthersRequestSchema>;
+
+export const signOutOthersResponseSchema = z.object({
+  ok: z.literal(true),
+});
+export type SignOutOthersResponse = z.infer<typeof signOutOthersResponseSchema>;
+
+// POST /v1/auth/sign-out-others → { ok: true }
+export const signOutOthersEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/sign-out-others`,
+  request: signOutOthersRequestSchema,
+  response: signOutOthersResponseSchema,
+});
+
 // --- delete account -----------------------------------------------------------
 
 // The full account teardown: every synced object, every session, the doors
@@ -232,4 +290,80 @@ export const deleteAccountEndpoint = defineEndpoint({
   path: `${API_V1}/auth/delete-account`,
   request: deleteAccountRequestSchema,
   response: deleteAccountResponseSchema,
+});
+
+// --- door management (authed) -------------------------------------------------
+//
+// Change the password door and generate/regenerate the recovery door. Both are
+// TIER-1 door rotations (docs/account.md): the DEK is unchanged, so the publicKey,
+// derived keys, all data, and any live session stay valid — only one
+// `account_keys` row is re-wrapped.
+//
+// Both are DOUBLE-guarded exactly like delete-account: requireAuth names the
+// account, and a FRESH signed proof proves the caller still holds the DEK-derived
+// key. That proof is the load-bearing guard here — a stolen session token alone
+// can't rotate a door, because forging a valid new wrapped door requires the DEK
+// (which the session never carries), and the proof is only producible by someone
+// who just opened a real door to recover that DEK. The new wrapped door rides
+// INSIDE the signed payload so the signature covers exactly what gets stored.
+
+// Change the password door. The client opened an existing door (current password
+// OR recovery code — a client-side detail the server never sees) to recover the
+// DEK, re-wrapped it under the new password's KEK, and signs this. `publicKey` is
+// unchanged by a password change, so the load-bearing stored-credential check
+// still holds.
+export const changePasswordPayloadSchema = z.object({
+  action: z.literal('change-password'),
+  username: usernameSchema,
+  publicKey: hexBytes(32),
+  passwordDoor: wireDoorSchema,
+  timestamp: z.number().int(),
+});
+export type ChangePasswordPayload = z.infer<typeof changePasswordPayloadSchema>;
+
+export const changePasswordRequestSchema = z.object({
+  payload: z.string(),
+  signature: hexBytes(64),
+});
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
+
+export const changePasswordResponseSchema = z.object({ ok: z.literal(true) });
+export type ChangePasswordResponse = z.infer<typeof changePasswordResponseSchema>;
+
+// POST /v1/auth/change-password → { ok: true }
+export const changePasswordEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/change-password`,
+  request: changePasswordRequestSchema,
+  response: changePasswordResponseSchema,
+});
+
+// Generate or regenerate the recovery door (upsert — same call whether the
+// account had one or not). The client minted a fresh recovery code, re-wrapped the
+// DEK under its KEK, and signs this. Regenerating invalidates the previous code
+// (the old wrapped blob is replaced).
+export const putRecoveryDoorPayloadSchema = z.object({
+  action: z.literal('put-recovery-door'),
+  username: usernameSchema,
+  publicKey: hexBytes(32),
+  recoveryDoor: wireDoorSchema,
+  timestamp: z.number().int(),
+});
+export type PutRecoveryDoorPayload = z.infer<typeof putRecoveryDoorPayloadSchema>;
+
+export const putRecoveryDoorRequestSchema = z.object({
+  payload: z.string(),
+  signature: hexBytes(64),
+});
+export type PutRecoveryDoorRequest = z.infer<typeof putRecoveryDoorRequestSchema>;
+
+export const putRecoveryDoorResponseSchema = z.object({ ok: z.literal(true) });
+export type PutRecoveryDoorResponse = z.infer<typeof putRecoveryDoorResponseSchema>;
+
+// POST /v1/auth/recovery-door → { ok: true }  (upsert the recovery door)
+export const putRecoveryDoorEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/recovery-door`,
+  request: putRecoveryDoorRequestSchema,
+  response: putRecoveryDoorResponseSchema,
 });

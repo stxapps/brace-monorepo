@@ -9,6 +9,8 @@ export * from './crypto/contract-vectors';
 export * from './crypto/doors';
 export * from './crypto/encoding';
 export * from './crypto/params';
+export * from './crypto/passphrase';
+export * from './crypto/recovery-code';
 export * from './crypto/salt';
 export * from './data/endpoints';
 export * from './export/bundle';

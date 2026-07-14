@@ -1,4 +1,4 @@
-import { DOOR_PASSWORD, type DoorType } from '@stxapps/shared';
+import { DOOR_PASSWORD, DOOR_RECOVERY, type DoorType } from '@stxapps/shared';
 
 import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
@@ -9,7 +9,7 @@ import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { getSubscriptionStatus } from './iap';
-import { type IssuedSession, issueSession } from './session';
+import { type IssuedSession, issueSession, revokeOtherSessions } from './session';
 import { deleteAllUserData } from './sync';
 
 // Account creation under the DEK door model, across separate databases. The root
@@ -148,6 +148,103 @@ export async function getPasswordDoor(
   if (!password) throw new HttpError(404, 'not_found', 'No password door for that account');
 
   return { wrappedDek: password.wrappedDek, iv: password.iv };
+}
+
+// The RECOVERY-door analogue of getPasswordDoor (pre-auth): hand back the recovery
+// door's wrapped DEK for a username so a client that lost its password can unwrap
+// the DEK with the recovery code. Same directory→shard resolution and tombstone
+// opacity. A 404 here means either no such account OR an account that never set up
+// a recovery door (it's skippable) — indistinguishable on this pre-auth path, and
+// the client maps both to "check your recovery code" the same way.
+export async function getRecoveryDoor(
+  env: Bindings,
+  username: string,
+): Promise<{ wrappedDek: Uint8Array; iv: Uint8Array }> {
+  const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(username);
+  if (!entry || entry.deletedAt !== null) {
+    throw new HttpError(404, 'not_found', 'No account for that username');
+  }
+
+  const recovery = await accountKeysRepo(
+    accountsDb(env, entry.accountDbId),
+  ).findByUserIdAndDoorType(entry.userId, DOOR_RECOVERY);
+  if (!recovery) throw new HttpError(404, 'not_found', 'No recovery door for that account');
+
+  return { wrappedDek: recovery.wrappedDek, iv: recovery.iv };
+}
+
+// Shared guard for the tier-1 door rotations (change password, put recovery
+// door). Binds the fresh signed proof to the authed session's account and runs
+// the load-bearing stored-credential check — the SAME defense as delete-account:
+// a bearer token alone must never mutate an account's doors. A door rotation on a
+// tombstoned/absent account is simply invalid (no tombstone exception like
+// deleteAccount's resumed-teardown case — there is nothing to resume). Returns the
+// account shard for the follow-up upsert.
+async function authorizeDoorRotation(
+  env: Bindings,
+  session: { userId: string; accountDbId: string },
+  proof: { username: string; publicKey: string },
+): Promise<D1Database> {
+  const invalid = () => new HttpError(401, 'invalid_credentials', 'Incorrect username or password');
+
+  const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(proof.username);
+  if (!entry || entry.deletedAt !== null || entry.userId !== session.userId) throw invalid();
+
+  const shard = accountsDb(env, session.accountDbId);
+  const user = await usersRepo(shard).findById(session.userId);
+  // publicKey is unchanged by any door rotation (only the DEK wrapping changes),
+  // so the presented credential must still equal the stored one.
+  if (!user || proof.publicKey !== user.publicKey) throw invalid();
+
+  return shard;
+}
+
+// Change the password door (authed + fresh proof). Tier-1 rotation: the client
+// recovered the DEK by opening an existing door (current password OR recovery
+// code — never seen here), re-wrapped it under the new password's KEK, and signed.
+// We only replace the 'password' door row; the DEK, publicKey, and data are
+// untouched.
+//
+// But we DO revoke every OTHER session (keeping this one — the UI stays signed in
+// on this device). A password change can't un-leak data an attacker already
+// exfiltrated (no DEK rotation — docs/account.md), but it must cut off ongoing
+// access: whoever had the old password can no longer mint new sessions, and any
+// session they already minted dies here. The upsert is the load-bearing mutation,
+// so it lands first; session revocation is idempotent hygiene after it.
+export async function changePasswordDoor(
+  env: Bindings,
+  session: { id: string; userId: string; accountDbId: string },
+  proof: { username: string; publicKey: string; door: { wrappedDek: Uint8Array; iv: Uint8Array } },
+): Promise<void> {
+  const shard = await authorizeDoorRotation(env, session, proof);
+  await accountKeysRepo(shard)
+    .upsertStmt({
+      userId: session.userId,
+      doorType: DOOR_PASSWORD,
+      wrappedDek: proof.door.wrappedDek,
+      iv: proof.door.iv,
+    })
+    .run();
+  await revokeOtherSessions(env, session);
+}
+
+// Generate/regenerate the recovery door (authed + fresh proof). Upsert: writes the
+// door if the account had none, or replaces it (invalidating the old code) if it
+// did. Same tier-1 rotation guarantees as changePasswordDoor.
+export async function putRecoveryDoor(
+  env: Bindings,
+  session: { userId: string; accountDbId: string },
+  proof: { username: string; publicKey: string; door: { wrappedDek: Uint8Array; iv: Uint8Array } },
+): Promise<void> {
+  const shard = await authorizeDoorRotation(env, session, proof);
+  await accountKeysRepo(shard)
+    .upsertStmt({
+      userId: session.userId,
+      doorType: DOOR_RECOVERY,
+      wrappedDek: proof.door.wrappedDek,
+      iv: proof.door.iv,
+    })
+    .run();
 }
 
 // Sign-in, step 3: mint a session for a proven sign-in. Proof-of-possession (the

@@ -17,22 +17,46 @@
 // section, where Paddle's portal handles cancellation.
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, CircleAlert, Loader2, Trash2, UserX } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  KeyRound,
+  Loader2,
+  MonitorSmartphone,
+  ShieldCheck,
+  Trash2,
+  UserX,
+} from 'lucide-react';
 import Link from 'next/link';
 
+import { canonicalizePassword, NEW_PASSWORD_MIN_LENGTH, newPasswordSchema } from '@stxapps/shared';
 import {
   InvalidCredentialsError,
+  InvalidRecoveryCodeError,
   SubscriptionActiveError,
   useAuth,
+  useChangePassword,
   useDeleteAccount,
   useEntitlements,
+  useHasRecoveryDoor,
+  useRecoveryCode,
+  useSignOutOthers,
 } from '@stxapps/web-react';
+import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
+import {
+  PASSWORD_MIN_STRENGTH_SCORE,
+  PasswordStrengthMeter,
+  usePasswordStrength,
+} from '@stxapps/web-ui/components/auth/password-strength';
+import { ShowOnceSecret } from '@stxapps/web-ui/components/auth/show-once-secret';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 
-type AccountView = 'overview' | 'delete';
+type AccountView = 'overview' | 'change-password' | 'recovery' | 'sign-out-others' | 'delete';
 
 // One tappable row on the overview that opens a sub-view — same presentation as
 // the Data section's ActionRow (each section keeps its own copy; they're
@@ -219,9 +243,331 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
   );
 }
 
+// Change the password door. Prove an existing door — the current password (usual)
+// or the recovery code ("I forgot it") — then set a new password gated by the same
+// zxcvbn floor as create-account. A tier-1 rotation: the DEK/keys/data and the
+// session are all unchanged, so there's nothing to re-sign-in.
+function ChangePasswordView({ onBack }: { onBack: () => void }) {
+  const changePassword = useChangePassword();
+  const [useRecovery, setUseRecovery] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  // Score the canonical form — the exact string the new KEK derives from — and fold
+  // in the same length floor as the schema so the meter and the gate agree.
+  const { score } = usePasswordStrength(
+    canonicalizePassword(newPassword),
+    [],
+    NEW_PASSWORD_MIN_LENGTH,
+  );
+  const newOk =
+    newPasswordSchema.safeParse(newPassword).success &&
+    score !== null &&
+    score >= PASSWORD_MIN_STRENGTH_SCORE;
+  const proofReady = useRecovery ? recoveryCode !== '' : currentPassword !== '';
+
+  const onSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (changePassword.isPending || !newOk || !proofReady) return;
+    setError(null);
+    try {
+      await changePassword.mutateAsync({
+        newPassword,
+        proof: useRecovery
+          ? { kind: 'recovery', recoveryCode }
+          : { kind: 'password', currentPassword },
+      });
+      setDone(true);
+    } catch (err) {
+      if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
+      else if (err instanceof InvalidRecoveryCodeError)
+        setError('That recovery code didn’t work.');
+      else setError('Could not change your password. Please try again.');
+    }
+  };
+
+  if (done) {
+    return (
+      <div>
+        <BackLink onBack={onBack} />
+        <h2 className="text-xl font-semibold">Change password</h2>
+        <p className="mt-3 flex items-start gap-2 text-sm text-foreground">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+          Your password has been changed. You&apos;re still signed in on this device, and your
+          other devices have been signed out.
+        </p>
+        <p className="mt-4 text-xs text-muted-foreground">
+          This changed how you sign in, but didn&apos;t re-encrypt data you&apos;ve already
+          synced. If your old password may have been compromised, a password change alone
+          won&apos;t protect data an attacker could already have copied — export your data (
+          <Link href="/settings/data" className="underline hover:text-foreground">
+            Settings → Data
+          </Link>
+          ), delete this account, and create a new one.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <BackLink onBack={onBack} />
+      <h2 className="text-xl font-semibold">Change password</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        You&apos;ll need your current password. There is no email reset, so keep the new one safe.
+      </p>
+
+      <form onSubmit={onSubmit} className="mt-6 flex max-w-sm flex-col gap-4">
+        {useRecovery ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="cp-recovery">Recovery code</Label>
+            <Input
+              id="cp-recovery"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              className="font-mono"
+              value={recoveryCode}
+              disabled={changePassword.isPending}
+              onChange={(e) => {
+                setRecoveryCode(e.target.value);
+                if (error) setError(null);
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="cp-current">Current password</Label>
+            <PasswordInput
+              id="cp-current"
+              autoComplete="current-password"
+              value={currentPassword}
+              disabled={changePassword.isPending}
+              onChange={(e) => {
+                setCurrentPassword(e.target.value);
+                if (error) setError(null);
+              }}
+            />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setUseRecovery((v) => !v);
+            setError(null);
+          }}
+          className="-mt-2 self-start text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          {useRecovery ? 'Use my current password instead' : 'I forgot it — use my recovery code'}
+        </button>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="cp-new">New password</Label>
+          <PasswordInput
+            id="cp-new"
+            autoComplete="new-password"
+            value={newPassword}
+            disabled={changePassword.isPending}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              if (error) setError(null);
+            }}
+          />
+          <PasswordStrengthMeter score={score} />
+        </div>
+
+        <div>
+          <Button type="submit" disabled={changePassword.isPending || !newOk || !proofReady}>
+            {changePassword.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {changePassword.isPending ? 'Changing…' : 'Change password'}
+          </Button>
+        </div>
+        {error ? (
+          <p className="flex items-start gap-2 text-sm text-destructive">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+            {error}
+          </p>
+        ) : null}
+
+        {/* Honest boundary of what a password change is: a door rotation, not a
+            DEK rotation (docs/account.md). It re-wraps the same DEK, so anyone
+            who already had the old password could have unwrapped that DEK — and
+            it stays valid, keeping any ciphertext they exfiltrated readable.
+            DEK rotation isn't shipped yet, so the real-compromise remedy is the
+            manual export → delete → recreate path. */}
+        <p className="mt-2 border-t border-border pt-4 text-xs text-muted-foreground">
+          Changing your password replaces how you sign in — it doesn&apos;t re-encrypt data
+          you&apos;ve already synced. If you think someone actually had your old password,
+          changing it alone won&apos;t protect data they may have already copied. In that case
+          the safe path is to export your data (
+          <Link href="/settings/data" className="underline hover:text-foreground">
+            Settings → Data
+          </Link>
+          ), delete this account, and create a new one.
+        </p>
+      </form>
+    </div>
+  );
+}
+
+// Generate or regenerate the recovery door. Prove the current password, mint a new
+// code server-side, and show it ONCE. Regenerating invalidates any previous code.
+function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasRecovery: boolean }) {
+  const recovery = useRecoveryCode();
+  const queryClient = useQueryClient();
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const onSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (recovery.isPending || currentPassword === '') return;
+    setError(null);
+    try {
+      const result = await recovery.mutateAsync({
+        proof: { kind: 'password', currentPassword },
+      });
+      setCode(result.recoveryCode);
+      // The nudge on the overview reads this query — refresh it so it clears.
+      void queryClient.invalidateQueries({ queryKey: ['recovery-door-exists'] });
+    } catch (err) {
+      if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
+      else setError('Could not generate a recovery code. Please try again.');
+    }
+  };
+
+  if (code) {
+    return (
+      <div>
+        <BackLink onBack={onBack} />
+        <h2 className="text-xl font-semibold">Recovery code</h2>
+        <p className="mt-1 mb-4 text-sm text-muted-foreground">
+          Save this somewhere safe. It won&apos;t be shown again — regenerate here if you lose it.
+        </p>
+        <div className="max-w-sm">
+          <ShowOnceSecret
+            id="settings-recovery-saved"
+            secret={code}
+            label="Your recovery code"
+            saved={saved}
+            onSavedChange={setSaved}
+            confirmLabel="I&apos;ve saved my recovery code somewhere safe."
+          />
+          <Button className="mt-4" disabled={!saved} onClick={onBack}>
+            Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <BackLink onBack={onBack} />
+      <h2 className="text-xl font-semibold">Recovery code</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {hasRecovery
+          ? 'Generate a new recovery code. Your previous code will stop working.'
+          : 'Set up a recovery code — a second way into your account if you lose your password.'}
+      </p>
+
+      <form onSubmit={onSubmit} className="mt-6 flex max-w-sm flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="rc-current">Current password</Label>
+          <PasswordInput
+            id="rc-current"
+            autoComplete="current-password"
+            value={currentPassword}
+            disabled={recovery.isPending}
+            onChange={(e) => {
+              setCurrentPassword(e.target.value);
+              if (error) setError(null);
+            }}
+          />
+        </div>
+        <div>
+          <Button type="submit" disabled={recovery.isPending || currentPassword === ''}>
+            {recovery.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {recovery.isPending
+              ? 'Generating…'
+              : hasRecovery
+                ? 'Generate new code'
+                : 'Generate recovery code'}
+          </Button>
+        </div>
+        {error ? (
+          <p className="flex items-start gap-2 text-sm text-destructive">
+            <CircleAlert className="mt-0.5 size-4 shrink-0" />
+            {error}
+          </p>
+        ) : null}
+      </form>
+    </div>
+  );
+}
+
+// Sign out every OTHER device, keeping this one. Session-only (no password
+// re-entry): a low-harm, reversible action — the other devices just land back on
+// sign-in. This dedicated view IS the confirm step (the section uses in-section
+// views, not modal dialogs), so the button click is the deliberate confirmation.
+function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
+  const signOutOthers = useSignOutOthers();
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const onConfirm = async () => {
+    if (signOutOthers.isPending) return;
+    setError(null);
+    try {
+      await signOutOthers.mutateAsync();
+      setDone(true);
+    } catch {
+      setError('Could not sign out your other devices. Please try again.');
+    }
+  };
+
+  return (
+    <div>
+      <BackLink onBack={onBack} />
+      <h2 className="text-xl font-semibold">Sign out other devices</h2>
+      {done ? (
+        <p className="mt-3 flex items-start gap-2 text-sm text-foreground">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+          Your other devices have been signed out. They&apos;ll need to sign in again. This device
+          stays signed in.
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-muted-foreground">
+            End every other signed-in session. Any other browser or device will have to sign in
+            again — this one stays signed in. Your data isn&apos;t touched.
+          </p>
+          <div className="mt-6">
+            <Button onClick={onConfirm} disabled={signOutOthers.isPending}>
+              {signOutOthers.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              {signOutOthers.isPending ? 'Signing out…' : 'Sign out other devices'}
+            </Button>
+          </div>
+          {error ? (
+            <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" />
+              {error}
+            </p>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AccountSection() {
   const { username } = useAuth();
   const [view, setView] = useState<AccountView>('overview');
+  const hasRecovery = useHasRecoveryDoor();
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
@@ -239,7 +585,47 @@ export function AccountSection() {
             </div>
           </div>
 
+          {hasRecovery.data === false ? (
+            <p className="mt-4 flex items-start gap-2 rounded-lg border border-border p-3 text-sm text-muted-foreground">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                You haven&apos;t set up a recovery code. Without one, a lost password means a lost
+                account — there is no email reset.{' '}
+                <button
+                  type="button"
+                  onClick={() => setView('recovery')}
+                  className="underline hover:text-foreground"
+                >
+                  Set one up
+                </button>
+                .
+              </span>
+            </p>
+          ) : null}
+
           <div className="mt-6 flex flex-col gap-3">
+            <ActionRow
+              icon={<KeyRound className="size-5" />}
+              title="Change password"
+              description="Set a new password using your current one or your recovery code."
+              onClick={() => setView('change-password')}
+            />
+            <ActionRow
+              icon={<ShieldCheck className="size-5" />}
+              title="Recovery code"
+              description={
+                hasRecovery.data === false
+                  ? 'Not set up yet — add a way back into your account.'
+                  : 'Generate a new recovery code (replaces the old one).'
+              }
+              onClick={() => setView('recovery')}
+            />
+            <ActionRow
+              icon={<MonitorSmartphone className="size-5" />}
+              title="Sign out other devices"
+              description="End every other signed-in session but this one."
+              onClick={() => setView('sign-out-others')}
+            />
             <ActionRow
               icon={<UserX className="size-5" />}
               title="Delete account"
@@ -249,6 +635,12 @@ export function AccountSection() {
             />
           </div>
         </>
+      ) : view === 'change-password' ? (
+        <ChangePasswordView onBack={() => setView('overview')} />
+      ) : view === 'recovery' ? (
+        <RecoveryCodeView onBack={() => setView('overview')} hasRecovery={hasRecovery.data === true} />
+      ) : view === 'sign-out-others' ? (
+        <SignOutOtherDevicesView onBack={() => setView('overview')} />
       ) : (
         <DeleteAccountView onBack={() => setView('overview')} />
       )}

@@ -93,5 +93,32 @@ export function accountKeysRepo(db: D1Database) {
         )
         .bind(k.userId, k.doorType, k.wrappedDek, k.iv, k.version ?? 1, now, now);
     },
+
+    // Prepared UPSERT for re-wrapping a door in place — the tier-1 door rotation
+    // (change password, generate/regenerate recovery). Inserts the door if the
+    // account has none of that type, or replaces the wrapped DEK + IV if it does.
+    // `created_at` is preserved across re-wraps (the door is the "same" door,
+    // stable since first created); `version` starts at 1 and increments on every
+    // re-wrap so the row stays auditable. Same PK (user_id, door_type) drives the
+    // conflict target.
+    upsertStmt(k: {
+      userId: string;
+      doorType: DoorType;
+      wrappedDek: Uint8Array;
+      iv: Uint8Array;
+    }): D1PreparedStatement {
+      const now = Date.now();
+      return db
+        .prepare(
+          `INSERT INTO account_keys (user_id, door_type, wrapped_dek, iv, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?)
+           ON CONFLICT(user_id, door_type) DO UPDATE SET
+             wrapped_dek = excluded.wrapped_dek,
+             iv = excluded.iv,
+             version = account_keys.version + 1,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(k.userId, k.doorType, k.wrappedDek, k.iv, now, now);
+    },
   };
 }
