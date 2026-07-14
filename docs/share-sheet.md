@@ -149,7 +149,7 @@ not by the in-sheet kick landing.
 
 **The outbox is the record of truth; the upload is a best-effort fast path on
 top of it — not a replacement.** The extension builds the entity, writes the
-outbox file (durable, always), and *then* best-effort encrypts + PUTs it:
+outbox file (durable, always), and _then_ best-effort encrypts + PUTs it:
 
 ```
 tap Add →
@@ -167,8 +167,8 @@ upload) as the fallback. It's safe to have both fire because the design is
 drains the same outbox item → re-uploads under the same id → last-write-wins,
 no duplicate.
 
-**What the upload actually buys — and what it doesn't.** For the *sharing
-device itself* it buys nothing the next-open drain wouldn't: the phone
+**What the upload actually buys — and what it doesn't.** For the _sharing
+device itself_ it buys nothing the next-open drain wouldn't: the phone
 populates its own local store on next open regardless (down-sync pulls back its
 own upload, or the outbox drain writes it). The upload's real payoff is
 **cross-device / web freshness** — your laptop and brace-web see the link
@@ -198,7 +198,7 @@ pre-derived, far under the ~120MB cap).
 **Invariant that keeps the memory story true: no bytes-heavy work in the
 extension.** The extension handles URLs and KB-sized entity JSON only —
 image/screenshot fetch, decrypt, and encrypt stay in the main app / extractor.
-This is what keeps phase 1 *and* phase 2 comfortably under the ~120MB
+This is what keeps phase 1 _and_ phase 2 comfortably under the ~120MB
 share-extension cap; don't move image work across the process boundary to
 "save a round trip."
 

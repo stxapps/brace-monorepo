@@ -58,7 +58,7 @@
       "plugin": "@nx/expo/plugin",
       "options": {
         "startTargetName": "start",
-        "buildTargetName": "build",
+        "buildTargetName": "eas-build",
         "prebuildTargetName": "prebuild",
         "serveTargetName": "serve",
         "installTargetName": "install",

@@ -10,7 +10,10 @@ describe('chunk', () => {
   });
 
   it('returns an exact split with no trailing empty batch', () => {
-    expect(chunk([1, 2, 3, 4], 2)).toEqual([[1, 2], [3, 4]]);
+    expect(chunk([1, 2, 3, 4], 2)).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
   });
 
   it('returns no batches for an empty array', () => {
