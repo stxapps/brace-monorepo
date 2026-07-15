@@ -22,6 +22,7 @@ import {
   FILES_PREFIX,
   type Link,
   linkSchema,
+  type LinksLayout,
   type List,
   listSchema,
   pathFromId,
@@ -33,6 +34,7 @@ import {
   settingsGeneralSchema,
   type Tag,
   tagSchema,
+  type ThemeState,
 } from '@stxapps/shared';
 
 import { db, type ItemRecord, type PendingOpRecord } from './db';
@@ -319,9 +321,19 @@ export function deletePin(username: string, linkId: string): Promise<void> {
 // starts from `createdAt: 0`, exactly like the first edit of an untouched
 // system-list default. Stamps `updatedAt` now (and `createdAt` on first write),
 // validates, then writes.
+//
+// The patch is typed field-by-field rather than `Pick`ed off `SettingsGeneral`,
+// because this is the WRITE edge and `SettingsGeneral` is the tolerant READ shape:
+// its `linksLayout` is a free `string` so that a future client's layout round-trips
+// (entities.ts), and `Pick`ing that here would let us write any string ourselves.
+// Writers stay strict — `LinksLayout` — while readers stay forgiving.
 export async function writeSettingsGeneral(
   username: string,
-  patch: Partial<Pick<SettingsGeneral, 'linksLayout' | 'serverExtraction' | 'theme'>>,
+  patch: {
+    linksLayout?: LinksLayout;
+    serverExtraction?: boolean;
+    theme?: ThemeState;
+  },
 ): Promise<void> {
   const now = Date.now();
   await writeEntityWith(username, SETTINGS_GENERAL_PATH, (existing) => {

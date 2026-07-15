@@ -2,7 +2,7 @@
 
 // The bar to the right of the sidebar. Left: the active selection's name (what
 // the main pane is showing). Right: the primary actions — add, search, bulk
-// edit, overflow. The list/card/table layout switch used to live here too; it
+// edit, overflow. The list/card layout switch used to live here too; it
 // moved to Settings → Misc (a choose-once setting with a sync/device split), so
 // the topbar stays minimal.
 //

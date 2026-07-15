@@ -271,12 +271,20 @@ export type Extraction = z.infer<typeof extractionSchema>;
 // this file, but live in sync/extraction.ts: this file is the plaintext SHAPE
 // contract; those are BEHAVIOR (the rank.ts/tree.ts split).
 
-// How the links library lays out its rows: `list` (dense default), `card` (a grid
-// of previews), `table` (columnar). A cross-platform contract — not a web-only
-// union — because the user's choice can be SYNCED (see `settingsGeneralSchema`
-// below), so every client must read/write the same string values. The web UI's
-// resolved `layout` (see `useSettings`) is one of these.
-export const LINKS_LAYOUTS = ['list', 'card', 'table'] as const;
+// How the links library lays out its rows: `list` (dense default) and `card` (a
+// grid of previews). A cross-platform contract — not a web-only union — because
+// the user's choice can be SYNCED (see `settingsGeneralSchema` below), so every
+// client must read/write the same string values.
+//
+// This is the WRITER's enumeration: what a UI offers and what a client may store.
+// It is deliberately NOT what the read edge validates against — a persisted
+// `linksLayout` is parsed as a free `z.string()` (see `settingsGeneralSchema`), so
+// a value this client doesn't model round-trips instead of being dropped or
+// clobbered. That asymmetry is what lets this list GROW without a migration: a
+// future `table` layout (docs/business-model.md — a planned Plus lever) is added
+// here, and clients that predate it keep syncing happily, rendering their default
+// and leaving the unknown value untouched.
+export const LINKS_LAYOUTS = ['list', 'card'] as const;
 export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 
 // The synced theme preference — the same three fields as `@stxapps/shared`'s
@@ -286,13 +294,20 @@ export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 // like `linksLayout` below.
 //
 // Every field is DELIBERATELY permissive (`z.string()`, not `z.enum(THEME_MODES)`
-// or a time regex): this schema parses PERSISTED bytes, and a single strict field
-// failing would fail the WHOLE `settingsGeneralSchema` parse and drop the entire
-// blob from the UI — taking `linksLayout`/`serverExtraction` down with the theme. A
-// newer client's unknown `mode`, or a malformed time, must parse harmlessly instead.
-// The read edge (`coerceThemeState`) is the one that validates/normalizes these into
-// a real `ThemeState`. (`THEME_MODES` in theme.ts is what a writer/UI enumerates the
+// or a time regex): this schema parses PERSISTED bytes, and a strict field failing
+// would fail the WHOLE `settingsGeneralSchema` parse and drop the entire blob from
+// the UI — taking `linksLayout`/`serverExtraction` down with the theme. A newer
+// client's unknown `mode`, or a malformed time, must parse harmlessly instead. The
+// read edge (`coerceThemeState`) is the one that validates/normalizes these into a
+// real `ThemeState`. (`THEME_MODES` in theme.ts is what a writer/UI enumerates the
 // modes from; it is not used to gate parsing here.)
+//
+// Each field also `.catch('')`es, so a NON-string (a future client storing a richer
+// `mode`, a corrupt byte) degrades to the empty string — which `coerceThemeState`
+// already maps to the default — rather than failing this object. Combined with the
+// `.catch(undefined)` on the parent's `theme` field, no theme value of any shape can
+// fail the settings parse. A partial theme survives per-field too: `{ mode: 'dark' }`
+// with no times keeps the mode and defaults the times, instead of losing all three.
 //
 // This is `z.object`, not the file's usual `looseObject`: theme is a CLOSED shape
 // (only these three fields feed `resolveTheme`), so there are no unknown sub-keys to
@@ -302,9 +317,9 @@ export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 // `settingsGeneralSchema` is `looseObject`, so a future client's new SIBLING setting
 // round-trips — the extension path for growth here is a new field beside `theme`.
 export const themeStateSchema = z.object({
-  mode: z.string(),
-  lightStart: z.string(),
-  darkStart: z.string(),
+  mode: z.string().catch(''),
+  lightStart: z.string().catch(''),
+  darkStart: z.string().catch(''),
 });
 export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 
@@ -313,11 +328,31 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // field here for a general setting, or a NEW `settings/<concern>.enc` schema
 // when a group of settings should stop clobbering the rest under LWW.
 //
+// NO SETTING FIELD CAN FAIL THIS PARSE. Every value field is optional AND
+// `.catch(undefined)`, so a value of the wrong shape reads as ABSENT and the
+// caller's default applies — one bad field can never drop the whole blob (and with
+// it every OTHER setting) from the UI. This is the theme doctrine (see
+// `themeStateSchema`) applied to the file as a whole: it parses PERSISTED bytes
+// written by past and future clients, so it must be maximally forgiving.
+//
+// The two exceptions are DELIBERATE and are the frame, not a setting:
+// `createdAt`/`updatedAt` stay strict `z.number().int()`. They're the LWW clock the
+// sync merge orders writes by — a blob without them isn't a settings file with a bad
+// setting, it's not a settings file. They're also the only thing separating a real
+// blob from arbitrary JSON at the IMPORT edge (`classifyBundleLine` in
+// import-all-data.ts gates on this schema), which would otherwise accept `{}`.
+//
 // `linksLayout` is OPTIONAL: it's the SYNCED links layout (the Settings → Misc
 // "Sync" tab). Absent until the user picks one, and an older client that never
-// wrote it still parses — `looseObject` round-trips it for clients that don't
-// model it yet. The device-local alternative ("Device" tab) lives off-sync in the
-// brace-web `localSettings` store, never here.
+// wrote it still parses. It's a free `z.string()`, NOT `z.enum(LINKS_LAYOUTS)`:
+// the enum is the WRITER's list (see LINKS_LAYOUTS), and validating reads against it
+// would mean a layout added later (a newer device syncing `table`) fails this parse
+// on every older client and takes the theme down with it. Unknown values instead
+// round-trip untouched, and the read edge falls back to its default for rendering
+// (brace-web's `Main` picks `ListLayout`) while the Settings UI simply shows no
+// selection — the user's choice on the newer device is preserved, not clobbered.
+// The device-local alternative ("Device" tab) lives off-sync in the brace-web
+// `localSettings` store, never here.
 //
 // `serverExtraction` is the SECOND, explicit opt-in (see docs/link-extraction.md
 // "server extraction" / "the stance"): the user lets a web/desktop client send a
@@ -327,14 +362,16 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // it for clients that don't model it (e.g. the extension, which is active-context
 // only and never calls the extractor).
 export const settingsGeneralSchema = z.looseObject({
-  linksLayout: z.enum(LINKS_LAYOUTS).optional(),
-  serverExtraction: z.boolean().optional(),
+  linksLayout: z.string().optional().catch(undefined),
+  serverExtraction: z.boolean().optional().catch(undefined),
   // The SYNCED theme (the Settings → theme "Sync" tab). OPTIONAL like `linksLayout`:
   // absent until the user picks a synced theme, and an older client that never wrote
   // it still parses — `looseObject` round-trips it. Permissive by design (see
   // `themeStateSchema`); the read edge coerces it with `coerceThemeState`. The
-  // device-local alternative ("Device" tab) lives in the `localSettings` store.
-  theme: themeStateSchema.optional(),
+  // `.catch` covers theme values that aren't objects at all (`themeStateSchema`'s own
+  // catches cover the fields within). The device-local alternative ("Device" tab)
+  // lives in the `localSettings` store.
+  theme: themeStateSchema.optional().catch(undefined),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

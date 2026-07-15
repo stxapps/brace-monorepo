@@ -38,16 +38,27 @@ const DEFAULT_LINKS_LAYOUT: LinksLayout = 'list';
 export type LinksLayoutSource = 'sync' | 'local';
 export type ThemeSource = 'sync' | 'local';
 
+// The three `*LinksLayout` values below are typed `string`, NOT `LinksLayout`, and
+// that width is the POINT: they're persisted values, and `linksLayout` can be SYNCED,
+// so a device running a newer client can legitimately store a layout this build has
+// never heard of (a future `table` — see LINKS_LAYOUTS in entities.ts). The schema
+// deliberately doesn't validate reads against the writer's enum, so neither can this
+// hook lie about the result. Unknown values reach consumers INTACT rather than being
+// silently rewritten to the default, which is what keeps them round-tripping back to
+// the newer device untouched — the cost is that every consumer must handle a value
+// outside its own union (brace-web's `Main` falls back to `ListLayout`; the Settings
+// radios show no selection). Writers are still strict: `setSyncLinksLayout` /
+// `setLocalLinksLayout` take a `LinksLayout`.
 export interface Settings {
   // The links layout the app should render right now — `localLinksLayout` when the
   // active source is `local`, else the synced `syncLinksLayout`.
-  linksLayout: LinksLayout;
+  linksLayout: string;
   // Which source is active on THIS device (device-local; never synced).
   linksLayoutSource: LinksLayoutSource;
   // The synced links layout (the Sync tab's radio value).
-  syncLinksLayout: LinksLayout;
+  syncLinksLayout: string;
   // This device's own links layout (the Device tab's radio value).
-  localLinksLayout: LinksLayout;
+  localLinksLayout: string;
   // The synced server-extraction opt-in (Settings → the second, explicit opt-in).
   // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
   // sends a saved URL to `brace-extractor` (see docs/link-extraction.md).

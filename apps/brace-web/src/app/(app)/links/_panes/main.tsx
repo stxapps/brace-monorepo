@@ -26,12 +26,17 @@ import { useLinks } from '../_hooks/use-links';
 import { CardLayout } from '../_layouts/card-layout';
 import { ListLayout } from '../_layouts/list-layout';
 import type { LinkLayoutProps } from '../_layouts/shared';
-import { TableLayout } from '../_layouts/table-layout';
 
-const LAYOUTS: Record<string, (props: LinkLayoutProps) => React.ReactNode> = {
+type Layout = (props: LinkLayoutProps) => React.ReactNode;
+
+// Keyed by the persisted `linksLayout` string rather than by `LinksLayout`, and the
+// value is `| undefined`, because the setting is SYNCED: a device on a newer client
+// can store a layout this build doesn't implement (see LINKS_LAYOUTS in entities.ts),
+// and `useSettings` hands that value through untouched instead of rewriting it. So
+// the lookup can miss, and `UnlockedMain` falls back rather than rendering nothing.
+const LAYOUTS: Record<string, Layout | undefined> = {
   list: ListLayout,
   card: CardLayout,
-  table: TableLayout,
 };
 
 export function Main() {
@@ -55,7 +60,12 @@ function UnlockedMain() {
   const { linksLayout } = useSettings();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
 
-  const Layout = LAYOUTS[linksLayout];
+  // An unknown layout (synced from a client that has one we don't) renders as the
+  // dense default — the same thing a user with no choice made sees. Deliberately does
+  // NOT write the fallback back: the stored value stays whatever the other device
+  // chose, so it still applies there. Settings → Misc shows no selected radio while
+  // this is in effect, which is the user's cue that the choice lives elsewhere.
+  const Layout = LAYOUTS[linksLayout] ?? ListLayout;
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">

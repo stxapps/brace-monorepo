@@ -19,7 +19,7 @@
 
 import Dexie, { type EntityTable, type Table } from 'dexie';
 
-import type { LinksLayout, OpKind, ThemeState } from '@stxapps/shared';
+import type { OpKind, ThemeState } from '@stxapps/shared';
 
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
@@ -197,7 +197,12 @@ export interface LocalSettingsRecord {
   // Single-row table — one settings blob per device, keyed by a constant.
   id: 'singleton';
   linksLayoutSource: 'sync' | 'local';
-  linksLayout: LinksLayout;
+  // A `string`, not `LinksLayout`, for the same reason the synced one is (see
+  // `settingsGeneralSchema` in entities.ts / the `Settings` shape in use-settings.ts):
+  // this is a PERSISTED value that Dexie hands back unvalidated, so a row written by a
+  // build whose `LINKS_LAYOUTS` had more entries than this one's still reads back
+  // as-is. Writers stay strict — `setLocalLinksLayout` takes a `LinksLayout`.
+  linksLayout: string;
   themeSource: 'sync' | 'local';
   theme: ThemeState;
 }

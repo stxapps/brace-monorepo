@@ -1,7 +1,7 @@
 'use client';
 
 // The Misc settings section: small app-wide preferences. It owns the link LAYOUT —
-// list / card / table — and the THEME — light / dark / system / custom time. Both
+// list / card — and the THEME — light / dark / system / custom time. Both
 // follow the same shape: a Sync/Device tab picks WHERE the choice lives, and the
 // selected tab IS the active source (use-settings.ts resolves the applied value from
 // it):
@@ -16,7 +16,7 @@
 // AppLockGate in the (app) layout.
 
 import { useState } from 'react';
-import { Clock, LayoutGrid, List, Monitor, Moon, Sun, Table } from 'lucide-react';
+import { Clock, LayoutGrid, List, Monitor, Moon, Sun } from 'lucide-react';
 
 import {
   LINKS_LAYOUTS,
@@ -54,11 +54,6 @@ const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: R
       label: 'Card',
       hint: 'A grid of preview cards.',
       icon: <LayoutGrid className="size-4" />,
-    },
-    table: {
-      label: 'Table',
-      hint: 'Columns with a header row.',
-      icon: <Table className="size-4" />,
     },
   };
 
@@ -120,13 +115,22 @@ function OptionRow({
   );
 }
 
-// The three layout radios for one source. `value`/`onChange` are wired to either
-// the synced or the device layout by the parent, so this row is source-agnostic.
+// The layout radios for one source. `value`/`onChange` are wired to either the
+// synced or the device layout by the parent, so this row is source-agnostic.
+//
+// `value` is the raw persisted `string`, not a `LinksLayout`: the synced setting can
+// hold a layout this build doesn't offer (see LINKS_LAYOUTS in entities.ts), and
+// `useSettings` passes it through rather than rewriting it. When it matches no radio,
+// RadioGroup renders with NOTHING selected — which is the honest rendering: the
+// active layout genuinely isn't one of these, and the links page is showing its
+// fallback. Picking any option here writes a layout this build knows and repairs it
+// (clobbering the other device's choice — deliberately, since the user just asked
+// for this one). `onChange` stays `LinksLayout`, so we can only ever write a real one.
 function LayoutRadioGroup({
   value,
   onChange,
 }: {
-  value: LinksLayout;
+  value: string;
   onChange: (layout: LinksLayout) => void;
 }) {
   return (
