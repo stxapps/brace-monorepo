@@ -1,8 +1,4 @@
-import {
-  generateRecoveryCode,
-  normalizeRecoveryCode,
-  RECOVERY_CODE_BYTES,
-} from './recovery-code';
+import { generateRecoveryCode, normalizeRecoveryCode, RECOVERY_CODE_BYTES } from './recovery-code';
 
 describe('generateRecoveryCode', () => {
   it('produces a grouped Crockford code with no ambiguous chars', () => {

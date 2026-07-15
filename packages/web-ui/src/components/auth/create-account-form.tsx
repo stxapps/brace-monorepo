@@ -105,9 +105,7 @@ export function CreateAccountForm() {
   // (see PASSWORD_MIN_GUESSES_LOG10).
   // null = estimator still loading; stay closed until it's ready.
   const ownPasswordOk =
-    ownPasswordParse.success &&
-    guessesLog10 !== null &&
-    guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
+    ownPasswordParse.success && guessesLog10 !== null && guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
 
   const passwordChosen =
     mode === 'generated' ? passphrase !== '' && passphraseSaved : ownPasswordOk;
@@ -219,7 +217,7 @@ export function CreateAccountForm() {
               label="Your passphrase"
               saved={passphraseSaved}
               onSavedChange={setPassphraseSaved}
-              confirmLabel="I&apos;ve saved my passphrase somewhere safe."
+              confirmLabel="I've saved my passphrase somewhere safe."
             />
             <div className="flex items-center justify-between">
               <button
@@ -268,12 +266,7 @@ export function CreateAccountForm() {
         )}
 
         <Field>
-          <Button
-            type="button"
-            className="w-full"
-            disabled={!canContinueSetup}
-            onClick={goConfirm}
-          >
+          <Button type="button" className="w-full" disabled={!canContinueSetup} onClick={goConfirm}>
             Continue
           </Button>
         </Field>
@@ -288,9 +281,7 @@ export function CreateAccountForm() {
         <BackLink onClick={() => setStep('setup')} />
         <Field data-invalid={confirmError}>
           <FieldLabel htmlFor="confirm">Confirm your password</FieldLabel>
-          <FieldDescription>
-            Re-enter it to make sure you have it saved correctly.
-          </FieldDescription>
+          <FieldDescription>Re-enter it to make sure you have it saved correctly.</FieldDescription>
           <PasswordInput
             id="confirm"
             autoComplete="new-password"
@@ -333,7 +324,7 @@ export function CreateAccountForm() {
           label="Your recovery code"
           saved={recoverySaved}
           onSavedChange={setRecoverySaved}
-          confirmLabel="I&apos;ve saved my recovery code somewhere safe."
+          confirmLabel="I've saved my recovery code somewhere safe."
         />
         <button
           type="button"

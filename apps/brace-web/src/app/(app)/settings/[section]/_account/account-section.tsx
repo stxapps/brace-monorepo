@@ -328,8 +328,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       setDone(true);
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
-      else if (err instanceof InvalidRecoveryCodeError)
-        setError('That recovery code didn’t work.');
+      else if (err instanceof InvalidRecoveryCodeError) setError('That recovery code didn’t work.');
       else setError('Could not change your password. Please try again.');
     }
   };
@@ -341,13 +340,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         <h2 className="text-xl font-semibold">Change password</h2>
         <p className="mt-3 flex items-start gap-2 text-sm text-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-          Your password has been changed. You&apos;re still signed in on this device, and your
-          other devices have been signed out.
+          Your password has been changed. You&apos;re still signed in on this device, and your other
+          devices have been signed out.
         </p>
         <p className="mt-4 text-xs text-muted-foreground">
-          This changed how you sign in, but didn&apos;t re-encrypt data you&apos;ve already
-          synced. If your old password may have been compromised, a password change alone
-          won&apos;t protect data an attacker could already have copied — export your data (
+          This changed how you sign in, but didn&apos;t re-encrypt data you&apos;ve already synced.
+          If your old password may have been compromised, a password change alone won&apos;t protect
+          data an attacker could already have copied — export your data (
           <Link href="/settings/data" className="underline hover:text-foreground">
             Settings → Data
           </Link>
@@ -422,7 +421,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
               label="Your new passphrase"
               saved={passphraseSaved}
               onSavedChange={setPassphraseSaved}
-              confirmLabel="I&apos;ve saved my new passphrase somewhere safe."
+              confirmLabel="I've saved my new passphrase somewhere safe."
             />
             <div className="flex items-center justify-between">
               <button
@@ -502,9 +501,9 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             manual export → delete → recreate path. */}
         <p className="mt-2 border-t border-border pt-4 text-xs text-muted-foreground">
           Changing your password replaces how you sign in — it doesn&apos;t re-encrypt data
-          you&apos;ve already synced. If you think someone actually had your old password,
-          changing it alone won&apos;t protect data they may have already copied. In that case
-          the safe path is to export your data (
+          you&apos;ve already synced. If you think someone actually had your old password, changing
+          it alone won&apos;t protect data they may have already copied. In that case the safe path
+          is to export your data (
           <Link href="/settings/data" className="underline hover:text-foreground">
             Settings → Data
           </Link>
@@ -572,7 +571,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
             label="Your recovery code"
             saved={saved}
             onSavedChange={setSaved}
-            confirmLabel="I&apos;ve saved my recovery code somewhere safe."
+            confirmLabel="I've saved my recovery code somewhere safe."
           />
           <Button className="mt-4" disabled={!saved} onClick={onBack}>
             Done
@@ -755,7 +754,10 @@ export function AccountSection() {
       ) : view === 'change-password' ? (
         <ChangePasswordView onBack={() => setView('overview')} />
       ) : view === 'recovery' ? (
-        <RecoveryCodeView onBack={() => setView('overview')} hasRecovery={hasRecovery.data === true} />
+        <RecoveryCodeView
+          onBack={() => setView('overview')}
+          hasRecovery={hasRecovery.data === true}
+        />
       ) : view === 'sign-out-others' ? (
         <SignOutOtherDevicesView onBack={() => setView('overview')} />
       ) : (

@@ -590,7 +590,12 @@ describe('auth routes', () => {
         ...(withRecovery ? [{ doorType: 'recovery' as const, ...door }] : []),
       ],
     });
-    return { ...kp, userId, token: session.token, auth: { authorization: `Bearer ${session.token}` } };
+    return {
+      ...kp,
+      userId,
+      token: session.token,
+      auth: { authorization: `Bearer ${session.token}` },
+    };
   }
 
   const signedReq = async (keyPair: CryptoKeyPair, payload: string) => ({
@@ -719,7 +724,10 @@ describe('auth routes', () => {
     it('creates the recovery door when the account had none', async () => {
       const acct = await seedSessioned('addrecovery'); // password door only
       expect(
-        await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(acct.userId, DOOR_RECOVERY),
+        await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserIdAndDoorType(
+          acct.userId,
+          DOOR_RECOVERY,
+        ),
       ).toBeNull();
 
       const req = await signedReq(acct.keyPair, payload('addrecovery', acct.publicKey));

@@ -98,5 +98,4 @@ export const canonicalizeUsername = (username: string): string =>
 //     a password must keep. This mirrors RFC 8265's OpaqueString profile.
 // On a plain-ASCII password (e.g. the generated hyphen-joined passphrase) this is
 // a no-op, so it doesn't disturb the ASCII contract vectors.
-export const canonicalizePassword = (password: string): string =>
-  password.trim().normalize('NFC');
+export const canonicalizePassword = (password: string): string => password.trim().normalize('NFC');

@@ -94,12 +94,12 @@ ciphertext can mount an offline Argon2id attack on a weak password.
 
 | door              | input entropy     | KDF for the KEK                                   | when                   |
 | ----------------- | ----------------- | ------------------------------------------------- | ---------------------- |
-| **password**      | low (user-chosen) | **Argon2id** (memory-hard) over the per-user salt | always (primary) — ✅   |
-| **recovery code** | high (CSPRNG)     | **HKDF** (input already high-entropy)             | ✅ built (skippable)    |
+| **password**      | low (user-chosen) | **Argon2id** (memory-hard) over the per-user salt | always (primary) — ✅  |
+| **recovery code** | high (CSPRNG)     | **HKDF** (input already high-entropy)             | ✅ built (skippable)   |
 | **passkey**       | high (PRF secret) | **HKDF** over the WebAuthn PRF output             | later, where supported |
 
 - **password door** — `password-KEK = Argon2id(canonicalizePassword(password),
-  salt)`, where `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the
+salt)`, where `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the
   per-user salt described below). Memory-hard because the input is low-entropy.
   `canonicalizePassword` (`shared` `crypto/params.ts`) is `trim().normalize('NFC')`
   — part of the frozen contract, so every platform folds it identically before the
@@ -309,12 +309,12 @@ sign-in than at create-time. Read them as a _length_ floor and a hashing bound,
 
 Rough entropy targets, for calibration:
 
-| secret                                  | approx. entropy | verdict                            |
-| --------------------------------------- | --------------- | ---------------------------------- |
-| human "strong" password (`Summer2026!`) | ~25–35 bits     | **weak** — do not rely on it       |
-| 7-word BIP-39 passphrase (generated default) | ~77 bits   | **good** — approaches wallet-grade |
-| 8-word BIP-39 passphrase                | ~88 bits        | strong                             |
-| BIP-39 24-word seed                     | ~256 bits       | wallet reference point             |
+| secret                                       | approx. entropy | verdict                            |
+| -------------------------------------------- | --------------- | ---------------------------------- |
+| human "strong" password (`Summer2026!`)      | ~25–35 bits     | **weak** — do not rely on it       |
+| 7-word BIP-39 passphrase (generated default) | ~77 bits        | **good** — approaches wallet-grade |
+| 8-word BIP-39 passphrase                     | ~88 bits        | strong                             |
+| BIP-39 24-word seed                          | ~256 bits       | wallet reference point             |
 
 > **STATUS — ✅ built (typed path).** On the "type my own" path the create-account
 > form runs **zxcvbn** (`@zxcvbn-ts`, dynamically imported so it stays out of the
@@ -336,11 +336,11 @@ Rough entropy targets, for calibration:
 > (no "green meter, disabled button").
 >
 > Two caveats worth knowing. zxcvbn models an unmatched password as **10^length**
-> guesses — ~3.32 bits/char, **independent of charset** — so it *underestimates*
+> guesses — ~3.32 bits/char, **independent of charset** — so it _underestimates_
 > truly random strings (a 16-char CSPRNG password is ~95 bits but models as 53, and
 > is rejected here) and character-class rules would not move the number at all.
 > That's the concrete reason this app has **no composition rules** (and NIST
-> SP 800-63B advises against them anyway). Conversely it can *overestimate* patterned
+> SP 800-63B advises against them anyway). Conversely it can _overestimate_ patterned
 > passwords its dictionaries miss — it can't know the user's dog's name — which is
 > what the 60-bit headroom buys. Both caveats argue the same thing: the estimate is a
 > weakness detector, not a strength certificate, which is why the **generated**

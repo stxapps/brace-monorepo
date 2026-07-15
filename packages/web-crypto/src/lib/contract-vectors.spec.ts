@@ -74,11 +74,7 @@ describe('frozen-contract vectors', () => {
     // Both must derive one KEK, or a user who set the password on one keyboard is
     // locked out on another (there is no reset).
     const created = await createAccount(V.username, 'café-secret-42');
-    const unlocked = await unlockAccount(
-      V.username,
-      '  café-secret-42  ',
-      created.passwordDoor,
-    );
+    const unlocked = await unlockAccount(V.username, '  café-secret-42  ', created.passwordDoor);
     expect(unlocked.publicKey).toBe(created.publicKey);
   });
 
@@ -133,8 +129,8 @@ describe('frozen-contract vectors', () => {
     // New code opens the same account; the original code no longer fits the new blob.
     const viaNew = await unlockAccountWithRecovery(newCode, rotated);
     expect(viaNew.publicKey).toBe(created.publicKey);
-    await expect(
-      unlockAccountWithRecovery(V.recovery.code, rotated),
-    ).rejects.toBeInstanceOf(WrongRecoveryCodeError);
+    await expect(unlockAccountWithRecovery(V.recovery.code, rotated)).rejects.toBeInstanceOf(
+      WrongRecoveryCodeError,
+    );
   });
 });

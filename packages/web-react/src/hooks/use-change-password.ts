@@ -32,8 +32,7 @@ import { InvalidRecoveryCodeError } from './use-sign-in-with-recovery';
 // password" UI exposes (docs/account.md): "I know my current password" and "I
 // forgot it (but have my recovery code)".
 export type DoorProofInput =
-  | { kind: 'password'; currentPassword: string }
-  | { kind: 'recovery'; recoveryCode: string };
+  { kind: 'password'; currentPassword: string } | { kind: 'recovery'; recoveryCode: string };
 
 // Fetch the wrapped door the proof will open and assemble the web-crypto
 // DoorOpener. Shared by useChangePassword and useRecoveryCode — both re-wrap the
@@ -80,7 +79,8 @@ export async function openerForProof(
 export function mapOpenError(err: unknown): never {
   // Both WrongPasswordError and WrongRecoveryCodeError are thrown from
   // @stxapps/web-crypto; check by name to avoid importing both classes everywhere.
-  if (err instanceof Error && err.name === 'WrongPasswordError') throw new InvalidCredentialsError();
+  if (err instanceof Error && err.name === 'WrongPasswordError')
+    throw new InvalidCredentialsError();
   if (err instanceof Error && err.name === 'WrongRecoveryCodeError') {
     throw new InvalidRecoveryCodeError();
   }

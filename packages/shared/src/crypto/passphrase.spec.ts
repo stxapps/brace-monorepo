@@ -37,8 +37,6 @@ describe('generatePassphrase', () => {
 describe('generated-passphrase wordlist (frozen contract)', () => {
   it('matches the pinned length and hash', () => {
     expect(wordlist).toHaveLength(CRYPTO_CONTRACT_VECTOR.wordlist.length);
-    expect(bytesToHex(sha256(wordlist.join('\n')))).toBe(
-      CRYPTO_CONTRACT_VECTOR.wordlist.sha256Hex,
-    );
+    expect(bytesToHex(sha256(wordlist.join('\n')))).toBe(CRYPTO_CONTRACT_VECTOR.wordlist.sha256Hex);
   });
 });
