@@ -65,8 +65,8 @@ export const passwordSchema = z
 // brute-force surface, and there is no reset). The UX cost is ~nil: the default is
 // the generated ~77-bit passphrase, so this only bites users who insist on typing
 // their own. Kept SEPARATE from passwordSchema so sign-in never inherits this floor
-// (see above). The strength meter clamps to sub-passing below this same length, so
-// the meter and this gate stay one consistent signal (usePasswordStrength).
+// (see above). The strength meter holds below its passing band under this same
+// length, so the meter and this gate stay one consistent signal (usePasswordStrength).
 //
 // 20 pairs with PASSWORD_MIN_GUESSES_LOG10 below: zxcvbn models an unmatched
 // password as 10^length guesses (~3.32 bits/char, charset-independent), so 10^18

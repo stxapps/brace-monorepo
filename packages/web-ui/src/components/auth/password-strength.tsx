@@ -10,36 +10,39 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // TYPED-your-own path only; the generated passphrase is ~77 bits by construction and
 // bypasses this entirely.
 //
-// Do NOT gate on `score`. zxcvbn's 0–4 score is a 5-bucket label over the same
-// guess estimate, and its top bucket is open-ended ("guesses >= 1e10" ≈ 33 bits) —
-// so score 4 spans `Summer2026Brace!` (~35 bits) through a 7-word passphrase
-// (~121 bits). It's a display signal, not a policy one. See the constant's comment
-// in `shared` `auth/credentials.ts`.
+// zxcvbn's own 0–4 `score` is deliberately NOT surfaced by this module. It's a
+// 5-bucket label over the same guess estimate, and its top bucket is open-ended
+// ("guesses >= 1e10" ≈ 33 bits) — so score 4 spans `Summer2026Brace!` (~35 bits)
+// through a 7-word passphrase (~121 bits). Anything a caller could gate on it is
+// wrong, so it doesn't leave this file; `displayScore` below is ours, derived from
+// the same floors as the gate. See the constant's comment in `shared`
+// `auth/credentials.ts`.
 //
 // zxcvbn is heavy (~400 KB with its dictionaries), so it's DYNAMICALLY imported
 // on first use — it never lands in the initial auth-route bundle. Until it loads,
 // both outputs are null and the caller keeps submit disabled (never gate-open before
 // the estimator is ready).
 
-// The meter's passing band. Display-only and deliberately NOT exported: the gate is
-// guessesLog10, and an exported score threshold is exactly the footgun that let a
-// ~27-bit password through before.
-const PASSING_SCORE = 4;
+// Display bands over the same guess estimate the gate uses — one per meter segment,
+// so `displayScore` (0–3) is both the band index and the last segment lit. The top
+// band IS the gate (PASSWORD_MIN_GUESSES_LOG10), so a full green meter and a passing
+// entropy gate are the same condition by construction rather than by clamping.
+const DISPLAY_BANDS = [10, 14, PASSWORD_MIN_GUESSES_LOG10];
+const TOP_BAND = DISPLAY_BANDS.length; // displayScore 3 = "Strong" = passes the gate
 
-type Estimate = { score: number; guessesLog10: number };
-type ScoreFn = (password: string, userInputs: string[]) => Estimate;
+type ScoreFn = (password: string, userInputs: string[]) => number;
 
 // Lazily load zxcvbn + its common language pack once, then score `password`
 // (penalizing `userInputs` — e.g. the username — so a username-derived password
-// scores low). Returns { score: 0–4 | null, guessesLog10: number | null, ready }.
-// Both estimates are null while loading or when the password is empty.
+// scores low). Returns { guessesLog10: number | null, displayScore: 0–3 | null, ready }.
+// Both outputs are null while loading or when the password is empty.
 //
 // `guessesLog10` is the raw, uncapped estimate — the value callers gate on.
-// `score` is for the meter only, and is clamped to sub-passing whenever the password
-// is below `minLength` OR below PASSWORD_MIN_GUESSES_LOG10, so the meter can never
-// show a green "Strong" while the gate blocks submit ("green meter but disabled
-// button"). zxcvbn itself can't be told either floor — it reports estimated guess
-// counts and buckets them — so we do it here.
+// `displayScore` is for the meter only: a band index derived from BOTH floors the
+// gate enforces, so it can never read "Strong" while submit is blocked ("green meter
+// but disabled button"). Below `minLength` it's held one band under the top; zxcvbn
+// can't be told either floor — it reports estimated guess counts and buckets them —
+// so we bucket them ourselves here.
 //
 // Pass the CANONICAL password so both the length and the estimate match what
 // actually derives the KEK.
@@ -47,7 +50,7 @@ export function usePasswordStrength(
   password: string,
   userInputs: string[] = [],
   minLength = 0,
-): { score: number | null; guessesLog10: number | null; ready: boolean } {
+): { guessesLog10: number | null; displayScore: number | null; ready: boolean } {
   const [scoreFn, setScoreFn] = React.useState<ScoreFn | null>(null);
 
   React.useEffect(() => {
@@ -62,10 +65,7 @@ export function usePasswordStrength(
         graphs: common.adjacencyGraphs,
       });
       if (alive) {
-        setScoreFn(() => (pw: string, inputs: string[]) => {
-          const r = core.zxcvbn(pw, inputs);
-          return { score: r.score, guessesLog10: r.guessesLog10 };
-        });
+        setScoreFn(() => (pw: string, inputs: string[]) => core.zxcvbn(pw, inputs).guessesLog10);
       }
     })();
     return () => {
@@ -78,32 +78,35 @@ export function usePasswordStrength(
   const inputsKey = userInputs.join(' ');
   return React.useMemo(() => {
     if (!scoreFn || !password) {
-      return { score: null, guessesLog10: null, ready: scoreFn !== null };
+      return { guessesLog10: null, displayScore: null, ready: scoreFn !== null };
     }
-    const raw = scoreFn(password, inputsKey ? inputsKey.split(' ').filter(Boolean) : []);
-    // Clamp the DISPLAY score to sub-passing while either floor blocks submit, so the
-    // meter and the gate stay one signal. (This makes label 3 "Good" unreachable by
-    // design: below the bar the meter tops out at "Fair", at the bar it's "Strong".)
-    const blocked =
-      password.length < minLength || raw.guessesLog10 < PASSWORD_MIN_GUESSES_LOG10;
-    const score = blocked ? Math.min(raw.score, PASSING_SCORE - 2) : raw.score;
-    return { score, guessesLog10: raw.guessesLog10, ready: true };
+    const guessesLog10 = scoreFn(password, inputsKey ? inputsKey.split(' ').filter(Boolean) : []);
+    // Band the estimate, then hold it one under the top while the length floor blocks
+    // submit — the entropy floor needs no such step, since the top band IS that floor.
+    const band = DISPLAY_BANDS.filter((b) => guessesLog10 >= b).length;
+    const displayScore = password.length < minLength ? Math.min(band, TOP_BAND - 1) : band;
+    return { guessesLog10, displayScore, ready: true };
   }, [scoreFn, password, inputsKey, minLength]);
 }
 
-const LABELS = ['Very weak', 'Weak', 'Fair', 'Good', 'Strong'] as const;
+// One label per band, so a full meter reads "Strong" exactly when the gate passes.
+const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
 
-// A four-segment meter with a text label. Renders nothing until there's a score
-// to show (empty password / estimator still loading).
-export function PasswordStrengthMeter({ score }: { score: number | null }) {
-  if (score === null) return null;
+// A four-segment meter with a text label. Purely presentational — it renders the
+// hook's `displayScore` and knows nothing about the policy behind it. Renders
+// nothing until there's a score to show (empty password / estimator still loading).
+export function PasswordStrengthMeter({ displayScore }: { displayScore: number | null }) {
+  if (displayScore === null) return null;
 
-  // Segments 1–4 fill as score climbs (score 0 fills the first, in red). Color
-  // steps destructive → amber → primary, and only PASSING_SCORE reads as passing —
-  // the hook has already clamped anything the gate blocks below that.
+  // Segments 1–4 fill as the score climbs (0 fills the first, in red). Color steps
+  // destructive → amber → primary; only the top band reads as passing.
   const tone =
-    score >= PASSING_SCORE ? 'bg-primary' : score === 2 ? 'bg-amber-500' : 'bg-destructive';
-  const filled = score + 1; // score 0 → 1 segment lit
+    displayScore >= TOP_BAND
+      ? 'bg-primary'
+      : displayScore === TOP_BAND - 1
+        ? 'bg-amber-500'
+        : 'bg-destructive';
+  const filled = displayScore + 1; // displayScore 0 → 1 segment lit
 
   return (
     <div className="flex items-center gap-2" aria-live="polite">
@@ -118,10 +121,10 @@ export function PasswordStrengthMeter({ score }: { score: number | null }) {
       <span
         className={cn(
           'w-16 shrink-0 text-right text-xs',
-          score >= PASSING_SCORE ? 'text-muted-foreground' : 'text-destructive',
+          displayScore >= TOP_BAND ? 'text-muted-foreground' : 'text-destructive',
         )}
       >
-        {LABELS[score]}
+        {LABELS[displayScore]}
       </span>
     </div>
   );

@@ -277,7 +277,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   // Strength only matters on the typed path (the generated passphrase is ~77 bits by
   // construction). Score the CANONICAL form — the exact string the new KEK derives
   // from — and fold in the same length floor so the meter and the gate agree.
-  const { score, guessesLog10 } = usePasswordStrength(
+  const { guessesLog10, displayScore } = usePasswordStrength(
     mode === 'own' ? canonicalizePassword(ownPassword) : '',
     [],
     NEW_PASSWORD_MIN_LENGTH,
@@ -286,7 +286,8 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   // says "Weak" without naming the rule that's blocking, which sends people reaching
   // for symbols when length is what's missing.
   const ownPasswordParse = newPasswordSchema.safeParse(ownPassword);
-  // Gate on the raw guess estimate, never on `score` (see PASSWORD_MIN_GUESSES_LOG10).
+  // Gate on the raw guess estimate; `displayScore` is the meter's, not the policy's
+  // (see PASSWORD_MIN_GUESSES_LOG10).
   // null = estimator still loading; stay closed until it's ready.
   const newOk =
     mode === 'generated'
@@ -459,7 +460,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
                 if (error) setError(null);
               }}
             />
-            <PasswordStrengthMeter score={score} />
+            <PasswordStrengthMeter displayScore={displayScore} />
             {ownPasswordError ? (
               <p className="text-sm text-destructive">{ownPasswordError}</p>
             ) : null}

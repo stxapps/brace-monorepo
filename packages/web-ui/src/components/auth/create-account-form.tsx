@@ -92,7 +92,7 @@ export function CreateAccountForm() {
   // by construction). Score the CANONICAL form (canonicalizePassword) — the exact
   // string the KEK derives from — so the meter can't disagree with what's stored.
   // Pass the username as a penalty term.
-  const { score, guessesLog10 } = usePasswordStrength(
+  const { guessesLog10, displayScore } = usePasswordStrength(
     mode === 'own' ? canonicalizePassword(ownPassword) : '',
     [username],
     NEW_PASSWORD_MIN_LENGTH,
@@ -101,7 +101,8 @@ export function CreateAccountForm() {
   // the meter alone says "Weak" without naming the rule that's blocking, which sends
   // people reaching for symbols when length is what's missing.
   const ownPasswordParse = newPasswordSchema.safeParse(ownPassword);
-  // Gate on the raw guess estimate, never on `score` (see PASSWORD_MIN_GUESSES_LOG10).
+  // Gate on the raw guess estimate; `displayScore` is the meter's, not the policy's
+  // (see PASSWORD_MIN_GUESSES_LOG10).
   // null = estimator still loading; stay closed until it's ready.
   const ownPasswordOk =
     ownPasswordParse.success &&
@@ -248,7 +249,7 @@ export function CreateAccountForm() {
               value={ownPassword}
               onChange={(e) => setOwnPassword(e.target.value)}
             />
-            <PasswordStrengthMeter score={score} />
+            <PasswordStrengthMeter displayScore={displayScore} />
             {ownPasswordError ? (
               <FieldDescription className="text-destructive">{ownPasswordError}</FieldDescription>
             ) : null}
