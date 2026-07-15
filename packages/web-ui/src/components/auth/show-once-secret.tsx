@@ -51,7 +51,7 @@ export function ShowOnceSecret({
       <div className="flex items-stretch gap-2">
         <output
           aria-label={label}
-          className="flex-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5 font-mono text-sm break-words select-all"
+          className="flex-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5 font-mono text-sm wrap-break-word select-all"
         >
           {secret}
         </output>

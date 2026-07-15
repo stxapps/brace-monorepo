@@ -1,6 +1,7 @@
 import {
   NEW_PASSWORD_MIN_LENGTH,
   newPasswordSchema,
+  PASSWORD_MIN_GUESSES_LOG10,
   passwordSchema,
   RESERVED_USERNAMES,
   usernameSchema,
@@ -24,12 +25,12 @@ describe('passwordSchema (sign-in — permissive)', () => {
 });
 
 describe('newPasswordSchema (create / change — policy floor)', () => {
-  it('rejects a password shorter than the 12-char floor', () => {
-    expect(newPasswordSchema.safeParse('abcdefghijk').success).toBe(false); // 11
+  it('rejects a password shorter than the 20-char floor', () => {
+    expect(newPasswordSchema.safeParse('abcdefghijklmnopqrs').success).toBe(false); // 19
   });
 
   it('accepts a password at the floor', () => {
-    expect(newPasswordSchema.safeParse('abcdefghijkl').success).toBe(true); // 12
+    expect(newPasswordSchema.safeParse('abcdefghijklmnopqrst').success).toBe(true); // 20
   });
 
   it('is stricter than sign-in: an 8-char password passes sign-in but not create', () => {
@@ -39,9 +40,9 @@ describe('newPasswordSchema (create / change — policy floor)', () => {
   });
 
   it('measures the TRIMMED length against the floor', () => {
-    // 12 visible chars + surrounding spaces still passes; 11 + padding does not.
-    expect(newPasswordSchema.safeParse('  abcdefghijkl  ').success).toBe(true);
-    expect(newPasswordSchema.safeParse('  abcdefghijk  ').success).toBe(false);
+    // 20 visible chars + surrounding spaces still passes; 19 + padding does not.
+    expect(newPasswordSchema.safeParse('  abcdefghijklmnopqrst  ').success).toBe(true);
+    expect(newPasswordSchema.safeParse('  abcdefghijklmnopqrs  ').success).toBe(false);
   });
 
   it('rejects passwords over the 128-char Argon2id bound', () => {
@@ -50,7 +51,15 @@ describe('newPasswordSchema (create / change — policy floor)', () => {
   });
 
   it('exposes the floor as a shared constant', () => {
-    expect(NEW_PASSWORD_MIN_LENGTH).toBe(12);
+    expect(NEW_PASSWORD_MIN_LENGTH).toBe(20);
+  });
+
+  // The two floors are one policy: zxcvbn models an unmatched password as 10^length
+  // guesses, so the entropy gate already implies ~19 chars. If someone lowers the
+  // length floor below that, the length rule silently stops being the backstop it's
+  // documented to be (a shorter password would fail on entropy with a vaguer message).
+  it('keeps the length floor consistent with the entropy floor', () => {
+    expect(NEW_PASSWORD_MIN_LENGTH).toBeGreaterThanOrEqual(PASSWORD_MIN_GUESSES_LOG10);
   });
 });
 

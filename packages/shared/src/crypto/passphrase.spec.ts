@@ -6,7 +6,7 @@ import { bytesToHex } from './encoding';
 import { generatePassphrase, PASSPHRASE_DEFAULT_WORDS } from './passphrase';
 
 describe('generatePassphrase', () => {
-  it('defaults to 6 hyphen-separated words, all from the list', () => {
+  it('defaults to 7 hyphen-separated words, all from the list', () => {
     const words = generatePassphrase().split('-');
     expect(words).toHaveLength(PASSPHRASE_DEFAULT_WORDS);
     for (const w of words) expect(wordlist).toContain(w);

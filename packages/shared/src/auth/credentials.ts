@@ -67,7 +67,33 @@ export const passwordSchema = z
 // their own. Kept SEPARATE from passwordSchema so sign-in never inherits this floor
 // (see above). The strength meter clamps to sub-passing below this same length, so
 // the meter and this gate stay one consistent signal (usePasswordStrength).
-export const NEW_PASSWORD_MIN_LENGTH = 12;
+//
+// 20 pairs with PASSWORD_MIN_GUESSES_LOG10 below: zxcvbn models an unmatched
+// password as 10^length guesses (~3.32 bits/char, charset-independent), so 10^18
+// already implies ~19 chars for anything its dictionaries don't match. Rounding the
+// length floor to 20 makes the two rules one story — "at least 20 characters, and
+// not predictable" — instead of two numbers that bite at different moments.
+export const NEW_PASSWORD_MIN_LENGTH = 20;
+
+// The entropy floor for the typed-your-own path, as log10(guesses) — i.e. 10^18
+// guesses ≈ 60 bits. Gate on THIS, never on zxcvbn's 0–4 `score`: the score is a
+// 5-bucket label whose top bucket is open-ended ("guesses >= 1e10" ≈ 33 bits), so
+// score 4 covers everything from `Summer2026Brace!` (~35 bits) to our generated
+// 7-word passphrase (~121 bits by zxcvbn's own estimate). The underlying
+// `guessesLog10` is uncapped and is the real signal.
+//
+// Why 60 bits: the wrapped password door is served pre-auth, so guessing is offline
+// and parallel, and there is no reset — a win is total and permanent. Behind
+// ARGON2_PARAMS (64 MiB, t=3 → order 10^3–10^4 guesses/sec/GPU), 10^18 is millions
+// of GPU-years, while the ~27 bits that `score >= 3` actually admitted was ~hours on
+// a single GPU.
+//
+// This is a floor on zxcvbn's ESTIMATE, not on true entropy. The estimate runs
+// conservative for random strings (a 16-char CSPRNG password is really ~95 bits but
+// models as 53) and can run optimistic for patterned ones it fails to match — it
+// can't know the user's dog's name. The headroom covers the latter; the former is
+// why this only bites the escape hatch and never the generated default.
+export const PASSWORD_MIN_GUESSES_LOG10 = 18;
 
 export const newPasswordSchema = z
   .string()
@@ -96,3 +122,15 @@ export const createAccountSchema = z.object({
 
 export type SignInValues = z.infer<typeof signInSchema>;
 export type CreateAccountValues = z.infer<typeof createAccountSchema>;
+
+// The create-account submit input: the validated form values PLUS an optional
+// recovery code minted by the "Secure your account" ceremony. When present it
+// wraps the SAME DEK into a recovery door alongside the password door; when
+// absent the account starts password-only (recovery is skippable —
+// docs/account.md). Not a schema — the recovery code is CSPRNG-generated and
+// read-only, so there is nothing to validate here (normalizeRecoveryCode +
+// the door's GCM tag are the real contract). Lives in `shared` because both
+// platform submit hooks — web-react's useCreateAccount and its future
+// expo-react sibling — feed the same shape to the same endpoint and must stay
+// in lockstep.
+export type CreateAccountInput = CreateAccountValues & { recoveryCode?: string };

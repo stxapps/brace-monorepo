@@ -20,12 +20,12 @@ import { wordlist } from '@scure/bip39/wordlists/english';
 // 2048 words = 2^11, so each word carries exactly this many bits of entropy.
 export const PASSPHRASE_BITS_PER_WORD = 11;
 
-// The product default (docs/account.md): 6 words ≈ 77 bits — "good, approaches
+// The product default (docs/account.md): 7 words = 77 bits — "good, approaches
 // wallet-grade". Callers may ask for more; fewer than 4 is refused as unsafe.
-export const PASSPHRASE_DEFAULT_WORDS = 6;
+export const PASSPHRASE_DEFAULT_WORDS = 7;
 
 // Uniformly pick `words` entries from the 2048-word list with a CSPRNG and join
-// them with HYPHENS. Entropy = words * 11 bits (6 → 77). Uses the standard
+// them with HYPHENS. Entropy = words * 11 bits (7 → 77). Uses the standard
 // `crypto.getRandomValues` global (present on web/Workers and on Hermes via the
 // app's react-native-get-random-values polyfill) — never Math.random.
 //

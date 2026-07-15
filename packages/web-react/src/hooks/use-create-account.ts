@@ -8,8 +8,8 @@ import {
   bytesToHex,
   canonicalizeUsername,
   createAccountEndpoint,
+  type CreateAccountInput,
   type CreateAccountPayload,
-  type CreateAccountValues,
 } from '@stxapps/shared';
 import { createAccount } from '@stxapps/web-crypto';
 
@@ -29,12 +29,6 @@ import { seedNewAccount } from '../data/sync-store';
 // the orchestration and just signals which kind of failure occurred.
 export class UsernameTakenError extends Error {}
 export class UsernameCheckError extends Error {}
-
-// The mutate input is the form values PLUS an optional recovery code minted by
-// the "Secure your account" ceremony. When present it wraps the SAME DEK into a
-// recovery door, submitted alongside the password door; when absent the account
-// starts password-only (recovery is skippable — docs/account.md).
-export type CreateAccountInput = CreateAccountValues & { recoveryCode?: string };
 
 export function useCreateAccount() {
   const api = useApiClient();

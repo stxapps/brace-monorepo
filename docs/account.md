@@ -40,7 +40,7 @@ A wallet _forces_ high entropy; brace _trusts the user_ to choose it. Argon2id
 (memory-hard) makes each guess expensive — this is what defeated the old
 SHA-256 "brain wallets" that got drained — and the per-user salt stops shared
 rainbow tables. But neither manufactures entropy: **the security of the password
-door is bounded by the entropy of the password.** A generated 6-word passphrase
+door is bounded by the entropy of the password.** A generated 7-word passphrase
 approaches wallet-grade; `Summer2026!` does not.
 
 > The product goal is _wallet-grade safety with better UX_. Two things buy that:
@@ -295,7 +295,7 @@ sign-in than at create-time. Read them as a _length_ floor and a hashing bound,
   failing to unwrap); `min 8` only pre-filters obviously-empty input before an
   expensive Argon2id. It must **never** be raised above the shortest creatable
   password, or it locks valid accounts out — and there is no reset.
-- **`newPasswordSchema` — create / change (`NEW_PASSWORD_MIN_LENGTH` = 12 … 128).**
+- **`newPasswordSchema` — create / change (`NEW_PASSWORD_MIN_LENGTH` = 20 … 128).**
   The policy floor for the typed-your-own path. A hard length floor is
   defense-in-depth **behind** the zxcvbn gate (zxcvbn is a heuristic and can be
   fooled; length can't be tricked past), which matters because a human-chosen
@@ -303,7 +303,8 @@ sign-in than at create-time. Read them as a _length_ floor and a hashing bound,
   attacker has the `publicKey` or any ciphertext. Kept separate from the sign-in
   schema so tightening it later never strands an existing shorter password. Cheap
   in UX terms: the default is the generated ~77-bit passphrase, so this only bites
-  users who insist on typing their own.
+  users who insist on typing their own. 20 is not independent of the entropy gate
+  below — see `PASSWORD_MIN_GUESSES_LOG10`.
 - **max 128** bounds the Argon2id input; well above any real passphrase.
 
 Rough entropy targets, for calibration:
@@ -311,20 +312,39 @@ Rough entropy targets, for calibration:
 | secret                                  | approx. entropy | verdict                            |
 | --------------------------------------- | --------------- | ---------------------------------- |
 | human "strong" password (`Summer2026!`) | ~25–35 bits     | **weak** — do not rely on it       |
-| 6-word diceware passphrase              | ~77 bits        | **good** — approaches wallet-grade |
-| 8-word diceware passphrase              | ~103 bits       | strong                             |
+| 7-word BIP-39 passphrase (generated default) | ~77 bits   | **good** — approaches wallet-grade |
+| 8-word BIP-39 passphrase                | ~88 bits        | strong                             |
 | BIP-39 24-word seed                     | ~256 bits       | wallet reference point             |
 
 > **STATUS — ✅ built (typed path).** On the "type my own" path the create-account
 > form runs **zxcvbn** (`@zxcvbn-ts`, dynamically imported so it stays out of the
 > initial bundle; the CANONICAL password is scored, and the username is fed as a
-> penalty term) and **disables submit below score 3**, with a strength meter
-> (`web-ui/components/auth/password-strength.tsx`) — alongside the
-> `newPasswordSchema` 12-char floor above. The two are kept **consistent**: the
-> meter clamps its score below passing until the length floor is met (via
-> `usePasswordStrength`'s `minLength`), so a too-short password never shows a green
-> "Good/Strong" while the gate blocks it. The **generated** path is ~77 bits by
+> penalty term) and **disables submit below `PASSWORD_MIN_GUESSES_LOG10`** — 10^18
+> guesses ≈ 60 bits — with a strength meter
+> (`web-ui/components/auth/password-strength.tsx`), alongside the
+> `newPasswordSchema` 20-char floor above. The **generated** path is ~77 bits by
 > construction and bypasses the gate.
+>
+> **Gate on `guessesLog10`, never on zxcvbn's 0–4 `score`.** The score is a
+> 5-bucket label over the same estimate, and its top bucket is open-ended
+> (`guesses >= 1e10` ≈ 33 bits) — measured, score 4 covers everything from
+> `Summer2026Brace!` (~35 bits) to the generated 7-word passphrase (~121 bits). A
+> `score >= 3` gate therefore admitted ~27 bits, which behind Argon2id (64 MiB,
+> t=3) is hours on a single GPU. `guessesLog10` is uncapped and is the real signal.
+> The meter still displays the score, but `usePasswordStrength` clamps it to
+> sub-passing whenever either floor blocks submit, so meter and gate stay one signal
+> (no "green meter, disabled button").
+>
+> Two caveats worth knowing. zxcvbn models an unmatched password as **10^length**
+> guesses — ~3.32 bits/char, **independent of charset** — so it *underestimates*
+> truly random strings (a 16-char CSPRNG password is ~95 bits but models as 53, and
+> is rejected here) and character-class rules would not move the number at all.
+> That's the concrete reason this app has **no composition rules** (and NIST
+> SP 800-63B advises against them anyway). Conversely it can *overestimate* patterned
+> passwords its dictionaries miss — it can't know the user's dog's name — which is
+> what the 60-bit headroom buys. Both caveats argue the same thing: the estimate is a
+> weakness detector, not a strength certificate, which is why the **generated**
+> passphrase is the default and the typed path is only an escape hatch.
 
 ### generated password (recommended default)
 
@@ -335,7 +355,7 @@ The cleanest way to get wallet-grade entropy with better-than-wallet UX is to
 **offer a generated passphrase as the default**, and let users override with
 their own only behind a strength gate. As built:
 
-- **generated 6-word passphrase is the default** (~77 bits), from the BIP-39
+- **generated 7-word passphrase is the default** (~77 bits), from the BIP-39
   English wordlist (2048 words = 11 bits each, unbiased 11-bit sampling) via
   `crypto.getRandomValues` — never `Math.random`. `generatePassphrase` lives in
   `shared` (`crypto/passphrase.ts`) so native shares it; the wordlist is pinned by
@@ -471,7 +491,7 @@ rate-limit**. This is the same exposure direct derivation had (the `publicKey`
 was the oracle then); the DEK model neither adds nor removes it.
 
 **The defense is entropy, not secrecy of the blob.** Like a wallet, the
-derivation is semi-public and the entropy is the wall: against a 6-word generated
+derivation is semi-public and the entropy is the wall: against a 7-word generated
 passphrase (~77 bits) the freely-served blob is not a practical risk, while
 `Summer2026!` falls regardless of how the blob is served. This is why the open
 items lead with the **entropy gate + generated passphrase** rather than gating

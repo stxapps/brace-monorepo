@@ -16,7 +16,7 @@
 // pre-warns from the same entitlements read and points at the Subscription
 // section, where Paddle's portal handles cancellation.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ChevronLeft,
@@ -25,13 +25,20 @@ import {
   KeyRound,
   Loader2,
   MonitorSmartphone,
+  RefreshCw,
   ShieldCheck,
   Trash2,
   UserX,
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { canonicalizePassword, NEW_PASSWORD_MIN_LENGTH, newPasswordSchema } from '@stxapps/shared';
+import {
+  canonicalizePassword,
+  generatePassphrase,
+  NEW_PASSWORD_MIN_LENGTH,
+  newPasswordSchema,
+  PASSWORD_MIN_GUESSES_LOG10,
+} from '@stxapps/shared';
 import {
   InvalidCredentialsError,
   InvalidRecoveryCodeError,
@@ -46,7 +53,6 @@ import {
 } from '@stxapps/web-react';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import {
-  PASSWORD_MIN_STRENGTH_SCORE,
   PasswordStrengthMeter,
   usePasswordStrength,
 } from '@stxapps/web-ui/components/auth/password-strength';
@@ -252,22 +258,60 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   const [useRecovery, setUseRecovery] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [mode, setMode] = useState<'generated' | 'own'>('generated');
+  const [passphrase, setPassphrase] = useState('');
+  const [passphraseSaved, setPassphraseSaved] = useState(false);
+  const [ownPassword, setOwnPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Score the canonical form — the exact string the new KEK derives from — and fold
-  // in the same length floor as the schema so the meter and the gate agree.
-  const { score } = usePasswordStrength(
-    canonicalizePassword(newPassword),
+  // A generated passphrase is the safe default here too (docs/account.md); the typed
+  // path is the escape hatch gated by the same zxcvbn floor as create-account.
+  // Generate on mount so the field is populated the moment the view opens.
+  useEffect(() => {
+    setPassphrase(generatePassphrase());
+  }, []);
+
+  const newPassword = mode === 'generated' ? passphrase : ownPassword;
+
+  // Strength only matters on the typed path (the generated passphrase is ~77 bits by
+  // construction). Score the CANONICAL form — the exact string the new KEK derives
+  // from — and fold in the same length floor so the meter and the gate agree.
+  const { score, guessesLog10 } = usePasswordStrength(
+    mode === 'own' ? canonicalizePassword(ownPassword) : '',
     [],
     NEW_PASSWORD_MIN_LENGTH,
   );
+  // Parse once so the schema's own message can surface under the field — the meter
+  // says "Weak" without naming the rule that's blocking, which sends people reaching
+  // for symbols when length is what's missing.
+  const ownPasswordParse = newPasswordSchema.safeParse(ownPassword);
+  // Gate on the raw guess estimate, never on `score` (see PASSWORD_MIN_GUESSES_LOG10).
+  // null = estimator still loading; stay closed until it's ready.
   const newOk =
-    newPasswordSchema.safeParse(newPassword).success &&
-    score !== null &&
-    score >= PASSWORD_MIN_STRENGTH_SCORE;
+    mode === 'generated'
+      ? passphrase !== '' && passphraseSaved
+      : ownPasswordParse.success &&
+        guessesLog10 !== null &&
+        guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
+
+  // Only once they've typed something. Length first (the schema owns its own message),
+  // then the entropy floor — otherwise a long-but-predictable password would fail with
+  // a silent "Fair" meter and no way to know what to change.
+  const ownPasswordError =
+    ownPassword === ''
+      ? null
+      : !ownPasswordParse.success
+        ? (ownPasswordParse.error?.issues[0]?.message ?? 'Invalid password')
+        : guessesLog10 !== null && guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
+          ? 'Too predictable — add a few more words, or generate a passphrase instead.'
+          : null;
   const proofReady = useRecovery ? recoveryCode !== '' : currentPassword !== '';
+
+  const regeneratePassphrase = () => {
+    setPassphrase(generatePassphrase());
+    setPassphraseSaved(false);
+  };
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -364,20 +408,77 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           {useRecovery ? 'Use my current password instead' : 'I forgot it — use my recovery code'}
         </button>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="cp-new">New password</Label>
-          <PasswordInput
-            id="cp-new"
-            autoComplete="new-password"
-            value={newPassword}
-            disabled={changePassword.isPending}
-            onChange={(e) => {
-              setNewPassword(e.target.value);
-              if (error) setError(null);
-            }}
-          />
-          <PasswordStrengthMeter score={score} />
-        </div>
+        {mode === 'generated' ? (
+          <div className="flex flex-col gap-2">
+            <Label>New passphrase</Label>
+            <p className="text-sm text-muted-foreground">
+              We generated a strong passphrase for you. Save it in your password manager — there is
+              no way to reset it if it&apos;s lost.
+            </p>
+            <ShowOnceSecret
+              id="cp-passphrase-saved"
+              secret={passphrase}
+              label="Your new passphrase"
+              saved={passphraseSaved}
+              onSavedChange={setPassphraseSaved}
+              confirmLabel="I&apos;ve saved my new passphrase somewhere safe."
+            />
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={regeneratePassphrase}
+                disabled={changePassword.isPending}
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                <RefreshCw className="size-3.5" />
+                Regenerate
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('own');
+                  if (error) setError(null);
+                }}
+                className="text-sm text-muted-foreground underline hover:text-foreground"
+              >
+                Choose my own
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="cp-new">New password</Label>
+            <PasswordInput
+              id="cp-new"
+              autoComplete="new-password"
+              aria-invalid={!!ownPasswordError}
+              value={ownPassword}
+              disabled={changePassword.isPending}
+              onChange={(e) => {
+                setOwnPassword(e.target.value);
+                if (error) setError(null);
+              }}
+            />
+            <PasswordStrengthMeter score={score} />
+            {ownPasswordError ? (
+              <p className="text-sm text-destructive">{ownPasswordError}</p>
+            ) : null}
+            <p className="text-sm text-muted-foreground">
+              A generated passphrase is stronger than most typed passwords. If you use your own,
+              make it long and unique.{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('generated');
+                  if (error) setError(null);
+                }}
+                className="underline hover:text-foreground"
+              >
+                Generate one instead
+              </button>
+            </p>
+          </div>
+        )}
 
         <div>
           <Button type="submit" disabled={changePassword.isPending || !newOk || !proofReady}>
@@ -422,6 +523,10 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
   const [error, setError] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // Frozen at mount: a successful mint invalidates the recovery-door query, which
+  // flips `hasRecovery` to true underneath us. The copy has to describe the account
+  // the user arrived with, not the one this view's own write just produced.
+  const [hadRecovery] = useState(hasRecovery);
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -443,10 +548,21 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
   if (code) {
     return (
       <div>
-        <BackLink onBack={onBack} />
+        {/* No BackLink here, deliberately (every other sub-view has one). By this
+            point the mint has landed: any previous door is already dead server-side,
+            and `hasRecovery` is now true — so a user who leaves without saving is
+            stranded with a recovery door they can't open, and the overview's "no
+            recovery code" nudge won't fire to tell them. Done (gated on `saved`) is
+            the only exit. It's friction, not enforcement — the settings nav and the
+            back button still leave, and the checkbox is self-attested — but it makes
+            leaving deliberate rather than a stray click. Contrast create-account's
+            recovery step, which DOES offer back: there nothing is committed until the
+            account is created, so leaving costs nothing. */}
         <h2 className="text-xl font-semibold">Recovery code</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
-          Save this somewhere safe. It won&apos;t be shown again — regenerate here if you lose it.
+          {hadRecovery
+            ? 'Save this somewhere safe — it won’t be shown again. Your previous code has stopped working, so this is the only one that can get you back into your account.'
+            : 'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'}
         </p>
         <div className="max-w-sm">
           <ShowOnceSecret
@@ -470,7 +586,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       <BackLink onBack={onBack} />
       <h2 className="text-xl font-semibold">Recovery code</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        {hasRecovery
+        {hadRecovery
           ? 'Generate a new recovery code. Your previous code will stop working.'
           : 'Set up a recovery code — a second way into your account if you lose your password.'}
       </p>
@@ -494,7 +610,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
             {recovery.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
             {recovery.isPending
               ? 'Generating…'
-              : hasRecovery
+              : hadRecovery
                 ? 'Generate new code'
                 : 'Generate recovery code'}
           </Button>

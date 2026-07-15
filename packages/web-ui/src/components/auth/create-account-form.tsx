@@ -11,12 +11,12 @@ import {
   generateRecoveryCode,
   NEW_PASSWORD_MIN_LENGTH,
   newPasswordSchema,
+  PASSWORD_MIN_GUESSES_LOG10,
   usernameSchema,
 } from '@stxapps/shared';
 import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import {
-  PASSWORD_MIN_STRENGTH_SCORE,
   PasswordStrengthMeter,
   usePasswordStrength,
 } from '@stxapps/web-ui/components/auth/password-strength';
@@ -92,15 +92,21 @@ export function CreateAccountForm() {
   // by construction). Score the CANONICAL form (canonicalizePassword) — the exact
   // string the KEK derives from — so the meter can't disagree with what's stored.
   // Pass the username as a penalty term.
-  const { score } = usePasswordStrength(
+  const { score, guessesLog10 } = usePasswordStrength(
     mode === 'own' ? canonicalizePassword(ownPassword) : '',
     [username],
     NEW_PASSWORD_MIN_LENGTH,
   );
+  // Parse once and reuse the schema's own message, like the username field above —
+  // the meter alone says "Weak" without naming the rule that's blocking, which sends
+  // people reaching for symbols when length is what's missing.
+  const ownPasswordParse = newPasswordSchema.safeParse(ownPassword);
+  // Gate on the raw guess estimate, never on `score` (see PASSWORD_MIN_GUESSES_LOG10).
+  // null = estimator still loading; stay closed until it's ready.
   const ownPasswordOk =
-    newPasswordSchema.safeParse(ownPassword).success &&
-    score !== null &&
-    score >= PASSWORD_MIN_STRENGTH_SCORE;
+    ownPasswordParse.success &&
+    guessesLog10 !== null &&
+    guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
 
   const passwordChosen =
     mode === 'generated' ? passphrase !== '' && passphraseSaved : ownPasswordOk;
@@ -162,6 +168,18 @@ export function CreateAccountForm() {
         ? (usernameParse.error?.issues[0]?.message ?? 'Invalid username')
         : null;
 
+    // Only once they've typed something. Length first (the schema owns its own
+    // message), then the entropy floor — otherwise a long-but-predictable password
+    // would fail with a silent "Fair" meter and no way to know what to change.
+    const ownPasswordError =
+      ownPassword === ''
+        ? null
+        : !ownPasswordParse.success
+          ? (ownPasswordParse.error?.issues[0]?.message ?? 'Invalid password')
+          : guessesLog10 !== null && guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
+            ? 'Too predictable — add a few more words, or generate a passphrase instead.'
+            : null;
+
     return (
       <FieldGroup>
         <Field data-invalid={!!usernameError}>
@@ -221,17 +239,22 @@ export function CreateAccountForm() {
             </div>
           </Field>
         ) : (
-          <Field>
+          <Field data-invalid={!!ownPasswordError}>
             <FieldLabel htmlFor="password">Password</FieldLabel>
             <PasswordInput
               id="password"
               autoComplete="new-password"
+              aria-invalid={!!ownPasswordError}
               value={ownPassword}
               onChange={(e) => setOwnPassword(e.target.value)}
             />
             <PasswordStrengthMeter score={score} />
+            {ownPasswordError ? (
+              <FieldDescription className="text-destructive">{ownPasswordError}</FieldDescription>
+            ) : null}
             <FieldDescription>
-              Use a strong, unique password — there is no way to reset it if it&apos;s lost.{' '}
+              A generated passphrase is stronger than most typed passwords. If you use your own,
+              make it long and unique — there is no way to reset it if it&apos;s lost.{' '}
               <button
                 type="button"
                 onClick={() => setMode('generated')}
