@@ -102,6 +102,16 @@ function SyncStatus() {
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
             </span>
           )}
+          {/* Qualifies what a settled sync means: the INDEX is what syncs, so
+              "Up to date" would otherwise read as "every byte is on this device"
+              — but content (`files/`) downloads lazily on open (docs
+              local-first-sync.md — metadata vs. content). Suppressed on an error,
+              where a standing fact only competes with the failure message. */}
+          {!isError && (
+            <span className="mt-1 text-xs text-muted-foreground">
+              Archived pages and images download when you open them.
+            </span>
+          )}
         </div>
       </div>
       {action && (
