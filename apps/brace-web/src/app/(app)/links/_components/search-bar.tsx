@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Lock, Search, SlidersHorizontal, X } from 'lucide-react';
+import Link from 'next/link';
 
 import { flattenTree } from '@stxapps/shared';
 import { emptyQuery, type LinkQuery, useEntitlements, useLists, useTags } from '@stxapps/web-react';
@@ -121,13 +122,25 @@ function MultiCheckList({
 // "let them build, then upgrade at the payoff" beats hiding the fields: the wall
 // lands at peak intent, and nothing sensitive is thrown away (unlike locks, which
 // gate before their password dialog).
+//
+// The banner's own "See plans" link is the door for the user who wants the offer
+// WITHOUT first building a query to trigger it — pressing Search still routes to
+// the paywall, which stays the primary, peak-intent path. (Contrast the link cap,
+// which replaces its form with LinkQuotaBanner and skips the paywall entirely:
+// there the action is impossible, whereas this one is a click away.)
 function LockedBanner() {
   return (
     <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
       <Lock className="mt-0.5 size-3.5 shrink-0" />
       <span>
         A <span className="font-medium text-foreground">Plus</span> feature. Build your query, then
-        upgrade to run it.
+        upgrade to run it.{' '}
+        <Link
+          href="/settings/subscription"
+          className="font-medium text-primary underline-offset-2 hover:underline"
+        >
+          See plans
+        </Link>
       </span>
     </div>
   );

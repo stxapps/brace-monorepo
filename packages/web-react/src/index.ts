@@ -31,6 +31,7 @@ export * from './hooks/use-export-all-data';
 export * from './hooks/use-has-recovery-door';
 export * from './hooks/use-import-all-data';
 export * from './hooks/use-link-mutations';
+export * from './hooks/use-link-quota';
 export * from './hooks/use-list-mutations';
 export * from './hooks/use-lists';
 export * from './hooks/use-pending-changes-count';

@@ -22,12 +22,25 @@
 // Bare domains are fine — they're normalized to https:// on save. The list
 // picker and tag editor are the shared ListSelect/TagsField (web-ui), the same
 // pieces the extension editor and the edit dialog render.
+//
+// One state precedes all of that: a free library at its link cap can't save at
+// all, so the popover renders the shared LinkQuotaBanner INSTEAD of the form
+// (useLinkQuota — which also explains why this gate is load-bearing rather than
+// cosmetic: an over-cap save wedges the sync queue on the server's 403).
 
 import { useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';
+import Link from 'next/link';
 
-import { DEFAULT_LIST_ID, LINK_NOTE_MAX, normalizeUrl, TRASH_ID } from '@stxapps/shared';
-import { readLinkByUrlKey, useLinkMutations } from '@stxapps/web-react';
+import {
+  DEFAULT_LIST_ID,
+  LINK_NOTE_MAX,
+  normalizeUrl,
+  PLAN_LABELS,
+  TRASH_ID,
+} from '@stxapps/shared';
+import { readLinkByUrlKey, useLinkMutations, useLinkQuota } from '@stxapps/web-react';
+import { LinkQuotaBanner } from '@stxapps/web-ui/components/links/link-quota-banner';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -51,6 +64,7 @@ function useDefaultListId(): string {
 export function LinkAddPopover() {
   const { create } = useLinkMutations();
   const defaultListId = useDefaultListId();
+  const { count, max, atLimit } = useLinkQuota();
 
   const [open, setOpen] = useState(false);
   const [openAdvanced, setOpenAdvanced] = useState(false);
@@ -154,95 +168,107 @@ export function LinkAddPopover() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="link-url">URL</Label>
-            <Input
-              id="link-url"
-              type="url"
-              inputMode="url"
-              placeholder="https://example.com"
-              autoFocus
-              aria-invalid={urlError !== null}
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                // Editing re-opens the question: clear the error and disarm the
-                // warning so the button reverts to Save and re-validates.
-                setUrlError(null);
-                setUrlWarning(null);
-              }}
-            />
-            {urlError !== null ? (
-              <p role="alert" className="text-xs text-destructive">
-                {urlError}
-              </p>
-            ) : urlWarning !== null ? (
-              <p role="alert" className="text-xs text-amber-600 dark:text-amber-500">
-                {urlWarning === 'malformed'
-                  ? 'This doesn’t look like a valid URL. Click Confirm to save it anyway.'
-                  : 'You’ve already saved this link. Click Confirm to save it again.'}
-              </p>
-            ) : null}
-          </div>
+        {atLimit && max !== null ? (
+          <LinkQuotaBanner
+            count={count}
+            max={max}
+            action={
+              <Button asChild size="sm" className="self-end">
+                <Link href="/settings/subscription">Upgrade to {PLAN_LABELS.plus}</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="link-url">URL</Label>
+              <Input
+                id="link-url"
+                type="url"
+                inputMode="url"
+                placeholder="https://example.com"
+                autoFocus
+                aria-invalid={urlError !== null}
+                value={url}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  // Editing re-opens the question: clear the error and disarm the
+                  // warning so the button reverts to Save and re-validates.
+                  setUrlError(null);
+                  setUrlWarning(null);
+                }}
+              />
+              {urlError !== null ? (
+                <p role="alert" className="text-xs text-destructive">
+                  {urlError}
+                </p>
+              ) : urlWarning !== null ? (
+                <p role="alert" className="text-xs text-amber-600 dark:text-amber-500">
+                  {urlWarning === 'malformed'
+                    ? 'This doesn’t look like a valid URL. Click Confirm to save it anyway.'
+                    : 'You’ve already saved this link. Click Confirm to save it again.'}
+                </p>
+              ) : null}
+            </div>
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-expanded={openAdvanced}
-            className="-mx-1 justify-between"
-            onClick={() => setOpenAdvanced((v) => !v)}
-          >
-            Advanced
-            <ChevronDown
-              className={cn('size-4 transition-transform', openAdvanced && 'rotate-180')}
-            />
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-expanded={openAdvanced}
+              className="-mx-1 justify-between"
+              onClick={() => setOpenAdvanced((v) => !v)}
+            >
+              Advanced
+              <ChevronDown
+                className={cn('size-4 transition-transform', openAdvanced && 'rotate-180')}
+              />
+            </Button>
 
-          {openAdvanced && (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="link-list">List</Label>
-                {/* No Trash target: it's the deletion staging area, never a place
+            {openAdvanced && (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="link-list">List</Label>
+                  {/* No Trash target: it's the deletion staging area, never a place
                     to add new links (same rule as the default-list fallback).
                     Locked/hidden lists stay pickable — hiding only declutters the
                     sidebar, it never blocks filing into a list you know exists. */}
-                <ListSelect
-                  id="link-list"
-                  value={listId}
-                  onValueChange={setListId}
-                  excludeIds={[TRASH_ID]}
-                />
-              </div>
+                  <ListSelect
+                    id="link-list"
+                    value={listId}
+                    onValueChange={setListId}
+                    excludeIds={[TRASH_ID]}
+                  />
+                </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="link-tag">Tags</Label>
-                <TagsField id="link-tag" value={tagIds} onChange={setTagIds} />
-              </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="link-tag">Tags</Label>
+                  <TagsField id="link-tag" value={tagIds} onChange={setTagIds} />
+                </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="link-note">Note</Label>
-                <Textarea
-                  id="link-note"
-                  maxLength={LINK_NOTE_MAX}
-                  placeholder="Optional note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="link-note">Note</Label>
+                  <Textarea
+                    id="link-note"
+                    maxLength={LINK_NOTE_MAX}
+                    placeholder="Optional note"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                </div>
               </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="default" size="sm" disabled={saving}>
+                {urlWarning !== null ? 'Confirm' : 'Save'}
+              </Button>
             </div>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="default" size="sm" disabled={saving}>
-              {urlWarning !== null ? 'Confirm' : 'Save'}
-            </Button>
-          </div>
-        </form>
+          </form>
+        )}
       </PopoverContent>
     </Popover>
   );
