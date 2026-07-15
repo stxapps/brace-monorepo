@@ -60,11 +60,12 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // Retry). Sync is status-based, not a percentage, so there's no progress bar;
 // the pending-changes line is the "how much is left" signal instead.
 function SyncStatus() {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync, retryInitialSync } =
-    useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
-  const isError = phase === 'initial-error' || phase === 'cycle-error';
+  // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
+  // 'initial-error' and its retryInitialSync belong to the gate's own screen.
+  const isError = phase === 'cycle-error';
 
   const icon = isError ? (
     <CircleAlert className="size-4 text-destructive" />
@@ -80,13 +81,11 @@ function SyncStatus() {
       : SYNC_PHASE_LABELS[phase];
   const detail = phase === 'cycle-error' ? lastError : null;
   const action =
-    phase === 'initial-error'
-      ? { label: 'Retry', onClick: retryInitialSync }
-      : phase === 'cycle-error'
-        ? { label: 'Retry', onClick: requestSync }
-        : phase === 'idle'
-          ? { label: 'Sync now', onClick: requestSync }
-          : null;
+    phase === 'cycle-error'
+      ? { label: 'Retry', onClick: requestSync }
+      : phase === 'idle'
+        ? { label: 'Sync now', onClick: requestSync }
+        : null;
 
   return (
     <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">

@@ -67,10 +67,12 @@ function useSelectionLabel(): string {
 // error surface (the full status card lives in Settings → Data). Only errors get
 // the dot: a spinner there would flicker on every edit's sub-second cycle.
 function MoreOptionsMenu() {
-  const { storeStatus, bgSyncStatus, requestSync, retryInitialSync } = useSync();
+  const { storeStatus, bgSyncStatus, requestSync } = useSync();
   const signOut = useSignOut();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
-  const syncError = phase === 'initial-error' || phase === 'cycle-error';
+  // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
+  // 'initial-error' and its retryInitialSync belong to the gate's own screen.
+  const syncError = phase === 'cycle-error';
 
   return (
     <DropdownMenu>
@@ -96,8 +98,7 @@ function MoreOptionsMenu() {
             // Keep the menu open: the Syncing… → settled transition on this item
             // IS the click's feedback (requestSync coalesces, so re-clicks are safe).
             e.preventDefault();
-            if (phase === 'initial-error') retryInitialSync();
-            else requestSync();
+            requestSync();
           }}
         >
           {phase === 'syncing' ? (
