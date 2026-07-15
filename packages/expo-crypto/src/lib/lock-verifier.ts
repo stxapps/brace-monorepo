@@ -6,10 +6,8 @@ import { bytesToHex, hexToBytes, utf8 } from '@stxapps/shared';
 // web-crypto's lock-verifier.ts: store salt+hash, check by re-deriving — the
 // password itself is never persisted. Verifiers are device-local (wiped on
 // sign-out, never synced), so unlike the account pipeline there's no
-// cross-platform byte contract to pin; the KDF parameters just mirror web's.
-// That locality is also why the encoding differs: web stores base64, but
-// Hermes has no btoa (see file-crypto.ts) so here it's hex — the contract's
-// byte encoding in @stxapps/shared.
+// cross-platform byte contract to pin; the KDF parameters and the hex encoding
+// just mirror web's, so the two files read as one.
 //
 // Deliberately PBKDF2, not the account's Argon2id: a lock gates ALREADY-DECRYPTED
 // data sitting on the device, so it's a shoulder-surfing deterrent, not

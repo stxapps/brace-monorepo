@@ -1,6 +1,8 @@
 // ID and token helpers. Uses the Web Crypto API (`crypto.*`), which is a global
 // in the Workers runtime — no Node imports, no `nodejs_compat` flag needed.
 
+import { bytesToHex } from '@stxapps/shared';
+
 // A random, collision-resistant id for rows (users, sessions). UUID v4
 // is plenty for primary keys here; we don't need sortable/k-ordered ids.
 export function newId(): string {
@@ -22,15 +24,13 @@ export function newSessionToken(): string {
 export async function hashToken(token: string): Promise<string> {
   const data = new TextEncoder().encode(token);
   const digest = await crypto.subtle.digest('SHA-256', data);
-  return hex(new Uint8Array(digest));
+  return bytesToHex(new Uint8Array(digest));
 }
 
-function hex(bytes: Uint8Array): string {
-  let out = '';
-  for (const b of bytes) out += b.toString(16).padStart(2, '0');
-  return out;
-}
-
+// Local, unlike the hex above: `shared` has no base64url encoder and this is the
+// only caller. Also not the same job — the token is opaque and never decoded back
+// to bytes (hashToken digests these characters), so this is a rendering of
+// entropy, not a byte encoding: short and header/URL-safe is all that's wanted.
 function base64url(bytes: Uint8Array): string {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);

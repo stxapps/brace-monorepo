@@ -1,4 +1,4 @@
-import { base64ToBytes, bytesToBase64, utf8 } from '@stxapps/shared';
+import { bytesToHex, hexToBytes, utf8 } from '@stxapps/shared';
 
 // Password VERIFIER for the device-local app/list locks: store salt+hash, check by
 // re-deriving — the password itself is never persisted (the old client stored a
@@ -10,11 +10,20 @@ import { base64ToBytes, bytesToBase64, utf8 } from '@stxapps/shared';
 // not encryption — a memory-hard KDF buys no real protection there, and unlocking
 // a list should feel instant, not cost the sign-in's ~1–3s. PBKDF2-SHA256 is
 // native Web Crypto (no worker), ~100–300ms at this iteration count.
+//
+// Hex, per the convention in @stxapps/shared crypto/encoding.ts: short binary
+// crypto material is hex, base64 is for size-sensitive payloads (images). At 16
+// and 32 bytes base64's 33%-vs-100% overhead saves ~28 chars per row, which buys
+// nothing, while hex stays canonical (one string per byte sequence), byte-aligned
+// to read in a DB browser, and free of the `atob`/`btoa` globals. Verifiers are
+// device-local (wiped on sign-out, never synced), so there's no byte contract with
+// the Expo sibling — but it derives the same hex from the same parameters, and the
+// two files are meant to read as one.
 
 export interface LockVerifier {
-  // base64; random per verifier, so equal passwords produce unequal hashes.
+  // hex; random per verifier, so equal passwords produce unequal hashes.
   salt: string;
-  // base64 PBKDF2-SHA256 output.
+  // hex PBKDF2-SHA256 output.
   hash: string;
 }
 
@@ -36,15 +45,15 @@ async function pbkdf2(password: string, salt: Uint8Array<ArrayBuffer>): Promise<
 export async function createLockVerifier(password: string): Promise<LockVerifier> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const hash = await pbkdf2(password, salt);
-  return { salt: bytesToBase64(salt), hash: bytesToBase64(hash) };
+  return { salt: bytesToHex(salt), hash: bytesToHex(hash) };
 }
 
 export async function verifyLockPassword(
   password: string,
   verifier: LockVerifier,
 ): Promise<boolean> {
-  const hash = await pbkdf2(password, base64ToBytes(verifier.salt));
-  const expected = base64ToBytes(verifier.hash);
+  const hash = await pbkdf2(password, hexToBytes(verifier.salt));
+  const expected = hexToBytes(verifier.hash);
   if (hash.length !== expected.length) return false;
   // Constant-time compare — cheap to do properly even though a local-only
   // verifier has no realistic timing adversary.

@@ -218,7 +218,7 @@ export interface LockRecord {
   // renames). One row per lock.
   id: string;
   kind: 'app' | 'list';
-  // The verifier pair (base64) — see LockVerifier in @stxapps/web-crypto.
+  // The verifier pair (hex) — see LockVerifier in @stxapps/web-crypto.
   salt: string;
   hash: string;
   // List locks only: while locked, also hide the list (and its subtree) from the
