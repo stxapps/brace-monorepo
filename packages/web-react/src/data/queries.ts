@@ -81,7 +81,7 @@ export { linkIdOf } from '@stxapps/shared';
 export type LinkView = LinkItem & {
   title?: string;
   imageId?: string;
-  pageArchiveId?: string;
+  pageCopyId?: string;
   screenshotId?: string;
 };
 
@@ -252,7 +252,7 @@ function toView(link: LinkItem, extraction: Extraction | undefined): LinkView {
     ...link,
     title: link.customTitle ?? extraction?.title,
     imageId: link.customImageId ?? extraction?.imageId,
-    pageArchiveId: extraction?.pageArchiveId,
+    pageCopyId: extraction?.pageCopyId,
     screenshotId: extraction?.screenshotId,
   };
 }
@@ -388,7 +388,7 @@ export function countLinksInList(listId: string): Promise<number> {
 
 // The LOCAL bytes of a `files/{id}.enc` content record, or undefined if absent /
 // not yet materialized. Reads straight from the store with NO network and NO crypto:
-// `data` holds the already-decrypted blob (an image/screenshot/archive the extractor
+// `data` holds the already-decrypted blob (an image/screenshot/page copy the extractor
 // just wrote, or one a prior sync decrypted). Used by the popup's complete page to
 // preview a captured image without round-tripping R2 — the lazy network fetch
 // (loadEntityContent) is the sync engine's job, not the UI's.

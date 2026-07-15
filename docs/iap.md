@@ -98,7 +98,7 @@ walls exactly where the cost is):
 | storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap + the 200-link cap)                                                                                                 |
 | free: 200 `links/`                        | **server-hard** (namespace count in the DO size map) + client UX                                                                                                                                                              |
 | free: preview-image `files/` blobs        | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
-| Plus archive meter (last 50)              | client-only — an archive is indistinguishable from any other `files/` blob server-side; bytes backstop                                                                                                                        |
+| Plus page-copy meter (last 50)            | client-only — a page copy is indistinguishable from any other `files/` blob server-side; bytes backstop                                                                                                                       |
 | read-mode / screenshot / AI gates         | client-only (they run on-device), backstopped by the blob rules                                                                                                                                                               |
 | extractor access (plan-gated opt-in)      | client + IP rate limits for now (the extractor is anonymous by design); a brace-api-minted signed entitlement token is the upgrade path if abused                                                                             |
 
@@ -144,7 +144,7 @@ covers comps/lifetime grants (non-expiring rows) meanwhile.
   beats a silent sync failure. Same for surfacing `upgrade_required` from the
   sync engine.
 - **Extraction gating beyond the settings toggle** — free stores the preview
-  image, but the HEAVY blob facets (read-mode / screenshot / archive) are
+  image, but the HEAVY blob facets (read-mode / screenshot / page copy) are
   client-gated: since the server no longer refuses any `files/` put (it can't
   tell a preview image from a heavy blob), client extractors must skip those
   heavier facets on free accounts themselves — the bytes/count quota is only a

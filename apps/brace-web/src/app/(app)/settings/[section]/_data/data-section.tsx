@@ -110,7 +110,7 @@ function SyncStatus() {
               where a standing fact only competes with the failure message. */}
           {!isError && (
             <span className="mt-1 text-xs text-muted-foreground">
-              Archived pages and images download when you open them.
+              Saved page copies and images download when you open them.
             </span>
           )}
         </div>

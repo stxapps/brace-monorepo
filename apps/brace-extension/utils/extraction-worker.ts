@@ -9,7 +9,7 @@ import {
   writeFile,
 } from '@stxapps/web-react';
 
-import { captureArchive, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
+import { capturePageCopy, captureReadMode, captureScreenshot, captureTitleImage } from './capture';
 
 // `extractedBy` is a `platform:env` string, NOT a device id (entities.ts): quality is
 // DERIVED from it by `tierOf()`, so there's no stored `tier` field. The extension only
@@ -23,7 +23,7 @@ const EXTRACTED_BY = 'extension:fg';
 // write back — the heavy bytes into `files/`, and BOTH the display refs and the
 // facet's done/failed bookkeeping into `extractions/{id}.enc`. The extractor NEVER
 // writes `links/{id}.enc` (the user's file): the writer-split keeps the machine half
-// (title/imageId/screenshotId/pageArchiveId + facet state) in `extractions/`, so a
+// (title/imageId/screenshotId/pageCopyId + facet state) in `extractions/`, so a
 // background capture can't clobber a concurrent user edit (link-extraction.md). One
 // read-merge-write per completion carries the field + its facet status together. This
 // client's tier is `active-page`.
@@ -85,12 +85,12 @@ export async function runExtraction(
         await markDone(username, linkId, facet, { fields: { screenshotId } });
         break;
       }
-      case 'archive': {
-        const dom = await captureArchive(tabId);
+      case 'pageCopy': {
+        const dom = await capturePageCopy(tabId);
 
-        const pageArchiveId = newId();
-        await writeFile(username, pageArchiveId, dom);
-        await markDone(username, linkId, facet, { fields: { pageArchiveId } });
+        const pageCopyId = newId();
+        await writeFile(username, pageCopyId, dom);
+        await markDone(username, linkId, facet, { fields: { pageCopyId } });
         break;
       }
       default:

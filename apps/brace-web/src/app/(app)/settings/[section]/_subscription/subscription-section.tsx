@@ -35,7 +35,7 @@ import { openPaddleCheckout } from '@/lib/paddle';
 
 // Upgrade-card copy — the customer-facing rendering of the entitlements table
 // (iap/plans.ts); keep the two in step when tuning tiers. Two rules:
-//   - Only list what actually SHIPS. Reader view, screenshots, archive, and AI
+//   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
 //     are gated in plans.ts but not yet built, so they are NOT promised here —
 //     re-add each line as it lands. At launch Plus is unlimited links + preview
 //     images + app lock/hidden lists + the storage bump.

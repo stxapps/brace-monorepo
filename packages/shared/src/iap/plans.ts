@@ -9,10 +9,10 @@
 // What's enforceable where is deliberately asymmetric (the E2E trust model):
 // content is opaque to the server, but PATHS are not — so the server can hard-
 // enforce anything COUNTABLE blind (total bytes, object counts, the `links/`
-// count), while per-feature gates (read-mode, screenshot, the archive meter) are
-// client-enforced UX backed by the blob rules. What the server CANNOT do is tell
-// one `files/` blob from another: a preview image, a screenshot, and an archive
-// are all opaque `files/{id}.enc` under the same namespace, so there is no
+// count), while per-feature gates (read-mode, screenshot, the page-copy meter)
+// are client-enforced UX backed by the blob rules. What the server CANNOT do is
+// tell one `files/` blob from another: a preview image, a screenshot, and a page
+// copy are all opaque `files/{id}.enc` under the same namespace, so there is no
 // server-visible signal to allow the free preview image while denying a heavy
 // blob. The free tier therefore stores `files/` blobs (client-extracted preview
 // images — see docs/business-model.md "tiers"), bounded server-hard only by the
@@ -23,7 +23,7 @@
 //
 // So the entitlements below split into two kinds of gate (see the same split in
 // docs/business-model.md "tiers"):
-//   - COST-DEFENSIVE (maxLinks, maxArchivedLinks, maxFiles, maxBytes,
+//   - COST-DEFENSIVE (maxLinks, maxPageCopies, maxFiles, maxBytes,
 //     serverExtraction) — protect real cost / the moat; server-hard where
 //     countable.
 //   - VALUE-CAPTURE (locks, nestedLists, searchEditor, smartLists,
@@ -80,10 +80,12 @@ export type Entitlements = {
   // but past "free forever"). Server-hard: brace-api counts `links/` paths in
   // the user's size map at `files/sign`. `null` on paid plans.
   maxLinks: number | null;
-  // Full-page-archive meter (Plus keeps the last 50; Pro unlimited). CLIENT-
-  // enforced only: an archive is indistinguishable from any other `files/` blob
+  // Saved-page-copy meter (Plus keeps the last 50; Pro unlimited) — the count of
+  // `pageCopy` extraction blobs, NOT a cap on how many links may sit in the
+  // Archive system list (an unrelated concept that used to share the word). CLIENT-
+  // enforced only: a page copy is indistinguishable from any other `files/` blob
   // server-side; the byte quota is the backstop.
-  maxArchivedLinks: number | null;
+  maxPageCopies: number | null;
   // Hard object-count cap — an abuse bound, not a product lever (see the byte
   // ceiling for what actually bites). Generous on paid plans: ~5 000 bookmarks
   // at 2-3 files each stays well under it.
@@ -102,7 +104,7 @@ export type Entitlements = {
   // --- Value-capture gates (all CLIENT-enforced) --------------------------
   // Pure willingness-to-pay; a client-side bypass only ever unlocks a
   // convenience that costs ~nothing to serve (same acceptable-risk logic as the
-  // archive meter above).
+  // page-copy meter above).
 
   // Nested lists/folders (Plus+) — the "manual organization" Plus lever, gating
   // a STRUCTURAL capability (depth/reparenting), not cosmetic order. Free stays
@@ -160,7 +162,7 @@ const GIB = 1024 * MIB;
 const ENTITLEMENTS: Record<Plan, Entitlements> = {
   free: {
     maxLinks: 200,
-    maxArchivedLinks: 0,
+    maxPageCopies: 0,
     // A maxed 200-link library of client-extracted preview images is ~16 MB;
     // maxFiles here is a pure abuse backstop (links + preview-image blobs +
     // lists/tags/pins/extractions ride along, never legitimately near this).
@@ -176,7 +178,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
   },
   plus: {
     maxLinks: null,
-    maxArchivedLinks: 50,
+    maxPageCopies: 50,
     maxFiles: 200_000,
     maxBytes: 5 * GIB,
     serverExtraction: true,
@@ -190,7 +192,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
   },
   pro: {
     maxLinks: null,
-    maxArchivedLinks: null,
+    maxPageCopies: null,
     maxFiles: 200_000,
     maxBytes: 20 * GIB,
     serverExtraction: true,

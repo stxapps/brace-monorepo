@@ -132,7 +132,7 @@ export async function writeTag(
 // write-back's payload — web-react mutations.ts's types, verbatim.
 export type ExtractionFacet = keyof Extraction['facets'];
 export type ExtractionFields = Partial<
-  Pick<Extraction, 'title' | 'imageId' | 'pageArchiveId' | 'screenshotId'>
+  Pick<Extraction, 'title' | 'imageId' | 'pageCopyId' | 'screenshotId'>
 >;
 export interface ExtractionPatch {
   fields?: ExtractionFields;

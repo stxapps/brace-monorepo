@@ -3,7 +3,7 @@
 Working economics for brace.to as a **privacy-first** bookmark / read-later app:
 tiering, infra cost, and break-even. Companion to the product/architecture docs —
 see [link-extraction.md](./link-extraction.md) for why extraction (and its heavy
-image/screenshot/archive blobs) is the main storage line item,
+image/screenshot/page-copy blobs) is the main storage line item,
 [local-first-sync.md](./local-first-sync.md) for the blind-broker data path that
 keeps server cost low, [deployment.md](./deployment.md) for the Cloudflare
 (R2/D1/Workers) infrastructure these numbers are priced against, and
@@ -69,8 +69,8 @@ cost, not a new cost category — the storage tables below are unchanged.
 Two kinds of gate do the work here, and keeping them straight is the whole model:
 
 - **Cost-defensive gates** protect real cost / the moat — heavy blob storage
-  (screenshot / read-mode / archive, _not_ the free preview image), byte quota,
-  archive count, `serverExtraction`, AI compute. Enforced where the cost is
+  (screenshot / read-mode / page copy, _not_ the free preview image), byte quota,
+  page-copy count, `serverExtraction`, AI compute. Enforced where the cost is
   (server-hard where countable; see [iap.md](./iap.md) and
   `packages/shared/src/iap/plans.ts`). These are why a free user costs cents.
 - **Value-capture gates** are pure willingness-to-pay for things that cost
@@ -82,7 +82,7 @@ Two kinds of gate do the work here, and keeping them straight is the whole model
   first-impression bounce than it wins in conversion.
 
 Design principle for the **cost-defensive** gates: the free tier limits the
-things that **cost money or weaken the moat** (screenshot / read-mode / archive
+things that **cost money or weaken the moat** (screenshot / read-mode / page copy
 blobs + `serverExtraction` = the storage / fetch tail; AI = compute), never the
 things that are nearly free and build the habit (metadata, sync, encryption — and
 the client-extracted preview image, which costs us ~nothing and is table-stakes, so
@@ -128,7 +128,7 @@ The two paid tiers then have a spine, not just a longer list:
 | Read-mode (clean reader text)           | ❌                             | ▹ planned         | ▹ planned                      |
 | Table layout (custom columns)           | ❌                             | ▹ planned         | ▹ planned                      |
 | Screenshot capture                      | ❌                             | ▹ planned         | ▹ planned                      |
-| Full-page archive (offline snapshot)    | ❌                             | ▹ planned         | ▹ planned                      |
+| Full page copy (offline snapshot)       | ❌                             | ▹ planned         | ▹ planned                      |
 | Nested tags (tag hierarchy)             | ❌                             | ▹ planned         | ▹ planned                      |
 | Per-list manual link ordering           | ❌                             | ▹ planned         | ▹ planned                      |
 | Smart lists / smart tags                | ❌                             | ❌                | ▹ planned                      |
@@ -152,9 +152,9 @@ Why these cuts:
   change). What actually drives Free→Plus is the honest, load-bearing set: the
   **200-link cap** (scale), nested lists/tags + per-list order (structure), **locks**
   (the wedge lever), and the genuinely-costly server/compute tail below.
-- **Read-mode / screenshot / archive** are the heavy blobs — and unlike the free
+- **Read-mode / screenshot / page copy** are the heavy blobs — and unlike the free
   preview image these are the true _storage_ gate (server-fetched / compute-side),
-  gated for cost. Archive is metered (50 → unlimited) because full-page snapshots
+  gated for cost. The page copy is metered (50 → unlimited) because full-page snapshots
   are the single biggest storage line item; the Plus→Pro jump is "permanent offline
   library."
 - **200 free links** is enough to evaluate seriously but past "free forever."
@@ -214,12 +214,12 @@ Why these cuts:
 - **AI is parked, not a current lever.** On-device models aren't good enough yet,
   so no plan ships AI today; it's marketed as "coming" and, when it lands, belongs
   wholly to Pro (all intelligence lives in Pro). Plus is already carried by
-  unlimited links + locks + the heavy-blob upgrades (read-mode / archive), so
+  unlimited links + locks + the heavy-blob upgrades (read-mode / page copy), so
   nothing bets on AI timing.
 - **Free needs no user-facing quota meter:** the only blob it stores is the
   client-extracted preview image, bounded by the 200-link cap (× a per-image byte
   ceiling, the same one `brace-extractor`'s `safeFetch` enforces); every _heavier_
-  blob (screenshot / read-mode / archive) is still absent, so there is nothing to
+  blob (screenshot / read-mode / page copy) is still absent, so there is nothing to
   surface in a quota UI.
 - **Lifetime ($149)** front-loads cash and suits the privacy/PKM crowd, but is a
   long-tail liability under E2E — offer as a launch lever, then retire.
@@ -236,7 +236,7 @@ reality. What ships when:
   **not on sale**: `AVAILABLE_PAID_PLANS` is `['plus']`, so the checkout contract
   and the cards offer Plus alone. Pro stays fully specified as spec-in-waiting
   (its entitlements, price, and Paddle branch are all in place).
-- **Plus fast-follow — read-mode, then screenshot / archive.** Gated in the table
+- **Plus fast-follow — read-mode, then screenshot / page copy.** Gated in the table
   already; each added as it's built. Card copy only ever promises what's live.
 - **Held for feedback — nested tags + per-list link ordering** (marked ▹ in the
   table). Planned Plus levers, in this doc but not yet entitlement fields (see
@@ -293,7 +293,7 @@ How to read it:
   presence, a sharp wedge audience, privacy-tribe word-of-mouth) at it.
 - **Conversion is a 2× lever.** 2%→4% halves the free base required (128k→64k).
   Conversion rests on the load-bearing gates — the 200-link cap (scale), structure
-  (nested lists/tags), locks, and the heavy-blob upgrades (read-mode / archive) —
+  (nested lists/tags), locks, and the heavy-blob upgrades (read-mode / page copy) —
   **not** on crippling the daily view: free shows client-extracted thumbnails, so the
   free tier looks alive and forms the habit that retention depends on.
 - **Pricing leverages the count.** At the original $10–12/yr every "paid subs"

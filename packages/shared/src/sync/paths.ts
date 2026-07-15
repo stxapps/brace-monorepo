@@ -19,7 +19,7 @@ export const LISTS_PREFIX = 'lists/';
 // User tags — `tags/{id}.enc`.
 export const TAGS_PREFIX = 'tags/';
 // Media/content blobs fetched LAZILY — `files/{id}.enc`: the preview image (the
-// one such blob the free tier stores) plus the heavier archived page / screenshot.
+// one such blob the free tier stores) plus the heavier saved page copy / screenshot.
 // All opaque to the server, so the byte/count quota — not a per-namespace gate —
 // is what bounds them (see apps/brace-api/src/lib/quota.ts, docs/iap.md).
 export const FILES_PREFIX = 'files/';
@@ -28,7 +28,7 @@ export const FILES_PREFIX = 'files/';
 export const PINS_PREFIX = 'pins/';
 // The MACHINE half of a link — `extractions/{id}.enc`, where `{id}` is the link's id
 // (so `extractions/{id}.enc` shadows `links/{id}.enc`). One file per link holding BOTH
-// the extracted display result (title, imageId, pageArchiveId, screenshotId) AND the
+// the extracted display result (title, imageId, pageCopyId, screenshotId) AND the
 // per-facet automated bookkeeping (status/extractedBy/retry). Split BY WRITER from the
 // user-authored `links/{id}.enc`, so a background extractor writes only this file and
 // never clobbers a concurrent user edit under file-level LWW (see link-extraction.md).

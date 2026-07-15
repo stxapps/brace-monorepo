@@ -169,7 +169,7 @@ resurrecting stale fields.
   `brace-extractor` server deliberately never resizes (link-extraction.md). One
   exception by design: the extension's full-page **screenshot** capture is stored
   full-fidelity, not thumbnailed — resize's 1024px/JPEG spec is a preview spec,
-  wrong for a visual archive.
+  wrong for a faithful visual record.
 
 **3. Guard the close so a stray click can't lose work.** The dialog and the
 popover both compute a `dirty` flag that mirrors the patch Save would write

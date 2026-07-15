@@ -19,7 +19,7 @@ entitlement fold, and the plan-aware quota gate),
 quota policy — and delete all data & delete account: the server-side wipe,
 multi-device convergence via the sync fallback, and the username tombstone),
 [link-extraction.md](./link-extraction.md) for how a saved link's
-title/image/screenshot/archive get filled in (privacy-first, clients do the
+title/image/screenshot/page-copy get filled in (privacy-first, clients do the
 work, the `extraction/` entity),
 [extension.md](./extension.md) for the brace-extension auth flow (own sign-in,
 no inherited session) and the move-shared-auth-code-later decision,

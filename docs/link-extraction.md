@@ -1,7 +1,7 @@
 ## link extraction
 
 How brace fills in a saved link's **title, image, read-mode text, screenshot,
-and archived page** — the metadata a bare URL doesn't carry. See
+and saved page copy** — the metadata a bare URL doesn't carry. See
 [local-first-sync.md](./local-first-sync.md) for the encrypted-file data path
 this rides on (one entity per `*.enc` blob, file-level LWW), the `pins/`
 precedent for the LWW-isolation move repeated here, and the `links/` vs `files/`
@@ -10,10 +10,19 @@ split; [architecture.md](./architecture.md) for package layering;
 client builds on; and [account.md](./account.md) for the data key that protects
 every blob written here.
 
+**Naming — "page copy", never "archive".** The saved-page capture is the
+`pageCopy` facet, stored as `extraction.pageCopyId`, metered by
+`entitlements.maxPageCopies`, and shown to users as "page copy". The word
+**archive is reserved for the ARCHIVE_ID system list** (`sync/system-lists.ts`)
+— a link the user filed away, which has nothing to do with capturing page
+bytes. The two senses shared the word until they were split (the meter was
+`maxArchivedLinks`, which read like a cap on the Archive list and was not).
+Keep them apart in code, comments, and UI copy.
+
 ### the shape of the problem
 
 A saved link starts as just a URL. To enrich it you must **fetch the page** (for
-title/image/read-mode) or **render it** (for screenshot/archive). Two hard
+title/image/read-mode) or **render it** (for screenshot/page-copy). Two hard
 constraints decide where that can happen:
 
 - **CORS.** A `fetch()` to an arbitrary third-party URL from a web app — main
@@ -21,7 +30,7 @@ constraints decide where that can happen:
   browser tab in `brace-web` simply **cannot** retrieve arbitrary page HTML. A
   Web Worker doesn't change this; it only helps with CPU-bound parsing of HTML
   something else already fetched.
-- **Rendering.** Screenshots and full archives need a real rendering engine
+- **Rendering.** Screenshots and full page copies need a real rendering engine
   (headless browser). A tab can't screenshot a remote URL it isn't displaying.
 
 The contexts that escape CORS are the ones that aren't a web-app `fetch`:
@@ -73,19 +82,19 @@ transiently, even unstored — is a leak we choose not to take by default.
 
 ### capability tiers — not every client can do every job
 
-Fetching a URL is easy wherever there's no CORS; **screenshots and archives are
+Fetching a URL is easy wherever there's no CORS; **screenshots and page copies are
 the hard part, and only an _active page context_ does them well.** This
 asymmetry drives the whole result/queue design.
 
-| client / mode                          | title + image      | read mode   | screenshot             | archive |
-| -------------------------------------- | ------------------ | ----------- | ---------------------- | ------- |
-| extension — **icon click, active tab** | ✅ live DOM        | ✅ live DOM | ✅ `captureVisibleTab` | ✅      |
-| ~~extension — background, queued URL~~ | —                  | —           | —                      | —       |
-| mobile — **share sheet**               | ⚠️ host-provided   | ❌          | ❌                     | ❌      |
-| mobile — **foreground**                | ✅                 | ✅ WebView  | ✅                     | ✅      |
-| mobile — **background queue**          | ⚠️ best-effort     | ⚠️          | ❌                     | ❌      |
-| `brace-extractor` Worker               | ✅                 | ✅          | ❌ needs Browser Rndr. | ❌      |
-| import                                 | ⚠️ export-provided | ❌          | ❌                     | ❌      |
+| client / mode                          | title + image      | read mode   | screenshot             | page copy |
+| -------------------------------------- | ------------------ | ----------- | ---------------------- | --------- |
+| extension — **icon click, active tab** | ✅ live DOM        | ✅ live DOM | ✅ `captureVisibleTab` | ✅        |
+| ~~extension — background, queued URL~~ | —                  | —           | —                      | —         |
+| mobile — **share sheet**               | ⚠️ host-provided   | ❌          | ❌                     | ❌        |
+| mobile — **foreground**                | ✅                 | ✅ WebView  | ✅                     | ✅        |
+| mobile — **background queue**          | ⚠️ best-effort     | ⚠️          | ❌                     | ❌        |
+| `brace-extractor` Worker               | ✅                 | ✅          | ❌ needs Browser Rndr. | ❌        |
+| import                                 | ⚠️ export-provided | ❌          | ❌                     | ❌        |
 
 The struck row is the **decision below**: the extension _could_ bg-fetch queued
 URLs with an `<all_urls>` host grant, but we **don't** — that capability moves to
@@ -101,7 +110,7 @@ see _imported links_ — so it emits **no `extractedBy` tier of its own**, and t
 `extractedBy` enum stays `expo:fg | expo:bg`, no share-sheet value). The
 **foreground** (the full app open) is mobile's true active-context tier: native
 fetch / a controllable WebView give it title+image, read-mode, screenshot, and
-archive — the `expo:fg` active-page tier, peer to the extension's active tab.
+page copy — the `expo:fg` active-page tier, peer to the extension's active tab.
 
 The **`import`** row is the same shape one step further out: a bulk import does
 **no fetch of its own** — it seeds a provisional `extraction.title` from the
@@ -117,7 +126,7 @@ Two consequences baked into the design:
 - **Background queue processing (where it exists) is metadata + read-mode only.**
   A queued URL has no open tab, so it can't be screenshotted without opening one
   (heavy, flaky). On mobile, background time is a few unreliable seconds. So:
-  **screenshot/archive are best-effort, captured only from the active context**
+  **screenshot/page-copy are best-effort, captured only from the active context**
   (icon click / foreground share). Don't fight the platforms to background them.
 - A link extracted at a **low tier** (background raw-HTML, no screenshot) should
   be **upgradable** when a **higher-tier** client later sees it — which means the
@@ -142,9 +151,9 @@ trade:
   justification). "We background-fetch pages you saved elsewhere" is exactly the
   pattern reviewers read as possible exfiltration/injection.
 - **It buys the extension's _weakest_ tier.** `<all_urls>` unlocks only the
-  background **bg-fetch** tier (title+image from raw HTML, no screenshot/archive).
+  background **bg-fetch** tier (title+image from raw HTML, no screenshot/page-copy).
   The extension's _unique, irreplaceable_ value — active-tab DOM,
-  `captureVisibleTab`, archive — needs only **`activeTab` + `scripting`**, which
+  `captureVisibleTab`, page copy — needs only **`activeTab` + `scripting`**, which
   carry **no broad-host warning at all**. So the broad grant costs the biggest
   install-funnel hit to add the lowest-quality capability.
 - **That capability has a better home.** The background/bg-fetch residual
@@ -199,7 +208,7 @@ time, from the best context it has.**
 
 | save happens on…            | extracts title+image via                      | tier        | cost / privacy                                                         |
 | --------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/archive for free            |
+| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/page-copy for free          |
 | **mobile / foreground**     | native fetch (no CORS) / a WebView            | active-page | free, private                                                          |
 | **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
 
@@ -254,7 +263,7 @@ Two consequences:
   opens it in a tab**, never headlessly — a save-channel can't change that. A direct
   save-channel would be a worse-constrained version of a path we already have. Note
   the extension's privacy advantage holds **only for `title+image`** (and
-  read-mode), and only once opened: **screenshot/archive have no server path at
+  read-mode), and only once opened: **screenshot/page-copy have no server path at
   all** (`brace-extractor` can't render), so those stay extension-active-tab only
   regardless of any bridge. What a thin **content-script
   bridge** _is_ for — and what the preference order above needs — is **presence
@@ -276,7 +285,7 @@ The split is **by writer**, and getting the axis right is the whole game:
    (save, edit, tag, move, annotate). Nothing a background actor produces touches
    this file.
 2. **`extractions/{id}.enc` — everything a machine derives.** Both the **display
-   result** (`title`, `imageId`, `pageArchiveId`, `screenshotId`) _and_ the
+   result** (`title`, `imageId`, `pageCopyId`, `screenshotId`) _and_ the
    **coordination/provenance** bookkeeping (the per-facet who/when/quality/retry
    map). `{id}` repeats the link's id; one file per link, shadowing `links/{id}.enc`.
 
@@ -343,13 +352,13 @@ blob, never the remote URL. Three reasons, heaviest first:
   `files/{id}.enc` image is stable, synced, and offline-available — and
   lazy-fetched on scroll, so storing it costs nothing up front (see
   [local-first-sync.md](./local-first-sync.md) — _metadata vs content_; same
-  heavy-media rule as `pageArchiveId`/`screenshotId`/`customImageId`). A remote
+  heavy-media rule as `pageCopyId`/`screenshotId`/`customImageId`). A remote
   URL rots, gets hotlink-protected, silently changes content, needs the network,
   and is dark offline.
 - **It would break the blob convention.** `imageId` is typed as a bare
   `files/{id}.enc` ref — "a field name types its blob" (see
   [local-first-sync.md](./local-first-sync.md) — _plaintext typing_) — the same
-  rule as `screenshotId` / `pageArchiveId` (its siblings in `extractions/`) and the
+  rule as `screenshotId` / `pageCopyId` (its siblings in `extractions/`) and the
   user's `customImageId` in `links/`. A plaintext,
   externally-mutable `https://…` string is a new pattern the sync encryption path
   never sees, and a stored pointer-to-plaintext the encrypted blob isn't.
@@ -434,7 +443,7 @@ id, one self-contained file per link). Lives in `@stxapps/shared`
 
 The entity holds both halves of the machine-derived state: the **display result**
 (the fields the UI renders) and the **bookkeeping**. A link is no longer **one**
-extraction with **one** lifecycle: title+image, read-mode, screenshot, archive,
+extraction with **one** lifecycle: title+image, read-mode, screenshot, page copy,
 keywords, tags, summary, and (deferred) vectors are **independent jobs** — each
 produced by a different client/tier at a different time, each able to be pending
 (no entry) while another is `done`. So the bookkeeping is a **map of facet →
@@ -467,7 +476,7 @@ export const extractionSchema = z.looseObject({
   // display (the user-written half, customTitle/customImageId, is on linkSchema):
   title: z.string().max(LINK_TITLE_MAX).optional(), // discovered/provisional og:title (or imported)
   imageId: z.string().optional(), // og:image preview — a files/{id}.enc ref, never the remote URL
-  pageArchiveId: z.string().optional(), // archived page — files/{id}.enc, from the `archive` facet
+  pageCopyId: z.string().optional(), // saved page copy — files/{id}.enc, from the `pageCopy` facet
   screenshotId: z.string().optional(), // full-page screenshot — files/{id}.enc, from `screenshot`
   // bookkeeping — partialRecord: a missing facet key = pending (not yet done):
   facets: z.partialRecord(
@@ -475,7 +484,7 @@ export const extractionSchema = z.looseObject({
       'titleImage',
       'readMode',
       'screenshot',
-      'archive',
+      'pageCopy',
       'keywords',
       'tags',
       'summary',
@@ -585,7 +594,7 @@ axis), never link-first. Don't pre-pay it.
 Wire it the standard three-step (see `paths.ts` header — _adding a namespace_):
 add `EXTRACTIONS_PREFIX = 'extractions/'` to `paths.ts`, add it to
 `ID_KEYED_PREFIXES`, add `extractionSchema` here — with the **display fields**
-(`title?`, `imageId?`, `pageArchiveId?`, `screenshotId?`, all `files/{id}.enc` refs
+(`title?`, `imageId?`, `pageCopyId?`, `screenshotId?`, all `files/{id}.enc` refs
 except the inline `title`, same plaintext-typing rule — see
 [local-first-sync.md](./local-first-sync.md) _plaintext typing_) alongside `facets`.
 `linkSchema` keeps only the **user-authored** fields, including the manual overrides
@@ -603,10 +612,10 @@ synced state:
   (absence _is_ pending), or a facet whose `status` is `failed` and now past its
   backoff (`now >= extractedAt + backoff(attempts)`). A `permanent` facet is
   skipped; there's no lease to check.
-- **best-effort tier (screenshot/archive):** an _active-context_ save extracts
+- **best-effort tier (screenshot/page-copy):** an _active-context_ save extracts
   immediately and writes the `files/` blob + the `extractions/` ref; the background
   loop's only job is to spot links **missing** those refs (`extraction.screenshotId`
-  / `extraction.pageArchiveId` absent) that this client's tier can satisfy — the
+  / `extraction.pageCopyId` absent) that this client's tier can satisfy — the
   absence _is_ the pending signal, no explicit field needed.
 
 The loop: **extract** → **write back** (the result _and_ bookkeeping into
@@ -706,7 +715,7 @@ isn't optional. An interactive save is one link, at human pace, on the client
 with the most context; an import is the inverse on every axis:
 
 - **volume** — hundreds to thousands at once, not one-at-a-time;
-- **no active context** — no live tab per link, so screenshot/archive are out and
+- **no active context** — no live tab per link, so screenshot/page-copy are out and
   title+image is **bg-fetch tier at best** (raw HTML), never active-page;
 - **the importer is usually the web app** — a dropped export file — which can't
   `fetch` at all.
@@ -819,7 +828,7 @@ For an extension whose job is extraction + save, the minimum working set is:
     namespace is genuinely never read by that client, which `links/` isn't here.)
 - **lazily / never: `files/`.** Heavy content is on-demand for **every** client
   already; the extension fetches a `files/` blob only to **upgrade** an existing
-  screenshot/archive, never routinely.
+  screenshot/page-copy, never routinely.
 - **pulled for the popup UI, not for extraction: `settings/` `lists/` `tags/`.**
   None are extraction inputs — they ride along because the popup renders more than a
   headless extractor. `settings/` feeds the ThemeProvider (`useSettings()` →
@@ -969,9 +978,10 @@ that opt-in.
 - **Re-extract / upgrade UX.** The derived tier (`tierOf(extractedBy)`) _enables_
   upgrading a low-tier result, but the trigger (automatic on a higher-tier sighting vs. a manual
   "re-extract" button) is an open product call.
-- **Archive on background tier.** Capturing a full archive without an open
+- **Page copy on background tier.** Capturing a full page copy without an open
   page is the weak spot (offscreen/hidden-tab rendering is heavy and flaky). For
-  now archive is active-context-only; a headless background archiver is deferred.
+  now the page copy is active-context-only; a headless background capturer is
+  deferred.
 - **Manual capture.** A user-facing "fetch metadata / capture now" action for
   links that auto-extraction missed (a `failed` link, or a web-only user who
   installs the extension later) — the loop already supports re-running; this just

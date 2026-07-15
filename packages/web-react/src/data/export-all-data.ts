@@ -234,7 +234,7 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
   for (const { link, extraction } of links) {
     if (link.customImageId !== undefined) ids.add(link.customImageId);
     if (extraction?.imageId !== undefined) ids.add(extraction.imageId);
-    if (extraction?.pageArchiveId !== undefined) ids.add(extraction.pageArchiveId);
+    if (extraction?.pageCopyId !== undefined) ids.add(extraction.pageCopyId);
     if (extraction?.screenshotId !== undefined) ids.add(extraction.screenshotId);
   }
   return [...ids].map((id) => pathFromId(id, FILES_PREFIX));

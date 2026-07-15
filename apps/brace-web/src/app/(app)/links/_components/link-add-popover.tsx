@@ -5,7 +5,7 @@
 // page-provider header explains the split: shareable state goes in the URL,
 // transient/private state does not). Anchored to its trigger (`align="end"`)
 // rather than centered as a dialog, because it's launched from one specific
-// button and should stay in that context; a heavier full editor (archive, page
+// button and should stay in that context; a heavier full editor (page copy, page
 // content) is the future dialog/route, not this.
 //
 // Shape: a URL field always visible, an "Advanced" disclosure that reveals the

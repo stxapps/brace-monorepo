@@ -40,7 +40,7 @@ import { resizeImage } from './resize-image';
 // Like the extension worker it writes ONLY `extractions/` + `files/`, NEVER
 // `links/{id}.enc` (the writer-split — docs/link-extraction.md), so a backfill can't
 // clobber a concurrent user edit. It only ever does `titleImage`: the server tier can't
-// screenshot/archive (no renderer) and read-mode parity isn't promised, so those facets
+// screenshot/page copy (no renderer) and read-mode parity isn't promised, so those facets
 // stay active-context only.
 //
 // Throws on a wholesale TRANSPORT failure of the extract request itself

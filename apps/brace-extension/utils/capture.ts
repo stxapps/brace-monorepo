@@ -123,12 +123,12 @@ export async function captureScreenshot(windowId: number): Promise<Uint8Array> {
   return dataUrlToBytes(dataUrl);
 }
 
-// --- archive -----------------------------------------------------------------
+// --- page copy -----------------------------------------------------------------
 
 // Serialize the live DOM and return it as bytes (a `files/{id}.enc` blob). Starts
 // with the inline XMLSerializer; SingleFile-grade inlining (CSS/images/fonts) is a
 // later enhancement, per the plan.
-export async function captureArchive(tabId: number): Promise<Uint8Array> {
+export async function capturePageCopy(tabId: number): Promise<Uint8Array> {
   const [injection] = await browser.scripting.executeScript({
     target: { tabId },
     func: () => new XMLSerializer().serializeToString(document),

@@ -26,10 +26,10 @@ import { z } from 'zod';
 // The plaintext of `links/{id}.enc` — the USER-AUTHORED half of one link. Small by
 // design (< ~2 KB budget): list-view fields only, so the whole library is browsable
 // offline after first sync. The machine-derived half (the extracted title/image, the
-// archive/screenshot refs, the extraction bookkeeping) lives in `extractions/{id}.enc`
+// page-copy/screenshot refs, the extraction bookkeeping) lives in `extractions/{id}.enc`
 // — split BY WRITER so a background extractor never read-merge-writes this file and so
 // can never clobber a concurrent user edit under LWW (see docs/link-extraction.md "the
-// data model"). Heavy media itself (archive/screenshot/preview bytes, long notes) lives
+// data model"). Heavy media itself (page-copy/screenshot/preview bytes, long notes) lives
 // in separate `files/{id}.enc` blobs referenced by id — never inlined. `listId`/`tagIds`
 // hold ids of `lists/{id}.enc` / `tags/{id}.enc` files; a dangling id (tag deleted on
 // another device) is NORMAL and the UI skips it, never errors.
@@ -89,7 +89,7 @@ export const linkSchema = z.looseObject({
   // content"). The cap counts UTF-16 length, so worst-case multi-byte text still
   // stays bounded. Long-form multi-paragraph notes do NOT belong here — those are a
   // separate `files/{id}.enc` blob (a `noteId` ref, deferred), the same lazy
-  // heavy-field rule as archives/screenshots.
+  // heavy-field rule as page copies/screenshots.
   note: z.string().max(LINK_NOTE_MAX).optional(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
@@ -164,7 +164,7 @@ export type Pin = z.infer<typeof pinSchema>;
 // carries two kinds of machine state, both written by the SAME writer (the extractor),
 // so LWW races between them are self-healing (re-extract is idempotent):
 //   1. the DISPLAY RESULT — `title` (the discovered/provisional og:title), `imageId`
-//      (og:image preview), `pageArchiveId`, `screenshotId` (heavy `files/{id}.enc`
+//      (og:image preview), `pageCopyId`, `screenshotId` (heavy `files/{id}.enc`
 //      refs). The UI resolves `customTitle ?? title ?? host(url)` and
 //      `customImageId ?? imageId` (the `custom*` halves live in `linkSchema`).
 //   2. the BOOKKEEPING — the per-facet who/when/quality/retry map (`facets`).
@@ -177,7 +177,7 @@ export type Pin = z.infer<typeof pinSchema>;
 // docs/link-extraction.md.
 //
 // A link is NOT one extraction with one lifecycle: title+image, read-mode, screenshot,
-// archive, keywords, tags, summary, and (deferred) vectors are INDEPENDENT jobs — each
+// page copy, keywords, tags, summary, and (deferred) vectors are INDEPENDENT jobs — each
 // produced by a different client/tier at a different time, each able to be missing while
 // another is `done`. So the entity carries a MAP of facet → state (`facets`), not a flat
 // `status`. One flat file per link with the facets inside (not one prefix per facet): a
@@ -226,7 +226,7 @@ export type Facet = z.infer<typeof facetSchema>;
 // `z.record`, because the latter over an enum key infers an EXHAUSTIVE `Record` (all 8
 // required) — which neither matches reality nor parses a real one-facet extraction. The
 // display fields are the results of specific facets: `title`/`imageId` from `titleImage`,
-// `pageArchiveId` from `archive`, `screenshotId` from `screenshot`; each is absent until
+// `pageCopyId` from `pageCopy`, `screenshotId` from `screenshot`; each is absent until
 // its facet lands. All but the inline `title` are `files/{id}.enc` refs — "a field name
 // types its blob" (see docs/local-first-sync.md "plaintext typing").
 export const extractionSchema = z.looseObject({
@@ -239,8 +239,10 @@ export const extractionSchema = z.looseObject({
   // encrypted by the extracting client, NEVER the remote URL (see the doc's "the preview
   // image is a downloaded blob"). Shown as `customImageId ?? imageId`.
   imageId: z.string().optional(),
-  // The archived page's content file (`files/{id}.enc`), from the `archive` facet.
-  pageArchiveId: z.string().optional(),
+  // The saved copy of the page's content (`files/{id}.enc`), from the `pageCopy` facet.
+  // Named "page copy", never "archive": `archive` is the ARCHIVE_ID system list (a link
+  // filed away), an unrelated concept — see sync/system-lists.ts.
+  pageCopyId: z.string().optional(),
   // The full-page screenshot (`files/{id}.enc`), from the `screenshot` facet — a rendered
   // capture, distinct from the og:image `imageId`. Active-page tier only (the extension's
   // `tabs.captureVisibleTab`).
@@ -250,7 +252,7 @@ export const extractionSchema = z.looseObject({
       'titleImage',
       'readMode',
       'screenshot',
-      'archive',
+      'pageCopy',
       'keywords',
       'tags',
       'summary',

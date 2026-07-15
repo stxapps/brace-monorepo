@@ -53,7 +53,7 @@ export function Editor({
         return;
       }
       // Auto-run the cheap facets off the live DOM, fire-and-forget (heavy screenshot
-      // / archive stay manual on the complete page — see link-extraction.md).
+      // / page copy stay manual on the complete page — see link-extraction.md).
       const id = linkIdOf(link);
       void sendMessage({ type: 'EXTRACT', linkId: id, facet: 'titleImage' });
 

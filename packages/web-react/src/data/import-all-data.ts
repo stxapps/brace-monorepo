@@ -411,9 +411,9 @@ function referencedFileIds(entries: BundleEntry[]): Set<string> {
       const { customImageId } = entry.data as Link;
       if (customImageId !== undefined) ids.add(customImageId);
     } else if (entry.kind === 'extraction') {
-      const { imageId, pageArchiveId, screenshotId } = entry.data as Extraction;
+      const { imageId, pageCopyId, screenshotId } = entry.data as Extraction;
       if (imageId !== undefined) ids.add(imageId);
-      if (pageArchiveId !== undefined) ids.add(pageArchiveId);
+      if (pageCopyId !== undefined) ids.add(pageCopyId);
       if (screenshotId !== undefined) ids.add(screenshotId);
     }
   }

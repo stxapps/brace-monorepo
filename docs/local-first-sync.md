@@ -12,7 +12,7 @@ described here.
 brace is **local-first**, with **one entity per encrypted file** and
 **end-to-end encryption**:
 
-- an entity (a bookmark's metadata, its content/archive, a tag, a list, the
+- an entity (a bookmark's metadata, its content/page-copy, a tag, a list, the
   settings) is encrypted on the client, then uploaded as an opaque blob to
   storage (Cloudflare R2) via a signed URL;
 - on download, the blob is fetched, decrypted, and written to a local store
@@ -52,7 +52,7 @@ re-renders when sync writes land. **Don't rebuild IndexedDB plumbing by hand.**
 Dexie holds:
 
 - decrypted bookmark metadata, tags, lists, settings (the always-resident index);
-- decrypted content/archive blobs (fetched lazily, on demand);
+- decrypted content/page-copy blobs (fetched lazily, on demand);
 - the **sync cursor** — the compound `(updatedAt, path)` of the newest op/file
   the client has reconciled, stored as `syncCursorUpdatedAt` + `syncCursorPath`
   (the high-water mark for the next incremental pull — see _the sync endpoint_);
@@ -170,7 +170,7 @@ encrypted file. Random ids — never content-derived — so filenames leak nothi
 
 ```
 /users/{uid}/links/{id}.enc       ← encrypted link metadata (small, < ~2 KB)
-/users/{uid}/files/{id}.enc       ← encrypted content / archived page / screenshot
+/users/{uid}/files/{id}.enc       ← encrypted content / saved page copy / screenshot
 /users/{uid}/tags/{id}.enc        ← encrypted { id, name, updatedAt }
 /users/{uid}/lists/{id}.enc       ← encrypted { id, name, updatedAt }
 /users/{uid}/pins/{id}.enc        ← encrypted { id, rank, … }; {id} = a pinned link's id
@@ -199,7 +199,7 @@ rewrites the user's file (see [link-extraction.md](./link-extraction.md)):
   "id": "{id}",
   "title": "Some Article",               // discovered og:title
   "imageId": "{id}.enc",                 // → files/ preview blob
-  "pageArchiveId": "{id}.enc",           // → files/ archive blob
+  "pageCopyId": "{id}.enc",           // → files/ page-copy blob
   "facets": { "titleImage": { "status": "done" } },
   "createdAt": "...",
   "updatedAt": "..."
@@ -271,10 +271,10 @@ tag/list names.
   Pin = `put`; unpin = `delete`. No `listId` in the pin: the link already records
   its list, so a pin floats the link to the top of every view it appears in, and a
   pin whose link is gone is just another dangling id the read layer skips.
-- **Extractions** ("fill in a saved link's title/image/screenshot/archive") are
+- **Extractions** ("fill in a saved link's title/image/screenshot/page-copy") are
   stored one per link (`extractions/{id}.enc`, where `{id}` is the link's id). This
   is the **machine-written half** of a link, holding **both** the extracted display
-  result (`title`, `imageId`, `pageArchiveId`, `screenshotId`) **and** the
+  result (`title`, `imageId`, `pageCopyId`, `screenshotId`) **and** the
   per-facet bookkeeping (`{ status, tier, attempts, … }`). It's a stronger
   LWW-isolation move than pins': the split is **by writer**, so a background
   extractor writes only this file and can **never** read-merge-write the user's
@@ -302,7 +302,7 @@ extraction.title ?? host(url)`). Written by client extractors (the extension,
   unknown/absent reference and render the rest**, never error. No referential
   cleanup is required — LWW plus tolerant rendering covers it.
 - **Metadata vs. content.** Metadata is small (`< ~2 KB`) and always synced into
-  the local index; content/archives download **lazily, never on first sync**. The
+  the local index; content/page copies download **lazily, never on first sync**. The
   list-view fields live in metadata-class blobs that are all eagerly synced — the
   URL, tags, list, note, and overrides in `links/`, and the extracted title/image
   in `extractions/` — so the **whole library is browsable and searchable offline**
@@ -314,9 +314,9 @@ extraction.title ?? host(url)`). Written by client extractors (the extension,
   offline — the cap is what keeps it inside the budget; anything longer becomes a
   `files/{id}.enc` (`noteId`, deferred). Two lazy triggers:
   **viewport/scroll** fetches per-row media (thumbnail/screenshot) as rows come
-  into view (prefetch slightly ahead); **open** fetches the full archived page.
+  into view (prefetch slightly ahead); **open** fetches the full saved page copy.
   Each fetched blob is decrypted once and **cached in Dexie**, so re-views are
-  instant and offline. The one tradeoff: a never-opened archive isn't available
+  instant and offline. The one tradeoff: a never-opened page copy isn't available
   offline (see _deferred_ — offline pinning).
 - **Plaintext typing: the namespace says what's inside, never the blob.** On the
   wire every object is the same opaque encrypted frame (see _crypto boundary —
@@ -325,8 +325,8 @@ extraction.title ?? host(url)`). Written by client extractors (the extension,
   the index namespaces — `links/`, `tags/`, `lists/`, `pins/`, `extractions/`,
   `settings/` — are
   UTF-8 JSON (decode, then `JSON.parse`), while `files/` is raw content whose meaning
-  comes from the **metadata field that references it** — `pageArchive` means an
-  HTML archive, a `screenshot`/`thumbnail` field means an image. The client only
+  comes from the **metadata field that references it** — `pageCopy` means an
+  HTML page copy, a `screenshot`/`thumbnail` field means an image. The client only
   ever reaches a content blob _through_ such a field, so it knows what it is
   about to decrypt before it even signs the GET. Where one field may hold
   several formats (PNG vs. WebP, raw HTML vs. a single-file bundle), store the
@@ -355,7 +355,7 @@ extraction.title ?? host(url)`). Written by client extractors (the extension,
 ### the three flows
 
 **1. First sync (after sign-in).** Pull the full set of metadata/tag/list paths,
-download + decrypt each, build the local index. Content/archives are _not_
+download + decrypt each, build the local index. Content/page copies are _not_
 downloaded here — they come on demand. For 5 000 bookmarks at ~500 bytes of
 metadata each that's ~2.5 MB — manageable. Set the cursor to the **newest
 `(updatedAt, path)` among the files listed** — the same reconstruction the
@@ -644,7 +644,7 @@ account for it.)
 
 ### multi-file consistency & orphans
 
-A bookmark spans 2–3 files (metadata + content + archive). Consistency comes from
+A bookmark spans 2–3 files (metadata + content + page copy). Consistency comes from
 two cheap rules, not transactions:
 
 - **upload metadata LAST, delete metadata FIRST.** The metadata file is what
@@ -746,7 +746,7 @@ and the future Expo client, forever. Raw bytes, deliberately not a JSON
 envelope — base64 would inflate every blob ~33% (worst on the heavy content
 files that count against the quota), and any plaintext field beside the
 ciphertext (a content type, say) would leak to the server. What a blob
-_contains_ (text vs. image, archive vs. thumbnail) is described **inside the
+_contains_ (text vs. image, page copy vs. thumbnail) is described **inside the
 ciphertext** of the metadata that references it, never in the frame. The
 version byte is format-change insurance: a future layout (new cipher, different
 IV size, compression) mints a new version constant and a new decode branch, so
@@ -830,9 +830,9 @@ the one injected client.
 - **Client-side orphan GC** (see _multi-file consistency_) — quota bounds growth
   until then.
 - **Offline content pinning / prefetch** (see _data model — metadata vs.
-  content_) — let users mark bookmarks "available offline," or prefetch archives
-  on idle, so a never-opened archive isn't missing offline.
-- **Local content-cache eviction** — lazily fetched content/archive blobs
+  content_) — let users mark bookmarks "available offline," or prefetch page copies
+  on idle, so a never-opened page copy isn't missing offline.
+- **Local content-cache eviction** — lazily fetched content/page-copy blobs
   accumulate in Dexie against the IndexedDB budget; an LRU eviction of _content_
   (metadata is never evicted) keeps it bounded. Distinct from server-side orphan
   GC above.

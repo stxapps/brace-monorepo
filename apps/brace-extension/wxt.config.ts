@@ -137,7 +137,7 @@ export default defineConfig({
         // activeTab grants temporary host access to the current tab on click,
         // covering url/title reads + captureVisibleTab on it
         'activeTab',
-        // required to call scripting.executeScript (archive serializer
+        // required to call scripting.executeScript (page-copy serializer
         // injection in background.ts); activeTab only grants host access
         'scripting',
       ],

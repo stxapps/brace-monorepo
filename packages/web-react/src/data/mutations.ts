@@ -170,7 +170,7 @@ async function deleteEntity(username: string, path: string): Promise<void> {
 
 // The user-authored fields an edit may touch — `links/{id}.enc` is the user half
 // of a link, so this is everything on it except identity/timestamps. The extracted
-// display fields (title/imageId/pageArchiveId/screenshotId) are NOT here: they live
+// display fields (title/imageId/pageCopyId/screenshotId) are NOT here: they live
 // in `extractions/{id}.enc` and are written via writeExtraction, so a background
 // extractor never rewrites this file (see docs/link-extraction.md). An EXPLICITLY
 // undefined field clears it: the spread overwrites the old value and JSON encoding
@@ -350,7 +350,7 @@ export type ExtractionFacet = keyof Extraction['facets'];
 // The machine-written display fields on `extractions/{id}.enc` — the extracted
 // counterparts of the user's `customTitle`/`customImageId` on the link.
 export type ExtractionFields = Partial<
-  Pick<Extraction, 'title' | 'imageId' | 'pageArchiveId' | 'screenshotId'>
+  Pick<Extraction, 'title' | 'imageId' | 'pageCopyId' | 'screenshotId'>
 >;
 
 // What one extraction write-back carries: an optional display-field patch and/or one
@@ -364,7 +364,7 @@ export interface ExtractionPatch {
 }
 
 // Read-merge-write one link's `extractions/{id}.enc` — the MACHINE half of a link
-// (entities.ts): the extracted display result (title/imageId/pageArchiveId/
+// (entities.ts): the extracted display result (title/imageId/pageCopyId/
 // screenshotId) AND the per-facet who/when/quality/retry bookkeeping. The extractor
 // writes ONLY this file, never `links/{id}.enc`, so it can never clobber a concurrent
 // user edit (the writer-split — docs/link-extraction.md). The read-merge-`put` runs
@@ -430,9 +430,9 @@ export function deleteExtraction(username: string, linkId: string): Promise<void
   return deleteEntity(username, pathFromId(linkId, EXTRACTIONS_PREFIX));
 }
 
-// Write a `files/{id}.enc` content blob (a captured screenshot/archive/read-mode
+// Write a `files/{id}.enc` content blob (a captured screenshot/page-copy/read-mode
 // file). Only the lazy content record is created here; the reference to it
-// (`imageId` / `screenshotId` / `pageArchiveId`) is written separately via
+// (`imageId` / `screenshotId` / `pageCopyId`) is written separately via
 // writeExtraction, content-before-metadata — the same ordering the sync engine's push
 // phases preserve.
 export function writeFile(username: string, fileId: string, data: Uint8Array): Promise<void> {

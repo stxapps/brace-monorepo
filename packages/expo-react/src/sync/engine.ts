@@ -109,7 +109,7 @@ const UPLOAD_CONCURRENCY = 8;
 // own upload window, well under the 5-min TTL, on a push of any size.
 const PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
 
-// A path under `files/` is heavy content (archived page, screenshot). Per the
+// A path under `files/` is heavy content (a saved page copy, screenshot). Per the
 // doc, content is fetched LAZILY (on open/scroll), never eagerly on sync — so
 // sync only tracks its `updatedAt` and downloads the always-resident index
 // (links/tags/lists/settings). loadEntityContent() pulls a content blob on

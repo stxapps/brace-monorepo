@@ -138,7 +138,7 @@ export function useLinkMutations(): LinkMutations {
         current.customImageId,
         extraction?.imageId,
         extraction?.screenshotId,
-        extraction?.pageArchiveId,
+        extraction?.pageCopyId,
       ].filter((fileId): fileId is string => typeof fileId === 'string');
       for (const fileId of fileIds) await deleteFile(username, fileId);
 

@@ -89,7 +89,7 @@ could collide with tags created since.
   network). A share-payload title is NOT a deliberate user title, so it seeds
   the provisional `extraction.title` (via `writeExtraction`), never
   `customTitle` — the same rule as bulk import (entities.ts). The sheet **never
-  fetches the page**; image/screenshot/archive fill in later through the
+  fetches the page**; image/screenshot/page-copy fill in later through the
   normal extraction pipeline in the main app.
 - **URL**: Android's `EXTRA_TEXT` sometimes wraps the URL in prose (Chrome),
   so the first http(s) URL is extracted from the text; normalized with
