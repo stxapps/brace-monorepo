@@ -1,15 +1,17 @@
 'use client';
 
-// Import-data orchestrator — the Settings → Data → Import action behind
-// useImport (hooks/use-import.ts), and the write-side mirror of export.ts. One
-// entry point takes the picked File, detects its format, and lands everything in
-// the LOCAL store through the write edge (bulkWriteEntities), so the durable
-// pending-ops queue carries the import to the server exactly like any other
-// local edit — the caller kicks a sync when the run finishes.
+// Import-all-data orchestrator — the Settings → Data → Import action behind
+// useImportAllData (hooks/use-import-all-data.ts), and the write-side mirror of
+// export-all-data.ts. One entry point takes the picked File, detects its format,
+// and lands everything in the LOCAL store through the write edge
+// (bulkWriteEntities), so the durable pending-ops queue carries the import to
+// the server exactly like any other local edit — the caller kicks a sync when
+// the run finishes.
 //
-//   brace     — the re-importable backup zip export.ts produced (manifest.json +
-//               items.jsonl + files/{id}): raw entities restored VERBATIM under
-//               their original paths, timestamps preserved.
+//   brace     — the re-importable backup zip export-all-data.ts produced
+//               (manifest.json + items.jsonl + files/{id}): raw entities
+//               restored VERBATIM under their original paths, timestamps
+//               preserved.
 //   netscape / csv / text — the interop formats: parsed rows (the pure parsers
 //               in @stxapps/shared import/) become NEW links, their folders and
 //               tag names resolved against — or created in — this library. A
@@ -76,7 +78,7 @@ import { newId } from '@stxapps/web-crypto';
 
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { db } from './db';
-import { BRACE_BACKUP_FORMAT, BRACE_BACKUP_VERSION } from './export';
+import { BRACE_BACKUP_FORMAT, BRACE_BACKUP_VERSION } from './export-all-data';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
 import { readLists, readTags } from './queries';
 

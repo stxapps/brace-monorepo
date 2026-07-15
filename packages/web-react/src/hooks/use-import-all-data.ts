@@ -1,10 +1,10 @@
 'use client';
 
-// The import-data state machine over data/import.ts — what the Settings →
-// Data → Import view renders; the mirror of use-export.ts. One run at a time.
-// On success it kicks the SyncProvider's requestSync so the freshly-queued
-// pending ops drain through the normal engine cycle (and the sync status card
-// shows it), rather than running a private sync of its own.
+// The import-all-data state machine over data/import-all-data.ts — what the
+// Settings → Data → Import view renders; the mirror of use-export-all-data.ts.
+// One run at a time. On success it kicks the SyncProvider's requestSync so the
+// freshly-queued pending ops drain through the normal engine cycle (and the sync
+// status card shows it), rather than running a private sync of its own.
 
 import { useCallback, useRef, useState } from 'react';
 
@@ -12,7 +12,7 @@ import { useApiClient } from '@stxapps/react';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
-import { importAllData, type ImportOutcome, type ImportProgress } from '../data/import';
+import { importAllData, type ImportOutcome, type ImportProgress } from '../data/import-all-data';
 import { getSession } from '../data/session-store';
 import type { SyncDeps } from '../sync/engine';
 import { useEntitlements } from './use-entitlements';
@@ -23,14 +23,14 @@ export type ImportState =
   | { phase: 'done'; outcome: ImportOutcome }
   | { phase: 'error'; message: string };
 
-export interface UseImportResult {
+export interface UseImportAllDataResult {
   state: ImportState;
   // Start an import from the picked file; no-op while one is running. Format is
   // detected from the file itself (zip magic → Brace backup, else sniffed text).
   run: (file: File) => void;
 }
 
-export function useImport(): UseImportResult {
+export function useImportAllData(): UseImportAllDataResult {
   const { username } = useAuth();
   const { requestSync } = useSync();
   const api = useApiClient();

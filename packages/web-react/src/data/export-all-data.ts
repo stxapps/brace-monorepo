@@ -1,9 +1,9 @@
 'use client';
 
 // Export-all-data orchestrator — the Settings → Data → Export action behind
-// useExport (hooks/use-export.ts). Reads the LOCAL store (so unsynced edits on
-// this device are included), applies the export policy, and produces one
-// downloadable file per format:
+// useExportAllData (hooks/use-export-all-data.ts). Reads the LOCAL store (so
+// unsynced edits on this device are included), applies the export policy, and
+// produces one downloadable file per format:
 //
 //   brace     — the complete, re-importable backup: a zip of manifest.json +
 //               items.jsonl (raw {path, data} entities — links, lists, tags,

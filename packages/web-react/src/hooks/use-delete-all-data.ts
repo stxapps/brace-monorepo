@@ -1,8 +1,8 @@
 'use client';
 
 // The delete-all-data state machine over data/delete-all-data.ts — what the
-// Settings → Data → Delete view renders. Mirrors useExport/useImport: one run at
-// a time, idle → running → done/error. No progress steps: the server wipe is a
+// Settings → Data → Delete view renders. Mirrors useExportAllData/
+// useImportAllData: one run at a time, idle → running → done/error. No progress steps: the server wipe is a
 // single call (the whole point of doing it server-side), so `running` is one
 // spinner, and `done` carries the deleted count for the receipt line.
 

@@ -1,9 +1,9 @@
 'use client';
 
-// The export-all-data state machine over data/export.ts — what the Settings →
-// Data → Export view renders. One run at a time; a run that ends in the user
-// dismissing the save dialog (ExportCancelledError) returns to `idle` rather
-// than surfacing an error, since nothing failed.
+// The export-all-data state machine over data/export-all-data.ts — what the
+// Settings → Data → Export view renders. One run at a time; a run that ends in
+// the user dismissing the save dialog (ExportCancelledError) returns to `idle`
+// rather than surfacing an error, since nothing failed.
 
 import { useCallback, useRef, useState } from 'react';
 
@@ -16,7 +16,7 @@ import {
   type ExportFormat,
   type ExportOutcome,
   type ExportProgress,
-} from '../data/export';
+} from '../data/export-all-data';
 import { getSession } from '../data/session-store';
 import type { SyncDeps } from '../sync/engine';
 
@@ -26,7 +26,7 @@ export type ExportState =
   | { phase: 'done'; outcome: ExportOutcome }
   | { phase: 'error'; message: string };
 
-export interface UseExportResult {
+export interface UseExportAllDataResult {
   state: ExportState;
   // Start an export; no-op while one is running. `excludedListIds` is the lock
   // coverage set (useLocks().lockedListIds) — the caller passes it so this hook
@@ -34,7 +34,7 @@ export interface UseExportResult {
   run: (format: ExportFormat, excludedListIds: ReadonlySet<string>) => void;
 }
 
-export function useExport(): UseExportResult {
+export function useExportAllData(): UseExportAllDataResult {
   const { username } = useAuth();
   const api = useApiClient();
   const [state, setState] = useState<ExportState>({ phase: 'idle' });

@@ -3,7 +3,7 @@
 // no Dexie/React: a parser turns one file's text into ImportedLink[] and decides
 // NOTHING about the library — dedup against existing links, folder→list and tag
 // name→id resolution, quota, and the actual writes all happen in the client's
-// import orchestrator (web-react data/import.ts), so the parsers stay pure
+// import orchestrator (web-react data/import-all-data.ts), so the parsers stay pure
 // `(text) => rows` functions any platform (web today, Expo later) can reuse.
 // The Brace-backup zip does NOT go through this: it round-trips raw entities per
 // path (manifest + items.jsonl), not this interop projection.

@@ -31,9 +31,9 @@ and keeps the identity; **delete account** takes both.
 
 ### export — read the local store, apply policy once, serialize per format
 
-`web-react` `data/export.ts` (behind `useExport`) orchestrates; the three
-interop serializers are pure functions in `@stxapps/shared` (`export/`). Four
-formats, one deliberate asymmetry:
+`web-react` `data/export-all-data.ts` (behind `useExportAllData`) orchestrates;
+the three interop serializers are pure functions in `@stxapps/shared`
+(`export/`). Four formats, one deliberate asymmetry:
 
 - **brace** — the complete backup: a zip of `manifest.json` + `items.jsonl`
   (raw `{path, data}` entities) + `files/{id}` (raw decrypted blob bytes). The
@@ -56,10 +56,10 @@ spirit.
 
 ### import — detect the format, land through the write edge
 
-`web-react` `data/import.ts` (behind `useImport`), the write-side mirror: one
-entry point takes the picked file, detects the format, and writes through the
-normal write edge (`bulkWriteEntities`) — so the pending-ops queue carries an
-import to the server **exactly like any other local edit**, and a crash
+`web-react` `data/import-all-data.ts` (behind `useImportAllData`), the write-side
+mirror: one entry point takes the picked file, detects the format, and writes
+through the normal write edge (`bulkWriteEntities`) — so the pending-ops queue
+carries an import to the server **exactly like any other local edit**, and a crash
 mid-import loses nothing already written. Detection is two-layered
 (`@stxapps/shared` `import/detect.ts`): zip magic first (a brace backup is
 bytes; a zip _without_ `manifest.json` has its `.html`/`.csv`/`.txt` entries

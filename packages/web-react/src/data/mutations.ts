@@ -120,7 +120,7 @@ export interface RawEntityEntry {
   data: object | Uint8Array;
 }
 
-// Batched raw put — the bulk-import primitive (data/import.ts). N entities land
+// Batched raw put — the bulk-import primitive (data/import-all-data.ts). N entities land
 // in ONE rw transaction (items.bulkPut + pendingOps.bulkPut), so a chunk is
 // atomic like any single write and IndexedDB isn't asked for a transaction per
 // link. Unlike writeLink/writeList this does NOT restamp createdAt/updatedAt:

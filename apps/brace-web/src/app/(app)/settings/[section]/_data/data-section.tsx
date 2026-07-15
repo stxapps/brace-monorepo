@@ -11,8 +11,9 @@
 //
 // All three actions are real. Export: format choice (ExportView), the
 // locked-lists exclusion warning, progress, and the result line, over
-// web-react's useExport → data/export.ts. Import: a picked file, auto-detected
-// format, progress, and the result line, over useImport → data/import.ts.
+// web-react's useExportAllData → data/export-all-data.ts. Import: a picked file,
+// auto-detected format, progress, and the result line, over useImportAllData →
+// data/import-all-data.ts.
 // Delete-all: checkbox gate + one server wipe call + the local wipe, over
 // useDeleteAllData → data/delete-all-data.ts (see docs/data-lifecycle.md —
 // the account itself is untouched; deleting THAT lives in the Account section).
@@ -41,8 +42,8 @@ import {
   type ExportState,
   type ImportState,
   useDeleteAllData,
-  useExport,
-  useImport,
+  useExportAllData,
+  useImportAllData,
   useLocks,
   usePendingChangesCount,
   useSync,
@@ -260,7 +261,7 @@ function ImportStatus({ state }: { state: ImportState }) {
 
 function ImportView({ onBack }: { onBack: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { state, run } = useImport();
+  const { state, run } = useImportAllData();
   const running = state.phase === 'running';
 
   const onFilePicked = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -401,7 +402,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
 function ExportView({ onBack }: { onBack: () => void }) {
   const [format, setFormat] = useState<ExportFormat>('brace');
   const { lockedListIds } = useLocks();
-  const { state, run } = useExport();
+  const { state, run } = useExportAllData();
   const running = state.phase === 'running';
   const lockedCount = lockedListIds.size;
 
