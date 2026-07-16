@@ -52,7 +52,10 @@ Flag notes:
 - `packages/expo-crypto` was written by hand (no generator): the usual lib
   files following the other packages' conventions, PLUS the Expo native module
   pieces `create-expo-module` would scaffold — `expo-module.config.json`,
-  `ios/BraceFileCrypto.podspec` + Swift, `android/build.gradle` + Kotlin.
+  `ios/BraceCrypto.podspec` + Swift, `android/build.gradle` + Kotlin. One pod
+  (`BraceCrypto`, source-file glob — a new `.swift` needs no podspec edit)
+  hosts two Apple modules: `BraceFileCrypto` and the iOS-only
+  `BraceSharedKeychain`.
   Native code is picked up by Expo autolinking from the workspace symlink in
   `node_modules` during `npx expo prebuild` (dev client required — not Expo Go).
 - `packages/expo-react` was also written by hand (no generator), mirroring

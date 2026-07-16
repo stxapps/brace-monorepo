@@ -2,10 +2,12 @@ import { Platform } from 'react-native';
 import { requireNativeModule } from 'expo-modules-core';
 
 // Keychain items under an EXPLICIT access group — the one Keychain capability
-// expo-secure-store doesn't expose, added to the BraceFileCrypto native module
-// for the share sheet's upload (docs/share-sheet.md): the main app
-// mirrors the session into a group both processes can read, so the iOS share
-// extension can encrypt + PUT without opening the app's sqlite or Keychain.
+// expo-secure-store doesn't expose (it hardcodes its query and offers no
+// access-group option), so it gets its own BraceSharedKeychain native module in
+// the BraceCrypto pod. This backs the share sheet's upload
+// (docs/share-sheet.md): the main app mirrors the session into a group both
+// processes can read, so the iOS share extension can encrypt + PUT without
+// opening the app's sqlite or Keychain.
 //
 // `group` is an App Group id (e.g. `group.to.brace.app`): iOS accepts App Group
 // ids as keychain access groups, so the App Group entitlement the app and the
@@ -16,9 +18,11 @@ import { requireNativeModule } from 'expo-modules-core';
 //
 // iOS-ONLY BY NATURE: Android's share surface runs in the app's own process and
 // reads the real session store, so nothing needs a cross-process keychain — the
-// Kotlin module doesn't define these functions. Rather than making every caller
-// platform-fork, the wrappers degrade to the "item absent" semantics off iOS:
-// get resolves null, set/delete resolve as no-ops.
+// module is registered under `apple.modules` only, with no Kotlin counterpart.
+// Rather than making every caller platform-fork, the wrappers degrade to the
+// "item absent" semantics off iOS: get resolves null, set/delete resolve as
+// no-ops. The Platform check must stay AHEAD of getNative() — on Android there
+// is no such module to resolve, so requireNativeModule would throw.
 
 interface NativeSharedKeychain {
   setSharedKeychainItem(group: string, key: string, value: string): Promise<void>;
@@ -30,7 +34,7 @@ interface NativeSharedKeychain {
 // runtime (same rule as file-crypto.ts).
 let native: NativeSharedKeychain | undefined;
 function getNative(): NativeSharedKeychain {
-  return (native ??= requireNativeModule<NativeSharedKeychain>('BraceFileCrypto'));
+  return (native ??= requireNativeModule<NativeSharedKeychain>('BraceSharedKeychain'));
 }
 
 export async function setSharedKeychainItem(

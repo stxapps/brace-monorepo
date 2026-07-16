@@ -50,7 +50,11 @@ interface PersistedSession {
   encryptionKeyHex: string;
 }
 
-// One active session at a time, under a fixed secure-store key.
+// One active session at a time, under a fixed key. Identifies the record in
+// BOTH stores — the secure-store entry and, on iOS, the shared-Keychain
+// mirror's account (kSecAttrAccount) — so it's named for the thing it
+// identifies, not for either backend. The two must agree; keeping one constant
+// is what makes that structural.
 const SESSION_KEY = 'brace-session';
 
 // iOS ALSO mirrors the serialized session into the shared Keychain access group

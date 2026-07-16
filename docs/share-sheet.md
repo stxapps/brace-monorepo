@@ -221,10 +221,11 @@ to native SwiftUI for cold-start reasons — see below — the upload would go
 native with it, on CryptoKit + the v1 frame BraceFileCrypto already produces.)
 
 **How the session crosses the process boundary.** expo-secure-store doesn't
-expose Keychain access groups, so the BraceFileCrypto native module
-(`packages/expo-crypto`) carries a shared-Keychain trio
-(`set/get/deleteSharedKeychainItem`, `lib/shared-keychain.ts` — iOS-only; the
-wrappers degrade to "item absent" elsewhere). The access group is the **App
+expose Keychain access groups, so the **BraceSharedKeychain** native module
+(`packages/expo-crypto`, in the `BraceCrypto` pod alongside BraceFileCrypto)
+carries a shared-Keychain trio (`set/get/deleteSharedKeychainItem`,
+`lib/shared-keychain.ts` — iOS-only, registered under `apple.modules` with no
+Kotlin counterpart; the wrappers degrade to "item absent" elsewhere). The access group is the **App
 Group id itself** (`group.to.brace.app`): iOS accepts App Group ids as keychain
 access groups, so the entitlement expo-share-extension already writes into both
 targets covers it — no keychain-sharing entitlement, no team-id prefix.
@@ -255,8 +256,8 @@ the durable outbox IS the retry.
 
 Prebuild verification: confirm `react-native-quick-crypto` links into the
 extension target — if it doesn't, the fallback is **not** "go full Swift" but
-call **BraceFileCrypto** (your own autolinked module, which links anyway for
-the shared keychain) for the AES, staying in the RN path. The entity blobs are
+call **BraceFileCrypto** (your own autolinked module — the `BraceCrypto` pod
+links anyway for BraceSharedKeychain) for the AES, staying in the RN path. The entity blobs are
 KB-sized (no Argon2, key pre-derived, far under the ~120MB cap).
 
 **Invariant that keeps the memory story true: no bytes-heavy work in the
@@ -282,11 +283,12 @@ real lever on RN cold-start latency.
 | snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                   | `@stxapps/expo-react` `data/share-store.ts`                                                                                      |
 | best-effort upload (entities from the draft, sign → PUT → commit)                                                | `@stxapps/expo-react` `data/share-upload.ts`                                                                                     |
 | app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                    |
-| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceFileCrypto, iOS Swift)  |
+| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceSharedKeychain, iOS Swift) |
 | write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                        |
 | iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.json` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`     |
 | Android ShareActivity + close() module                                                                           | `apps/brace-expo/modules/brace-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)       |
 
-Like the other native pieces (BraceFileCrypto, the embedded font), none of
+Like the other native pieces (the `BraceCrypto` pod's modules, the embedded
+font), none of
 this is exercisable in jest/Metro alone — it needs `npx expo prebuild` + a dev
 client on device/simulator.

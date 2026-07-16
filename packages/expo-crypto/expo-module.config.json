@@ -1,7 +1,7 @@
 {
   "platforms": ["apple", "android"],
   "apple": {
-    "modules": ["BraceFileCryptoModule"]
+    "modules": ["BraceFileCryptoModule", "BraceSharedKeychainModule"]
   },
   "android": {
     "modules": ["to.brace.filecrypto.BraceFileCryptoModule"]

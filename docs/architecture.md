@@ -134,12 +134,18 @@ activity, and why sync converges either way).
   and AES-GCM go through `react-native-quick-crypto` (C++ JSI/Nitro); Ed25519
   stays on the same `@noble/ed25519` as web (signing is microseconds, and
   sharing the library makes credential drift structurally impossible). Also
-  ships the **`BraceFileCrypto` Expo native module** (`ios/` Swift CryptoKit,
-  `android/` Kotlin `javax.crypto`, autolinked by `expo prebuild`): whole-file
+  ships the **`BraceCrypto` pod** (`ios/` Swift, `android/` Kotlin, autolinked
+  by `expo prebuild`), which hosts two Expo modules. **`BraceFileCrypto`**
+  (Swift CryptoKit / Kotlin `javax.crypto`): whole-file
   encrypt/decrypt path-to-path in the native layer, reading/writing the frozen
   v1 blob frame — file bytes never enter the JS heap; the app stores content
   DECRYPTED on device (the Dexie-`data` analogue) and e.g. `expo-image` renders
-  straight from the plaintext `file://` path. The **small ENTITY blobs** take the
+  straight from the plaintext `file://` path. **`BraceSharedKeychain`** is the
+  pod's second module — iOS-only (registered under `apple.modules`, no Kotlin
+  counterpart), it reads/writes generic-password items under an explicit App
+  Group access group, the one Keychain capability `expo-secure-store` doesn't
+  expose; it's what lets the separate-process iOS share extension see the
+  session (docs/share-sheet.md). The **small ENTITY blobs** take the
   JS-side path instead: `blob.ts` (`packBlob`/`unpackBlob` + `encryptEntity`/
   `decryptEntity`, the sibling of `web-crypto`'s) frames the identical v1 layout
   in JS over the `react-native-quick-crypto` AES — so the same wire frame is
