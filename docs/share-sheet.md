@@ -287,17 +287,17 @@ real lever on RN cold-start latency.
 
 ### file map
 
-| piece                                                                                                            | where                                                                                                                            |
-| ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| share screen UI + prop normalizing + close() seam                                                                | `apps/brace-expo/src/features/share/`                                                                                            |
-| entries: `index.js` (main, registers `braceShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/brace-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension) |
-| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                   | `@stxapps/expo-react` `data/share-store.ts`                                                                                      |
-| best-effort upload (entities from the draft, sign → PUT → commit)                                                | `@stxapps/expo-react` `data/share-upload.ts`                                                                                     |
-| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                    |
+| piece                                                                                                            | where                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| share screen UI + prop normalizing + close() seam                                                                | `apps/brace-expo/src/features/share/`                                                                                               |
+| entries: `index.js` (main, registers `braceShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/brace-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)    |
+| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                   | `@stxapps/expo-react` `data/share-store.ts`                                                                                         |
+| best-effort upload (entities from the draft, sign → PUT → commit)                                                | `@stxapps/expo-react` `data/share-upload.ts`                                                                                        |
+| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                       |
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceSharedKeychain, iOS Swift) |
-| write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                        |
-| iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.json` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`     |
-| Android ShareActivity + close() module                                                                           | `apps/brace-expo/modules/brace-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)       |
+| write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                           |
+| iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.json` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`        |
+| Android ShareActivity + close() module                                                                           | `apps/brace-expo/modules/brace-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)          |
 
 Like the other native pieces (the `BraceCrypto` pod's modules, the embedded
 font), none of

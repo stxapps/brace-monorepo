@@ -25,11 +25,11 @@ URL + list/tags/note, title/image back-filled later by extraction) and **full
 edit** (every `links/{id}.enc` field, including the `customTitle`/`customImageId`
 overrides). Create collects a strict subset of edit's fields.
 
-| surface                | file                                                        | kind      | fields                                            |
-| ---------------------- | ----------------------------------------------------------- | --------- | ------------------------------------------------- |
-| extension save editor  | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)    |
-| web quick-add popover  | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"        |
-| web edit dialog        | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                    |
+| surface                | file                                                        | kind      | fields                                             |
+| ---------------------- | ----------------------------------------------------------- | --------- | -------------------------------------------------- |
+| extension save editor  | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
+| web quick-add popover  | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
+| web edit dialog        | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
 | brace-expo share sheet | `apps/brace-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
 The share sheet is the RN member of the create family
