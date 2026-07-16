@@ -248,15 +248,43 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
 
 - The selection lives in `view-state-provider` (not in a layout) because rows are
   virtualized — a layout-owned selection would be lost on repaint. `bulkEditing`
-  is also one of the five guards that hold a background sync back, so rows can't
+  is also one of the six guards that hold a background sync back, so rows can't
   shift mid-multi-select.
 - **Navigating to another view exits bulk-edit mode.** Remove and Delete
   permanently mean different things per view, so a selection made in one view can
   never be acted on from another.
-- Current actions are the view-split delete only — **Remove** (a reversible
-  `update({ listId: TRASH_ID })`, no confirm) everywhere except Trash, where it's
-  **Delete permanently** (irreversible → `requestDestroy` → `LinkDestroyConfirm`).
-  Bulk **Move to** / **retag** are the natural next actions and should reuse the
-  same `ListCommand`/`TagsField` pickers over the whole selection, exactly as the
-  per-row menu does over one link — keep them consistent with §"shared pickers"
-  when adding them.
+- **Select all** (checkbox left of the count) selects every loaded row — the
+  toolbar takes `links`, the same useLinks page Main hands the layout. Bulk-edit
+  mode holds `engaged`, so sync can't grow or reorder that page underneath;
+  "Show more" can grow it, dropping the checkbox to indeterminate. Unchecking
+  clears the selection without leaving the mode.
+- **The toolbar mirrors the row menu over the whole selection**, with the same
+  view split. **Copy links** is common to both views (the row menu's Copy link
+  over the selection: URLs newline-separated, in display order; reads only, so
+  trashed links are included). In Trash: **Restore** (→ My List — the schema records no previous
+  list, same as the row menu) and **Delete permanently** (irreversible →
+  `requestDestroy` → `LinkDestroyConfirm`). Elsewhere: **Move to** (the same
+  searchable `ListCommand` as the row menu's submenu — no Trash target, no
+  `onCreate`/`root`, per §"shared pickers"; the selection's single shared list,
+  when there is one, shows checked-but-disabled), **Edit tags** (below),
+  **Pin**/**Unpin** (Pin pins only the not-yet-pinned so existing manual pin
+  ranks aren't churned; Unpin the inverse), **Archive** (flipping to
+  **Unarchive** in the Archive view), and **Remove** (a reversible
+  `update({ listId: TRASH_ID })`, no confirm). Buttons disable rather than
+  disappear when their target set is empty, so the toolbar never reflows
+  mid-multi-select.
+- **Non-Trash-view actions skip trashed links.** The All view and tag views can
+  hold trashed links, whose own row menu allows only Restore/destroy; the
+  toolbar is keyed off the active view, so each action instead filters
+  `listId === TRASH_ID` out of its targets — per-link parity without per-link
+  buttons. Every action also drops links already in its target state, so it
+  never writes a no-op patch (no `updatedAt` bump reordering the date-modified
+  sort).
+- **Bulk Edit tags** (`BulkTagsDialog` — hoisted at the page level like the edit
+  dialog, driven by `retagging` in `view-state-provider`) seeds one `TagsField`
+  with the **intersection** of the selection's tags and saves the **diff**:
+  added tags are added to every link, removed seed tags are removed from every
+  link, and a tag only some links carry is never shown and never touched — a
+  bulk edit can't strip tags the user couldn't see. An all-identical-tags
+  selection degenerates to plain edit-in-place. It upholds the §invariants
+  (copy-to-draft, dirty close guard, minimal per-link patches).

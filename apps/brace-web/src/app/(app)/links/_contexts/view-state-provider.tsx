@@ -4,7 +4,7 @@
 // sync is allowed to repaint the list. The list is index-virtualized and sorted
 // newest-first, so applying a sync mid-interaction shifts the rows under the user
 // (the read edge, useLinks, holds results back instead — see its `hasPending` /
-// refresh pill). "Mid-interaction" is five things, tracked here:
+// refresh pill). "Mid-interaction" is six things, tracked here:
 //
 //   scrolled    — the active layout reports its scroll container left the top.
 //                 Applying at the top is harmless (it's a newest-first feed), so we
@@ -25,6 +25,9 @@
 //                 confirmation (see LinkDestroyConfirm). A LIST of links: the bulk
 //                 toolbar's delete confirms the whole selection at once; the row
 //                 menu passes a single-element list.
+//   retagging   — same hoisting for the bulk-edit toolbar's "Edit tags" dialog
+//                 (see BulkTagsDialog): the toolbar requests it with the
+//                 selection, the page-level dialog renders it.
 //   bulkEditing — bulk-edit mode is on (topbar toggles it, rows become selectable,
 //                 the BulkEditToolbar shows). Selection is by row, so rows shifting
 //                 mid-multi-select is exactly the disruption this flag exists for.
@@ -78,6 +81,11 @@ interface LinksViewStateValue {
   destroying: LinkView[] | null;
   requestDestroy: (links: LinkView[]) => void;
   closeDestroy: () => void;
+  // The bulk "Edit tags" dialog: the links awaiting it (null = closed; an empty
+  // request is ignored, so a non-null value always has at least one).
+  retagging: LinkView[] | null;
+  requestRetag: (links: LinkView[]) => void;
+  closeRetag: () => void;
   // Bulk-edit mode: the topbar toggles it, rows toggle selection while it's on,
   // the BulkEditToolbar acts on the selection. Exiting clears the selection.
   bulkEditing: boolean;
@@ -88,6 +96,10 @@ interface LinksViewStateValue {
   // blob before acting (see useLinkMutations.update/destroy).
   selectedLinks: ReadonlyMap<string, LinkView>;
   toggleSelected: (link: LinkView) => void;
+  // Replace the selection with the given rows / clear it without leaving
+  // bulk-edit mode — the two sides of the toolbar's Select-all checkbox.
+  selectAll: (links: LinkView[]) => void;
+  clearSelected: () => void;
 }
 
 const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
@@ -97,6 +109,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   const [openMenus, setOpenMenus] = useState(0);
   const [editing, setEditing] = useState<LinkEditRequest | null>(null);
   const [destroying, setDestroying] = useState<LinkView[] | null>(null);
+  const [retagging, setRetagging] = useState<LinkView[] | null>(null);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [selectedLinks, setSelectedLinks] = useState<ReadonlyMap<string, LinkView>>(new Map());
 
@@ -114,6 +127,11 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   }, []);
   const closeDestroy = useCallback(() => setDestroying(null), []);
 
+  const requestRetag = useCallback((links: LinkView[]) => {
+    if (links.length > 0) setRetagging(links);
+  }, []);
+  const closeRetag = useCallback(() => setRetagging(null), []);
+
   const enterBulkEdit = useCallback(() => setBulkEditing(true), []);
   const exitBulkEdit = useCallback(() => {
     setBulkEditing(false);
@@ -127,6 +145,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       return next;
     });
   }, []);
+  const selectAll = useCallback((links: LinkView[]) => {
+    setSelectedLinks(new Map(links.map((link) => [link.path, link])));
+  }, []);
+  const clearSelected = useCallback(() => setSelectedLinks(new Map()), []);
 
   // Navigating to another view (sidebar click, back button, deep link) exits
   // bulk-edit mode — see the header comment. Keyed on the query's identity, the
@@ -141,7 +163,13 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
 
   const value = useMemo<LinksViewStateValue>(
     () => ({
-      engaged: scrolled || openMenus > 0 || editing !== null || destroying !== null || bulkEditing,
+      engaged:
+        scrolled ||
+        openMenus > 0 ||
+        editing !== null ||
+        destroying !== null ||
+        retagging !== null ||
+        bulkEditing,
       setScrolled,
       setMenuOpen,
       editing,
@@ -150,11 +178,16 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       destroying,
       requestDestroy,
       closeDestroy,
+      retagging,
+      requestRetag,
+      closeRetag,
       bulkEditing,
       enterBulkEdit,
       exitBulkEdit,
       selectedLinks,
       toggleSelected,
+      selectAll,
+      clearSelected,
     }),
     [
       scrolled,
@@ -166,11 +199,16 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       destroying,
       requestDestroy,
       closeDestroy,
+      retagging,
+      requestRetag,
+      closeRetag,
       bulkEditing,
       enterBulkEdit,
       exitBulkEdit,
       selectedLinks,
       toggleSelected,
+      selectAll,
+      clearSelected,
     ],
   );
 

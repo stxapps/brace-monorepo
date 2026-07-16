@@ -17,6 +17,7 @@
  * need no bridge.
  */
 @custom-variant data-checked (&[data-state="checked"]);
+@custom-variant data-indeterminate (&[data-state="indeterminate"]);
 @custom-variant data-active (&[data-state="active"]);
 @custom-variant data-open (&[data-state="open"]);
 @custom-variant data-closed (&[data-state="closed"]);
