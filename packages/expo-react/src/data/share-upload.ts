@@ -13,14 +13,17 @@
 // frame) → files/sign → PUT → ops/commit, the same three round trips as one
 // engine put-chunk, minus the store bookkeeping.
 //
-// What is NOT uploaded: the draft's NEW TAGS. A tag entity needs a `rank`, and
-// rank is computed at apply time against the store's current tag set — exactly
-// why it's excluded from the draft (share-store's header); the extension has no
-// store to rank against, and a snapshot-derived rank is the collision the
-// design rejects. So new tags are created only by the drain; until the phone
-// app next opens, other devices see the link without its brand-new tag chips
-// (existing tags referenced by id render fine). The link's `tagIds` already
-// include the new ids, so nothing needs rewriting when the tags land.
+// The draft's NEW LISTS and NEW TAGS upload too, when they carry a rank —
+// which the sheet mints from its taxonomy precisely so this path can build the
+// complete entity set from the draft alone (a stale-snapshot rank can only tie,
+// broken by id in the sort — share-store's header). That's the point of the
+// upload: another device sees the link IN its new list WITH its new tag chips
+// without waiting for the phone app to be reopened. A rank-free entry (a draft
+// minted against an old, rank-free snapshot) is skipped — the drain creates it,
+// and until then other devices see the link without that list/tag (the link's
+// `tagIds`/`listId` already reference the new ids, so nothing is rewritten when
+// they land). The drain later re-writes the same entities with the same ranks
+// (applyShareDraft uses the draft verbatim), so LWW converges byte-stable.
 
 import { encryptEntity } from '@stxapps/expo-crypto';
 import {
@@ -33,8 +36,14 @@ import {
   type Link,
   LINKS_PREFIX,
   linkSchema,
+  type List,
+  LISTS_PREFIX,
+  listSchema,
   opsCommitEndpoint,
   pathFromId,
+  type Tag,
+  TAGS_PREFIX,
+  tagSchema,
   utf8,
 } from '@stxapps/shared';
 
@@ -52,16 +61,53 @@ export interface ShareUploadDeps {
 // One entity ready to encrypt: its R2 path + the pathless plaintext blob.
 export interface DraftEntity {
   path: string;
-  entity: Link | Extraction;
+  entity: Link | Extraction | List | Tag;
 }
 
 // Build the uploadable entities from a draft — the extension-side twin of
-// share-store's applyShareDraft, minus everything that needs the store (new-tag
-// ranks, the deleted-list fallback: an uploaded `listId` that no longer exists
-// converges when the drain re-writes the link). Pure, so it's spec-able; `now`
-// is injected for the same reason. The share-payload title seeds the
+// share-store's applyShareDraft, minus everything that needs the store (the
+// rank fallback for rank-free entries, the deleted-list fallback: an uploaded
+// `listId` that no longer exists converges when the drain re-writes the link).
+// Pure, so it's spec-able; `now` is injected for the same reason. New lists/
+// tags ride only with a sheet-minted rank (header) — `parentId` pinned null,
+// the editors' top-level-only create. Taxonomy entities go first so the batch
+// commits referenced-before-referencing. The share-payload title seeds the
 // provisional extraction title, never `customTitle` — same rule as the drain.
 export function buildDraftEntities(draft: ShareDraft, now: number): DraftEntity[] {
+  const entities: DraftEntity[] = [];
+
+  for (const newList of draft.newLists) {
+    if (newList.rank === undefined) continue;
+    const list: List = {
+      id: newList.id,
+      name: newList.name,
+      parentId: null,
+      rank: newList.rank,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!listSchema.safeParse(list).success) {
+      throw new Error(`buildDraftEntities: invalid list ${newList.id}`);
+    }
+    entities.push({ path: pathFromId(newList.id, LISTS_PREFIX), entity: list });
+  }
+
+  for (const newTag of draft.newTags) {
+    if (newTag.rank === undefined) continue;
+    const tag: Tag = {
+      id: newTag.id,
+      name: newTag.name,
+      parentId: null,
+      rank: newTag.rank,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!tagSchema.safeParse(tag).success) {
+      throw new Error(`buildDraftEntities: invalid tag ${newTag.id}`);
+    }
+    entities.push({ path: pathFromId(newTag.id, TAGS_PREFIX), entity: tag });
+  }
+
   const link: Link = {
     url: draft.url,
     listId: draft.listId,
@@ -72,7 +118,7 @@ export function buildDraftEntities(draft: ShareDraft, now: number): DraftEntity[
   if (!linkSchema.safeParse(link).success) {
     throw new Error(`buildDraftEntities: invalid link ${draft.id}`);
   }
-  const entities: DraftEntity[] = [{ path: pathFromId(draft.id, LINKS_PREFIX), entity: link }];
+  entities.push({ path: pathFromId(draft.id, LINKS_PREFIX), entity: link });
 
   const title = cleanTitle(draft.title);
   if (title !== undefined) {

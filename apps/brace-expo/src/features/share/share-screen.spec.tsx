@@ -2,7 +2,7 @@ import * as React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { loadShareTaxonomy, saveSharedDraft, type ShareDraft } from '@stxapps/expo-react';
-import { DEFAULT_LIST_ID, MY_LIST_ID } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, MY_LIST_ID, rankBetween } from '@stxapps/shared';
 
 import { apiClient } from '../../lib/api-client';
 import { ShareScreen } from './share-screen';
@@ -26,10 +26,10 @@ const saveSharedDraftMock = saveSharedDraft as jest.Mock;
 const TAXONOMY = {
   sessionPresent: true,
   lists: [
-    { id: MY_LIST_ID, name: 'My List', depth: 0 },
-    { id: 'list-a', name: 'Reading', depth: 0 },
+    { id: MY_LIST_ID, name: 'My List', depth: 0, rank: 'a0' },
+    { id: 'list-a', name: 'Reading', depth: 0, rank: 'a1' },
   ],
-  tags: [{ id: 'tag-a', name: 'alpha' }],
+  tags: [{ id: 'tag-a', name: 'alpha', rank: 'a0' }],
 };
 
 beforeEach(() => {
@@ -67,6 +67,7 @@ test('saves a draft into the picked list and shows the saved state', async () =>
     listId: 'list-a',
     tagIds: ['tag-a'],
     newTags: [],
+    newLists: [],
   });
   expect(draft.id).toMatch(/^minted-/);
   expect(await findByTestId('share-saved')).toBeTruthy();
@@ -79,7 +80,7 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
   // Case-insensitive reuse — must select tag-a, not mint a duplicate.
   fireEvent.changeText(input, 'ALPHA');
   fireEvent(input, 'submitEditing');
-  // A genuinely new name mints a new tag.
+  // A genuinely new name mints a new tag, ranked after the last existing one.
   fireEvent.changeText(input, 'fresh');
   fireEvent(input, 'submitEditing');
   fireEvent.press(getByTestId('share-add'));
@@ -87,6 +88,57 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
   await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
   const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
   expect(draft.listId).toBe(DEFAULT_LIST_ID);
-  expect(draft.newTags).toEqual([{ id: 'minted-1', name: 'fresh' }]);
+  expect(draft.newTags).toEqual([{ id: 'minted-1', name: 'fresh', rank: rankBetween('a0', null) }]);
   expect(draft.tagIds).toEqual(['tag-a', 'minted-1']);
+});
+
+test('creates a new list — minted, selected, ranked before the first root list', async () => {
+  const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/c" />);
+
+  const input = await findByTestId('share-list-input');
+  fireEvent.changeText(input, 'Cooking');
+  fireEvent(input, 'submitEditing');
+  fireEvent.press(getByTestId('share-add'));
+
+  await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
+  const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
+  // Created = selected; the rank prepends (web ListSelect's create-at-index-0).
+  expect(draft.newLists).toEqual([
+    { id: 'minted-1', name: 'Cooking', rank: rankBetween(null, 'a0') },
+  ]);
+  expect(draft.listId).toBe('minted-1');
+});
+
+test('reuses an existing list on an exact case-insensitive name match', async () => {
+  const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/d" />);
+
+  const input = await findByTestId('share-list-input');
+  fireEvent.changeText(input, 'reading');
+  fireEvent(input, 'submitEditing');
+  fireEvent.press(getByTestId('share-add'));
+
+  await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
+  const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
+  expect(draft.listId).toBe('list-a');
+  expect(draft.newLists).toEqual([]);
+});
+
+test('discards the pending new list when another list is selected', async () => {
+  const { findByTestId, getByTestId, queryByTestId } = render(
+    <ShareScreen url="https://example.com/e" />,
+  );
+
+  const input = await findByTestId('share-list-input');
+  fireEvent.changeText(input, 'Cooking');
+  fireEvent(input, 'submitEditing');
+  // Selecting away discards the pending create — an unselected new list must
+  // never be created.
+  fireEvent.press(getByTestId('share-list-list-a'));
+  expect(queryByTestId('share-new-list')).toBeNull();
+  fireEvent.press(getByTestId('share-add'));
+
+  await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
+  const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
+  expect(draft.listId).toBe('list-a');
+  expect(draft.newLists).toEqual([]);
 });

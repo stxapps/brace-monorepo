@@ -11,13 +11,18 @@
 //    outbox draft per Add that the main app drains through the same write edge
 //    on the next launch/foreground.
 //
-// Drafts are idempotent by construction: the link id (and any new tag's id) is
-// minted in the sheet and travels with the draft everywhere, so a retried
-// drain (crash between the local write and the file delete) re-writes the same
-// entities instead of duplicating. New-tag `rank` is deliberately NOT in the
-// draft — it's computed at apply time against the store's current tag set,
-// because a rank minted against a stale snapshot could collide with tags
-// created since.
+// Drafts are idempotent by construction: the link id (and any new list's/tag's
+// id AND rank) is minted in the sheet and travels with the draft everywhere, so
+// a retried drain (crash between the local write and the file delete) and the
+// extension's best-effort upload re-write the SAME entities instead of
+// duplicating or shuffling. Minting the rank against the sheet's taxonomy
+// (live on Android, snapshot on iOS) is safe because a stale-snapshot rank can
+// only TIE with a rank minted elsewhere since — the same equal-key case two
+// devices inserting concurrently already produce, broken deterministically by
+// id in the sort (shared sync/rank.ts), never data loss. When a rank is absent
+// (a draft or snapshot written by an older build), the drain computes one at
+// apply time and the upload skips just that entity — the pre-rank behavior,
+// kept as the fallback path.
 //
 // Everything that lands in the App Group container is PLAINTEXT BY DESIGN —
 // the same trust boundary as the rest of the device store (brace-expo keeps
@@ -55,36 +60,63 @@ import { runIncrementalSync } from '../sync/engine';
 import { appGroupDir } from './app-group';
 import { getDb, items } from './db';
 import { getItem } from './item-store';
-import { readLocks } from './lock-store';
-import { writeExtraction, writeLink, writeTag } from './mutations';
+import { writeExtraction, writeLink, writeList, writeTag } from './mutations';
 import { parseBlob } from './projection';
 import { getSession, loadSession, loadSharedSession } from './session-store';
 import { uploadShareDraft } from './share-upload';
 
 // --- shapes -------------------------------------------------------------------
 
+// A list/tag the sheet minted for creation at apply time. `rank` is minted in
+// the sheet too (from the taxonomy's neighbour ranks — see the header on why a
+// stale rank is only a tie) so the upload and the drain write identical
+// entities; it's optional because a sheet fed an old, rank-free snapshot can't
+// mint one — the drain then computes it and the upload skips the entity.
+const shareNewEntitySchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  rank: z.string().min(1).optional(),
+});
+export type ShareNewEntity = z.infer<typeof shareNewEntitySchema>;
+
 // One Add, as minted by the sheet. `tagIds` is the link's FINAL tag order and
 // already includes the ids in `newTags` (which just says which of those must be
-// created). `title` is the share payload's page title — it seeds the
-// provisional `extraction.title` at apply time, never `customTitle` (the same
-// not-a-deliberate-user-title rule as bulk import — shared entities.ts).
+// created). `newLists` is the list counterpart — at most one in practice (the
+// sheet's create-and-select), `parentId` pinned null at apply (the editors'
+// top-level-only create rule — docs/editors.md); `.default([])` keeps outbox
+// drafts written by builds that predate it parseable (the drain DELETES a
+// draft that fails to parse). `title` is the share payload's page title — it
+// seeds the provisional `extraction.title` at apply time, never `customTitle`
+// (the same not-a-deliberate-user-title rule as bulk import — shared
+// entities.ts).
 const shareDraftSchema = z.object({
   id: z.string().min(1),
   url: z.string().min(1),
   title: z.string().optional(),
   listId: z.string().min(1),
   tagIds: z.array(z.string()),
-  newTags: z.array(z.object({ id: z.string().min(1), name: z.string().min(1) })),
+  newTags: z.array(shareNewEntitySchema),
+  newLists: z.array(shareNewEntitySchema).default([]),
   sharedAt: z.number().int(),
 });
 export type ShareDraft = z.infer<typeof shareDraftSchema>;
 
 // What the sheet's pickers render. Lists arrive flattened in tree order with
 // their indentation `depth` (the sheet has no tree logic); tags in rank order.
+// `rank` rides along so the sheet can mint neighbour ranks for what it creates
+// (prepend for a new list, append for new tags) — optional so a snapshot
+// written by a pre-rank build still parses instead of reading as signed-out.
 const shareTaxonomySchema = z.object({
   sessionPresent: z.boolean(),
-  lists: z.array(z.object({ id: z.string(), name: z.string(), depth: z.number().int() })),
-  tags: z.array(z.object({ id: z.string(), name: z.string() })),
+  lists: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      depth: z.number().int(),
+      rank: z.string().optional(),
+    }),
+  ),
+  tags: z.array(z.object({ id: z.string(), name: z.string(), rank: z.string().optional() })),
 });
 export type ShareTaxonomy = z.infer<typeof shareTaxonomySchema>;
 export type ShareTaxonomyList = ShareTaxonomy['lists'][number];
@@ -96,30 +128,39 @@ const EMPTY_TAXONOMY: ShareTaxonomy = { sessionPresent: false, lists: [], tags: 
 
 // --- pure builders (spec'd in share-store.spec.ts) ------------------------------
 
-// The share sheet's list-picker rows: system defaults overlaid by stored
-// overrides (web's mergeSystemLists), tree-ordered and depth-annotated by the
-// shared buildTree, minus Trash (saving into the deletion staging area is
-// incoherent) and minus locked-hidden subtrees (a `hideList` lock hides the
-// list from pickers in-app; the sheet must match — locks gate READING, so
-// non-hidden locked lists stay pickable, see docs/share-sheet.md).
-export function buildShareLists(
-  stored: List[],
-  hiddenListIds: ReadonlySet<string>,
-): ShareTaxonomyList[] {
+// System defaults overlaid by stored overrides — web's mergeSystemLists, shared
+// by the picker-row builder and the drain's rank/validity reads.
+function mergeSystemLists(stored: List[]): List[] {
   const storedById = new Map(stored.map((list) => [list.id, list]));
   const merged: List[] = SYSTEM_LIST_DEFAULTS.map((def) => storedById.get(def.id) ?? def);
   for (const list of stored) {
     if (!SYSTEM_LIST_IDS.has(list.id)) merged.push(list);
   }
+  return merged;
+}
+
+// The share sheet's list-picker rows: merged system+user lists, tree-ordered
+// and depth-annotated by the shared buildTree, minus Trash ONLY (saving into
+// the deletion staging area is incoherent). Deliberately NOT filtered by the
+// lock model: hide is a pure sidebar declutter and a lock gates a list's
+// CONTENTS, never its use as a destination — the same only-Trash rule every
+// editor picker follows (docs/editors.md, "Locked and hidden lists stay
+// pickable"). Don't re-add a hiddenListIds filter here.
+export function buildShareLists(stored: List[]): ShareTaxonomyList[] {
   const rows: ShareTaxonomyList[] = [];
   const walk = (nodes: TreeNode<List>[]) => {
     for (const node of nodes) {
-      if (node.item.id === TRASH_ID || hiddenListIds.has(node.item.id)) continue;
-      rows.push({ id: node.item.id, name: node.item.name, depth: node.depth });
+      if (node.item.id === TRASH_ID) continue;
+      rows.push({
+        id: node.item.id,
+        name: node.item.name,
+        depth: node.depth,
+        rank: node.item.rank,
+      });
       walk(node.children);
     }
   };
-  walk(buildTree(merged, { noChildrenIds: LIST_NO_CHILDREN_IDS }));
+  walk(buildTree(mergeSystemLists(stored), { noChildrenIds: LIST_NO_CHILDREN_IDS }));
   return rows;
 }
 
@@ -128,7 +169,7 @@ export function buildShareTags(tags: Tag[]): ShareTaxonomyTag[] {
   return tags
     .slice()
     .sort(compareRank)
-    .map((tag) => ({ id: tag.id, name: tag.name }));
+    .map((tag) => ({ id: tag.id, name: tag.name, rank: tag.rank }));
 }
 
 // Defensive parses for what crosses the App Group container (the other process
@@ -174,14 +215,10 @@ function readNamespace<T extends z.ZodTypeAny>(prefix: string, schema: T): z.inf
   return decoded;
 }
 
-async function readTaxonomyFromDb(): Promise<ShareTaxonomy> {
-  const locks = await readLocks();
-  const hidden = new Set(
-    locks.filter((lock) => lock.kind === 'list' && lock.hideList).map((lock) => lock.id),
-  );
+function readTaxonomyFromDb(): ShareTaxonomy {
   return {
     sessionPresent: true,
-    lists: buildShareLists(readNamespace(LISTS_PREFIX, listSchema), hidden),
+    lists: buildShareLists(readNamespace(LISTS_PREFIX, listSchema)),
     tags: buildShareTags(readNamespace(TAGS_PREFIX, tagSchema)),
   };
 }
@@ -278,21 +315,56 @@ async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<voi
 
 // --- the main app's half ---------------------------------------------------------
 
-// Land one draft through the write edge: create the new tags (ranked against
-// the store's CURRENT tag set, appended at the end), then the link, then seed
-// the provisional extraction title. Idempotent per the header: an existing tag
-// row short-circuits its create; re-writing the link converges under LWW. A
-// listId that stopped existing between share and apply (list deleted on
+// Land one draft through the write edge: create the new lists (top-level, the
+// editors' `parentId: null` rule), then the new tags, then the link, then seed
+// the provisional extraction title. Ranks come from the draft verbatim (minted
+// in the sheet — see the header; verbatim keeps this byte-identical with what
+// the extension may have already uploaded, so LWW converges without shuffling
+// anyone's order); a rank-free entry (older build) gets one computed here —
+// prepend-before-the-first-root-list for lists and append-after-the-last for
+// tags, the same placements the sheet mints. Idempotent per the header: an
+// existing row short-circuits its create; re-writing the link converges under
+// LWW. A listId that stopped existing between share and apply (list deleted on
 // another device) falls back to the default inbox rather than dangling.
 async function applyShareDraft(username: string, draft: ShareDraft): Promise<void> {
+  const storedLists = readNamespace(LISTS_PREFIX, listSchema);
+  const rootLists = mergeSystemLists(storedLists)
+    .filter((list) => list.parentId === null)
+    .sort(compareRank);
+  let firstRootRank = rootLists.length ? rootLists[0].rank : null;
+  for (const newList of draft.newLists) {
+    if (await getItem(pathFromId(newList.id, LISTS_PREFIX))) continue;
+    let rank = newList.rank;
+    if (rank === undefined) {
+      rank = rankBetween(null, firstRootRank);
+      firstRootRank = rank;
+    }
+    await writeList(
+      username,
+      {
+        path: pathFromId(newList.id, LISTS_PREFIX),
+        id: newList.id,
+        name: newList.name,
+        parentId: null,
+        rank,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+      {},
+    );
+  }
+
   const existingTags = readNamespace(TAGS_PREFIX, tagSchema);
   let lastRank = existingTags.length
     ? existingTags.slice().sort(compareRank)[existingTags.length - 1].rank
     : null;
   for (const newTag of draft.newTags) {
     if (await getItem(pathFromId(newTag.id, TAGS_PREFIX))) continue;
-    const rank = rankBetween(lastRank, null);
-    lastRank = rank;
+    let rank = newTag.rank;
+    if (rank === undefined) {
+      rank = rankBetween(lastRank, null);
+      lastRank = rank;
+    }
     await writeTag(
       username,
       {
@@ -310,7 +382,8 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
 
   const listIds = new Set<string>([
     ...SYSTEM_LIST_IDS,
-    ...readNamespace(LISTS_PREFIX, listSchema).map((list) => list.id),
+    ...storedLists.map((list) => list.id),
+    ...draft.newLists.map((list) => list.id),
   ]);
   const listId =
     listIds.has(draft.listId) && draft.listId !== TRASH_ID ? draft.listId : DEFAULT_LIST_ID;
@@ -361,7 +434,7 @@ export async function drainShareOutbox(): Promise<number> {
 }
 
 // Rewrite the iOS taxonomy snapshot from the current store — called by the main
-// app whenever lists/tags/locks change and after sign-in/first sync. No-op on
+// app whenever lists/tags change and after sign-in/first sync. No-op on
 // Android (the share activity reads live) and when signed out (clearShareData
 // owns removal).
 export async function refreshShareTaxonomy(): Promise<void> {
@@ -369,7 +442,7 @@ export async function refreshShareTaxonomy(): Promise<void> {
   if (!getSession()) return;
   const group = appGroupDir();
   if (!group) return;
-  const taxonomy = await readTaxonomyFromDb();
+  const taxonomy = readTaxonomyFromDb();
   const file = taxonomyFile(group);
   if (!file.exists) file.create({ intermediates: true, overwrite: true });
   file.write(JSON.stringify(taxonomy));

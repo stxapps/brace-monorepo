@@ -5,54 +5,43 @@
 // the same component renders inside the iOS extension and Android's
 // ShareActivity.
 //
-// The pickers are the SHARE-SIZED cousins of the web ListSelect/TagsField
-// (docs/editors.md), upholding the same invariants at smaller scope: the draft
-// is local component state (copy-to-draft), a typed tag is matched
-// case-insensitively against existing tags before minting a new one (the
-// findOrCreate rule, applied at input time since the sheet already holds the
-// taxonomy), and ids for everything new are minted HERE so the draft is
-// idempotent downstream (share-store's header).
-//
-// One deliberate divergence from those web cousins: the list picker PICKS ONLY.
-// The web ListSelect can mint a list inline (`allowCreate`); this can't, because
-// the iOS taxonomy is a read-only snapshot — see docs/share-sheet.md ("New tags
-// yes, new lists no") before adding it.
+// The pickers (share-list-picker / share-tags-picker, presentational) are the
+// SHARE-SIZED cousins of the web ListSelect/TagsField (docs/editors.md), and
+// this screen upholds the same editor invariants at smaller scope: the draft is
+// local component state (copy-to-draft), a typed list/tag name is matched
+// case-insensitively against the taxonomy before minting a new one (the
+// findOrCreate / exact-match-suppression rule, applied at input time since the
+// sheet already holds the taxonomy), the list create is TOP-LEVEL ONLY
+// (parentId pinned null at apply — the editors' rule), and ids AND ranks for
+// everything new are minted HERE so the draft is idempotent downstream and the
+// extension's upload can push complete entities (share-store's header: a
+// stale-snapshot rank can only tie, broken by id). Creating a list selects it;
+// selecting another list discards the pending create — a new list exists only
+// as the share's destination.
 
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
   loadShareTaxonomy,
   saveSharedDraft,
   type ShareDraft,
+  type ShareNewEntity,
   type ShareTaxonomy,
 } from '@stxapps/expo-react';
-import { DEFAULT_LIST_ID } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, rankBetween } from '@stxapps/shared';
 
 import { apiClient } from '../../lib/api-client';
 import { closeShareSheet } from './share-host';
+import { ShareListPicker } from './share-list-picker';
+import { ShareTagsPicker } from './share-tags-picker';
 import type { SharePayload } from './share-url';
 
 type Phase = 'loading' | 'ready' | 'saving' | 'saved';
 
 // How long the ✓ lingers before the sheet dismisses itself.
 const SAVED_DISMISS_MS = 900;
-
-// A tag the user typed that matched nothing — to be created at save. The id is
-// minted at ADD-TO-DRAFT time so the chip is stable and the draft idempotent.
-interface NewTag {
-  id: string;
-  name: string;
-}
 
 // The sheet's container. On iOS, expo-share-extension provides the floating
 // sheet (height/background from app.json) — fill it. On Android the activity
@@ -96,13 +85,23 @@ function Notice({ testID, message }: { testID: string; message: string }) {
   );
 }
 
+// Mint the sheet-side rank against the neighbour `prev`, or undefined when the
+// neighbour row carries no rank (an old, pre-rank snapshot) — the drain then
+// computes the rank at apply time and the upload skips the entity
+// (share-store's header). Callers handle the empty-group case themselves
+// (rankBetween(null, null), the first key).
+function mintRank(prev: string | undefined, side: 'before' | 'after'): string | undefined {
+  if (prev === undefined) return undefined;
+  return side === 'before' ? rankBetween(null, prev) : rankBetween(prev, null);
+}
+
 export function ShareScreen({ url, title }: SharePayload) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [taxonomy, setTaxonomy] = useState<ShareTaxonomy | null>(null);
   const [listId, setListId] = useState<string>(DEFAULT_LIST_ID);
+  const [newList, setNewList] = useState<ShareNewEntity | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [newTags, setNewTags] = useState<NewTag[]>([]);
-  const [tagInput, setTagInput] = useState('');
+  const [newTags, setNewTags] = useState<ShareNewEntity[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -132,24 +131,71 @@ export function ShareScreen({ url, title }: SharePayload) {
     return () => clearTimeout(timer);
   }, [phase]);
 
-  // Commit the typed tag onto the draft: reuse an existing tag on a
-  // case-insensitive name match (findOrCreate), else mint a new one.
-  const submitTagInput = useCallback(() => {
-    const name = tagInput.trim();
-    setTagInput('');
-    if (name === '' || !taxonomy) return;
-    const lower = name.toLowerCase();
-    const existing = taxonomy.tags.find((tag) => tag.name.toLowerCase() === lower);
-    if (existing) {
-      setSelectedTagIds((ids) => (ids.includes(existing.id) ? ids : [...ids, existing.id]));
-      return;
-    }
-    setNewTags((tags) =>
-      tags.some((tag) => tag.name.toLowerCase() === lower)
-        ? tags
-        : [...tags, { id: newId(), name }],
-    );
-  }, [tagInput, taxonomy]);
+  // Pick a list. Selecting away from the pending new list discards it —
+  // created-means-selected, so an unselected new list must not be created.
+  const selectList = useCallback(
+    (id: string) => {
+      setListId(id);
+      if (newList && id !== newList.id) setNewList(null);
+    },
+    [newList],
+  );
+
+  // Commit a typed list name: reuse an existing list on an exact
+  // case-insensitive name match (the ListCommand suppression rule — the
+  // deliberate-duplicate case still has the app's Settings → Lists), else mint
+  // and select. The rank prepends before the first root list — web ListSelect's
+  // create-at-index-0, so the same action lands the same place everywhere.
+  const submitListName = useCallback(
+    (name: string) => {
+      if (!taxonomy) return;
+      const lower = name.toLowerCase();
+      const existing = taxonomy.lists.find((list) => list.name.toLowerCase() === lower);
+      if (existing) {
+        setNewList(null);
+        setListId(existing.id);
+        return;
+      }
+      const first = taxonomy.lists[0];
+      const rank = first === undefined ? rankBetween(null, null) : mintRank(first.rank, 'before');
+      const minted: ShareNewEntity = {
+        id: newId(),
+        name,
+        ...(rank !== undefined ? { rank } : {}),
+      };
+      setNewList(minted);
+      setListId(minted.id);
+    },
+    [taxonomy],
+  );
+
+  // Commit a typed tag name onto the draft: reuse an existing tag on a
+  // case-insensitive name match (findOrCreate), else mint a new one appended
+  // after the last tag — chaining off the previous mint so several new tags
+  // keep their typed order.
+  const submitTagName = useCallback(
+    (name: string) => {
+      if (!taxonomy) return;
+      const lower = name.toLowerCase();
+      const existing = taxonomy.tags.find((tag) => tag.name.toLowerCase() === lower);
+      if (existing) {
+        setSelectedTagIds((ids) => (ids.includes(existing.id) ? ids : [...ids, existing.id]));
+        return;
+      }
+      setNewTags((tags) => {
+        if (tags.some((tag) => tag.name.toLowerCase() === lower)) return tags;
+        const prev =
+          tags.length > 0
+            ? tags[tags.length - 1].rank
+            : taxonomy.tags.length > 0
+              ? taxonomy.tags[taxonomy.tags.length - 1].rank
+              : null;
+        const rank = prev === null ? rankBetween(null, null) : mintRank(prev, 'after');
+        return [...tags, { id: newId(), name, ...(rank !== undefined ? { rank } : {}) }];
+      });
+    },
+    [taxonomy],
+  );
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((ids) => (ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]));
@@ -170,6 +216,9 @@ export function ShareScreen({ url, title }: SharePayload) {
       listId,
       tagIds: [...selectedTagIds, ...newTags.map((tag) => tag.id)],
       newTags,
+      // selectList discards a deselected pending list, so newList non-null
+      // means it IS the destination — the guard is belt-and-braces.
+      newLists: newList && newList.id === listId ? [newList] : [],
       sharedAt: Date.now(),
     };
     try {
@@ -182,7 +231,7 @@ export function ShareScreen({ url, title }: SharePayload) {
       setPhase('ready');
       setError('Could not save. Please try again.');
     }
-  }, [url, title, listId, selectedTagIds, newTags]);
+  }, [url, title, listId, newList, selectedTagIds, newTags]);
 
   if (phase === 'loading' || !taxonomy) {
     return (
@@ -237,73 +286,24 @@ export function ShareScreen({ url, title }: SharePayload) {
       <Text className="mt-4 font-sans text-xs font-medium text-gray-400 uppercase dark:text-gray-500">
         List
       </Text>
-      <ScrollView className="mt-1 max-h-40">
-        {taxonomy.lists.map((list) => (
-          <Pressable
-            key={list.id}
-            testID={`share-list-${list.id}`}
-            onPress={() => setListId(list.id)}
-            className="flex-row items-center justify-between py-2"
-            style={{ paddingLeft: list.depth * 16 }}
-          >
-            <Text className="font-sans text-base text-gray-800 dark:text-gray-100">
-              {list.name}
-            </Text>
-            {list.id === listId && <Text className="text-primary font-sans text-base">✓</Text>}
-          </Pressable>
-        ))}
-      </ScrollView>
+      <ShareListPicker
+        lists={taxonomy.lists}
+        newList={newList}
+        selectedId={listId}
+        onSelect={selectList}
+        onCreateName={submitListName}
+      />
 
       <Text className="mt-4 font-sans text-xs font-medium text-gray-400 uppercase dark:text-gray-500">
         Tags
       </Text>
-      <View className="mt-1 flex-row flex-wrap gap-2">
-        {taxonomy.tags.map((tag) => {
-          const selected = selectedTagIds.includes(tag.id);
-          return (
-            <Pressable
-              key={tag.id}
-              testID={`share-tag-${tag.id}`}
-              onPress={() => toggleTag(tag.id)}
-              className={
-                selected
-                  ? 'bg-primary rounded-full px-3 py-1'
-                  : 'rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800'
-              }
-            >
-              <Text
-                className={
-                  selected
-                    ? 'font-sans text-sm text-white'
-                    : 'font-sans text-sm text-gray-700 dark:text-gray-200'
-                }
-              >
-                {tag.name}
-              </Text>
-            </Pressable>
-          );
-        })}
-        {newTags.map((tag) => (
-          <Pressable
-            key={tag.id}
-            testID={`share-new-tag-${tag.id}`}
-            onPress={() => removeNewTag(tag.id)}
-            className="bg-primary rounded-full px-3 py-1"
-          >
-            <Text className="font-sans text-sm text-white">{tag.name} ×</Text>
-          </Pressable>
-        ))}
-      </View>
-      <TextInput
-        testID="share-tag-input"
-        value={tagInput}
-        onChangeText={setTagInput}
-        onSubmitEditing={submitTagInput}
-        placeholder="Add a tag…"
-        autoCapitalize="none"
-        autoCorrect={false}
-        submitBehavior="submit"
-        className="mt-2 rounded-lg bg-gray-100 px-3 py-2 font-sans text-base text-gray-900 dark:bg-gray-800 dark:text-gray-50"
+      <ShareTagsPicker
+        tags={taxonomy.tags}
+        selectedTagIds={selectedTagIds}
+        newTags={newTags}
+        onToggle={toggleTag}
+        onRemoveNew={removeNewTag}
+        onSubmitName={submitTagName}
       />
 
       {error !== null && (

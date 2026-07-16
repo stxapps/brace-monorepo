@@ -13,9 +13,9 @@
 //    (`produce(existing)`) runs inside the transaction, so the lost-update
 //    window web closes with IndexedDB's rw-lock is closed the same way here.
 //
-// Ported so far: the shared primitives plus writeLink / writeTag /
+// Ported so far: the shared primitives plus writeLink / writeList / writeTag /
 // writeExtraction — what the share sheet needs (docs/share-sheet.md). The
-// remaining siblings (writeList, writePin, writeSettingsGeneral, the deletes,
+// remaining siblings (writePin, writeSettingsGeneral, the deletes,
 // bulkWriteEntities) arrive verbatim with the features that need them.
 
 import { eq } from 'drizzle-orm';
@@ -27,6 +27,8 @@ import {
   type Facet,
   type Link,
   linkSchema,
+  type List,
+  listSchema,
   pathFromId,
   type Tag,
   tagSchema,
@@ -103,6 +105,28 @@ export async function writeLink(
   const { path: _path, ...blob } = next;
   if (!linkSchema.safeParse(blob).success) {
     throw new Error(`writeLink: invalid link ${link.path}`);
+  }
+  writeEntity(username, next);
+}
+
+// Apply a patch to a list and write it — create (new `lists/{id}.enc`) or edit.
+// Same body as web's writeList, including the first-edit-of-a-system-default
+// stamp (`createdAt === 0` → now).
+export async function writeList(
+  username: string,
+  list: WithPath<List>,
+  patch: Partial<Pick<List, 'name' | 'parentId' | 'rank'>>,
+): Promise<void> {
+  const now = Date.now();
+  const next: WithPath<List> = {
+    ...list,
+    ...patch,
+    createdAt: list.createdAt === 0 ? now : list.createdAt,
+    updatedAt: now,
+  };
+  const { path: _path, ...blob } = next;
+  if (!listSchema.safeParse(blob).success) {
+    throw new Error(`writeList: invalid list ${list.id}`);
   }
   writeEntity(username, next);
 }

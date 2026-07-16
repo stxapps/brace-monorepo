@@ -9,9 +9,10 @@ import {
   EXTRACTIONS_PREFIX,
   filesSignEndpoint,
   LINKS_PREFIX,
-  MY_LIST_ID,
+  LISTS_PREFIX,
   opsCommitEndpoint,
   pathFromId,
+  TAGS_PREFIX,
 } from '@stxapps/shared';
 
 import type { ShareDraft } from './share-store';
@@ -34,12 +35,15 @@ const draft: ShareDraft = {
   id: 'link-1',
   url: 'https://example.com/a',
   title: 'Example',
-  listId: MY_LIST_ID,
+  listId: 'list-new',
   tagIds: ['tag-a', 'tag-new'],
-  newTags: [{ id: 'tag-new', name: 'fresh' }],
+  newTags: [{ id: 'tag-new', name: 'fresh', rank: 'a2' }],
+  newLists: [{ id: 'list-new', name: 'Recipes', rank: 'Zx' }],
   sharedAt: NOW - 5_000,
 };
 
+const LIST_PATH = pathFromId('list-new', LISTS_PREFIX);
+const TAG_PATH = pathFromId('tag-new', TAGS_PREFIX);
 const LINK_PATH = pathFromId('link-1', LINKS_PREFIX);
 const EXTRACTION_PATH = pathFromId('link-1', EXTRACTIONS_PREFIX);
 
@@ -48,18 +52,35 @@ beforeEach(() => {
 });
 
 describe('buildDraftEntities', () => {
-  it('builds the link plus the provisional extraction title — and NO tag entities', () => {
+  it('builds the ranked new list/tag, the link, then the provisional extraction title', () => {
     const entities = buildDraftEntities(draft, NOW);
 
-    expect(entities.map((e) => e.path)).toEqual([LINK_PATH, EXTRACTION_PATH]);
+    // Taxonomy first — the batch commits referenced-before-referencing.
+    expect(entities.map((e) => e.path)).toEqual([LIST_PATH, TAG_PATH, LINK_PATH, EXTRACTION_PATH]);
     expect(entities[0].entity).toEqual({
-      url: draft.url,
-      listId: draft.listId,
-      tagIds: draft.tagIds, // new-tag ids stay referenced; the drain creates the tags
+      id: 'list-new',
+      name: 'Recipes',
+      parentId: null, // pinned — the editors' top-level-only create
+      rank: 'Zx',
       createdAt: NOW,
       updatedAt: NOW,
     });
     expect(entities[1].entity).toEqual({
+      id: 'tag-new',
+      name: 'fresh',
+      parentId: null,
+      rank: 'a2',
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(entities[2].entity).toEqual({
+      url: draft.url,
+      listId: draft.listId,
+      tagIds: draft.tagIds,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(entities[3].entity).toEqual({
       id: draft.id,
       title: 'Example',
       facets: {},
@@ -68,9 +89,24 @@ describe('buildDraftEntities', () => {
     });
   });
 
+  it('skips rank-free new entries — the drain creates those', () => {
+    // A draft minted against an old, rank-free snapshot: the link still
+    // uploads (its listId/tagIds reference the new ids; nothing is rewritten
+    // when the drain lands the entities), the taxonomy entities wait.
+    const entities = buildDraftEntities(
+      {
+        ...draft,
+        newTags: [{ id: 'tag-new', name: 'fresh' }],
+        newLists: [{ id: 'list-new', name: 'Recipes' }],
+      },
+      NOW,
+    );
+    expect(entities.map((e) => e.path)).toEqual([LINK_PATH, EXTRACTION_PATH]);
+  });
+
   it('omits the extraction when the payload carried no usable title', () => {
     const entities = buildDraftEntities({ ...draft, title: undefined }, NOW);
-    expect(entities.map((e) => e.path)).toEqual([LINK_PATH]);
+    expect(entities.map((e) => e.path)).toEqual([LIST_PATH, TAG_PATH, LINK_PATH]);
   });
 });
 
@@ -94,15 +130,20 @@ describe('uploadShareDraft', () => {
     return { api, commits, encryptionKey: new Uint8Array(32) };
   };
 
-  it('signs, PUTs each blob to its URL, then commits both puts', async () => {
+  it('signs, PUTs each blob to its URL, then commits every put', async () => {
     const { api, commits, encryptionKey } = deps();
     await uploadShareDraft({ api, encryptionKey }, draft);
 
-    expect(mockPutBlob).toHaveBeenCalledTimes(2);
+    expect(mockPutBlob).toHaveBeenCalledTimes(4);
     const putUrls = mockPutBlob.mock.calls.map((call) => (call as unknown[])[0]);
-    expect(putUrls).toEqual([`https://r2.test/${LINK_PATH}`, `https://r2.test/${EXTRACTION_PATH}`]);
+    expect(putUrls).toEqual([
+      `https://r2.test/${LIST_PATH}`,
+      `https://r2.test/${TAG_PATH}`,
+      `https://r2.test/${LINK_PATH}`,
+      `https://r2.test/${EXTRACTION_PATH}`,
+    ]);
     // encryptEntity is identity here — the uploaded bytes decode to the link.
-    const linkBytes = (mockPutBlob.mock.calls[0] as unknown[])[1] as Uint8Array;
+    const linkBytes = (mockPutBlob.mock.calls[2] as unknown[])[1] as Uint8Array;
     expect(JSON.parse(new TextDecoder().decode(linkBytes))).toMatchObject({
       url: draft.url,
       listId: draft.listId,
@@ -111,6 +152,8 @@ describe('uploadShareDraft', () => {
     expect(commits).toEqual([
       {
         ops: [
+          { op: 'put', path: LIST_PATH },
+          { op: 'put', path: TAG_PATH },
           { op: 'put', path: LINK_PATH },
           { op: 'put', path: EXTRACTION_PATH },
         ],

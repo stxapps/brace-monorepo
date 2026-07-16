@@ -58,9 +58,11 @@ instead exchanges **atomic per-item JSON files** — no locks, no contention:
   plaintext by design (brace-expo already stores content decrypted on device —
   see architecture.md). Lists are the merged system+user set in tree order,
   Trash excluded (saving into the deletion staging area is incoherent); tags in
-  rank order.
+  rank order. Every row carries its `rank` so the sheet can mint neighbour
+  ranks for what it creates (below).
 - `<app-group>/share/outbox/<linkId>.json` — one `ShareDraft` per Add, written
-  by the EXTENSION: `{ id, url, title?, listId, tagIds, newTags, sharedAt }`.
+  by the EXTENSION:
+  `{ id, url, title?, listId, tagIds, newTags, newLists, sharedAt }`.
   The main app drains each through the normal write edge on launch/foreground
   and deletes the file only after the local write commits.
 
@@ -70,17 +72,23 @@ default (`group.` + bundle id = `group.to.brace.app`).
 
 ### the draft is idempotent by construction
 
-The link id (and any new tag's id) is minted **in the sheet** (`newId`) and
-travels with the draft everywhere — outbox file name, sqlite row, future server
-entity. Any path can retry (drain crash between item write and file delete,
-upload + later drain) and converge on the same entities instead of
-duplicating. Same reason the drain is a plain re-`writeLink`: last write wins
-on identical content.
+The link id (and any new list's/tag's id AND `rank`) is minted **in the
+sheet** (`newId`) and travels with the draft everywhere — outbox file name,
+sqlite row, server entity. Any path can retry (drain crash between item write
+and file delete, upload + later drain) and converge on the same entities
+instead of duplicating or shuffling — the drain applies the draft's ranks
+verbatim, so it re-writes byte-identical taxonomy entities to what the
+extension may already have uploaded. Same reason the drain is a plain
+re-`writeLink`: last write wins on identical content.
 
-New tags ride as `{ id, name }` pairs; their `rank` is deliberately NOT in the
-draft — it's computed at apply time from the store's current tag set
-(`rankBetween(last, null)`), because a rank minted against a stale snapshot
-could collide with tags created since.
+Minting a rank against the sheet's taxonomy (live on Android, a possibly-stale
+snapshot on iOS) is safe because an equal-key **tie is an anticipated,
+deterministically-resolved case** of the rank model, not a corruption: two
+devices inserting at the same slot concurrently already mint equal keys, and
+`compareRank` breaks the tie by id (shared `sync/rank.ts`) — a stale-snapshot
+rank can do no worse. A draft or snapshot from an older build may carry no
+ranks; then the drain computes them at apply time (the pre-rank behavior, kept
+as the fallback) and the upload skips just those entities.
 
 ### what the sheet does and doesn't do
 
@@ -94,25 +102,24 @@ could collide with tags created since.
 - **URL**: Android's `EXTRA_TEXT` sometimes wraps the URL in prose (Chrome),
   so the first http(s) URL is extracted from the text; normalized with
   shared's `normalizeUrl` before storing.
-- **Locks**: list locks gate READING already-decrypted data; adding to a
-  locked list reveals nothing, so locked lists stay pickable and
-  `computeCoverage` stays out of the share surface entirely. (Snapshot nuance:
-  a `hideList` lock hides the list from pickers in-app; the snapshot builder
-  applies the same filter so the sheet matches.)
-- **New tags yes, new lists no** — the sheet mints tags (`newTags`, above) but
-  offers **list-picking only**, deliberately diverging from the web editors,
-  whose `ListSelect` grew an inline create (`allowCreate` — editors.md). Not an
-  oversight, and cheap to justify: the sheet's taxonomy is a **read-only
-  snapshot** on iOS, so a new list is exactly the `rank`-against-a-stale-snapshot
-  problem that already keeps new tags' ranks out of the draft — except a list also
-  needs a `parentId`, and the link's `listId` would point at a list no other
-  device has yet. Supporting it means a parallel `newLists` field threaded through
-  the draft, the outbox, the drain, and `share-upload`'s deliberate
-  no-tag-entities rule — real work in the trickiest code here, for the surface
-  where the user is most likely dumping a link fast and organizing later. The
-  cheap version, if it's ever wanted: reuse `newTags`' exact shape (id minted in
-  the sheet, rank computed at apply time) and pin `parentId: null`, matching the
-  editors' top-level-only create.
+- **Locks**: the sheet's pickers filter **only Trash** — the same rule as every
+  editor picker (editors.md, "Locked and hidden lists stay pickable"): a lock
+  gates a list's CONTENTS (reading already-decrypted data), never its use as a
+  destination, and `hideList` is a pure sidebar declutter that no picker
+  prunes. So `computeCoverage` and the lock model stay out of the share
+  surface entirely — the taxonomy snapshot doesn't read locks at all.
+- **New tags AND new lists** — the sheet mints both, matching the web editors
+  (`TagsField`'s always-on mint, `ListSelect`'s `allowCreate` — editors.md) and
+  their rules: a typed name that exactly matches an existing list/tag
+  (case-insensitive) reuses it instead of minting; a new list is **top-level
+  only** (`parentId` pinned null at apply — create now, reparent later in
+  Settings → Lists). Both ride the draft as `{ id, name, rank }` — id and rank
+  minted in the sheet (rank from the taxonomy's neighbour ranks: prepend before
+  the first root list for a list, matching web's create-at-index-0; append
+  after the last tag for tags), so the upload can push complete entities and
+  the drain re-writes the identical ones (see _the draft is idempotent_,
+  above). A new list exists only as the share's destination: creating selects
+  it, and selecting another list discards the pending create.
 - **Duplicates**: not detected in the sheet (iOS can't see the DB; a stale
   snapshot would lie). Save anyway; dedup is the apply-side's concern.
 - **No session** (cold share before first sign-in): the sheet shows "Open
@@ -173,9 +180,10 @@ renderless component mounted inside `<SyncProvider>` in brace-expo's
   immediately and the read edge shows the user their own share without a
   refresh pill.
 - **outbound**: `refreshShareTaxonomy()` after every drain (a draft can mint
-  new tags), after every completed sync cycle (`lastSyncAt` — a pull may have
-  changed lists/tags/locks), and on every local edit (`localWriteNonce`). Lock
-  edits bump neither signal; the next foreground/mount pass picks them up.
+  new lists/tags), after every completed sync cycle (`lastSyncAt` — a pull may
+  have changed lists/tags), and on every local edit (`localWriteNonce`). Locks
+  never enter the snapshot (the pickers filter only Trash — see _Locks_ above),
+  so lock edits are no concern here.
 
 Both calls are platform no-ops on Android and failure-tolerant — a missed pass
 self-heals on the next signal.
@@ -238,21 +246,24 @@ hydrates the in-memory session mirror so the api client's synchronous
 write/delete is best-effort — a Keychain hiccup must not fail sign-in/out; a
 missing mirror just means no fast-path upload (the drain still delivers).
 
-**What the upload sends — and deliberately doesn't.** `uploadShareDraft`
-(`data/share-upload.ts`) builds the **link** entity (plus the provisional
-**extraction title** when the payload carried one) from the draft alone,
-encrypts each with the v1 frame, and pushes sign → PUT → commit — the same
-three round trips as one engine put-chunk, minus the store bookkeeping (the
-extension must never open the app's sqlite). The draft's **new tags are NOT
-uploaded**: a tag entity needs a `rank`, rank is computed at apply time against
-the store's current tag set — exactly why it's excluded from the draft — and
-the extension has no store to rank against. So new tags are created only by
-the drain; until the phone app next opens, other devices see the link without
-its brand-new tag chips (existing tags referenced by id render fine), and the
-link's `tagIds` already include the new ids so nothing is rewritten when the
-tags land. Failures skip the commit (no partial entity set) and are swallowed:
-no retry wrapper either — the extension process lives ~a second past the ✓, so
-the durable outbox IS the retry.
+**What the upload sends.** `uploadShareDraft` (`data/share-upload.ts`) builds
+the **complete entity set from the draft alone** — the new lists/tags (when
+they carry a sheet-minted `rank` — see _the draft is idempotent_ for why a
+stale-snapshot rank is only a tie), then the **link**, then the provisional
+**extraction title** when the payload carried one — encrypts each with the v1
+frame, and pushes sign → PUT → commit — the same three round trips as one
+engine put-chunk, minus the store bookkeeping (the extension must never open
+the app's sqlite). Uploading the taxonomy entities is what makes the upload's
+payoff whole: another device sees the link **in its new list, with its new tag
+chips**, without waiting for the phone app to be reopened. A rank-free entry
+(a draft minted against an old, rank-free snapshot) is skipped — the drain
+creates it, and until then other devices see the link without that list/tag
+(the link's `listId`/`tagIds` already reference the new ids, so nothing is
+rewritten when they land; a link whose `listId` hasn't arrived yet simply
+doesn't match any list-scoped query until it does). Failures skip the commit
+(no partial entity set) and are swallowed: no retry wrapper either — the
+extension process lives ~a second past the ✓, so the durable outbox IS the
+retry.
 
 Prebuild verification: confirm `react-native-quick-crypto` links into the
 extension target — if it doesn't, the fallback is **not** "go full Swift" but

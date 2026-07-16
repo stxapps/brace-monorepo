@@ -14,12 +14,12 @@ import { useSync } from './sync-provider';
 //    requestSync(), so the pending ops push now and the read edge shows the
 //    user their own share immediately (localWriteNonce semantics).
 //  - OUTBOUND (store → snapshot): rewrite the taxonomy snapshot after every
-//    drain (a draft can mint new tags), after every completed sync cycle
-//    (lastSyncAt — a pull may have changed lists/tags/locks), and on every
-//    local edit (localWriteNonce — a rename/new list must reach the sheet
-//    before the cycle that pushes it finishes). Lock edits don't bump either
-//    signal; they're picked up by the next foreground/mount pass, which is
-//    fresh enough for a picker filter.
+//    drain (a draft can mint new lists/tags), after every completed sync cycle
+//    (lastSyncAt — a pull may have changed lists/tags), and on every local
+//    edit (localWriteNonce — a rename/new list must reach the sheet before
+//    the cycle that pushes it finishes). Locks never enter the snapshot —
+//    the sheet's pickers filter only Trash, like every editor picker
+//    (docs/editors.md) — so lock edits are no concern here.
 //
 // Every call is a platform no-op on Android (the share activity reads live) and
 // failure-tolerant: this bridge must never take the app tree down over a share

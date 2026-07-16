@@ -67,7 +67,7 @@ public class BraceSharedKeychainModule: Module {
     }
   }
 
-  private static let keychainService = "to.brace.shared"
+  private static let keychainService = "to.brace.app.shared"
 
   private static func keychainQuery(_ group: String, _ key: String) -> [String: Any] {
     return [

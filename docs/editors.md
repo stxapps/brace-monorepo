@@ -25,11 +25,23 @@ URL + list/tags/note, title/image back-filled later by extraction) and **full
 edit** (every `links/{id}.enc` field, including the `customTitle`/`customImageId`
 overrides). Create collects a strict subset of edit's fields.
 
-| surface               | file                                                        | kind      | fields                                         |
-| --------------------- | ----------------------------------------------------------- | --------- | ---------------------------------------------- |
-| extension save editor | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only) |
-| web quick-add popover | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"     |
-| web edit dialog       | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                 |
+| surface                | file                                                        | kind      | fields                                            |
+| ---------------------- | ----------------------------------------------------------- | --------- | ------------------------------------------------- |
+| extension save editor  | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)    |
+| web quick-add popover  | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"        |
+| web edit dialog        | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                    |
+| brace-expo share sheet | `apps/brace-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
+
+The share sheet is the RN member of the create family
+([share-sheet.md](./share-sheet.md) is its own map — the two native shells, the
+iOS snapshot/outbox, the upload). It can't render the web pickers (`web-ui` is
+`platform:web`), so it carries **share-sized presentational cousins**
+(`share-list-picker.tsx` / `share-tags-picker.tsx` — rows in, events out, fed
+by a taxonomy snapshot rather than the live hooks) that uphold the same rules:
+create is opt-in and inline, a new list is top-level only, an exact
+case-insensitive name match reuses instead of minting, and the pickers filter
+only Trash (the locks/hide rule below applies there too). Change a picker
+invariant here and the share sheet must follow.
 
 Two more surfaces edit the taxonomy itself (not links), as inline row editors —
 not modal forms, so the invariants below apply loosely (they hold no snapshot
@@ -125,6 +137,8 @@ search, pins) until unlocked — but the list stays selectable as a _destination
 So: lock gates a list's contents; hide only tidies the sidebar; neither touches
 what the pickers offer. Don't re-add `hiddenListIds` to any picker's
 `excludeIds` — it looks like a privacy fix but only breaks web/extension parity.
+The brace-expo share sheet follows the same rule: its taxonomy
+(`buildShareLists`) filters only Trash and never reads locks.
 
 **The coupling to watch** — the reason an editor change reaches beyond the
 editors:
