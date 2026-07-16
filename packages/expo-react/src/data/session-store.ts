@@ -19,7 +19,14 @@
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 
+import {
+  deleteSharedKeychainItem,
+  getSharedKeychainItem,
+  setSharedKeychainItem,
+} from '@stxapps/expo-crypto';
 import { bytesToHex, hexToBytes } from '@stxapps/shared';
+
+import { APP_GROUP_ID } from './app-group';
 
 export interface SessionRecord {
   // Public handle, kept for display/UX — not a secret.
@@ -45,6 +52,24 @@ interface PersistedSession {
 
 // One active session at a time, under a fixed secure-store key.
 const SESSION_KEY = 'brace-session';
+
+// iOS ALSO mirrors the serialized session into the shared Keychain access group
+// (the App Group id — expo-crypto's shared-keychain wrappers, no-ops off iOS):
+// the share extension is a separate process that can't read the app's own
+// Keychain entries, and the best-effort upload (docs/share-sheet.md)
+// needs the token + encryptionKey there. The mirror is a COPY, never the source
+// of truth: the app always reads its own entry (loadSession); only the
+// extension reads the mirror (loadSharedSession). Every writer below keeps the
+// two in step — and every mirror write/delete is best-effort (a Keychain
+// hiccup must not fail sign-in/out; a stale-mirror upload just 401s and the
+// outbox drain covers the share).
+function mirrorSharedSession(serialized: string | null): Promise<void> {
+  const op =
+    serialized === null
+      ? deleteSharedKeychainItem(APP_GROUP_ID, SESSION_KEY)
+      : setSharedKeychainItem(APP_GROUP_ID, SESSION_KEY, serialized);
+  return op.catch(() => undefined);
+}
 
 // AFTER_FIRST_UNLOCK instead of the WHEN_UNLOCKED default: background sync must
 // read the key while the device is locked (any time after the first unlock
@@ -177,7 +202,9 @@ function parse(raw: string): SessionRecord | null {
 export async function saveSession(record: SessionRecord): Promise<void> {
   current = record;
   markInstalled();
-  await SecureStore.setItemAsync(SESSION_KEY, serialize(record), SECURE_OPTIONS);
+  const serialized = serialize(record);
+  await SecureStore.setItemAsync(SESSION_KEY, serialized, SECURE_OPTIONS);
+  await mirrorSharedSession(serialized);
 }
 
 // Read the persisted session into the in-memory mirror and return it. Called
@@ -188,6 +215,7 @@ export async function saveSession(record: SessionRecord): Promise<void> {
 export async function loadSession(): Promise<SessionRecord | null> {
   if (isFreshInstall()) {
     await SecureStore.deleteItemAsync(SESSION_KEY, SECURE_OPTIONS);
+    await mirrorSharedSession(null); // the mirror is a Keychain ghost too
     markInstalled();
     current = null;
     return null;
@@ -205,4 +233,19 @@ export async function loadSession(): Promise<SessionRecord | null> {
 export async function clearSession(): Promise<void> {
   current = null;
   await SecureStore.deleteItemAsync(SESSION_KEY, SECURE_OPTIONS);
+  await mirrorSharedSession(null);
+}
+
+// The iOS share extension's loadSession: read the shared-Keychain MIRROR (the
+// only session the extension process can see) and hydrate the in-memory mirror
+// so the api client's synchronous getToken()/getSession() work — the extension
+// runs no AuthProvider, so nothing else hydrates it. Null when signed out, when
+// the mirror write failed, or off iOS. Unlike loadSession this never deletes
+// anything: the MAIN APP owns the entry's lifecycle; a corrupt/stale mirror
+// just means no fast-path upload this share (the outbox drain still delivers).
+export async function loadSharedSession(): Promise<SessionRecord | null> {
+  const raw = await getSharedKeychainItem(APP_GROUP_ID, SESSION_KEY).catch(() => null);
+  const record = raw === null ? null : parse(raw);
+  if (record) current = record;
+  return record;
 }

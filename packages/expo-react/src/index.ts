@@ -1,5 +1,7 @@
 export * from './contexts/auth-provider';
+export * from './contexts/share-bridge';
 export * from './contexts/sync-provider';
+export * from './data/app-group';
 export * from './data/clear-data';
 export * from './data/db';
 export * from './data/delete-all-data';
@@ -12,6 +14,7 @@ export * from './data/pending-store';
 export * from './data/projection';
 export * from './data/session-store';
 export * from './data/share-store';
+export * from './data/share-upload';
 export * from './data/subscription-store';
 export * from './data/sync-store';
 export * from './lib/auth-api-client';

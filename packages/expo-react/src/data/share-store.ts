@@ -26,10 +26,11 @@
 
 import { Platform } from 'react-native';
 import { and, gte, lt } from 'drizzle-orm';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
 import { z } from 'zod';
 
 import {
+  type ApiClient,
   buildTree,
   cleanTitle,
   compareRank,
@@ -50,12 +51,15 @@ import {
   type TreeNode,
 } from '@stxapps/shared';
 
+import { runIncrementalSync } from '../sync/engine';
+import { appGroupDir } from './app-group';
 import { getDb, items } from './db';
 import { getItem } from './item-store';
 import { readLocks } from './lock-store';
 import { writeExtraction, writeLink, writeTag } from './mutations';
 import { parseBlob } from './projection';
-import { getSession, loadSession } from './session-store';
+import { getSession, loadSession, loadSharedSession } from './session-store';
+import { uploadShareDraft } from './share-upload';
 
 // --- shapes -------------------------------------------------------------------
 
@@ -184,17 +188,6 @@ async function readTaxonomyFromDb(): Promise<ShareTaxonomy> {
 
 // --- App Group container (iOS) --------------------------------------------------
 
-// expo-share-extension's default group id: `group.` + the bundle identifier
-// (app.json `ios.bundleIdentifier`). Falls back to the first container so a
-// future explicit AppGroup override doesn't strand this lookup.
-const APP_GROUP_ID = 'group.to.brace.app';
-
-function appGroupDir(): Directory | null {
-  const containers = Paths.appleSharedContainers;
-  const dir = containers[APP_GROUP_ID] ?? Object.values(containers)[0];
-  return dir ?? null;
-}
-
 function taxonomyFile(group: Directory): File {
   return new File(group, 'share/taxonomy.json');
 }
@@ -231,20 +224,56 @@ export type ShareSaveResult =
   | 'queued';
 
 // One Add. The sheet checks `sessionPresent` before offering the form, so a
-// missing session here is a programming error, not a user state.
-export async function saveSharedDraft(draft: ShareDraft): Promise<ShareSaveResult> {
+// missing session here is a programming error, not a user state. `api` is the
+// app's configured client (the sheet passes it in — the baseUrl binding lives
+// in the app, per the layering rules); it powers the post-write kick on both
+// platforms. THE KICK IS NEVER AWAITED (docs/share-sheet.md): the durable
+// commit is the local write / outbox file, so Add resolves as soon as that
+// lands and the sheet shows ✓ — delivery is guaranteed by the pending op /
+// next-open drain, not by the in-flight network work surviving the dismissal.
+export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promise<ShareSaveResult> {
   if (Platform.OS === 'ios') {
     const group = appGroupDir();
     if (!group) throw new Error('saveSharedDraft: no App Group container');
     const dir = outboxDir(group);
     if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
     new File(dir, `${draft.id}.json`).write(JSON.stringify(draft));
+    // Best-effort encrypt + PUT on top of the durable outbox write
+    // (share-upload.ts) — buys cross-device freshness when it lands, loses
+    // nothing when it doesn't (offline, no mirrored session, process reaped
+    // after close()): the drain re-uploads the same ids and LWW converges.
+    void uploadQueuedDraft(api, draft);
     return 'queued';
   }
   const session = getSession();
   if (!session) throw new Error('saveSharedDraft: no session');
   await applyShareDraft(session.username, draft);
+  // Inline sync kick: the pending op usually lands server-side while the share
+  // activity's process is still alive (one entity, sub-second). Un-awaited JS
+  // on the app-level React host IS the doc's "application/process scope" — the
+  // activity's finish() doesn't cancel it; only a process reap does, and that
+  // loss is covered by the pending op + the app's next sync cycle.
+  void runIncrementalSync({
+    username: session.username,
+    encryptionKey: session.encryptionKey,
+    api,
+  }).catch(() => undefined);
   return 'saved';
+}
+
+// The iOS extension's fire-and-forget half of saveSharedDraft. Hydrates the
+// session from the shared-Keychain mirror (the extension runs no AuthProvider —
+// this is also what arms the api client's bearer token), skips when the token
+// has lapsed (the PUT would just 401), and swallows every failure: the outbox
+// file already written is the record of truth.
+async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<void> {
+  try {
+    const session = await loadSharedSession();
+    if (!session || session.expiresAt <= Date.now()) return;
+    await uploadShareDraft({ encryptionKey: session.encryptionKey, api }, draft);
+  } catch {
+    // Best-effort by design — the main app drains the outbox on next open.
+  }
 }
 
 // --- the main app's half ---------------------------------------------------------

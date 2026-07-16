@@ -33,6 +33,7 @@ import {
 } from '@stxapps/expo-react';
 import { DEFAULT_LIST_ID } from '@stxapps/shared';
 
+import { apiClient } from '../../lib/api-client';
 import { closeShareSheet } from './share-host';
 import type { SharePayload } from './share-url';
 
@@ -167,7 +168,10 @@ export function ShareScreen({ url, title }: SharePayload) {
       sharedAt: Date.now(),
     };
     try {
-      await saveSharedDraft(draft);
+      // The api client powers saveSharedDraft's un-awaited post-write kick
+      // (Android inline sync / iOS upload); Add itself only waits on
+      // the durable local write.
+      await saveSharedDraft(draft, apiClient);
       setPhase('saved');
     } catch {
       setPhase('ready');

@@ -1,5 +1,6 @@
 import CryptoKit
 import ExpoModulesCore
+import Security
 
 // File-level AES-256-GCM in the native layer — the implementation behind
 // src/lib/file-crypto.ts. Reads/writes the FROZEN v1 blob frame
@@ -14,6 +15,14 @@ import ExpoModulesCore
 // (temp file + rename via `.atomic`), so a consumer can never observe
 // partially-written output; GCM only authenticates at the end of `open`, and a
 // failed tag throws before anything is written.
+//
+// The module also carries the SHARED-KEYCHAIN trio (src/lib/shared-keychain.ts)
+// — generic-password items under an explicit kSecAttrAccessGroup, which
+// expo-secure-store doesn't expose. The group is an App Group id (iOS accepts
+// those as keychain access groups, so the App Group entitlement both targets
+// already carry from expo-share-extension covers it — no keychain-sharing
+// entitlement needed). This is what lets the share extension read the session
+// the main app persists (docs/share-sheet.md).
 
 private let blobFormatV1: UInt8 = 0x01
 private let ivBytes = 12
@@ -41,6 +50,12 @@ internal final class TruncatedBlobException: Exception {
 internal final class DecryptionFailedException: Exception {
   override var reason: String {
     "decryption failed — tampered file or wrong key"
+  }
+}
+
+internal final class KeychainException: GenericException<Int32> {
+  override var reason: String {
+    "keychain operation failed (OSStatus \(param))"
   }
 }
 
@@ -83,6 +98,58 @@ public class BraceFileCryptoModule: Module {
       }
       try plaintext.write(to: Self.fileURL(outputPath), options: .atomic)
     }
+
+    // --- shared keychain (access-group generic-password items) ---------------
+    //
+    // AFTER_FIRST_UNLOCK to match expo-secure-store's session entry (the mirror
+    // must be readable wherever the original is — e.g. a share while the phone
+    // hasn't been unlocked since boot fails BOTH reads consistently).
+    // Set is delete-then-add: simpler than SecItemUpdate's attribute dance, and
+    // the value is a few hundred bytes written once per sign-in.
+
+    AsyncFunction("setSharedKeychainItem") { (group: String, key: String, value: String) in
+      SecItemDelete(Self.keychainQuery(group, key) as CFDictionary)
+      var attributes = Self.keychainQuery(group, key)
+      attributes[kSecValueData as String] = Data(value.utf8)
+      attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+      let status = SecItemAdd(attributes as CFDictionary, nil)
+      guard status == errSecSuccess else {
+        throw KeychainException(status)
+      }
+    }
+
+    AsyncFunction("getSharedKeychainItem") { (group: String, key: String) -> String? in
+      var query = Self.keychainQuery(group, key)
+      query[kSecReturnData as String] = true
+      query[kSecMatchLimit as String] = kSecMatchLimitOne
+      var result: CFTypeRef?
+      let status = SecItemCopyMatching(query as CFDictionary, &result)
+      if status == errSecItemNotFound {
+        return nil
+      }
+      guard status == errSecSuccess, let data = result as? Data else {
+        throw KeychainException(status)
+      }
+      return String(data: data, encoding: .utf8)
+    }
+
+    AsyncFunction("deleteSharedKeychainItem") { (group: String, key: String) in
+      let status = SecItemDelete(Self.keychainQuery(group, key) as CFDictionary)
+      guard status == errSecSuccess || status == errSecItemNotFound else {
+        throw KeychainException(status)
+      }
+    }
+  }
+
+  private static let keychainService = "to.brace.shared"
+
+  private static func keychainQuery(_ group: String, _ key: String) -> [String: Any] {
+    return [
+      kSecClass as String: kSecClassGenericPassword,
+      kSecAttrService as String: keychainService,
+      kSecAttrAccount as String: key,
+      kSecAttrAccessGroup as String: group,
+    ]
   }
 
   // expo-file-system hands out file:// URIs; plain absolute paths work too.

@@ -26,12 +26,12 @@ One RN share screen, written once, hosted by two very different native shells:
 The process split is the load-bearing difference, and everything below follows
 from it:
 
-|                          | Android (same process)                               | iOS (separate process)                                                                                                  |
-| ------------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                            |
-| saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                         |
-| sync after Add           | inline `runIncrementalSync` (process is alive)       | main app drains outbox on next launch/foreground (+ BGAppRefresh backstop; phase 2: upload from the extension)          |
-| session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot (extension can't read the app's Keychain without a shared access group — phase 2) |
+|                          | Android (same process)                               | iOS (separate process)                                                                                                     |
+| ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                               |
+| saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                            |
+| sync after Add           | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                  |
+| session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot to gate the form; the shared-Keychain session mirror arms the upload's api |
 
 **The two shells meet at one `AppRegistry` string.** Each native host mounts
 its RN root by a registered name — `braceShare` (Android, `index.js`) and
@@ -73,7 +73,7 @@ default (`group.` + bundle id = `group.to.brace.app`).
 The link id (and any new tag's id) is minted **in the sheet** (`newId`) and
 travels with the draft everywhere — outbox file name, sqlite row, future server
 entity. Any path can retry (drain crash between item write and file delete,
-phase-2 upload + later drain) and converge on the same entities instead of
+upload + later drain) and converge on the same entities instead of
 duplicating. Same reason the drain is a plain re-`writeLink`: last write wins
 on identical content.
 
@@ -137,15 +137,36 @@ not by the in-sheet kick landing.
   background-task cadence**, never by the inline kick. If a hard "on the server
   before the user looks elsewhere" guarantee is ever needed, the right tool is
   **WorkManager** (survives process death, network-constrained, retrying) — an
-  enhancement, since the pending op already makes it lossless. (The inline kick
-  needs the app's `SyncDeps`/api-client binding, which lands with the auth
-  provider — `TODO(auth)`; until then the pending op drains on next open.)
-- **iOS Add** = outbox write + ✓ + `close()`, plus the best-effort upload
-  (phase 2, below). Down-sync happens on next launch/foreground drain, plus
-  opportunistic BGAppRefresh (expo-background-task) — iOS schedules that at its
-  own discretion, which is the honest phase-1 latency story.
+  enhancement, since the pending op already makes it lossless. (WIRED: the kick
+  lives in `saveSharedDraft` itself — the sheet passes the app's api client in,
+  and the un-awaited `runIncrementalSync` promise runs on the app-level React
+  host's JS runtime, which the activity's `finish()` doesn't cancel; that IS the
+  process scope in RN terms.)
+- **iOS Add** = outbox write + best-effort upload kick + ✓ +
+  `close()`. Down-sync happens on next launch/foreground drain (`ShareBridge`);
+  an opportunistic BGAppRefresh backstop (expo-background-task) remains a
+  possible enhancement, less pressing now that the upload gives cross-device
+  freshness at share time.
 
-### phase 2 — immediate upload from the iOS extension
+### the main app's half — ShareBridge
+
+`ShareBridge` (`@stxapps/expo-react` `contexts/share-bridge.tsx`) is a
+renderless component mounted inside `<SyncProvider>` in brace-expo's
+`(app)/_layout` — the app-side pump for both App Group artifacts:
+
+- **inbound**: `drainShareOutbox()` on mount and on every return to foreground;
+  a drain that landed drafts calls `requestSync()` so the pending ops push
+  immediately and the read edge shows the user their own share without a
+  refresh pill.
+- **outbound**: `refreshShareTaxonomy()` after every drain (a draft can mint
+  new tags), after every completed sync cycle (`lastSyncAt` — a pull may have
+  changed lists/tags/locks), and on every local edit (`localWriteNonce`). Lock
+  edits bump neither signal; the next foreground/mount pass picks them up.
+
+Both calls are platform no-ops on Android and failure-tolerant — a missed pass
+self-heals on the next signal.
+
+### immediate upload from the iOS extension (shipped)
 
 **The outbox is the record of truth; the upload is a best-effort fast path on
 top of it — not a replacement.** The extension builds the entity, writes the
@@ -172,9 +193,9 @@ device itself_ it buys nothing the next-open drain wouldn't: the phone
 populates its own local store on next open regardless (down-sync pulls back its
 own upload, or the outbox drain writes it). The upload's real payoff is
 **cross-device / web freshness** — your laptop and brace-web see the link
-without waiting for you to reopen the phone app. So this stays contained and
-additive, warranted only once multi-device freshness is a felt need; until
-then outbox + next-open is already correct.
+without waiting for you to reopen the phone app. It stays contained and
+additive: if the upload path ever misbehaves, deleting the kick reverts to the
+still-correct outbox + next-open story.
 
 **The upload runs in RN, because the runtime is already warm.** The sheet is
 RN, so at Add time the JS instance is up and the upload is just more work in a
@@ -185,20 +206,49 @@ upload's language follows the sheet's language: if the sheet were ever forked
 to native SwiftUI for cold-start reasons — see below — the upload would go
 native with it, on CryptoKit + the v1 frame BraceFileCrypto already produces.)
 
-Prerequisites: (a) the encryption key readable from a **shared Keychain access
-group** — expo-secure-store doesn't expose access groups, so add an
-explicit-group read/write to the BraceFileCrypto native module in
-`packages/expo-crypto` (this native hop happens regardless of upload language);
-(b) verify `react-native-quick-crypto` links into the extension target — if it
-doesn't, the fallback is **not** "go full Swift" but call **BraceFileCrypto**
-(your own autolinked module, which has to link anyway for (a)) for the AES,
-staying in the RN path. The entity blobs are KB-sized (no Argon2, key
-pre-derived, far under the ~120MB cap).
+**How the session crosses the process boundary.** expo-secure-store doesn't
+expose Keychain access groups, so the BraceFileCrypto native module
+(`packages/expo-crypto`) carries a shared-Keychain trio
+(`set/get/deleteSharedKeychainItem`, `lib/shared-keychain.ts` — iOS-only; the
+wrappers degrade to "item absent" elsewhere). The access group is the **App
+Group id itself** (`group.to.brace.app`): iOS accepts App Group ids as keychain
+access groups, so the entitlement expo-share-extension already writes into both
+targets covers it — no keychain-sharing entitlement, no team-id prefix.
+session-store **mirrors** the serialized session into that group on every
+`saveSession`, and removes it on `clearSession` and the fresh-install wipe (the
+mirror is a Keychain ghost too). The mirror is a copy, never the source of
+truth: only the extension reads it, via `loadSharedSession()`, which also
+hydrates the in-memory session mirror so the api client's synchronous
+`getToken()` works in a process that runs no AuthProvider. Every mirror
+write/delete is best-effort — a Keychain hiccup must not fail sign-in/out; a
+missing mirror just means no fast-path upload (the drain still delivers).
+
+**What the upload sends — and deliberately doesn't.** `uploadShareDraft`
+(`data/share-upload.ts`) builds the **link** entity (plus the provisional
+**extraction title** when the payload carried one) from the draft alone,
+encrypts each with the v1 frame, and pushes sign → PUT → commit — the same
+three round trips as one engine put-chunk, minus the store bookkeeping (the
+extension must never open the app's sqlite). The draft's **new tags are NOT
+uploaded**: a tag entity needs a `rank`, rank is computed at apply time against
+the store's current tag set — exactly why it's excluded from the draft — and
+the extension has no store to rank against. So new tags are created only by
+the drain; until the phone app next opens, other devices see the link without
+its brand-new tag chips (existing tags referenced by id render fine), and the
+link's `tagIds` already include the new ids so nothing is rewritten when the
+tags land. Failures skip the commit (no partial entity set) and are swallowed:
+no retry wrapper either — the extension process lives ~a second past the ✓, so
+the durable outbox IS the retry.
+
+Prebuild verification: confirm `react-native-quick-crypto` links into the
+extension target — if it doesn't, the fallback is **not** "go full Swift" but
+call **BraceFileCrypto** (your own autolinked module, which links anyway for
+the shared keychain) for the AES, staying in the RN path. The entity blobs are
+KB-sized (no Argon2, key pre-derived, far under the ~120MB cap).
 
 **Invariant that keeps the memory story true: no bytes-heavy work in the
 extension.** The extension handles URLs and KB-sized entity JSON only —
 image/screenshot fetch, decrypt, and encrypt stay in the main app / extractor.
-This is what keeps phase 1 _and_ phase 2 comfortably under the ~120MB
+This is what keeps everything comfortably under the ~120MB
 share-extension cap; don't move image work across the process boundary to
 "save a round trip."
 
@@ -215,7 +265,10 @@ real lever on RN cold-start latency.
 | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | share screen UI + prop normalizing + close() seam                                                                | `apps/brace-expo/src/features/share/`                                                                                            |
 | entries: `index.js` (main, registers `braceShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/brace-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension) |
-| snapshot + outbox + saveSharedDraft + drain/refresh                                                              | `@stxapps/expo-react` `data/share-store.ts`                                                                                      |
+| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                   | `@stxapps/expo-react` `data/share-store.ts`                                                                                      |
+| best-effort upload (entities from the draft, sign → PUT → commit)                                        | `@stxapps/expo-react` `data/share-upload.ts`                                                                                     |
+| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                    |
+| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceFileCrypto, iOS Swift)  |
 | write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                        |
 | iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.json` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`     |
 | Android ShareActivity + close() module                                                                           | `apps/brace-expo/modules/brace-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)       |

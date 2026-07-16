@@ -5,3 +5,4 @@ export * from './lib/derive';
 export * from './lib/file-crypto';
 export * from './lib/ids';
 export * from './lib/lock-verifier';
+export * from './lib/shared-keychain';

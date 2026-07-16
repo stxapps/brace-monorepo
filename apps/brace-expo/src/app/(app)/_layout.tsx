@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 
-import { SyncProvider } from '@stxapps/expo-react';
+import { ShareBridge, SyncProvider } from '@stxapps/expo-react';
 
 import { AuthGuard } from '../../components/auth-guard';
 
@@ -23,17 +23,16 @@ import { AuthGuard } from '../../components/auth-guard';
 // → InitialSyncGate → PaywallProvider. Until InitialSyncGate lands, screens see
 // the store while its status is still 'checking'/'syncing-initial'.
 //
-// TODO(auth): the share sheet's app-side half rides the same providers
-// (docs/share-sheet.md): on launch/foreground and after each sync, call
-// @stxapps/expo-react's drainShareOutbox() (land iOS extension drafts through
-// the write edge) and refreshShareTaxonomy() (rewrite the iOS App Group
-// snapshot when lists/tags/locks change); on Android, kick an inline
-// runIncrementalSync after the share activity saves, using the SyncDeps this
-// provider now supplies.
+// ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
+// drains the iOS extension's outbox through the write edge on launch/foreground
+// and keeps the App Group taxonomy snapshot fresh after syncs and local edits.
+// It reads useSync, so it sits inside SyncProvider. (The Android share
+// activity's inline sync kick lives in saveSharedDraft itself, not here.)
 export default function AppLayout() {
   return (
     <AuthGuard>
       <SyncProvider>
+        <ShareBridge />
         <Stack screenOptions={{ headerShown: false }} />
       </SyncProvider>
     </AuthGuard>

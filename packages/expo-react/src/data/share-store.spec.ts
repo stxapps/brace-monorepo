@@ -26,6 +26,14 @@ import {
 } from './share-store';
 
 jest.mock('expo-sqlite', () => ({ openDatabaseSync: jest.fn() }));
+// share-store's post-Add kicks reach the sync engine and the upload,
+// whose import graphs end in native modules (react-native-quick-crypto via
+// @stxapps/expo-crypto, expo-file-system/legacy via sync/r2) — inert them too.
+jest.mock('@stxapps/expo-crypto', () => ({}));
+jest.mock('expo-file-system/legacy', () => ({
+  FileSystemUploadType: { BINARY_CONTENT: 'binaryContent' },
+  uploadAsync: jest.fn(),
+}));
 jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK: 'afterFirstUnlock',
   getItemAsync: jest.fn(async () => null),

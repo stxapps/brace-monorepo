@@ -1,10 +1,24 @@
 import { bytesToHex } from '@stxapps/shared';
 
-// In-memory stand-ins for the two native stores. Keyed maps/sets outside the
+// In-memory stand-ins for the native stores. Keyed maps/sets outside the
 // factories (mock-prefixed so jest's hoisting allows the reference) so each test
 // can seed/inspect them directly.
 const mockSecureEntries = new Map<string, string>();
 const mockFiles = new Set<string>();
+const mockSharedKeychain = new Map<string, string>();
+
+// The shared-Keychain trio (expo-crypto) backing the iOS session mirror.
+jest.mock('@stxapps/expo-crypto', () => ({
+  setSharedKeychainItem: jest.fn(async (group: string, key: string, value: string) => {
+    mockSharedKeychain.set(`${group}/${key}`, value);
+  }),
+  getSharedKeychainItem: jest.fn(
+    async (group: string, key: string) => mockSharedKeychain.get(`${group}/${key}`) ?? null,
+  ),
+  deleteSharedKeychainItem: jest.fn(async (group: string, key: string) => {
+    mockSharedKeychain.delete(`${group}/${key}`);
+  }),
+}));
 
 jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK: 'afterFirstUnlock',
@@ -49,6 +63,7 @@ let secureStore: SecureStoreMock;
 beforeEach(() => {
   mockSecureEntries.clear();
   mockFiles.clear();
+  mockSharedKeychain.clear();
   jest.resetModules();
   store = jest.requireActual<SessionStore>('./session-store');
   secureStore = jest.requireMock<SecureStoreMock>('expo-secure-store');
@@ -147,6 +162,55 @@ test('a well-formed entry with missing fields reads as signed-out', async () => 
   mockSecureEntries.set(SESSION_KEY, JSON.stringify({ username: 'alice' }));
 
   expect(await store.loadSession()).toBeNull();
+});
+
+const SHARED_MIRROR_KEY = 'group.to.brace.app/brace-session';
+
+test('saveSession mirrors the serialized session into the shared Keychain', async () => {
+  await store.saveSession(record());
+
+  expect(mockSharedKeychain.get(SHARED_MIRROR_KEY)).toBe(mockSecureEntries.get(SESSION_KEY));
+});
+
+test('clearSession and the fresh-install wipe both drop the shared mirror', async () => {
+  await store.saveSession(record());
+  await store.clearSession();
+  expect(mockSharedKeychain.has(SHARED_MIRROR_KEY)).toBe(false);
+
+  // Fresh install: seed a leftover mirror alongside the Keychain leftover.
+  mockFiles.clear();
+  seedPersisted();
+  mockSharedKeychain.set(SHARED_MIRROR_KEY, 'stale-mirror');
+  expect(await store.loadSession()).toBeNull();
+  expect(mockSharedKeychain.has(SHARED_MIRROR_KEY)).toBe(false);
+});
+
+test('loadSharedSession reads the mirror and hydrates the in-memory session', async () => {
+  const r = record();
+  mockSharedKeychain.set(
+    SHARED_MIRROR_KEY,
+    JSON.stringify({
+      username: r.username,
+      token: r.token,
+      expiresAt: r.expiresAt,
+      encryptionKeyHex: bytesToHex(r.encryptionKey),
+    }),
+  );
+
+  expect(await store.loadSharedSession()).toEqual(r);
+  // The api client's synchronous readers see it — the extension runs no
+  // AuthProvider to hydrate them otherwise.
+  expect(store.getSession()).toEqual(r);
+  expect(store.getToken()).toBe(r.token);
+});
+
+test('loadSharedSession is null (not a throw) on a missing or corrupt mirror', async () => {
+  expect(await store.loadSharedSession()).toBeNull();
+
+  mockSharedKeychain.set(SHARED_MIRROR_KEY, 'not-json{');
+  expect(await store.loadSharedSession()).toBeNull();
+  // Never deletes: the main app owns the entry's lifecycle.
+  expect(mockSharedKeychain.has(SHARED_MIRROR_KEY)).toBe(true);
 });
 
 test('onSessionInvalid fans out to subscribers; unsubscribe stops delivery', () => {

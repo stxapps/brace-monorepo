@@ -4,6 +4,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { loadShareTaxonomy, saveSharedDraft, type ShareDraft } from '@stxapps/expo-react';
 import { DEFAULT_LIST_ID, MY_LIST_ID } from '@stxapps/shared';
 
+import { apiClient } from '../../lib/api-client';
 import { ShareScreen } from './share-screen';
 
 // The store seam is mocked whole — the sheet's data exchange is share-store's
@@ -15,6 +16,9 @@ jest.mock('@stxapps/expo-react', () => ({
 let mockIdCounter = 0;
 jest.mock('@stxapps/expo-crypto', () => ({ newId: jest.fn(() => `minted-${++mockIdCounter}`) }));
 jest.mock('./share-host', () => ({ closeShareSheet: jest.fn() }));
+// The app's api-client binding throws at import when EXPO_PUBLIC_API_URL is
+// unset (as in jest); the sheet only threads it through to saveSharedDraft.
+jest.mock('../../lib/api-client', () => ({ apiClient: { call: jest.fn() } }));
 
 const loadShareTaxonomyMock = loadShareTaxonomy as jest.Mock;
 const saveSharedDraftMock = saveSharedDraft as jest.Mock;
@@ -55,6 +59,7 @@ test('saves a draft into the picked list and shows the saved state', async () =>
   fireEvent.press(getByTestId('share-add'));
 
   await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
+  expect(saveSharedDraftMock).toHaveBeenCalledWith(expect.anything(), apiClient);
   const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
   expect(draft).toMatchObject({
     url: 'https://example.com/a',
