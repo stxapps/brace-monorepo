@@ -119,7 +119,7 @@ export function ListLayout({
                 >
                   <LinkPreviewImage
                     link={link}
-                    className="h-[38px] w-16 rounded"
+                    className="h-10 w-16 rounded"
                     iconClassName="size-4 rounded"
                   />
                 </a>

@@ -128,9 +128,8 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   // If the whole selection sits in one list (always true in a plain list view),
   // show it checked-but-disabled in Move to, like the row menu; a mixed
   // selection has no such list, so nothing is marked.
-  const sharedListId = new Set(actionable.map((l) => l.listId)).size === 1
-    ? actionable[0].listId
-    : undefined;
+  const sharedListId =
+    new Set(actionable.map((l) => l.listId)).size === 1 ? actionable[0].listId : undefined;
 
   const runBulk = async (
     action: BulkAction,
@@ -279,9 +278,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
                 size="sm"
                 disabled={disabled || toArchive.length === 0}
                 onClick={() =>
-                  void runBulk('archive', toArchive, (link) =>
-                    update(link, { listId: ARCHIVE_ID }),
-                  )
+                  void runBulk('archive', toArchive, (link) => update(link, { listId: ARCHIVE_ID }))
                 }
               >
                 <Archive className="size-4" />

@@ -100,8 +100,8 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             <Label htmlFor="bulk-tags">Tags</Label>
             <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} autoFocus />
             <p className="text-xs text-muted-foreground">
-              Only tags shared by every selected link are shown; a tag on just some of them is
-              left untouched.
+              Only tags shared by every selected link are shown; a tag on just some of them is left
+              untouched.
             </p>
           </div>
           <DialogFooter>
