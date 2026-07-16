@@ -5,7 +5,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 // username used to live in the popup's SyncDetail, but that surface is for the live
 // sync cycle (status/pending/last sync); the username never changes and reads better
 // paired with the sign-out it scopes. Together they answer "who am I, and how do I
-// leave?" — see docs/extension.md (the extension owns its own sign-in).
+// leave?" — see docs/browser-extension.md (the extension owns its own sign-in).
 
 export function AccountSection() {
   const { username } = useAuth();

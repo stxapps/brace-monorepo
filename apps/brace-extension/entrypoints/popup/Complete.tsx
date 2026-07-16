@@ -16,7 +16,7 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // titleImage facet fills `title`/`imageId` into the link's `extractions/{id}.enc` in
 // the background, and the live reads here pick it up), and a footer button opening
 // the web app's library in a new tab. It reads "Open Brace" (navigation), not "view
-// this link": the extension's session doesn't cross origins (docs/extension.md), so
+// this link": the extension's session doesn't cross origins (docs/browser-extension.md), so
 // a user who never signed in to brace-web lands on its sign-in page first.
 export function Complete({ link }: { link: LinkItem }) {
   const id = linkIdOf(link);

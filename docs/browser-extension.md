@@ -1,4 +1,4 @@
-## extension
+## browser extension
 
 Notes on the `brace-extension` (wxt) app and how its UI/logic relates to
 `brace-web`. See [architecture.md](./architecture.md) for the package layering

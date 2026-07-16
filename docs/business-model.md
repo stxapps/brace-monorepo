@@ -113,7 +113,8 @@ The two paid tiers then have a spine, not just a longer list:
 | Storage quota (blobs)                   | preview imgs only (≤200)       | 5 GB              | 20 GB                          |
 | E2E encryption                          | ✅                             | ✅                | ✅                             |
 | Sync across devices                     | ✅ (habit-builder — don't cap) | ✅                | ✅                             |
-| Extension (save + extract)              | ✅                             | ✅                | ✅                             |
+| Browser extension (save)                | ✅                             | ✅                | ✅                             |
+| Mobile share sheet (save)               | ✅                             | ✅                | ✅                             |
 | Theme, flat tags, flat lists, pin       | ✅                             | ✅                | ✅                             |
 | Sort + manual reorder (lists/tags/pins) | ✅                             | ✅                | ✅                             |
 | Layouts (card, list)                    | ✅                             | ✅                | ✅                             |
@@ -121,6 +122,8 @@ The two paid tiers then have a spine, not just a longer list:
 | Full data export (no lock-in)           | ✅                             | ✅                | ✅                             |
 | Search (words, all links)               | ✅                             | ✅                | ✅                             |
 | Preview images (downloaded blob)        | ✅ (client-extracted)          | ✅                | ✅                             |
+| Browser extension extraction            | ✅                             | ✅                | ✅                             |
+| Mobile app extraction.                  | ✅                             | ✅                | ✅                             |
 | Server extraction (`brace-extractor`)   | ❌                             | opt-in            | opt-in                         |
 | Nested lists                            | ❌                             | ✅                | ✅                             |
 | Locks (app lock + per-list hide)        | ❌                             | ✅                | ✅                             |
@@ -141,8 +144,8 @@ if/when demand shows (see _launch sequencing_).
 Why these cuts:
 
 - **The free tier is genuinely good — and that's the point; the keystone paywall
-  is scale + heavy blobs, not the preview image.** A client (extension / expo)
-  extracts the preview image itself at **zero cost to us** (the expensive,
+  is scale + heavy blobs, not the preview image.** A client (browser extension /
+  expo) extracts the preview image itself at **zero cost to us** (the expensive,
   abuse-exposed `brace-extractor` path never runs), and a thumbnail-less library
   looks broken next to every competitor — so withholding it would lose more to
   first-impression bounce than it wins in conversion, and it's misaligned with the
@@ -343,10 +346,11 @@ ship. The build advantage is real; **point it at a sharp audience, not "everyone
 
 ### related risks (tracked elsewhere / open)
 
-- **The web-only gap is a conversion leak.** Free users _with_ the extension get
-  client-extracted thumbnails for free, but a web-only user (no extension) gets bare
-  URLs and no images — a steep first impression next to competitors' auto-thumbnails
-  (see [link-extraction.md](./link-extraction.md) — _the web-only gap_). The remedy
+- **The web-only gap is a conversion leak.** Free users _with_ the browser
+  extension get client-extracted thumbnails for free, but a web-only user (no
+  extension) gets bare URLs and no images — a steep first impression next to
+  competitors' auto-thumbnails (see
+  [link-extraction.md](./link-extraction.md) — _the web-only gap_). The remedy
   is the growth lever the model already leans on: onboarding must push the extension
   hard on day one (installing it _is_ what unlocks images), with opt-in
   `serverExtraction` as the no-extension fallback.

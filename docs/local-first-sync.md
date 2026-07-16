@@ -152,7 +152,7 @@ re-implements the engine on a non-IndexedDB store (the future native app) still
 speaks the same status language and collapses phases identically. The concrete
 providers are the platform layer's job: `web-react`'s `SyncProvider` drives the
 web engine and produces the two fields; `ExternalSyncProvider` takes them from an
-out-of-page context (the extension's background worker, via its
+out-of-page context (the browser extension's background worker, via its
 `browser.storage` mirror); a native app would write its own producer. **Shared
 owns the vocabulary; each platform owns its producer.**
 
@@ -282,9 +282,10 @@ tag/list names.
   unrecoverable race the old "backfill display into `links/`" layout risked). Races
   inside `extractions/` are between two extraction writes only — idempotent,
   self-healing. The UI joins the two blobs to render a row (`customTitle ??
-extraction.title ?? host(url)`). Written by client extractors (the extension,
-  future Expo app, the web app orchestrating `brace-extractor` or an import), never
-  by `brace-api`, which stays a blind sync broker. The work loop is a **query**, not
+extraction.title ?? host(url)`). Written by client extractors (the browser
+  extension, future Expo app, the web app orchestrating `brace-extractor` or an
+  import), never by `brace-api`, which stays a blind sync broker. The work loop
+  is a **query**, not
   a queue object: a link with no `done` `titleImage` facet (no `extractions/` file,
   or one not yet extracted) is pending. See
   [link-extraction.md](./link-extraction.md) for the entity and the privacy stance.

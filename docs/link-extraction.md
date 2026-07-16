@@ -6,9 +6,9 @@ and saved page copy** — the metadata a bare URL doesn't carry. See
 this rides on (one entity per `*.enc` blob, file-level LWW), the `pins/`
 precedent for the LWW-isolation move repeated here, and the `links/` vs `files/`
 split; [architecture.md](./architecture.md) for package layering;
-[extension.md](./extension.md) for the brace-extension auth flow the privileged
-client builds on; and [account.md](./account.md) for the data key that protects
-every blob written here.
+[browser-extension.md](./browser-extension.md) for the brace-extension auth flow
+the privileged client builds on; and [account.md](./account.md) for the data key
+that protects every blob written here.
 
 **Naming — "page copy", never "archive".** The saved-page capture is the
 `pageCopy` facet, stored as `extraction.pageCopyId`, metered by

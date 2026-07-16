@@ -21,8 +21,9 @@ multi-device convergence via the sync fallback, and the username tombstone),
 [link-extraction.md](./link-extraction.md) for how a saved link's
 title/image/screenshot/page-copy get filled in (privacy-first, clients do the
 work, the `extraction/` entity),
-[extension.md](./extension.md) for the brace-extension auth flow (own sign-in,
-no inherited session) and the move-shared-auth-code-later decision,
+[browser-extension.md](./browser-extension.md) for the brace-extension auth
+flow (own sign-in, no inherited session) and the move-shared-auth-code-later
+decision,
 [env-files.md](./env-files.md) for per-app environment configuration across
 `development` / `staging` / `production`, [deployment.md](./deployment.md)
 for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow, and
@@ -44,20 +45,31 @@ activity, and why sync converges either way).
 
 ### apps
 
+**Naming — never write "extension" bare.** Two unrelated things here are
+extensions: the **browser extension** (`brace-extension`, wxt —
+[browser-extension.md](./browser-extension.md)) and the iOS **share extension**
+(a target inside `brace-expo` — [share-sheet.md](./share-sheet.md)). Qualify
+which one on first mention; bare "extension" is fine afterwards inside a doc
+that only discusses one of them (share-sheet.md does exactly this). Say
+**"browser extension"**, never "web extension" — `web` is already taken by
+brace-web, the `web-*` packages, and `platform:web` (which covers
+brace-extension too), and `web/extension` is established shorthand for brace-web
+_vs._ brace-extension.
+
 - **brace-web** — Next.js web app
 - **brace-extension** — browser extension (wxt)
 - **brace-api** — backend API (hand-written, not nx-generated)
 - **brace-extractor** — Cloudflare Workers + hono server that fetches
   link metadata (title/image; read-mode deferred) for clients that can't reach the
-  URL themselves (`brace-web` without an extension, bulk imports). Its **own app on
+  URL themselves (`brace-web` without the browser extension, bulk imports). Its **own app on
   its own origin** `extractor.brace.to`, **separate from `brace-api`** (the blind sync
   broker) so that "`api.brace.to` only ever sees ciphertext" stays code-provable —
   the extractor is the one component that fetches arbitrary user URLs. A pure
   function (returns plaintext, holds no key, persists nothing — no D1/R2/DO
   bindings, only CORS config + rate limiters), anonymous, off-by-default and opt-in.
-  Not "someday": the design **needs** it now that the extension is active-context
-  only (no background bg-fetch), so web/desktop users have no other bulk-enrichment
-  path. Two endpoints, contract-typed in `@stxapps/shared` (`extract/endpoints.ts`):
+  Not "someday": the design **needs** it now that the browser extension is
+  active-context only (no background bg-fetch), so web/desktop users have no
+  other bulk-enrichment path. Two endpoints, contract-typed in `@stxapps/shared` (`extract/endpoints.ts`):
   `POST /v1/extract` (per-URL `{ title, image }` metadata) and `GET /v1/image` (a
   stateless, stream-don't-store image proxy). All arbitrary-URL fetches go through
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
