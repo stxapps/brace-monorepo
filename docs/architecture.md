@@ -194,7 +194,8 @@ activity, and why sync converges either way).
   (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
   **peerDependencies** — the
   app owns them so Expo autolinking sees them (the same pattern `expo-crypto`
-  uses for `react-native-quick-crypto`).
+  uses for `react-native-quick-crypto`). See _dependency versions_ below for the
+  version each slot declares, and why `expo-modules-core` is declared nowhere.
 
 ### dependency rules
 
@@ -263,6 +264,98 @@ brace-api` below; `expo` is React Native/Hermes — no DOM, no Web Crypto.)
 
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.
+
+### dependency versions
+
+Where the previous section governs _what_ a project may import, this one governs
+_which version_ it gets. **This section is about the Expo projects only**
+(`brace-expo`, `expo-crypto`, `expo-react`) — see _the web side is different_ at
+the end for why it stops there.
+
+Expo is the special case because `react`, `react-native`, `expo-modules-core`, and
+every autolinked native module must resolve to **exactly one** copy. Two copies
+means duplicate native module registration, a second React, or Metro resolving one
+while autolinking binds the other — and the symptom is an opaque native crash, not
+a version error. What makes that hard to hold is that the Expo SDK version-locks
+its whole native constellation **by exact pin**, and moves those pins on patch
+releases. So any manifest that restates one of those versions is a second opinion
+that can only agree by luck, and npm nests a duplicate the moment it disagrees.
+Hence: **a version is chosen in exactly one place, and everyone else defers.**
+
+| slot                       | version              | why                                                       |
+| -------------------------- | -------------------- | --------------------------------------------------------- |
+| root `package.json`        | real pin             | single source of truth                                    |
+| app (`brace-expo`)         | `*`                  | never published; a range here can only conflict with root |
+| package `dependencies`     | real range           | the package's own contract; not singletons                |
+| package `peerDependencies` | real floor, else `*` | the app + root decide the version                         |
+| package `devDependencies`  | **absent**           | nothing needs it — see below                              |
+
+- **Root pins; the app declares `*`.** The app is private and never published, so
+  a range in it can only ever disagree with root. (One deliberate exception:
+  `tailwindcss@^4.x`, which root does _not_ pin — see setup.md, _uniwind_.)
+- **A package's `dependencies` carry real ranges** (`@noble/*`, `drizzle-orm`,
+  `zod`, …) — they're the package's genuine contract and none are singletons.
+- **A package's native/singleton `peerDependencies` are `*`** — the app owns them
+  so Expo autolinking sees them, and root owns the version. Keep a real floor only
+  where it encodes something you'd actually break on (`react: ^19.0.0`,
+  `@tanstack/react-query: ^5.101.0`), not as a restatement of the root pin.
+- **The expo packages declare no `devDependencies` at all** — not even the usual
+  `*` mirror of their peers. The mirror's only job would be to make `typecheck`/
+  `jest` resolve, but resolution is plain Node upward traversal
+  (`packages/expo-crypto/src` → … → root `node_modules`, hit) and never reads the
+  package's own manifest; and `@nx/dependency-checks` already counts the **peer**
+  as the declaration, so `lint --fix` doesn't repopulate. A mirror would therefore
+  carry no information the peer line doesn't — while reintroducing exactly the
+  drift that nests a duplicate. This leans on npm workspace hoisting and is only
+  sound because these packages are private and consumed as source by `brace-expo`
+  alone; publishing them, or moving to a strict store like pnpm, would mean
+  bringing real devDeps back.
+
+**Never declare expo's internal, exactly-pinned transitives — `expo-modules-core`
+above all.** `expo` depends on it at an _exact_ version (`expo@54.0.35` →
+`expo-modules-core@3.0.30`), so any second declaration is a competing opinion that
+can only agree by luck. It also moves on expo **patch** releases (`expo@54.0.30` →
+`3.0.29`), so a well-meant `~3.0.30` (i.e. `>=3.0.30 <3.1.0`) silently nests a
+duplicate the moment expo steps outside that window — in either direction. The SDK
+is its sole owner: `expo-crypto` declares it **only** as a peer `*` and carries no
+devDep for it, which resolves (verified via `npm ls`) to expo's exact `3.0.30`,
+deduped to one hoisted copy. A bare `*` is safe **only** because expo's exact edge
+constrains the intersection — on its own it would resolve to `latest`, which is
+`57.x` (the package renumbered to track SDK versions). `@nx/dependency-checks`
+counts the peer as a declaration, so `lint --fix` won't repopulate a pin; the app
+gets the same outcome via `ignoredDependencies: ['expo-modules-core']` in the root
+`eslint.config.mjs`.
+
+So an Expo SDK bump edits **one** file: the root `package.json`.
+
+#### the web side is different — don't propagate this
+
+`shared`, `react`, `web-crypto`, `web-ui`, `brace-web`, `brace-extension`, and the
+worker apps deliberately do **not** follow the above, and shouldn't be "fixed" to
+match. They use ordinary npm conventions: each manifest is self-describing, with
+real ranges (`brace-web` owns `next: ~16.1.6`; `web-ui` owns its radix/lucide
+deps; `react` and `web-ui` keep `react`/`react-dom` peer+devDep mirrors at
+`^19.0.0`). Root pins the RN/Expo constellation for the Expo side; it is not a
+version registry for the web side.
+
+That's not inconsistency — the hazard that motivates the Expo rule doesn't exist
+here:
+
+- **No autolinking, no native constellation.** Nothing on web is version-locked as
+  a set by an SDK, so there's no pin for a second manifest to contradict.
+- **Web ranges intersect by construction.** `^19.0.0` in `web-ui`, `^19.1.0` at
+  root, and `^19.0.0` in `brace-web` all admit the hoisted `19.2.7`, so npm
+  dedupes to one copy without anyone deferring to anyone. The Expo problem is
+  specifically that `react-native@0.81.5` and `expo-modules-core@3.0.30` are
+  **exact**, leaving no room for a range to agree.
+- **The web devDeps do real work.** `web-ui`'s `tailwindcss: ^4.3.0` and
+  `brace-web`'s `@serwist/cli` aren't peer mirrors — they're genuine build-time
+  deps with real ranges that carry real information.
+
+`react` is a singleton on web too (two copies ⇒ "Invalid hook call"), so the
+_concern_ isn't unique to Expo — but the ranges above already prevent it, and the
+failure is legible when it does happen, unlike a native crash. When in doubt on
+the web side, follow normal npm practice, not this section.
 
 ### module resolution in packages
 

@@ -27,21 +27,12 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@react-native-community/netinfo": ">=11.0.0",
+    "@react-native-community/netinfo": "*",
     "@tanstack/react-query": "^5.101.0",
     "expo-file-system": "*",
     "expo-secure-store": "*",
     "expo-sqlite": "*",
     "react": "^19.0.0",
     "react-native": "*"
-  },
-  "devDependencies": {
-    "@react-native-community/netinfo": "11.4.1",
-    "@tanstack/react-query": "^5.101.0",
-    "expo-file-system": "~19.0.23",
-    "expo-secure-store": "~15.0.8",
-    "expo-sqlite": "~16.0.10",
-    "react": "^19.1.0",
-    "react-native": "0.81.5"
   }
 }
