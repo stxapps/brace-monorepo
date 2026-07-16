@@ -229,6 +229,10 @@ export async function loadSession(): Promise<SessionRecord | null> {
   if (raw !== null && record === null) {
     // Corrupt entry: drop it now so it can't shadow a future session.
     await SecureStore.deleteItemAsync(SESSION_KEY, SECURE_OPTIONS);
+    // The mirror is a copy of the same bad write — and if the two ever diverged
+    // it could still hold a valid OLDER session, leaving the extension signed in
+    // against an app that reads signed-out. The app owns the lifecycle; drop it.
+    await mirrorSharedSession(null);
   }
   current = record;
   return current;

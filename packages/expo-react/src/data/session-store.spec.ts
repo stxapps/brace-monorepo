@@ -152,9 +152,13 @@ test('clearSession drops both the mirror and the persisted entry', async () => {
 test('a corrupt persisted entry reads as signed-out and is deleted', async () => {
   mockFiles.add(SENTINEL_URI);
   mockSecureEntries.set(SESSION_KEY, 'not-json{');
+  // A mirror that outlived the app's own entry — the divergent case: it must not
+  // leave the extension signed in against an app that reads signed-out.
+  mockSharedKeychain.set(SHARED_MIRROR_KEY, 'stale-mirror');
 
   expect(await store.loadSession()).toBeNull();
   expect(mockSecureEntries.has(SESSION_KEY)).toBe(false);
+  expect(mockSharedKeychain.has(SHARED_MIRROR_KEY)).toBe(false);
 });
 
 test('a well-formed entry with missing fields reads as signed-out', async () => {
