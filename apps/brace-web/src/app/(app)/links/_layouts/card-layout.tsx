@@ -15,16 +15,23 @@ import {
   EmptyState,
   faviconUrl,
   type LinkLayoutProps,
+  LinkPreviewImage,
   LinkRowMenu,
   LinkRowSelect,
+  LinkTagChips,
   PinnedBadge,
   RefreshPill,
   ShowMore,
   useReportDisplayedLinkPaths,
+  useTagMap,
 } from './shared';
 
 const COLUMNS = 3;
-const ROW_HEIGHT = 180;
+// Fixed card budget: preview banner (112) + p-3 text block (host 20 + gap 8 +
+// two title lines 40 + padding 24) + up to two clamped chip lines (56, max-h-14
+// incl. pb-3) + the row's pb-4 (16). Cards with less content keep the height —
+// the anchor's flex-1 absorbs the slack — so the row estimate stays exact.
+const ROW_HEIGHT = 280;
 const SCROLL_TOP_THRESHOLD = 8;
 
 export function CardLayout({
@@ -38,6 +45,7 @@ export function CardLayout({
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
+  const tagsById = useTagMap();
   const rowCount = Math.ceil(links.length / COLUMNS);
 
   useEffect(() => {
@@ -97,15 +105,18 @@ export function CardLayout({
                   return (
                     <div
                       key={link.path}
-                      className={`relative flex rounded-lg border border-border ${
+                      className={`relative flex flex-col overflow-hidden rounded-lg border border-border ${
                         selected ? 'bg-muted' : 'hover:bg-muted/50'
                       }`}
                     >
+                      {/* The tag chips are buttons, so they sit OUTSIDE the anchor
+                          as the card's bottom block (same no-button-in-anchor rule
+                          as LinkRowMenu); the anchor's flex-1 pins them there. */}
                       <a
                         href={link.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex min-w-0 flex-1 flex-col gap-2 p-3"
+                        className="flex min-w-0 flex-1 flex-col"
                         // In bulk-edit mode the card's click toggles selection
                         // instead of opening the link (middle/cmd-click still opens).
                         onClick={
@@ -117,23 +128,37 @@ export function CardLayout({
                             : undefined
                         }
                       >
-                        <div className="flex items-center gap-2 pr-8">
-                          {pinned && <PinnedBadge />}
-                          <img
-                            src={faviconUrl(link.url)}
-                            alt=""
-                            className="size-5 shrink-0 rounded"
-                            loading="lazy"
-                          />
-                          <span className="truncate text-xs text-muted-foreground">
-                            {hostFromText(link.url)}
+                        <LinkPreviewImage
+                          link={link}
+                          className="h-28 w-full shrink-0"
+                          iconClassName="size-6 rounded"
+                        />
+                        <div className="flex min-w-0 flex-col gap-2 p-3">
+                          <div className="flex items-center gap-2">
+                            {pinned && <PinnedBadge />}
+                            <img
+                              src={faviconUrl(link.url)}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              className="size-4 shrink-0 rounded"
+                              loading="lazy"
+                            />
+                            <span className="truncate text-xs text-muted-foreground">
+                              {hostFromText(link.url)}
+                            </span>
+                          </div>
+                          <span className="line-clamp-2 text-sm font-medium">
+                            {link.title || displayUrl(link.url)}
                           </span>
                         </div>
-                        <span className="line-clamp-3 text-sm font-medium">
-                          {link.title || displayUrl(link.url)}
-                        </span>
                       </a>
-                      <div className="absolute top-1 right-1">
+                      <LinkTagChips
+                        link={link}
+                        tagsById={tagsById}
+                        className="max-h-14 flex-wrap px-3 pb-3"
+                      />
+                      {/* Floats over the banner now, so give it a readable pad. */}
+                      <div className="absolute top-1 right-1 rounded-md bg-background/60">
                         {bulkEditing ? (
                           <LinkRowSelect link={link} />
                         ) : (

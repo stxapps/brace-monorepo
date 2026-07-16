@@ -6,6 +6,7 @@
 // ApiClientProvider (the seam these modules read through useApiClient / SyncDeps.api).
 export * from './contexts/auth-provider';
 export * from './contexts/extraction-provider';
+export * from './contexts/file-content-provider';
 export * from './contexts/lock-provider';
 export * from './contexts/sync-provider';
 export * from './data/clear-data';
@@ -29,6 +30,7 @@ export * from './hooks/use-delete-all-data';
 export * from './hooks/use-entitlements';
 export * from './hooks/use-export-all-data';
 export * from './hooks/use-has-recovery-door';
+export * from './hooks/use-image-file-url';
 export * from './hooks/use-import-all-data';
 export * from './hooks/use-link-mutations';
 export * from './hooks/use-link-quota';

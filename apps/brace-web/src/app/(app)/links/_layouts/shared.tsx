@@ -5,7 +5,7 @@
 // own scroll container + virtualizer (row geometry differs per layout), so this
 // is deliberately just the shared chrome, not a base component.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -23,12 +23,21 @@ import {
   Undo2,
 } from 'lucide-react';
 
-import { ARCHIVE_ID, DEFAULT_LIST_ID, hostFromText, TRASH_ID } from '@stxapps/shared';
+import {
+  ARCHIVE_ID,
+  DEFAULT_LIST_ID,
+  hostFromText,
+  TRASH_ID,
+  type TreeNode,
+} from '@stxapps/shared';
 import {
   type LinkView,
+  type TagItem,
   useExtraction,
+  useImageFileUrl,
   useLinkMutations,
   usePinMutations,
+  useTags,
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -44,6 +53,7 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
+import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
 export interface LinkLayoutProps {
@@ -98,11 +108,114 @@ export function useReportDisplayedLinkPaths(
   }, [links, startIndex, endIndex, reportDisplayedLinkPaths]);
 }
 
-// Google's favicon service — no key, cached at the edge. Swap for a synced
-// `files/` screenshot later if previews move local. The display host comes from
+// Google's favicon service — no key, cached at the edge. Render with
+// referrerPolicy="no-referrer" (every call site does): the request itself still
+// discloses each rendered link's HOST to Google, which is the one third-party
+// leak left in the app — the planned fix is capturing the favicon in the
+// titleImage extraction facet as an encrypted `files/` blob, riding the same
+// local pipeline as LinkPreviewImage. The display host comes from
 // `hostFromText` (@stxapps/shared) so it matches the secondary line.
 export function faviconUrl(url: string): string {
   return `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(hostFromText(url))}`;
+}
+
+// The link's preview-image slot. The resolved bytes are local-first: `imageId`
+// is the row's override-wins image ref (LinkView), read from Dexie and fetched
+// on demand by useImageFileUrl the moment the row mounts (rows are virtualized,
+// so mounted = displayed). Until bytes exist — or when the link has no image at
+// all — the slot shows the site favicon on a muted background, so the
+// placeholder still identifies the link and the geometry never shifts. Both
+// call sites pass a FIXED-size `className` (the layouts' row estimates depend
+// on it).
+export function LinkPreviewImage({
+  link,
+  className,
+  iconClassName,
+}: {
+  link: LinkView;
+  className: string;
+  iconClassName: string;
+}) {
+  const url = useImageFileUrl(link.imageId);
+
+  if (url) {
+    return <img src={url} alt="" className={`object-cover ${className}`} />;
+  }
+  return (
+    <div className={`flex items-center justify-center bg-muted ${className}`}>
+      <img
+        src={faviconUrl(link.url)}
+        alt=""
+        referrerPolicy="no-referrer"
+        className={iconClassName}
+        loading="lazy"
+      />
+    </div>
+  );
+}
+
+// Flatten the live tag tree into an id → name map, hoisted ONCE per layout and
+// passed to the rows (a per-row useTags would mount one liveQuery per virtual
+// row). Live, so a rename repaints the chips immediately — tag names are
+// deliberately NOT part of useLinks' staged snapshot: a rename isn't a row
+// reorder, so it must never wait behind the refresh pill.
+export function useTagMap(): Map<string, string> {
+  const tree = useTags();
+  return useMemo(() => {
+    const map = new Map<string, string>();
+    const walk = (nodes: TreeNode<TagItem>[]): void => {
+      for (const node of nodes) {
+        map.set(node.item.id, node.item.name);
+        walk(node.children);
+      }
+    };
+    walk(tree);
+    return map;
+  }, [tree]);
+}
+
+// The row's tag chips: one button per tag, in the link's own `tagIds` order,
+// each navigating to that tag's view via setSimpleQuery — the same canonical
+// `/links?tag=…` URL the sidebar writes, so highlight/back-button behavior comes
+// for free. Rendered OUTSIDE the row's <a> (a button inside an anchor is invalid
+// and would fire the navigation — same rule as LinkRowMenu). In bulk-edit mode a
+// chip toggles the row's selection instead, matching the row click. Ids the map
+// doesn't know (a tag deleted / not yet synced) are skipped; no tags renders
+// nothing. The base is a NON-wrapping, overflow-hidden single line — the rows
+// are fixed-height — and the card layout opts into clamped wrapping via
+// `className`.
+export function LinkTagChips({
+  link,
+  tagsById,
+  className = '',
+}: {
+  link: LinkView;
+  tagsById: Map<string, string>;
+  className?: string;
+}) {
+  const { setSimpleQuery } = useLinksPage();
+  const { bulkEditing, toggleSelected } = useLinksViewState();
+
+  const tags = link.tagIds.flatMap((id) => {
+    const name = tagsById.get(id);
+    return name === undefined ? [] : [{ id, name }];
+  });
+  if (tags.length === 0) return null;
+
+  return (
+    <div className={`flex gap-1 overflow-hidden ${className}`}>
+      {tags.map(({ id, name }) => (
+        <button
+          key={id}
+          type="button"
+          className="max-w-32 shrink-0 truncate rounded-full bg-secondary px-2 py-px text-[11px] font-medium text-secondary-foreground hover:bg-secondary/80"
+          onClick={() => (bulkEditing ? toggleSelected(link) : setSimpleQuery({ kind: 'tag', id }))}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function EmptyState({ isLoading }: { isLoading: boolean }) {

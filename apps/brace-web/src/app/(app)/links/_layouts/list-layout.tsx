@@ -13,17 +13,21 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
-  faviconUrl,
   type LinkLayoutProps,
+  LinkPreviewImage,
   LinkRowMenu,
   LinkRowSelect,
+  LinkTagChips,
   PinnedBadge,
   RefreshPill,
   ShowMore,
   useReportDisplayedLinkPaths,
+  useTagMap,
 } from './shared';
 
-const ROW_HEIGHT = 64;
+// Fixed row budget: 64×38 preview image left, then title (20) + host (16) +
+// one clamped chip line (~20) stacked in the text column, centered vertically.
+const ROW_HEIGHT = 70;
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
 const SCROLL_TOP_THRESHOLD = 8;
@@ -39,6 +43,7 @@ export function ListLayout({
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
+  const tagsById = useTagMap();
 
   // This layout owns the scroll position; reset the shared flag on mount (fresh
   // at top) and unmount (so a layout switch doesn't leave it stuck true).
@@ -82,37 +87,50 @@ export function ListLayout({
             const link = links[row.index];
             const pinned = row.index < pinnedCount;
             const selected = bulkEditing && selectedLinks.has(link.path);
+            // In bulk-edit mode a click toggles selection instead of opening the
+            // link (middle/cmd-click still opens). Shared by both row anchors.
+            const onRowClick = bulkEditing
+              ? (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  toggleSelected(link);
+                }
+              : undefined;
             return (
               <div
                 key={link.path}
-                className={`absolute inset-x-0 flex items-center gap-1 border-b border-border pr-2 ${
+                className={`absolute inset-x-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
                   selected ? 'bg-muted' : 'hover:bg-muted/50'
                 }`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
               >
+                {/* Two sibling anchors (image, text) rather than one wrapping the
+                    whole row: the tag chips are buttons and may not nest inside an
+                    <a> (same rule as LinkRowMenu), so the chips sit in the text
+                    column AFTER its anchor. The image anchor duplicates the text
+                    one, so keyboard/AT skip it. */}
                 <a
                   href={link.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex h-full min-w-0 flex-1 items-center gap-3 px-4"
-                  // In bulk-edit mode the row's click toggles selection instead
-                  // of opening the link (middle/cmd-click still opens).
-                  onClick={
-                    bulkEditing
-                      ? (e) => {
-                          e.preventDefault();
-                          toggleSelected(link);
-                        }
-                      : undefined
-                  }
+                  tabIndex={-1}
+                  aria-hidden
+                  className="shrink-0"
+                  onClick={onRowClick}
                 >
-                  <img
-                    src={faviconUrl(link.url)}
-                    alt=""
-                    className="size-6 shrink-0 rounded"
-                    loading="lazy"
+                  <LinkPreviewImage
+                    link={link}
+                    className="h-[38px] w-16 rounded"
+                    iconClassName="size-4 rounded"
                   />
-                  <span className="min-w-0 flex-1">
+                </a>
+                <span className="min-w-0 flex-1">
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block min-w-0"
+                    onClick={onRowClick}
+                  >
                     <span className="flex items-center gap-1.5">
                       {pinned && <PinnedBadge />}
                       <span className="truncate text-sm font-medium">
@@ -122,8 +140,9 @@ export function ListLayout({
                     <span className="block truncate text-xs text-muted-foreground">
                       {hostFromText(link.url)}
                     </span>
-                  </span>
-                </a>
+                  </a>
+                  <LinkTagChips link={link} tagsById={tagsById} className="mt-0.5" />
+                </span>
                 {bulkEditing ? (
                   <LinkRowSelect link={link} />
                 ) : (

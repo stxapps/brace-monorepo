@@ -1,4 +1,9 @@
-import { ExtractionProvider, LockProvider, SyncProvider } from '@stxapps/web-react';
+import {
+  ExtractionProvider,
+  FileContentProvider,
+  LockProvider,
+  SyncProvider,
+} from '@stxapps/web-react';
 
 import { AppLockGate } from '@/components/app-lock-gate';
 import { AuthGuard } from '@/components/auth-guard';
@@ -18,22 +23,26 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //                     first sync, then the app. Never redirects (sync-provider).
 // LockProvider (app + list locks state) needs SyncProvider (its orphan sweep
 // waits for a ready store) and serves both AppLockGate here and the links
-// page's list-lock surfaces.
+// page's list-lock surfaces. FileContentProvider (on-demand `files/` blobs for
+// the link preview images) only needs the session + api client, so it sits with
+// the other sync-layer providers, above the gates.
 // This layout stays a server component and just composes the client wrappers.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
       <SyncProvider>
         <ExtractionProvider>
-          <LockProvider>
-            <AppLockGate>
-              <InitialSyncGate>
-                <PaywallProvider>
-                  <div className="min-h-screen">{children}</div>
-                </PaywallProvider>
-              </InitialSyncGate>
-            </AppLockGate>
-          </LockProvider>
+          <FileContentProvider>
+            <LockProvider>
+              <AppLockGate>
+                <InitialSyncGate>
+                  <PaywallProvider>
+                    <div className="min-h-screen">{children}</div>
+                  </PaywallProvider>
+                </InitialSyncGate>
+              </AppLockGate>
+            </LockProvider>
+          </FileContentProvider>
         </ExtractionProvider>
       </SyncProvider>
     </AuthGuard>
