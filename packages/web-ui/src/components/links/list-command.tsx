@@ -15,8 +15,16 @@
 // with their ancestor path ("Work / Cooking / Recipes"). Query state lives
 // here, so a host that unmounts its content on close (popover, submenu) resets
 // the search for free.
+//
+// The editors additionally opt into `onCreate` — a Create row that mints a list
+// named by the typed query, the list analogue of TagsCommand's. Like `root`, it's
+// opt-in precisely because the two "Move to" menus must NOT offer it: creating a
+// list is incoherent as a *move destination*, and doubly so in the Lists settings
+// menu, which picks a PARENT. See list-select.tsx for why the create is
+// top-level-only and why the editors need it inline at all.
 
 import { useMemo, useState } from 'react';
+import { PlusIcon } from 'lucide-react';
 
 import type { TreeNode } from '@stxapps/shared';
 import { type ListItem, useLists } from '@stxapps/web-react';
@@ -33,10 +41,12 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // Below this many lists, scrolling beats a filter box — don't render one.
 const SEARCH_THRESHOLD = 10;
 
-// cmdk value for the optional `root` item. A reserved sentinel that can't collide
-// with a list id (user ids are UUIDs, system ids are slugs like 'my-list'), so
-// `shouldFilter={false}` keyboard nav treats it as just another distinct row.
+// cmdk values for the optional `root` and Create items. Reserved sentinels that
+// can't collide with a list id (user ids are UUIDs, system ids are slugs like
+// 'my-list'), so `shouldFilter={false}` keyboard nav treats each as just another
+// distinct row.
 const ROOT_VALUE = '__root__';
+const CREATE_VALUE = '__create__';
 
 export type ListRow = { item: ListItem; depth: number; ancestors: string[] };
 
@@ -69,6 +79,7 @@ export function ListCommand({
   excludeIds,
   disabledIds,
   root,
+  onCreate,
   className,
 }: {
   // The current list id — its row gets the check mark.
@@ -86,17 +97,49 @@ export function ListCommand({
   // it (already at the root, so moving there is a no-op), mirroring how `value` /
   // `disabledIds` treat the current-parent list row. Omitted by link surfaces.
   root?: { label: string; selected: boolean; onSelect: () => void };
+  // Mint a list named by the typed query and select it (the editors' ListSelect
+  // passes this; the move-to menus don't — see the header). Awaited, so the row
+  // can disable itself while the write lands.
+  onCreate?: (name: string) => void | Promise<void>;
   className?: string;
 }) {
   const rows = useListRows(excludeIds);
   const [query, setQuery] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const searchable = rows.length > SEARCH_THRESHOLD;
-  const trimmed = query.trim().toLowerCase();
-  const filtering = searchable && trimmed.length > 0;
+  // The input is normally count-gated (below the threshold, scrolling beats a
+  // filter box) — but when this instance can create, the input is ALSO the Create
+  // row's name field, so it earns its keep at any count. Without this a small
+  // account would have nothing to type into, which is most accounts.
+  const searchable = rows.length > SEARCH_THRESHOLD || onCreate !== undefined;
+  const trimmed = query.trim();
+  const q = trimmed.toLowerCase();
+  const filtering = searchable && q.length > 0;
   const visibleRows = filtering
-    ? rows.filter(({ item }) => item.name.toLowerCase().includes(trimmed))
+    ? rows.filter(({ item }) => item.name.toLowerCase().includes(q))
     : rows;
+
+  // Offer Create unless the name is empty or already names a list exactly
+  // (case-insensitive). Note this is STRICTER than it strictly has to be: unlike
+  // a tag, a list isn't identified by its name, so a second "Recipes" under a
+  // different parent is legitimate. But a Create row competing with an identical
+  // row sitting right above it reads as a mistake far more often than as intent,
+  // and the deliberate-duplicate case still has Settings → Lists. Suppress it.
+  const canCreate =
+    onCreate !== undefined &&
+    trimmed !== '' &&
+    !rows.some(({ item }) => item.name.toLowerCase() === q);
+
+  const create = async () => {
+    if (!onCreate || creating || trimmed === '') return;
+    setCreating(true);
+    try {
+      await onCreate(trimmed);
+      setQuery('');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     /* Without an input, cmdk's arrow-key nav needs the root focusable. */
@@ -106,10 +149,16 @@ export function ListCommand({
       className={cn('rounded-2xl outline-none', className)}
     >
       {searchable && (
-        <CommandInput placeholder="Search lists…" value={query} onValueChange={setQuery} />
+        <CommandInput
+          placeholder={onCreate ? 'Search or create lists…' : 'Search lists…'}
+          value={query}
+          onValueChange={setQuery}
+        />
       )}
       <CommandList>
-        <CommandEmpty>No lists found.</CommandEmpty>
+        {/* Suppressed when there's a Create row: that row IS the next step, so
+            "No lists found." would just be noise above it. */}
+        {!canCreate && <CommandEmpty>No lists found.</CommandEmpty>}
         {root && !filtering && (
           // Hidden while filtering: it has no name to match, and the flat
           // filtered view is name-matches only (like the indent guides).
@@ -154,6 +203,12 @@ export function ListCommand({
             </span>
           </CommandItem>
         ))}
+        {canCreate && (
+          <CommandItem value={CREATE_VALUE} disabled={creating} onSelect={() => void create()}>
+            <PlusIcon />
+            <span className="truncate">Create “{trimmed}”</span>
+          </CommandItem>
+        )}
       </CommandList>
     </Command>
   );

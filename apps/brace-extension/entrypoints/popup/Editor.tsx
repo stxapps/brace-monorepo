@@ -97,8 +97,16 @@ export function Editor({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="list">List</Label>
-        {/* No Trash target: a fresh save never lands in the deletion staging area. */}
-        <ListSelect id="list" value={listId} onValueChange={setListId} excludeIds={[TRASH_ID]} />
+        {/* No Trash target: a fresh save never lands in the deletion staging area.
+            allowCreate matters most here: the popup can't link out to the web app's
+            list settings without killing itself and the draft with it. */}
+        <ListSelect
+          id="list"
+          value={listId}
+          onValueChange={setListId}
+          excludeIds={[TRASH_ID]}
+          allowCreate
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">

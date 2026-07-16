@@ -323,6 +323,7 @@ function LinkEditForm({
                 value={listId}
                 onValueChange={setListId}
                 excludeIds={[TRASH_ID]}
+                allowCreate
               />
             </div>
 

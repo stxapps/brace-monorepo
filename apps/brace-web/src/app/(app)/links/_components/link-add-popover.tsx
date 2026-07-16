@@ -238,6 +238,7 @@ export function LinkAddPopover() {
                     value={listId}
                     onValueChange={setListId}
                     excludeIds={[TRASH_ID]}
+                    allowCreate
                   />
                 </div>
 

@@ -70,14 +70,46 @@ The list and tag inputs are **two picker pairs** in
 searchable command body; the body owns the tree/search rendering and is wired
 straight to `web-react`'s live data hook:
 
-| pair | shell                                            | body                               | data hook                     |
-| ---- | ------------------------------------------------ | ---------------------------------- | ----------------------------- |
-| list | `list-select.tsx` (`ListSelect`, a combobox)     | `list-command.tsx` (`ListCommand`) | `useLists`                    |
-| tag  | `tags-field.tsx` (`TagsField`, a token combobox) | `tags-command.tsx` (`TagsCommand`) | `useTags` / `useTagMutations` |
+| pair | shell                                            | body                               | data hook                       |
+| ---- | ------------------------------------------------ | ---------------------------------- | ------------------------------- |
+| list | `list-select.tsx` (`ListSelect`, a combobox)     | `list-command.tsx` (`ListCommand`) | `useLists` / `useListMutations` |
+| tag  | `tags-field.tsx` (`TagsField`, a token combobox) | `tags-command.tsx` (`TagsCommand`) | `useTags` / `useTagMutations`   |
 
 All three link editors render `ListSelect` + `TagsField`, so the pickers stay
 identical across web quick-add, the extension, and the edit dialog. That's the
 point of the pairing — one picker over one live tree, no drift.
+
+**Both pickers can CREATE, and both creates are opt-in on the shell.**
+`TagsField` always mints (a tag editor with no way to make a tag is barely an
+editor); `ListSelect` mints only under **`allowCreate`**, which the three link
+editors pass and the move-to menus below must not. The rows themselves are
+`TagsCommand`'s always-on Create and `ListCommand`'s **`onCreate`**-gated one.
+
+- **Why inline, rather than a "Manage lists" link out to Settings → Lists** (the
+  shape the sidebar's `FooterLink` uses): the sidebar holds no draft, and every
+  editor does. Navigating away destroys it — the quick-add popover would drop the
+  very URL/note its `advancedDirty` guard exists to protect (invariant 3), and the
+  extension popup would be killed outright by `tabs.create`, since a popup
+  dismisses on focus loss uninterceptably. "Add a list" is a **sub-task of the
+  save**; anything that ends the save to do it isn't an answer.
+- **Why the list create is top-level only** (`parentId: null`, index 0 — matching
+  the settings `CreateRow`, so the same action lands the same place wherever it's
+  invoked): this is what keeps the create cheap despite the lists/tags asymmetry.
+  `useTagMutations.findOrCreate(name)` takes only a name because a tag **is** its
+  name; `useListMutations.create(name, parentId, siblings, index)` needs a
+  **position in a tree**. The editors decline to ask: nesting is non-destructive to
+  defer (`move` is a one-field `{ parentId, rank }` write), and rebuilding the
+  settings tree editor — drag, depth projection — inside a 320px popover would be
+  absurd. Create now, reparent later, lose nothing.
+- **Two smaller consequences, both in `list-command`.** (1) The filter input is
+  normally count-gated at `SEARCH_THRESHOLD` (scrolling beats a box), but
+  `onCreate` **forces it on at any count** — it doubles as the Create row's name
+  field, and without it a small account (i.e. most accounts) would have nothing to
+  type into. (2) An exact case-insensitive name match **suppresses** the Create
+  row. That's stricter than lists strictly require — name isn't a list's identity,
+  so a second "Recipes" under a different parent is legitimate — but a Create row
+  competing with an identical row right above it reads as a mistake far more often
+  than as intent, and the deliberate-duplicate case still has Settings → Lists.
 
 **Locked and hidden lists stay pickable — the pickers filter only `TRASH_ID`.**
 They deliberately do **not** prune the lock model's `hiddenListIds`. Hiding a
@@ -103,7 +135,9 @@ editors:
   handling) hits the move-to menu too, not just the editors. It passes
   `excludeIds={[TRASH_ID]}` and `disabledIds={[link.listId]}` — trashing is the
   menu's Remove, never a "move", and the current list stays visible-but-disabled
-  to keep the tree's shape intact.
+  to keep the tree's shape intact. It does **not** pass `onCreate`: this menu
+  re-files an existing link, and a Create row inside a _destination_ picker is a
+  different intent wearing the same clothes.
 - **The Lists settings "Move to"** (`_lists/lists-section.tsx`, `RowActions`)
   also embeds `ListCommand` — but it **reparents a list**, not a link, so it uses
   two things a link-move never does. It opts into `ListCommand`'s **`root`** prop
@@ -116,8 +150,14 @@ editors:
   which Radix would auto-close), that menu is **controlled** and closes itself on
   select — same pattern as `LinkRowMenu`. Drag-and-drop with depth projection is
   still the _primary_ reparent gesture there; this menu is the keyboard/mouse
-  fallback. So `list-command`'s `root` prop now has two audiences: leave it out
-  for link surfaces, opt in for reparenting.
+  fallback. It must never pass `onCreate` either — this picker chooses a
+  **parent**, so "create a new list" inside it is incoherent twice over.
+- **The rule the two menus above share**: `list-command`'s optional props split
+  its audiences, and the split runs in both directions. `root` is for
+  **reparenting** only (leave it out on link surfaces); `onCreate` is for
+  **editors** only (leave it out on both move-to menus). Adding a fourth consumer
+  means deciding both, not copying the nearest call site — and a future bulk
+  "Move to" (see below) is a _menu_, not an editor.
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker
   components — it renders its own `NavTree`. But it renders it over the **same
   `useLists`/`useTags` trees** and the same `@stxapps/shared` tree helpers

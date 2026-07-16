@@ -26,11 +26,11 @@ One RN share screen, written once, hosted by two very different native shells:
 The process split is the load-bearing difference, and everything below follows
 from it:
 
-|                          | Android (same process)                               | iOS (separate process)                                                                                                     |
-| ------------------------ | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                               |
-| saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                            |
-| sync after Add           | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                  |
+|                          | Android (same process)                               | iOS (separate process)                                                                                           |
+| ------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                     |
+| saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                  |
+| sync after Add           | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                         |
 | session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot to gate the form; the shared-Keychain session mirror arms the upload's api |
 
 **The two shells meet at one `AppRegistry` string.** Each native host mounts
@@ -99,6 +99,20 @@ could collide with tags created since.
   `computeCoverage` stays out of the share surface entirely. (Snapshot nuance:
   a `hideList` lock hides the list from pickers in-app; the snapshot builder
   applies the same filter so the sheet matches.)
+- **New tags yes, new lists no** — the sheet mints tags (`newTags`, above) but
+  offers **list-picking only**, deliberately diverging from the web editors,
+  whose `ListSelect` grew an inline create (`allowCreate` — editors.md). Not an
+  oversight, and cheap to justify: the sheet's taxonomy is a **read-only
+  snapshot** on iOS, so a new list is exactly the `rank`-against-a-stale-snapshot
+  problem that already keeps new tags' ranks out of the draft — except a list also
+  needs a `parentId`, and the link's `listId` would point at a list no other
+  device has yet. Supporting it means a parallel `newLists` field threaded through
+  the draft, the outbox, the drain, and `share-upload`'s deliberate
+  no-tag-entities rule — real work in the trickiest code here, for the surface
+  where the user is most likely dumping a link fast and organizing later. The
+  cheap version, if it's ever wanted: reuse `newTags`' exact shape (id minted in
+  the sheet, rank computed at apply time) and pin `parentId: null`, matching the
+  editors' top-level-only create.
 - **Duplicates**: not detected in the sheet (iOS can't see the DB; a stale
   snapshot would lie). Save anyway; dedup is the apply-side's concern.
 - **No session** (cold share before first sign-in): the sheet shows "Open
@@ -266,7 +280,7 @@ real lever on RN cold-start latency.
 | share screen UI + prop normalizing + close() seam                                                                | `apps/brace-expo/src/features/share/`                                                                                            |
 | entries: `index.js` (main, registers `braceShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/brace-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension) |
 | snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                   | `@stxapps/expo-react` `data/share-store.ts`                                                                                      |
-| best-effort upload (entities from the draft, sign → PUT → commit)                                        | `@stxapps/expo-react` `data/share-upload.ts`                                                                                     |
+| best-effort upload (entities from the draft, sign → PUT → commit)                                                | `@stxapps/expo-react` `data/share-upload.ts`                                                                                     |
 | app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                    |
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceFileCrypto, iOS Swift)  |
 | write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                        |

@@ -12,6 +12,11 @@
 // findOrCreate rule, applied at input time since the sheet already holds the
 // taxonomy), and ids for everything new are minted HERE so the draft is
 // idempotent downstream (share-store's header).
+//
+// One deliberate divergence from those web cousins: the list picker PICKS ONLY.
+// The web ListSelect can mint a list inline (`allowCreate`); this can't, because
+// the iOS taxonomy is a read-only snapshot — see docs/share-sheet.md ("New tags
+// yes, new lists no") before adding it.
 
 import { useCallback, useEffect, useState } from 'react';
 import {
