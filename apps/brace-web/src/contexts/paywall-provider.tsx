@@ -86,10 +86,14 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
   // The current caller's dismiss callback, held out of state so `show` stays
   // identity-stable (callers put it in dep arrays).
   const dismissRef = useRef<(() => void) | undefined>(undefined);
+  // The element that triggered the gate, so closing can hand focus back to it —
+  // see onCloseAutoFocus below.
+  const invokerRef = useRef<HTMLElement | null>(null);
 
   const api = useMemo<PaywallApi>(
     () => ({
       show: (f, onDismiss) => {
+        invokerRef.current = document.activeElement as HTMLElement | null;
         dismissRef.current = onDismiss;
         setFeature(f);
       },
@@ -104,6 +108,20 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
     dismiss?.();
   }, []);
 
+  // Radix's modal DialogContent hardcodes close-focus to the DialogTrigger
+  // (preventing the usual restore-to-previous), but this dialog is imperative and
+  // has no trigger — so its `triggerRef.current?.focus()` no-ops and focus falls to
+  // <body>. Restore to the element that called `show` instead: the gate is an
+  // interrupt, so backing out belongs where the user pressed (e.g. the advanced
+  // popover's Search button, whose query is still sitting there untouched), not
+  // nowhere. Our preventDefault short-circuits Radix's branch via
+  // composeEventHandlers' checkForDefaultPrevented.
+  const onCloseAutoFocus = useCallback((e: Event) => {
+    e.preventDefault();
+    invokerRef.current?.focus();
+    invokerRef.current = null;
+  }, []);
+
   const copy = feature ? FEATURE_COPY[feature] : null;
 
   return (
@@ -111,7 +129,7 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
       {children}
       {copy && (
         <Dialog open onOpenChange={(open) => !open && close()}>
-          <DialogContent className="sm:max-w-sm">
+          <DialogContent className="sm:max-w-sm" onCloseAutoFocus={onCloseAutoFocus}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Lock className="size-4" /> {copy.title}
