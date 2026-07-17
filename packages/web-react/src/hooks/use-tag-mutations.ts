@@ -35,7 +35,7 @@ export interface TagMutations {
     index: number,
   ) => Promise<TagItem | null>;
   // Reuse-or-mint by name: return the existing tag whose name matches (case-
-  // insensitive), else create a new top-level tag appended after the root group.
+  // insensitive), else create a new top-level tag prepended to the root group.
   // This is what keeps the link editor's free-text "Add tag" from forking a
   // duplicate entity every time someone retypes a tag they already have. A blank
   // name is a no-op (returns null).
@@ -107,9 +107,14 @@ export function useTagMutations(): TagMutations {
       const match = tags.find((t) => t.name.toLowerCase() === trimmed.toLowerCase());
       if (match) return match;
 
-      // New top-level tag, appended after the current root group.
+      // New top-level tag at index 0 — where the Tags settings CreateRow and
+      // ListSelect's create both put a new node, so the same action lands the
+      // same place wherever it's invoked. Still sorted: rankForIndex reads the
+      // group's head to mint a key before it. Several tags typed in one session
+      // therefore stack newest-first (a, b, c → c, b, a) — recency order, and
+      // each lands where the eye already is rather than off the end of the list.
       const root = tags.filter((t) => t.parentId === null).sort(compareRank);
-      return create(trimmed, null, root, root.length);
+      return create(trimmed, null, root, 0);
     },
     [username, create],
   );

@@ -13,17 +13,15 @@
 // frame) → files/sign → PUT → ops/commit, the same three round trips as one
 // engine put-chunk, minus the store bookkeeping.
 //
-// The draft's NEW LISTS and NEW TAGS upload too, when they carry a rank —
-// which the sheet mints from its taxonomy precisely so this path can build the
-// complete entity set from the draft alone (a stale-snapshot rank can only tie,
-// broken by id in the sort — share-store's header). That's the point of the
-// upload: another device sees the link IN its new list WITH its new tag chips
-// without waiting for the phone app to be reopened. A rank-free entry (a draft
-// minted against an old, rank-free snapshot) is skipped — the drain creates it,
-// and until then other devices see the link without that list/tag (the link's
-// `tagIds`/`listId` already reference the new ids, so nothing is rewritten when
-// they land). The drain later re-writes the same entities with the same ranks
-// (applyShareDraft uses the draft verbatim), so LWW converges byte-stable.
+// The draft's NEW LISTS and NEW TAGS upload too — the sheet mints their ranks
+// from its taxonomy precisely so this path can build the complete entity set
+// from the draft alone (a stale-snapshot rank can only tie, broken by id in the
+// sort — share-store's header). That's the point of the upload: another device
+// sees the link IN its new list WITH its new tag chips without waiting for the
+// phone app to be reopened. Rank is required on the draft, so there is no
+// partial-entity case to handle here. The drain later re-writes the same
+// entities with the same ranks (applyShareDraft uses the draft verbatim), so
+// LWW converges byte-stable.
 
 import { encryptEntity } from '@stxapps/expo-crypto';
 import {
@@ -66,18 +64,17 @@ export interface DraftEntity {
 
 // Build the uploadable entities from a draft — the extension-side twin of
 // share-store's applyShareDraft, minus everything that needs the store (the
-// rank fallback for rank-free entries, the deleted-list fallback: an uploaded
-// `listId` that no longer exists converges when the drain re-writes the link).
-// Pure, so it's spec-able; `now` is injected for the same reason. New lists/
-// tags ride only with a sheet-minted rank (header) — `parentId` pinned null,
-// the editors' top-level-only create. Taxonomy entities go first so the batch
-// commits referenced-before-referencing. The share-payload title seeds the
-// provisional extraction title, never `customTitle` — same rule as the drain.
+// deleted-list fallback: an uploaded `listId` that no longer exists converges
+// when the drain re-writes the link). Pure, so it's spec-able; `now` is injected
+// for the same reason. New lists/tags carry a sheet-minted rank (header) and
+// `parentId` pinned null, the editors' top-level-only create. Taxonomy entities
+// go first so the batch commits referenced-before-referencing. The share-payload
+// title seeds the provisional extraction title, never `customTitle` — same rule
+// as the drain.
 export function buildDraftEntities(draft: ShareDraft, now: number): DraftEntity[] {
   const entities: DraftEntity[] = [];
 
   for (const newList of draft.newLists) {
-    if (newList.rank === undefined) continue;
     const list: List = {
       id: newList.id,
       name: newList.name,
@@ -93,7 +90,6 @@ export function buildDraftEntities(draft: ShareDraft, now: number): DraftEntity[
   }
 
   for (const newTag of draft.newTags) {
-    if (newTag.rank === undefined) continue;
     const tag: Tag = {
       id: newTag.id,
       name: newTag.name,

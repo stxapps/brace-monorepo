@@ -89,21 +89,6 @@ describe('buildDraftEntities', () => {
     });
   });
 
-  it('skips rank-free new entries — the drain creates those', () => {
-    // A draft minted against an old, rank-free snapshot: the link still
-    // uploads (its listId/tagIds reference the new ids; nothing is rewritten
-    // when the drain lands the entities), the taxonomy entities wait.
-    const entities = buildDraftEntities(
-      {
-        ...draft,
-        newTags: [{ id: 'tag-new', name: 'fresh' }],
-        newLists: [{ id: 'list-new', name: 'Recipes' }],
-      },
-      NOW,
-    );
-    expect(entities.map((e) => e.path)).toEqual([LINK_PATH, EXTRACTION_PATH]);
-  });
-
   it('omits the extraction when the payload carried no usable title', () => {
     const entities = buildDraftEntities({ ...draft, title: undefined }, NOW);
     expect(entities.map((e) => e.path)).toEqual([LIST_PATH, TAG_PATH, LINK_PATH]);

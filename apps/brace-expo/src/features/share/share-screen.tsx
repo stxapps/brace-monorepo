@@ -85,16 +85,6 @@ function Notice({ testID, message }: { testID: string; message: string }) {
   );
 }
 
-// Mint the sheet-side rank against the neighbour `prev`, or undefined when the
-// neighbour row carries no rank (an old, pre-rank snapshot) — the drain then
-// computes the rank at apply time and the upload skips the entity
-// (share-store's header). Callers handle the empty-group case themselves
-// (rankBetween(null, null), the first key).
-function mintRank(prev: string | undefined, side: 'before' | 'after'): string | undefined {
-  if (prev === undefined) return undefined;
-  return side === 'before' ? rankBetween(null, prev) : rankBetween(prev, null);
-}
-
 export function ShareScreen({ url, title }: SharePayload) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [taxonomy, setTaxonomy] = useState<ShareTaxonomy | null>(null);
@@ -156,12 +146,11 @@ export function ShareScreen({ url, title }: SharePayload) {
         setListId(existing.id);
         return;
       }
-      const first = taxonomy.lists[0];
-      const rank = first === undefined ? rankBetween(null, null) : mintRank(first.rank, 'before');
+      // rankBetween(null, null) — the first key — when there are no lists yet.
       const minted: ShareNewEntity = {
         id: newId(),
         name,
-        ...(rank !== undefined ? { rank } : {}),
+        rank: rankBetween(null, taxonomy.lists[0]?.rank ?? null),
       };
       setNewList(minted);
       setListId(minted.id);
@@ -170,9 +159,9 @@ export function ShareScreen({ url, title }: SharePayload) {
   );
 
   // Commit a typed tag name onto the draft: reuse an existing tag on a
-  // case-insensitive name match (findOrCreate), else mint a new one appended
-  // after the last tag — chaining off the previous mint so several new tags
-  // keep their typed order.
+  // case-insensitive name match (findOrCreate), else mint a new one prepended
+  // before the first tag — web findOrCreate's create-at-index-0, the same rule
+  // submitListName follows, so the same action lands the same place everywhere.
   const submitTagName = useCallback(
     (name: string) => {
       if (!taxonomy) return;
@@ -184,14 +173,14 @@ export function ShareScreen({ url, title }: SharePayload) {
       }
       setNewTags((tags) => {
         if (tags.some((tag) => tag.name.toLowerCase() === lower)) return tags;
-        const prev =
-          tags.length > 0
-            ? tags[tags.length - 1].rank
-            : taxonomy.tags.length > 0
-              ? taxonomy.tags[taxonomy.tags.length - 1].rank
-              : null;
-        const rank = prev === null ? rankBetween(null, null) : mintRank(prev, 'after');
-        return [...tags, { id: newId(), name, ...(rank !== undefined ? { rank } : {}) }];
+        // The group's current head: the previous mint if this session made one
+        // (each prepends, so the latest IS the head), else the first existing
+        // tag, else null (no tags yet — rankBetween(null, null) is the first
+        // key). Chaining off it stacks several new tags newest-first, matching
+        // what web's re-read-per-call gives — the array order below is just the
+        // draft's set; rank is what orders them.
+        const head = tags.length > 0 ? tags[tags.length - 1].rank : (taxonomy.tags[0]?.rank ?? null);
+        return [...tags, { id: newId(), name, rank: rankBetween(null, head) }];
       });
     },
     [taxonomy],

@@ -19,10 +19,17 @@
 // (live on Android, snapshot on iOS) is safe because a stale-snapshot rank can
 // only TIE with a rank minted elsewhere since — the same equal-key case two
 // devices inserting concurrently already produce, broken deterministically by
-// id in the sort (shared sync/rank.ts), never data loss. When a rank is absent
-// (a draft or snapshot written by an older build), the drain computes one at
-// apply time and the upload skips just that entity — the pre-rank behavior,
-// kept as the fallback path.
+// id in the sort (shared sync/rank.ts), never data loss.
+//
+// The schemas below carry NO back-compat slack — rank is required wherever it
+// appears (no drain-side fallback, no upload-side skip) and `newLists` has no
+// `.default([])`. Each of those covered files written by a build predating the
+// field, and nothing has shipped, so no such file can exist; the greenfield
+// rule is to tighten the schema in place rather than carry compatibility with a
+// past that never happened. A payload missing either is therefore corrupt, and
+// the parse boundary rejects it like any other malformed input. Both are worth
+// revisiting the day a build ships: an outbox draft or snapshot CAN outlive an
+// app update, which is the skew these once guarded.
 //
 // Everything that lands in the App Group container is PLAINTEXT BY DESIGN —
 // the same trust boundary as the rest of the device store (brace-expo keeps
@@ -46,7 +53,6 @@ import {
   LISTS_PREFIX,
   listSchema,
   pathFromId,
-  rankBetween,
   SYSTEM_LIST_DEFAULTS,
   SYSTEM_LIST_IDS,
   type Tag,
@@ -69,13 +75,13 @@ import { uploadShareDraft } from './share-upload';
 
 // A list/tag the sheet minted for creation at apply time. `rank` is minted in
 // the sheet too (from the taxonomy's neighbour ranks — see the header on why a
-// stale rank is only a tie) so the upload and the drain write identical
-// entities; it's optional because a sheet fed an old, rank-free snapshot can't
-// mint one — the drain then computes it and the upload skips the entity.
+// stale rank is only a tie), so the upload and the drain write identical
+// entities from the draft alone. Required: the sheet mints against the taxonomy
+// it already renders its pickers from, so a rank-free entry can only be corrupt.
 const shareNewEntitySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  rank: z.string().min(1).optional(),
+  rank: z.string().min(1),
 });
 export type ShareNewEntity = z.infer<typeof shareNewEntitySchema>;
 
@@ -83,12 +89,12 @@ export type ShareNewEntity = z.infer<typeof shareNewEntitySchema>;
 // already includes the ids in `newTags` (which just says which of those must be
 // created). `newLists` is the list counterpart — at most one in practice (the
 // sheet's create-and-select), `parentId` pinned null at apply (the editors'
-// top-level-only create rule — docs/editors.md); `.default([])` keeps outbox
-// drafts written by builds that predate it parseable (the drain DELETES a
-// draft that fails to parse). `title` is the share payload's page title — it
-// seeds the provisional `extraction.title` at apply time, never `customTitle`
-// (the same not-a-deliberate-user-title rule as bulk import — shared
-// entities.ts).
+// top-level-only create rule — docs/editors.md). It carries no `.default([])`,
+// for the same reason `rank` above is required: the default only ever covered
+// drafts from a build predating the field, and no such build shipped. `title`
+// is the share payload's page title — it seeds the provisional
+// `extraction.title` at apply time, never `customTitle` (the same
+// not-a-deliberate-user-title rule as bulk import — shared entities.ts).
 const shareDraftSchema = z.object({
   id: z.string().min(1),
   url: z.string().min(1),
@@ -96,16 +102,18 @@ const shareDraftSchema = z.object({
   listId: z.string().min(1),
   tagIds: z.array(z.string()),
   newTags: z.array(shareNewEntitySchema),
-  newLists: z.array(shareNewEntitySchema).default([]),
+  newLists: z.array(shareNewEntitySchema),
   sharedAt: z.number().int(),
 });
 export type ShareDraft = z.infer<typeof shareDraftSchema>;
 
 // What the sheet's pickers render. Lists arrive flattened in tree order with
 // their indentation `depth` (the sheet has no tree logic); tags in rank order.
-// `rank` rides along so the sheet can mint neighbour ranks for what it creates
-// (prepend for a new list, append for new tags) — optional so a snapshot
-// written by a pre-rank build still parses instead of reading as signed-out.
+// `rank` rides along so the sheet can mint the neighbour rank for what it
+// creates — index 0 for both entities (docs/editors.md). Required: the snapshot
+// is rewritten from the store by refreshShareTaxonomy, which always has ranks,
+// so a rank-free row means a corrupt file — and reading THAT as signed-out is
+// the right answer, since it points the user at the app, which rewrites it.
 const shareTaxonomySchema = z.object({
   sessionPresent: z.boolean(),
   lists: z.array(
@@ -113,10 +121,10 @@ const shareTaxonomySchema = z.object({
       id: z.string(),
       name: z.string(),
       depth: z.number().int(),
-      rank: z.string().optional(),
+      rank: z.string(),
     }),
   ),
-  tags: z.array(z.object({ id: z.string(), name: z.string(), rank: z.string().optional() })),
+  tags: z.array(z.object({ id: z.string(), name: z.string(), rank: z.string() })),
 });
 export type ShareTaxonomy = z.infer<typeof shareTaxonomySchema>;
 export type ShareTaxonomyList = ShareTaxonomy['lists'][number];
@@ -225,12 +233,25 @@ function readTaxonomyFromDb(): ShareTaxonomy {
 
 // --- App Group container (iOS) --------------------------------------------------
 
+// Everything this module owns lives under one subtree, so the sign-out teardown
+// can remove it wholesale rather than enumerating artifacts (clearShareData).
+function shareDir(group: Directory): Directory {
+  return new Directory(group, 'share');
+}
+
 function taxonomyFile(group: Directory): File {
   return new File(group, 'share/taxonomy.json');
 }
 
 function outboxDir(group: Directory): Directory {
   return new Directory(group, 'share/outbox');
+}
+
+// Where an outbox file the drain couldn't read goes (see drainShareOutbox). A
+// SIBLING of the outbox, not a child: the drain must never see it again, and
+// nesting it would make that depend on the scan skipping directories.
+function failedDir(group: Directory): Directory {
+  return new Directory(group, 'share/failed');
 }
 
 // --- the sheet's surface ---------------------------------------------------------
@@ -317,28 +338,18 @@ async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<voi
 
 // Land one draft through the write edge: create the new lists (top-level, the
 // editors' `parentId: null` rule), then the new tags, then the link, then seed
-// the provisional extraction title. Ranks come from the draft verbatim (minted
-// in the sheet — see the header; verbatim keeps this byte-identical with what
-// the extension may have already uploaded, so LWW converges without shuffling
-// anyone's order); a rank-free entry (older build) gets one computed here —
-// prepend-before-the-first-root-list for lists and append-after-the-last for
-// tags, the same placements the sheet mints. Idempotent per the header: an
-// existing row short-circuits its create; re-writing the link converges under
-// LWW. A listId that stopped existing between share and apply (list deleted on
-// another device) falls back to the default inbox rather than dangling.
+// the provisional extraction title. Ranks come from the draft VERBATIM — minted
+// in the sheet (see the header), which keeps this byte-identical with what the
+// extension may have already uploaded, so LWW converges without shuffling
+// anyone's order. Idempotent per the header: an existing row short-circuits its
+// create; re-writing the link converges under LWW. A listId that stopped
+// existing between share and apply (list deleted on another device) falls back
+// to the default inbox rather than dangling.
 async function applyShareDraft(username: string, draft: ShareDraft): Promise<void> {
   const storedLists = readNamespace(LISTS_PREFIX, listSchema);
-  const rootLists = mergeSystemLists(storedLists)
-    .filter((list) => list.parentId === null)
-    .sort(compareRank);
-  let firstRootRank = rootLists.length ? rootLists[0].rank : null;
+
   for (const newList of draft.newLists) {
     if (await getItem(pathFromId(newList.id, LISTS_PREFIX))) continue;
-    let rank = newList.rank;
-    if (rank === undefined) {
-      rank = rankBetween(null, firstRootRank);
-      firstRootRank = rank;
-    }
     await writeList(
       username,
       {
@@ -346,7 +357,7 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
         id: newList.id,
         name: newList.name,
         parentId: null,
-        rank,
+        rank: newList.rank,
         createdAt: 0,
         updatedAt: 0,
       },
@@ -354,17 +365,8 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
     );
   }
 
-  const existingTags = readNamespace(TAGS_PREFIX, tagSchema);
-  let lastRank = existingTags.length
-    ? existingTags.slice().sort(compareRank)[existingTags.length - 1].rank
-    : null;
   for (const newTag of draft.newTags) {
     if (await getItem(pathFromId(newTag.id, TAGS_PREFIX))) continue;
-    let rank = newTag.rank;
-    if (rank === undefined) {
-      rank = rankBetween(lastRank, null);
-      lastRank = rank;
-    }
     await writeTag(
       username,
       {
@@ -372,7 +374,7 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
         id: newTag.id,
         name: newTag.name,
         parentId: null,
-        rank,
+        rank: newTag.rank,
         createdAt: 0,
         updatedAt: 0,
       },
@@ -407,11 +409,48 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
   }
 }
 
+// Read + parse one outbox file. Null when the bytes are unreadable OR the JSON
+// doesn't match the schema — the caller treats both the same, since neither can
+// be applied, and a file that throws on read would otherwise abort the whole
+// drain and strand every draft behind it.
+function readDraft(entry: File): ShareDraft | null {
+  try {
+    return parseShareDraft(entry.textSync());
+  } catch {
+    return null;
+  }
+}
+
+// Park an unreadable outbox file out of the drain's path (see drainShareOutbox).
+// Best-effort: if the move itself fails, leaving the file in the outbox is the
+// least-bad outcome — the next drain retries it, and it blocks nothing in the
+// meantime (the loop moves on to the next file either way).
+function quarantine(group: Directory, entry: File): void {
+  try {
+    const dir = failedDir(group);
+    if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
+    entry.move(dir);
+  } catch {
+    // Leave it where it is; the next drain will try again.
+  }
+}
+
 // Drain the iOS outbox into the local store — called by the main app on launch
 // and foreground (and by the background-task pass). Returns how many drafts
-// landed. Each file is deleted only AFTER its local write commits; a corrupt
-// file is deleted without applying so it can't wedge the outbox forever. No-op
-// when signed out (the drafts wait) or on Android (no outbox exists).
+// landed. Each file is deleted only AFTER its local write commits.
+//
+// A file the drain CAN'T READ is moved to `share/failed/`, never deleted. It
+// can't stay in the outbox (it would be retried forever), but destroying it is
+// worse: an outbox draft is sometimes the ONLY copy of a share — the
+// best-effort upload fails exactly when the user was offline — and the drafts
+// most likely to stop parsing are the ones written by an older build, since a
+// parked file outlives the code that wrote it and the schemas here carry no
+// back-compat slack (see the header). Quarantining keeps that class of mistake
+// a recoverable bug report instead of a link the user silently never gets back.
+// Nothing reads `failed/` today; sign-out clears it with everything else
+// (clearShareData).
+//
+// No-op when signed out (the drafts wait) or on Android (no outbox exists).
 export async function drainShareOutbox(): Promise<number> {
   if (Platform.OS !== 'ios') return 0;
   const session = getSession();
@@ -423,11 +462,13 @@ export async function drainShareOutbox(): Promise<number> {
   let applied = 0;
   for (const entry of dir.list()) {
     if (!(entry instanceof File)) continue;
-    const draft = parseShareDraft(entry.textSync());
-    if (draft) {
-      await applyShareDraft(session.username, draft);
-      applied += 1;
+    const draft = readDraft(entry);
+    if (!draft) {
+      quarantine(group, entry);
+      continue;
     }
+    await applyShareDraft(session.username, draft);
+    applied += 1;
     entry.delete();
   }
   return applied;
@@ -450,15 +491,16 @@ export async function refreshShareTaxonomy(): Promise<void> {
 
 // Remove everything share-related from the App Group container — part of the
 // sign-out teardown (clear-data.ts): the snapshot names the account's lists and
-// tags and the outbox may hold undrained URLs, none of which may outlive the
-// session or leak to the next account. Failure-tolerant like the rest of the
-// teardown's file half.
+// tags, and the outbox (plus its `failed/` quarantine) may hold undrained URLs,
+// none of which may outlive the session or leak to the next account. Deletes the
+// whole `share/` subtree rather than naming each artifact, so anything added
+// under it later is covered by construction — an enumeration here is exactly the
+// kind of list that silently misses the next addition. Failure-tolerant like the
+// rest of the teardown's file half.
 export function clearShareData(): void {
   if (Platform.OS !== 'ios') return;
   const group = appGroupDir();
   if (!group) return;
-  const file = taxonomyFile(group);
-  if (file.exists) file.delete();
-  const dir = outboxDir(group);
+  const dir = shareDir(group);
   if (dir.exists) dir.delete();
 }

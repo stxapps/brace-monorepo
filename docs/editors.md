@@ -38,7 +38,7 @@ iOS snapshot/outbox, the upload). It can't render the web pickers (`web-ui` is
 `platform:web`), so it carries **share-sized presentational cousins**
 (`share-list-picker.tsx` / `share-tags-picker.tsx` — rows in, events out, fed
 by a taxonomy snapshot rather than the live hooks) that uphold the same rules:
-create is opt-in and inline, a new list is top-level only, an exact
+create is opt-in and inline, every create lands top-level at index 0, an exact
 case-insensitive name match reuses instead of minting, and the pickers filter
 only Trash (the locks/hide rule below applies there too). Change a picker
 invariant here and the share sheet must follow.
@@ -104,15 +104,48 @@ editors pass and the move-to menus below must not. The rows themselves are
   extension popup would be killed outright by `tabs.create`, since a popup
   dismisses on focus loss uninterceptably. "Add a list" is a **sub-task of the
   save**; anything that ends the save to do it isn't an answer.
-- **Why the list create is top-level only** (`parentId: null`, index 0 — matching
-  the settings `CreateRow`, so the same action lands the same place wherever it's
-  invoked): this is what keeps the create cheap despite the lists/tags asymmetry.
-  `useTagMutations.findOrCreate(name)` takes only a name because a tag **is** its
-  name; `useListMutations.create(name, parentId, siblings, index)` needs a
-  **position in a tree**. The editors decline to ask: nesting is non-destructive to
-  defer (`move` is a one-field `{ parentId, rank }` write), and rebuilding the
-  settings tree editor — drag, depth projection — inside a 320px popover would be
-  absurd. Create now, reparent later, lose nothing.
+- **Every create lands in the same place: top-level, index 0.** `parentId: null`
+  and the head of the root group — for **both** entities, on **every** surface: the
+  settings `CreateRow`s, `ListSelect`'s Create row, `useTagMutations.findOrCreate`,
+  and the share sheet's two pickers. One action, one landing spot, wherever it's
+  invoked; there is no per-entity or per-surface variation to remember. Two halves
+  to the rule, each load-bearing for a different reason:
+  - **Top-level is what keeps the create cheap despite the lists/tags asymmetry.**
+    `findOrCreate(name)` takes only a name because a tag **is** its name;
+    `useListMutations.create(name, parentId, siblings, index)` needs a **position in
+    a tree**. The editors decline to ask: nesting is non-destructive to defer
+    (`move` is a one-field `{ parentId, rank }` write), and rebuilding the settings
+    tree editor — drag, depth projection — inside a 320px popover would be absurd.
+    Create now, reparent later, lose nothing.
+  - **Index 0 puts the new row where the eye already is** — beside the `CreateRow`
+    that minted it, at the top of the still-open picker. Against a hand-ranked
+    group an append is no less arbitrary and merely invisible: a new tag landing
+    below the fold of a long list reads as "did that even work?". The cost is that
+    several tags typed in one editor session stack **newest-first** (a, b, c → c, b,
+    a), since `findOrCreate` re-reads the store per call and holds no session state.
+    That's accepted, not overlooked: the link's own `tagIds` preserves the typed
+    order regardless (it's what renders the chips), so the reversal touches only the
+    global picker order, where recency is the more useful key anyway. Buying typed
+    order back would mean threading an anchor through a deliberately stateless hook.
+- **The web pickers create IMMEDIATELY; the share sheet DEFERS to Add — that's a
+  constraint, not a preference.** `ListSelect`/`TagsField` write the entity the
+  moment a name is confirmed: they run in the app's process, so the create hits the
+  store and the live `useLists`/`useTags` query renders the row/chip a beat later
+  (the catch-up gap both shells already account for). The iOS share extension is a
+  **separate process that must never open the app's sqlite**
+  ([share-sheet.md](./share-sheet.md) — a shared-container lock invites the
+  `0xdead10cc` kill), so it _cannot_ create immediately; it mints the id **and the
+  rank** in the sheet and ships them on the draft to be created at Add.
+  `share-screen` is platform-blind, so Android defers too even though, running
+  in-process, it could write live. Don't "fix" either side to match the other:
+  deferral is what forces the sheet's pending-entity state, its
+  created-means-selected discard rule, and the idempotent drain + upload —
+  machinery that only pays for itself where the process split leaves no choice.
+  What must stay identical is the user-visible rule (top-level, index 0,
+  case-insensitive reuse), and it does. **The accepted cost on web:** confirming a
+  name and then cancelling the editor leaves the list/tag behind, since the write
+  already happened. `findOrCreate` reuses it on a retype, and Settings →
+  Lists/Tags is one delete away.
 - **Two smaller consequences, both in `list-command`.** (1) The filter input is
   normally count-gated at `SEARCH_THRESHOLD` (scrolling beats a box), but
   `onCreate` **forces it on at any count** — it doubles as the Create row's name

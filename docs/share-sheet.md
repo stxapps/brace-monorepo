@@ -65,6 +65,9 @@ instead exchanges **atomic per-item JSON files** — no locks, no contention:
   `{ id, url, title?, listId, tagIds, newTags, newLists, sharedAt }`.
   The main app drains each through the normal write edge on launch/foreground
   and deletes the file only after the local write commits.
+- `<app-group>/share/failed/<linkId>.json` — the **quarantine**: an outbox file
+  the drain couldn't read, parked here rather than deleted (_the drain never
+  destroys what it couldn't read_, below). Nothing reads it; sign-out clears it.
 
 Both sides reach the container via expo-file-system's
 `Paths.appleSharedContainers`; the App Group id is expo-share-extension's
@@ -86,9 +89,51 @@ snapshot on iOS) is safe because an equal-key **tie is an anticipated,
 deterministically-resolved case** of the rank model, not a corruption: two
 devices inserting at the same slot concurrently already mint equal keys, and
 `compareRank` breaks the tie by id (shared `sync/rank.ts`) — a stale-snapshot
-rank can do no worse. A draft or snapshot from an older build may carry no
-ranks; then the drain computes them at apply time (the pre-rank behavior, kept
-as the fallback) and the upload skips just those entities.
+rank can do no worse.
+
+**Rank is required on the draft and the snapshot** — there is no drain-side
+fallback that computes one and no upload-side skip for entities missing one.
+Those existed for files written by a build that predates sheet-minted ranks;
+nothing has shipped, so no such file can exist, and the greenfield rule is to
+tighten the schema in place rather than carry compatibility with a past that
+never happened. A rank-free payload is corrupt and is rejected at the parse
+boundary like any other malformed input — for the snapshot that means reading as
+signed-out, which points the user at the app, and the app rewrites it
+(`refreshShareTaxonomy`). Both pickers mint at **index 0** (the create-position
+rule — [editors.md](./editors.md)), against the head of the group.
+
+### the drain never destroys what it couldn't read
+
+A tight schema and a deleting drain are safe **separately** and lethal
+**together**, so `drainShareOutbox` pairs the strictness above with a
+quarantine: a file it can't read — unreadable bytes or JSON the schema rejects —
+moves to `share/failed/` instead of being deleted. It can't stay in the outbox
+(it would be retried forever) and it can't be applied, but destroying it is the
+one option that's unrecoverable.
+
+The asymmetry that drives this: **the snapshot is a cache, the outbox draft is
+sometimes the only copy.** `refreshShareTaxonomy` rebuilds a bad snapshot from
+the store, so discarding one costs a confusing sheet and self-heals. A draft has
+no such source — the best-effort upload is what would have made a second copy,
+and it fails exactly when the user was offline. So the rule is: **version what
+you can't reconstruct, discard what you can, and never delete what you couldn't
+read.** Only the third clause needs code here.
+
+What makes this more than theory is that a parked file **outlives the code that
+wrote it**. The app and the extension ship in one bundle and update atomically,
+so two builds never run at once — but an outbox file written before an update is
+read by the drain after it, and that is the one skew this design has. It is also
+the direction that matters: only "new code reads old file" can happen, never the
+reverse. The exposed user is the one the share sheet is FOR — share, never open
+the app, auto-update lands. Quarantining turns that from a silently vanished
+link into a recoverable file.
+
+Nothing reads `share/failed/` today; there is deliberately no version tag and no
+migration path, because a version field only pays for itself if you write the
+second parser, and the quarantine keeps the option open **without** committing to
+that. Sign-out clears it with everything else (`clearShareData` deletes the whole
+`share/` subtree rather than naming artifacts, so a future addition can't be
+missed).
 
 ### what the sheet does and doesn't do
 
@@ -188,7 +233,7 @@ renderless component mounted inside `<SyncProvider>` in brace-expo's
 Both calls are platform no-ops on Android and failure-tolerant — a missed pass
 self-heals on the next signal.
 
-### immediate upload from the iOS extension (shipped)
+### immediate upload from the iOS extension
 
 **The outbox is the record of truth; the upload is a best-effort fast path on
 top of it — not a replacement.** The extension builds the entity, writes the
@@ -247,20 +292,17 @@ write/delete is best-effort — a Keychain hiccup must not fail sign-in/out; a
 missing mirror just means no fast-path upload (the drain still delivers).
 
 **What the upload sends.** `uploadShareDraft` (`data/share-upload.ts`) builds
-the **complete entity set from the draft alone** — the new lists/tags (when
-they carry a sheet-minted `rank` — see _the draft is idempotent_ for why a
-stale-snapshot rank is only a tie), then the **link**, then the provisional
+the **complete entity set from the draft alone** — the new lists/tags (carrying
+the sheet-minted `rank` — see _the draft is idempotent_ for why a stale-snapshot
+rank is only a tie), then the **link**, then the provisional
 **extraction title** when the payload carried one — encrypts each with the v1
 frame, and pushes sign → PUT → commit — the same three round trips as one
 engine put-chunk, minus the store bookkeeping (the extension must never open
 the app's sqlite). Uploading the taxonomy entities is what makes the upload's
 payoff whole: another device sees the link **in its new list, with its new tag
-chips**, without waiting for the phone app to be reopened. A rank-free entry
-(a draft minted against an old, rank-free snapshot) is skipped — the drain
-creates it, and until then other devices see the link without that list/tag
-(the link's `listId`/`tagIds` already reference the new ids, so nothing is
-rewritten when they land; a link whose `listId` hasn't arrived yet simply
-doesn't match any list-scoped query until it does). Failures skip the commit
+chips**, without waiting for the phone app to be reopened. Since rank is
+required on the draft, there is no partial-entity case here — the set is always
+complete. Failures skip the commit
 (no partial entity set) and are swallowed: no retry wrapper either — the
 extension process lives ~a second past the ✓, so the durable outbox IS the
 retry.

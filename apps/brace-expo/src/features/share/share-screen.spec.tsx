@@ -80,7 +80,8 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
   // Case-insensitive reuse — must select tag-a, not mint a duplicate.
   fireEvent.changeText(input, 'ALPHA');
   fireEvent(input, 'submitEditing');
-  // A genuinely new name mints a new tag, ranked after the last existing one.
+  // A genuinely new name mints a new tag, ranked before the first existing one
+  // (web findOrCreate's create-at-index-0).
   fireEvent.changeText(input, 'fresh');
   fireEvent(input, 'submitEditing');
   fireEvent.press(getByTestId('share-add'));
@@ -88,7 +89,7 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
   await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
   const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
   expect(draft.listId).toBe(DEFAULT_LIST_ID);
-  expect(draft.newTags).toEqual([{ id: 'minted-1', name: 'fresh', rank: rankBetween('a0', null) }]);
+  expect(draft.newTags).toEqual([{ id: 'minted-1', name: 'fresh', rank: rankBetween(null, 'a0') }]);
   expect(draft.tagIds).toEqual(['tag-a', 'minted-1']);
 });
 
