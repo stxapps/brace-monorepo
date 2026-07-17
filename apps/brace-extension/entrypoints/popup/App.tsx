@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { SettingsIcon } from 'lucide-react';
 
-import { normalizeUrl } from '@stxapps/shared';
+import { normalizeUrl, TRASH_ID } from '@stxapps/shared';
 import { type LinkItem, readLinkByUrlKey, useAuth, useSync } from '@stxapps/web-react';
 
 import { Complete } from './Complete';
@@ -30,7 +30,8 @@ function Centered({ children }: { children: React.ReactNode }) {
 //   loading → (signed out) signin → (signed in) editor → complete.
 // If the active URL is already in the local store, we skip the editor and open the
 // complete page straight away (covers reopening a saved tab, and the bonus path of
-// opening a web-app-saved link then clicking the icon).
+// opening a web-app-saved link then clicking the icon). A match in TRASH is the
+// exception — see SaveFlow.
 function App() {
   const { status } = useAuth();
 
@@ -119,9 +120,22 @@ function SaveFlow() {
     return <Centered>This page can’t be saved.</Centered>;
   }
 
+  // A match in Trash is NOT "already saved": the user removed it, and brace-web
+  // hides Trash from every view except Trash itself (use-links), so Complete's
+  // "Saved ✓" would point at something they can't find. Falling through to a plain
+  // Editor is no better — Save would mint a live copy shadowing the trashed one,
+  // and readLinkByUrlKey (a `.first()` on the index) would then return an arbitrary
+  // one of the two. So the editor takes the match and offers Restore instead.
   const link = justSaved ?? existing;
-  if (link) return <Complete link={link} />;
-  return <Editor tab={tab} url={normalizedUrl || tab.url} onSaved={setJustSaved} />;
+  if (link && link.listId !== TRASH_ID) return <Complete link={link} />;
+  return (
+    <Editor
+      tab={tab}
+      url={normalizedUrl || tab.url}
+      trashed={link ?? undefined}
+      onSaved={setJustSaved}
+    />
+  );
 }
 
 export default App;

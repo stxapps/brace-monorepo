@@ -23,6 +23,17 @@
 // picker and tag editor are the shared ListSelect/TagsField (web-ui), the same
 // pieces the extension editor and the edit dialog render.
 //
+// The already-saved warning has a TRASHED variant, and it's the one case that
+// offers an action instead of just a sentence. A plain duplicate is visible —
+// "you've already saved this" points at something the user can go find — but a
+// trashed match is invisible everywhere they browse or search (use-links
+// suppresses Trash outside the Trash view), so naming it as a duplicate without
+// a way to reach it is a dead end. Worse, Confirm would then mint a live copy
+// shadowing the trashed one, and `readLinkByUrlKey` (a `.first()` on the index)
+// would start returning an arbitrary one of the two. So Restore is offered
+// alongside Confirm: it reuses the existing record — keeping its history — while
+// Confirm stays the deliberate "no, a fresh copy" door.
+//
 // One state precedes all of that: a free library at its link cap can't save at
 // all, so the popover renders the shared LinkQuotaBanner INSTEAD of the form
 // (useLinkQuota — which also explains why this gate is load-bearing rather than
@@ -39,7 +50,12 @@ import {
   PLAN_LABELS,
   TRASH_ID,
 } from '@stxapps/shared';
-import { readLinkByUrlKey, useLinkMutations, useLinkQuota } from '@stxapps/web-react';
+import {
+  type LinkItem,
+  readLinkByUrlKey,
+  useLinkMutations,
+  useLinkQuota,
+} from '@stxapps/web-react';
 import { LinkQuotaBanner } from '@stxapps/web-ui/components/links/link-quota-banner';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -62,7 +78,7 @@ function useDefaultListId(): string {
 }
 
 export function LinkAddPopover() {
-  const { create } = useLinkMutations();
+  const { create, update } = useLinkMutations();
   const defaultListId = useDefaultListId();
   const { count, max, atLimit } = useLinkQuota();
 
@@ -74,12 +90,15 @@ export function LinkAddPopover() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   // urlError is a HARD, blocking error (empty URL); urlWarning is the SOFT
-  // state that relabels Save → Confirm and lets the next submit through. Two
+  // state that relabels Save → Confirm and lets the next submit through. Three
   // grounds, checked in order on submit — 'malformed' (can't normalize), then
-  // 'duplicate' (already in the local store) — so a URL that's both warns on
-  // each ground in turn. Editing the field disarms whichever is showing.
+  // the already-saved pair 'trashed' / 'duplicate' — so a URL that's both warns
+  // on each ground in turn. Editing the field disarms whichever is showing.
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [urlWarning, setUrlWarning] = useState<'malformed' | 'duplicate' | null>(null);
+  const [urlWarning, setUrlWarning] = useState<'malformed' | 'duplicate' | 'trashed' | null>(null);
+  // The trashed link behind a 'trashed' warning — what Restore acts on. Held
+  // from the submit that found it, so Restore doesn't re-query.
+  const [trashedMatch, setTrashedMatch] = useState<LinkItem | null>(null);
 
   // Reset to a clean draft whenever the popover opens; clear on close too so a
   // half-filled form never lingers. defaultListId is read at open time so the
@@ -93,6 +112,7 @@ export function LinkAddPopover() {
       setNote('');
       setUrlError(null);
       setUrlWarning(null);
+      setTrashedMatch(null);
     }
     setOpen(next);
   };
@@ -124,18 +144,44 @@ export function LinkAddPopover() {
     try {
       // Soft, second ground: the URL is already saved. Matched by canonical
       // dedup identity (readLinkByUrlKey — folds scheme/www/trailing slash/query
-      // order), so trivial variants of a saved link warn too. Only checked while
-      // 'duplicate' is unarmed — an armed warning means the user has seen it, so
+      // order), so trivial variants of a saved link warn too. A match in Trash
+      // warns as 'trashed' instead, which adds Restore to the footer. Only checked
+      // while neither is armed — an armed warning means the user has seen it, so
       // Confirm saves the duplicate deliberately.
-      if (urlWarning !== 'duplicate') {
+      if (urlWarning !== 'duplicate' && urlWarning !== 'trashed') {
         const existing = await readLinkByUrlKey(normalized ?? trimmed);
         if (existing) {
-          setUrlWarning('duplicate');
+          const inTrash = existing.listId === TRASH_ID;
+          setUrlWarning(inTrash ? 'trashed' : 'duplicate');
+          setTrashedMatch(inTrash ? existing : null);
           return;
         }
       }
 
       await create({ url: normalized ?? trimmed, listId, tagIds, note: note.trim() || undefined });
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Restore the trashed match instead of minting a second copy. It lands in the
+  // list the form names (the view they opened this from, or My List — never Trash,
+  // which ListSelect excludes), so Restore reads as "add it here", the same promise
+  // Save makes. Anything else they typed rides along: the draft is the request the
+  // user just made, so it wins over the old record's fields — and a quick-add draft
+  // starts empty, so the untouched case leaves the link's own tags/note alone rather
+  // than wiping them. Tags UNION for the same reason: both sets were wanted.
+  const onRestore = async () => {
+    if (!trashedMatch || saving) return;
+    setSaving(true);
+    try {
+      const trimmedNote = note.trim();
+      await update(trashedMatch, {
+        listId,
+        ...(tagIds.length > 0 ? { tagIds: [...new Set([...trashedMatch.tagIds, ...tagIds])] } : {}),
+        ...(trimmedNote ? { note: trimmedNote } : {}),
+      });
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -196,6 +242,7 @@ export function LinkAddPopover() {
                   // warning so the button reverts to Save and re-validates.
                   setUrlError(null);
                   setUrlWarning(null);
+                  setTrashedMatch(null);
                 }}
               />
               {urlError !== null ? (
@@ -206,7 +253,9 @@ export function LinkAddPopover() {
                 <p role="alert" className="text-xs text-amber-600 dark:text-amber-500">
                   {urlWarning === 'malformed'
                     ? 'This doesn’t look like a valid URL. Click Confirm to save it anyway.'
-                    : 'You’ve already saved this link. Click Confirm to save it again.'}
+                    : urlWarning === 'trashed'
+                      ? 'This link is in your Trash. Restore it, or click Confirm to save a new copy.'
+                      : 'You’ve already saved this link. Click Confirm to save it again.'}
                 </p>
               ) : null}
             </div>
@@ -264,6 +313,21 @@ export function LinkAddPopover() {
               <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
+              {/* Only on the trashed ground — the one already-saved case where the
+                  match is unreachable, so a second door is worth the width. Kept
+                  type="button" so it can't be the form's implicit submit: Enter in
+                  the URL field must stay Save/Confirm. */}
+              {urlWarning === 'trashed' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onClick={() => void onRestore()}
+                >
+                  Restore
+                </Button>
+              )}
               <Button type="submit" variant="default" size="sm" disabled={saving}>
                 {urlWarning !== null ? 'Confirm' : 'Save'}
               </Button>

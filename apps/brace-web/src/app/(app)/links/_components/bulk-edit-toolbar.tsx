@@ -36,10 +36,13 @@
 // the toolbar is one button for the whole selection, and navigation exits
 // bulk-edit mode (view-state-provider), so the selection always belongs to the
 // view whose semantics the buttons show. One wrinkle the row menu doesn't have:
-// the All view and tag views can hold TRASHED links, whose own row menu allows
-// only Restore/destroy — so every non-Trash-view action here filters trashed
-// links out of its targets (`actionable`), keeping the row menu's per-link
-// semantics without forking the toolbar per link. Each action also drops links
+// a view can hold TRASHED links whose own row menu allows only Restore/destroy —
+// so every non-Trash-view action here filters trashed links out of its targets
+// (`actionable`), keeping the row menu's per-link semantics without forking the
+// toolbar per link. Browsing can't produce that mix any more (use-links suppresses
+// Trash outside the Trash view), but an advanced search that names Trash ALONGSIDE
+// another list opts back in and resolves to no single-axis selection — so it lands
+// here with the non-Trash buttons over a mixed selection. Each action also drops links
 // already in its target state, so it never writes a no-op patch (which would
 // bump updatedAt and reorder the date-modified sort).
 //
