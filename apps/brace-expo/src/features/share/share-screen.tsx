@@ -179,7 +179,8 @@ export function ShareScreen({ url, title }: SharePayload) {
         // key). Chaining off it stacks several new tags newest-first, matching
         // what web's re-read-per-call gives — the array order below is just the
         // draft's set; rank is what orders them.
-        const head = tags.length > 0 ? tags[tags.length - 1].rank : (taxonomy.tags[0]?.rank ?? null);
+        const head =
+          tags.length > 0 ? tags[tags.length - 1].rank : (taxonomy.tags[0]?.rank ?? null);
         return [...tags, { id: newId(), name, rank: rankBetween(null, head) }];
       });
     },

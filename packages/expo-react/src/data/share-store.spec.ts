@@ -257,7 +257,9 @@ describe('parseShareDraft', () => {
       parseShareDraft(JSON.stringify({ ...draft, newTags: [{ id: 'tag-2', name: 'fresh' }] })),
     ).toBeNull();
     expect(
-      parseShareDraft(JSON.stringify({ ...draft, newLists: [{ id: 'list-new', name: 'Recipes' }] })),
+      parseShareDraft(
+        JSON.stringify({ ...draft, newLists: [{ id: 'list-new', name: 'Recipes' }] }),
+      ),
     ).toBeNull();
   });
 });

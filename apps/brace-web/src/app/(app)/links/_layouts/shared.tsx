@@ -52,11 +52,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@stxapps/web-ui/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
