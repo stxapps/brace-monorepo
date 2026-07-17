@@ -310,6 +310,26 @@ Two things fall out, both wins:
   facets in one sync window) — idempotent, re-extract fixes them. No user data is
   ever on the losing side.
 
+One **deletion race** survives the split and is handled by a **janitor, not
+accounting**: destroy deletes `links/` + `extractions/` + `files/` together, but a
+concurrent extraction write-back from another device can land after them,
+resurrecting the machine half without its link — a **dangling extraction**. Nothing
+ever reads it (every join goes link → extraction), but it skews the facet counts
+(its outcome token counts against no link, so `pending` under-counts) and leaks
+storage — the blob plus the `files/` content it references, in R2 against the quota
+and in every device's local store, with no other reclamation path. So it's fixed by
+deletion: `sweepDanglingExtractions` (web-react) scans extraction paths against
+their co-keyed links (keys only — blobs are read only when a dangling is actually
+found) and tears each one down content-before-entity through the normal delete
+mutations, queuing the server deletes. **brace-web** fires it once per session,
+after the session's first **completed** sync cycle — never mid-pull, where absence
+proves nothing (the fallback listing walks in path order and `extractions/` sorts
+before `links/`) — and only a **full-sync** client may run it: the test is "link
+absent locally" and the remedy is a remote delete, so a selective-sync client (see
+_what each client syncs_ below) would judge healthy extractions dangling and delete
+them for every device. If a sweep races an edit-vs-delete link resurrection, the
+loss is the machine half only: the link re-queues as pending and re-extracts.
+
 The cost is a **render-time join**: drawing a row needs both files, co-keyed by the
 same `{id}` (the UI resolves `customTitle ?? extraction.title ?? host(url)` and
 `customImageId ?? extraction.imageId`). For the virtual-scrolled window that's a

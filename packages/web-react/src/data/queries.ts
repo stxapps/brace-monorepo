@@ -51,6 +51,7 @@ import {
   SYSTEM_LIST_IDS,
   TAGS_PREFIX,
   tagSchema,
+  TRASH_ID,
 } from '@stxapps/shared';
 
 import { db, type ItemRecord } from './db';
@@ -408,22 +409,17 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   return decodeCachedExtraction(record);
 }
 
-// The options/status page's extraction tally, headlined on the `titleImage` facet (the
-// primary "fill in title + image" job). `done`/`failed` are exact index range-counts off
-// the `*itemFacetStatuses` multiEntry index (projection.ts) — one token per facet, so a
-// status:facet equals-count is the exact per-link count, no decode. `pending` can't be a
-// token: the writer-split makes pending = ABSENCE (a link with no `done`/`failed`/
-// `permanent` titleImage facet — often no extractions file at all — see
-// docs/link-extraction.md), so it's the link total minus the recorded outcomes. `failed`
-// folds in `permanent` (both are "not extracted, won't auto-retry without help").
-export interface ExtractionFacetCounts {
-  done: number;
-  pending: number;
-  failed: number;
-}
-
-export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
-  const [totalLinks, done, failedTransient, permanent] = await Promise.all([
+// The four `titleImage` tallies both counts below are assembled from: the link total
+// (an index range-count) and the three recorded outcomes off the `*itemFacetStatuses`
+// multiEntry index (projection.ts) — one token per facet, so a status:facet equals-count
+// is the exact per-link count, no decode. `pending` can't be counted directly: the
+// writer-split makes it ABSENCE (a link with no `done`/`failed`/`permanent` titleImage
+// facet — often no extractions file at all — see docs/link-extraction.md), so both
+// readers derive it as the link total minus the recorded outcomes. Await-free (a plain
+// Promise.all of direct Dexie calls), so awaiting it from a querier costs one native
+// resumption — zone-safe without a Promise.resolve wrap (see readLinks' zone-echo note).
+function countTitleImageOutcomes(): Promise<[number, number, number, number]> {
+  return Promise.all([
     db.items
       .where('[itemType+itemUpdatedAt]')
       .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
@@ -432,8 +428,100 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
     db.items.where('itemFacetStatuses').equals('failed:titleImage').count(),
     db.items.where('itemFacetStatuses').equals('permanent:titleImage').count(),
   ]);
-  const failed = failedTransient + permanent;
-  return { done, failed, pending: Math.max(0, totalLinks - done - failed) };
+}
+
+// The RAW pending-titleImage count: links minus recorded outcomes, four index counts,
+// no decode, no join. "Raw" because Trash is NOT folded out — and that's sound for its
+// one consumer, extract-all's WAKE SIGNAL (extraction-provider `hasWork`): a trashed
+// link's outcome token cancels against its own entry in the link total, so the result
+// is exactly livePending + trashedPending — a strict OVER-count of eligible work, never
+// an under-count. 0 therefore always means "no live pending links" (safe to stay
+// asleep); the rare trashed-pending false positive just runs a finite library walk that
+// finds nothing eligible (the walk skips Trash inline) and cleanly ends the job — zero
+// paid requests. The exact, trash-corrected tally for DISPLAY is
+// readExtractionFacetCounts below; the raw/exact split keeps the O(trash) join off this
+// wake path. The cancellation assumes extractions shadow EXISTING links — a dangling
+// `extractions/{id}.enc` whose link was destroyed on another device skews every count
+// here (its token has no link-total entry to cancel), which is why danglings are a
+// deletion problem, not an accounting one: sweepDanglingExtractions removes them
+// (brace-web fires it once per session, after the first completed sync cycle).
+export async function readRawPendingTitleImageCount(): Promise<number> {
+  const [totalLinks, done, failedTransient, permanent] = await countTitleImageOutcomes();
+  return Math.max(0, totalLinks - done - failedTransient - permanent);
+}
+
+// The Settings page's extraction tally, headlined on the `titleImage` facet (the
+// primary "fill in title + image" job) — the DISPLAY counterpart of the raw wake count
+// above, exact because Trash is folded out. `failed` folds in `permanent` (both are
+// "not extracted, won't auto-retry without help").
+//
+// TRASHED links are excluded from all three, matching the drains (which skip them — see
+// readLinksPendingTitleImagePage): a trashed pending link is work the drains will never
+// do, so counting it would show a Pending stat that never drops and a "Generate all"
+// button that drains nothing. Exactness costs the O(trash) link↔extraction join below,
+// which is why this read is mounted ON DEMAND (useExtractionCounts — only while a
+// surface renders the numbers) and never rides the always-on wake path.
+export interface ExtractionFacetCounts {
+  done: number;
+  pending: number;
+  failed: number;
+}
+
+// The trash correction for the tally: how many TRASHED links sit in each bucket, so each
+// term below can be reduced by it. This can't be an index count like the rest, because the
+// two terms disagree about where list membership lives — `itemListId` is projected on
+// LINKS only (projection.ts keeps that exclusive on purpose), while the `done`/`failed`
+// tokens live on the co-keyed EXTRACTION record, which carries no list. So it's a join:
+// walk the trash list, read each link's extraction, tally its titleImage status. Absence
+// counts as pending, exactly as the tally above defines it.
+//
+// O(trash) reads per re-run. This rides the ON-DEMAND counts liveQuery
+// (useExtractionCounts), so it repeats per `db.items` transaction only while a surface
+// showing the numbers is mounted — never on the always-on wake path (the raw count
+// above). It's the cheaper of the two joins available — the other direction (every
+// settled extraction back to its link) is O(library) — and decoding is memoized, but a
+// huge Trash makes it real work. Emptying Trash makes it free.
+async function readTrashedTitleImageCounts(): Promise<{
+  total: number;
+  done: number;
+  failed: number;
+}> {
+  const records = await db.items
+    .where('[itemListId+itemUpdatedAt]')
+    .between([TRASH_ID, Dexie.minKey], [TRASH_ID, Dexie.maxKey], true, true)
+    .toArray();
+  if (records.length === 0) return { total: 0, done: 0, failed: 0 };
+
+  const exRecords = await db.items.bulkGet(records.map((r) => extractionPathForLink(r.path)));
+  let done = 0;
+  let failed = 0;
+  for (const exRecord of exRecords) {
+    const status = exRecord
+      ? decodeCachedExtraction(exRecord)?.facets.titleImage?.status
+      : undefined;
+    if (status === 'done') done += 1;
+    // `failed` folds in `permanent`, matching the tally's own bucketing.
+    else if (status === 'failed' || status === 'permanent') failed += 1;
+  }
+  return { total: records.length, done, failed };
+}
+
+export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
+  // Promise.resolve: helper await inside a querier (this feeds a liveQuery) — see
+  // readLinks' zone-echo note. countTitleImageOutcomes is await-free (a Promise.all of
+  // direct Dexie calls), so it's safe as-is; only the stacked-await helper needs the wrap.
+  const trashed = await Promise.resolve(readTrashedTitleImageCounts());
+  const [totalLinks, done, failedTransient, permanent] = await countTitleImageOutcomes();
+  // Each term drops its trashed share, so the three still sum to the live link total —
+  // the Settings stats render `done + pending + failed` as the total.
+  const liveLinks = totalLinks - trashed.total;
+  const liveDone = done - trashed.done;
+  const liveFailed = failedTransient + permanent - trashed.failed;
+  return {
+    done: liveDone,
+    failed: liveFailed,
+    pending: Math.max(0, liveLinks - liveDone - liveFailed),
+  };
 }
 
 // A position in the newest-first `links/` walk, used to PAGINATE the whole-library
@@ -472,6 +560,10 @@ function toCursor(record: ItemRecord): LinkScanCursor {
 // is a query"), PAGINATED. Returns up to `limit` links whose `titleImage` is pending+eligible,
 // newest-first, plus a `cursor` the caller threads back to resume. The automatic drain uses
 // the displayed-scoped read below instead.
+//
+// TRASHED links are skipped: they're excluded from every browse and search view (use-links),
+// so extracting one spends a paid request filling in a title the user can only see by
+// restoring the link first. "Whole-library" means the library you can actually see.
 //
 // Cost: O(examined), and across a full drain O(library) total — NOT the O(settled)-per-batch
 // of a blocked-set rebuild, and NOT the O(library²) of re-scanning from the top every batch.
@@ -519,6 +611,10 @@ export async function readLinksPendingTitleImagePage(
       examined++;
       scannedTo = { createdAt, path: record.path };
 
+      // No extraction work for trashed links. Skipped AFTER the cursor advances over
+      // them, so the walk still makes progress and never re-examines them.
+      if (record.itemListId === TRASH_ID) continue;
+
       const exRecord = exRecords[i];
       const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;
       if (isFacetEligible(facet, now)) {
@@ -552,7 +648,14 @@ export async function readLinksPendingTitleImagePage(
 // per-path eligibility test (`isFacetEligible`) — the same direct facet test the
 // extract-all page read uses, just over a bounded path set. Order follows `linkPaths` (the
 // display order — newest first), so on-screen links extract top-down. Missing / non-link /
-// settled / still-cooling paths drop out.
+// trashed / settled / still-cooling paths drop out.
+//
+// Trashed paths drop out because the drains give Trash no extraction work at all (see the
+// extract-all read above). The layouts report whatever rows they render, and the Trash view
+// renders trashed links like any other — so browsing Trash must not become the one way to
+// spend paid requests on links the user removed. Filtering here rather than asking each
+// caller not to report keeps that policy at the read layer, where the extract-all walk
+// already enforces it.
 export async function readLinksPendingTitleImageForLinkPaths(
   linkPaths: string[],
   now: number,
@@ -567,7 +670,7 @@ export async function readLinksPendingTitleImageForLinkPaths(
   const pending: ItemRecord[] = [];
   for (let i = 0; i < linkPaths.length; i++) {
     const record = records[i];
-    if (!record || record.itemType !== 'link') continue;
+    if (!record || record.itemType !== 'link' || record.itemListId === TRASH_ID) continue;
 
     const exRecord = exRecords[i];
     const facet = exRecord ? decodeCachedExtraction(exRecord)?.facets.titleImage : undefined;

@@ -37,7 +37,8 @@
 //      bounded by being FINITE: the cursor walk drains to the end of the library and then
 //      CLEARS extract-all mode (it does NOT stay armed to re-fire on later synced/imported links),
 //      with the server's per-IP caps as the hard floor. `pause()` stops it early. Surfaced via
-//      the context below (counts + controls) so the app can confirm at the button ("Enrich all
+//      the context below (controls + running/mode flags; the exact numbers come from the
+//      on-demand useExtractionCounts hook) so the app can confirm at the button ("Enrich all
 //      X links?") and show "X of Y enriched — [Enrich all] / [Pause]" rather than draining
 //      behind the user's back.
 //
@@ -80,9 +81,9 @@ import {
 
 import {
   type LinkScanCursor,
-  readExtractionFacetCounts,
   readLinksPendingTitleImageForLinkPaths,
   readLinksPendingTitleImagePage,
+  readRawPendingTitleImageCount,
 } from '../data/queries';
 import { useSettings } from '../hooks/use-settings';
 import { runServerTitleImageBatch } from '../lib/server-extraction';
@@ -116,22 +117,20 @@ const AUTO_BUDGET = 10 * BATCH;
 // failure up to RETRY_MAX_MS, and reset to BASE after the first clean batch. Either delay is
 // jittered upward so parallel tabs sharing the IP bucket don't retry in lockstep.
 // This is what lets an extract-all job RESUME after a 429 instead of stalling — a failed batch
-// writes no facets, so the free counts/probe (and thus the drain effect's deps) never change, and
+// writes no facets, so the wake count/probe (and thus the drain effect's deps) never change, and
 // the scheduled retry is the only thing that re-wakes it.
 const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 60_000;
 
 interface ExtractionContextValue {
   // Is server extraction live at all (opted in, store ready, extractor configured)?
-  // When false, every count is 0 and the controls are no-ops.
+  // When false, the controls are no-ops.
   enabled: boolean;
-  // Progress, for an indicator. From `readExtractionFacetCounts` (a free index read):
-  // `done` ran, `failed` was attempted and failed (incl. permanent), `pending` is
-  // not-yet-attempted. `pending` excludes `failed` — a backed-off retry shows under
-  // `failed`, not `pending`.
-  doneCount: number;
-  pendingCount: number;
-  failedCount: number;
+  // NO progress counts here — the exact done/pending/failed numbers carry an O(trash)
+  // trash-correction join (readExtractionFacetCounts), so they live in the ON-DEMAND
+  // useExtractionCounts hook, mounted only where the numbers render. This always-on
+  // provider keeps only its cheap internal wake signals (the displayed-scoped probe;
+  // the raw pending count while extracting all).
   // A drain is actively processing right now (some request is in flight).
   isRunning: boolean;
   // User-initiated "extract all" mode is on (the auto cap is lifted until `pause()` or the
@@ -143,7 +142,8 @@ interface ExtractionContextValue {
   // Start the explicit full-library drain: lifts the auto cap AND runs even while the tab is
   // hidden (a finite, consented job — it drains to the end of the library, then clears
   // extract-all mode rather than staying armed). Potentially thousands of paid requests, so the
-  // app should confirm at the button before calling this; `pendingCount` is the count to show.
+  // app should confirm at the button before calling this; useExtractionCounts().pending is the
+  // count to show.
   extractAll: () => void;
   // Stop the running drain; nothing auto-resumes until `extractAll()` is called again.
   pause: () => void;
@@ -156,8 +156,6 @@ interface ExtractionContextValue {
 }
 
 const ExtractionContext = createContext<ExtractionContextValue | null>(null);
-
-const EMPTY_COUNTS = { done: 0, pending: 0, failed: 0 };
 
 function isDocumentVisible(): boolean {
   // SSR / first render before hydration: assume visible so the gate doesn't wedge.
@@ -192,15 +190,6 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onChange);
     return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
-
-  // Progress counts for the indicator. liveQuery re-runs on every `db.items` change,
-  // so the numbers tick up as extractions land — the same query the loop's pending
-  // scan is built from (docs: "progress is free").
-  const counts =
-    useLiveQuery(
-      () => (enabled ? readExtractionFacetCounts() : Promise.resolve(EMPTY_COUNTS)),
-      [enabled],
-    ) ?? EMPTY_COUNTS;
 
   // Remaining AUTOMATIC budget for this session — decremented per link in auto mode,
   // ignored in extract-all mode. Held in a ref (not state) so spending it doesn't re-render.
@@ -245,20 +234,33 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   // `db.items` changes — a fresh save, an import, or a sync landing a cross-device link —
   // and whenever the displayed page changes (a scroll / "show more" / navigation), so the
   // drain is reactive without a fixed poll. Bounded to O(displayed). Inert in extract-all mode,
-  // where the wake comes from `counts.pending` below instead (no per-write library scan).
+  // where the wake comes from the raw pending count below instead (no per-write library scan).
   const probe = useLiveQuery(() => {
     if (!enabled || isExtractingAll) return Promise.resolve([] as unknown[]);
     return readLinksPendingTitleImageForLinkPaths(displayedLinkPaths, Date.now());
   }, [enabled, isExtractingAll, displayedLinkPaths]);
 
-  // Extract-all mode wakes off the free index-count `counts.pending` (not-yet-attempted
-  // links) rather than a per-write whole-library eligibility scan: pending > 0 always means
-  // genuine eligible work (an absent facet is always eligible), and any cooled-`failed` links
-  // the walk passes are still retried inline. The job is finite: once the walk reaches the end
+  // Extract-all mode wakes off the RAW pending count (links minus recorded outcomes — four
+  // index counts, no decode, no trash join) rather than a per-write whole-library eligibility
+  // scan or the exact trash-corrected tally: raw pending is a strict OVER-count of live work
+  // (see readRawPendingTitleImageCount — a trashed link's outcome token cancels against its
+  // own link-total entry), so 0 always means no eligible work, and a rare trashed-pending
+  // false positive just walks the library once, finds nothing eligible (the walk skips Trash
+  // inline), and ends the job — zero paid requests. Any cooled-`failed` links the walk passes
+  // are still retried inline. GATED to extract-all mode: outside it this querier reads
+  // nothing, so in normal operation NO count query re-runs on `db.items` writes (the
+  // displayed-scoped probe above is the only always-on read; the exact display numbers are
+  // the on-demand useExtractionCounts). The job is finite: once the walk reaches the end
   // of the library it clears extract-all mode (see the cursor reset in the drain), so it does NOT
   // stay armed to re-fire on a later import/synced link — that takes a fresh extractAll(). Auto
   // mode uses the displayed-scoped probe.
-  const hasWork = isExtractingAll ? counts.pending > 0 : (probe?.length ?? 0) > 0;
+  const rawPending =
+    useLiveQuery(
+      () => (enabled && isExtractingAll ? readRawPendingTitleImageCount() : Promise.resolve(0)),
+      [enabled, isExtractingAll],
+    ) ?? 0;
+
+  const hasWork = isExtractingAll ? rawPending > 0 : (probe?.length ?? 0) > 0;
 
   // Single-flight the drain: a wake while one is running sets `rerun` so it loops once
   // more at the end, instead of overlapping.
@@ -438,9 +440,6 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ExtractionContextValue>(
     () => ({
       enabled,
-      doneCount: counts.done,
-      pendingCount: counts.pending,
-      failedCount: counts.failed,
       isRunning,
       isExtractingAll,
       autoLimitReached,
@@ -450,9 +449,6 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
     }),
     [
       enabled,
-      counts.done,
-      counts.pending,
-      counts.failed,
       isRunning,
       isExtractingAll,
       autoLimitReached,

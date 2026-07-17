@@ -7,6 +7,7 @@ import {
 
 import { AppLockGate } from '@/components/app-lock-gate';
 import { AuthGuard } from '@/components/auth-guard';
+import { DanglingExtractionSweep } from '@/components/dangling-extraction-sweep';
 import { InitialSyncGate } from '@/components/initial-sync-gate';
 import { PaywallProvider } from '@/contexts/paywall-provider';
 
@@ -26,11 +27,16 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 // page's list-lock surfaces. FileContentProvider (on-demand `files/` blobs for
 // the link preview images) only needs the session + api client, so it sits with
 // the other sync-layer providers, above the gates.
+// DanglingExtractionSweep is a render-null trigger, not a gate: it fires the
+// once-per-session dangling-extraction janitor after the first completed sync
+// cycle. Mounted HERE (brace-web only, inside SyncProvider) on purpose — see its
+// header for why a selective-sync client must never inherit it.
 // This layout stays a server component and just composes the client wrappers.
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
       <SyncProvider>
+        <DanglingExtractionSweep />
         <ExtractionProvider>
           <FileContentProvider>
             <LockProvider>

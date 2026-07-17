@@ -9,7 +9,9 @@
 //     leaves the browser until it's on), a synced setting read/written through
 //     useSettings/useSettingMutations, colocated here with the controls it
 //     governs rather than split off into Misc;
-//   - progress from the free facet counts (done / pending / failed);
+//   - progress from the exact facet counts (done / pending / failed) via
+//     useExtractionCounts — mounted HERE, on demand, because exactness carries an
+//     O(trash) trash-correction join that shouldn't ride the always-on provider;
 //   - "Extract all" to drain the WHOLE library (a conscious, potentially
 //     thousands-of-requests job — so it confirms at the button first, per
 //     docs/link-extraction.md), and "Pause" to stop it early.
@@ -25,6 +27,7 @@ import Link from 'next/link';
 import {
   useEntitlements,
   useExtraction,
+  useExtractionCounts,
   useSettingMutations,
   useSettings,
 } from '@stxapps/web-react';
@@ -43,17 +46,9 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 export function ExtractionSection() {
-  const {
-    enabled,
-    doneCount,
-    pendingCount,
-    failedCount,
-    isRunning,
-    isExtractingAll,
-    autoLimitReached,
-    extractAll,
-    pause,
-  } = useExtraction();
+  const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
+    useExtraction();
+  const { done: doneCount, pending: pendingCount, failed: failedCount } = useExtractionCounts();
 
   // The opt-in itself. `enabled` above is the composite gate (signed in + store
   // ready + extractor configured + this), so the toggle binds to the raw
