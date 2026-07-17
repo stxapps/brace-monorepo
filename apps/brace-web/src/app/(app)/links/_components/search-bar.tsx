@@ -40,24 +40,37 @@ function words(raw: string): string[] {
     .filter((w) => w.length > 0);
 }
 
-// Whether the committed query carries filters BEYOND a single-axis navigation
-// selection (one list, one tag, or Show All) — i.e. the advanced editor is doing
-// something the basic box can't show. Drives the trigger's active dot, so a user
-// whose text box is empty still sees that url/title/list/tag filters are narrowing
-// the view. Plain navigation (a list or tag picked in the sidebar) does NOT light it.
+// Whether the committed query narrows the view in a way the rest of the UI does NOT
+// already show. Drives the trigger's active dot. The UI has exactly two ways to
+// render a filter — the basic box (which shows `text.all`) and the sidebar highlight
+// (`selection`) — so the dot lights precisely when those two don't account for the
+// whole query. Plain navigation (a list or tag picked in the sidebar) does NOT light
+// it; neither does a bare global text search.
 function hasAdvancedFilters(q: LinkQuery): boolean {
-  const textish =
+  // Substring predicates the basic box cannot render (it shows `text.all` only —
+  // the any/none forms are deep-link-only, and initDraft ignores them too).
+  const hidden =
+    q.text.any.length +
+    q.text.none.length +
     q.url.all.length +
     q.url.any.length +
     q.url.none.length +
     q.title.all.length +
     q.title.any.length +
     q.title.none.length;
-  if (textish > 0) return true;
-  if (q.lists.none.length > 0 || q.lists.any.length > 1) return true;
-  if (q.tags.all.length > 0 || q.tags.none.length > 0 || q.tags.any.length > 1) return true;
-  // A list AND a tag together is already beyond a single-axis selection.
-  return q.lists.any.length >= 1 && q.tags.any.length >= 1;
+  if (hidden > 0) return true;
+  if (q.lists.none.length > 0 || q.tags.all.length > 0 || q.tags.none.length > 0) return true;
+
+  // Past this point the box shows `text.all` and the sidebar can highlight ONE list
+  // or tag — but never both: a text clause makes `selection` resolve to `none`
+  // (page-provider's `selectionFromQuery`, which drops the highlight rather than let
+  // it go stale during a search). So any list/tag sitting alongside text is
+  // unrepresented on screen, and the dot is the only thing left to surface it.
+  const lists = q.lists.any.length;
+  const tags = q.tags.any.length;
+  if (lists > 1 || tags > 1) return true;
+  if (lists >= 1 && tags >= 1) return true;
+  return q.text.all.length > 0 && lists + tags > 0;
 }
 
 // The advanced popover's editable snapshot — raw strings for the word fields (so
