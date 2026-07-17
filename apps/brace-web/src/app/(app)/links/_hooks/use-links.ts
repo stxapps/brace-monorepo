@@ -30,6 +30,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
+import { TRASH_ID } from '@stxapps/shared';
 import {
   excludeLists,
   type LinkItem,
@@ -85,19 +86,49 @@ export function useLinks(): UseLinksResult {
   const { engaged } = useLinksViewState();
   const [limit, setLimit] = useState(PAGE_SIZE);
 
-  // The query the reads actually run — the URL query with the locked lists folded
-  // out. This is the lock's enforcement EDGE (the policy: suppress lock-provider's
-  // coverage set — descendants included — so EVERY read path, Show All, tag views,
-  // text search, the pinned overlay, hand-built deep links, excludes their links;
-  // the main pane's lock pane is just chrome). The grammar-level HOW — shaping the
-  // exclusion to preserve readRest's fast path — lives in `excludeLists`.
+  // The list ids the reads suppress, for two independent reasons:
   //
-  // Memoized so its identity is stable like the URL query's: it changes only when
-  // the URL or the locked set changes (an unlock reads as a page change below and
-  // repaints immediately — the user's own action). `lockedListIds` is
-  // identity-stable from lock-provider's memo, and `excludeLists` returns the SAME
-  // reference when there's nothing to exclude, so this memo stays stable then too.
-  const query = useMemo(() => excludeLists(urlQuery, lockedListIds), [urlQuery, lockedListIds]);
+  //   LOCKS — lock-provider's coverage set (descendants included), ALWAYS. This is
+  //     the lock's enforcement EDGE: suppressing here means EVERY read path — Show
+  //     All, tag views, text search, the pinned overlay, hand-built deep links —
+  //     excludes a locked list's links; the main pane's lock pane is just chrome.
+  //
+  //   TRASH — unless the query ASKS for it. Removing a link means "stop showing me
+  //     this", so Trash is a destination you visit, not content that keeps
+  //     resurfacing in the views you browse and search. Without this, a trashed link
+  //     is indistinguishable from a live one in Show All / tag views / search (rows
+  //     render no list, so the only tell is its row menu collapsing to
+  //     Restore/Delete). Archive is deliberately NOT suppressed — archiving means
+  //     "keep, just not in my inbox", so those links belong in Show All.
+  //
+  // The trash gate keys off the QUERY (`lists.any` naming it), not `selection`:
+  // selection is a lossy single-axis projection that resolves to `none` for compound
+  // filters, so the advanced editor's "Trash + some text" — an explicit request —
+  // would be silently emptied if we keyed off it. Asking for Trash is the same act
+  // whether it arrives from the sidebar, the search editor, or a deep link.
+  //
+  // Locks differ precisely here: they're enforcement, so no query can opt out.
+  const suppressedListIds = useMemo(() => {
+    if (urlQuery.lists.any.includes(TRASH_ID)) return lockedListIds;
+    return new Set([...lockedListIds, TRASH_ID]);
+  }, [urlQuery, lockedListIds]);
+
+  // The query the reads actually run. The grammar-level HOW — shaping the exclusion
+  // to preserve readRest's fast path — lives in `excludeLists`; a positive list view
+  // (My List, a user list) keeps its exact-count fast path because the suppressed ids
+  // aren't in its `any`, so `excludeLists` returns the query unchanged. Show All and
+  // tag/search views pay a `lists.none` clause, which is what actually filters them.
+  //
+  // Memoized so its identity is stable like the URL query's: it changes only when the
+  // URL or the suppressed set changes (an unlock reads as a page change below and
+  // repaints immediately — the user's own action). `lockedListIds` is identity-stable
+  // from lock-provider's memo, so `suppressedListIds` is stable per URL, and
+  // `excludeLists` returns the SAME reference when there's nothing to exclude — so
+  // this memo stays stable then too.
+  const query = useMemo(
+    () => excludeLists(urlQuery, suppressedListIds),
+    [urlQuery, suppressedListIds],
+  );
 
   // Reset pagination when the view changes: a new query is a fresh page and should
   // start at PAGE_SIZE, not inherit a grown "show more" limit from the previous
