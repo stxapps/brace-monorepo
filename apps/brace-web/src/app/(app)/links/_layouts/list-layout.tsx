@@ -26,7 +26,8 @@ import {
 } from './shared';
 
 // Fixed row budget: 64×38 preview image left, then title (20) + host (16) +
-// one clamped chip line (~20) stacked in the text column, centered vertically.
+// one chip line (~20, LinkTagChips' default maxLines — measured, overflow
+// behind "+N") stacked in the text column, centered vertically.
 const ROW_HEIGHT = 70;
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).

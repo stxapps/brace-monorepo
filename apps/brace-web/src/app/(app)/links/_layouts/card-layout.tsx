@@ -28,9 +28,10 @@ import {
 
 const COLUMNS = 3;
 // Fixed card budget: preview banner (112) + p-3 text block (host 20 + gap 8 +
-// two title lines 40 + padding 24) + up to two clamped chip lines (56, max-h-14
-// incl. pb-3) + the row's pb-4 (16). Cards with less content keep the height —
-// the anchor's flex-1 absorbs the slack — so the row estimate stays exact.
+// two title lines 40 + padding 24) + up to two chip lines + pb-3 (56 —
+// LinkTagChips maxLines={2} measures the fit, so the block never exceeds two
+// lines) + the row's pb-4 (16). Cards with less content keep the height — the
+// anchor's flex-1 absorbs the slack — so the row estimate stays exact.
 const ROW_HEIGHT = 280;
 const SCROLL_TOP_THRESHOLD = 8;
 
@@ -155,7 +156,8 @@ export function CardLayout({
                       <LinkTagChips
                         link={link}
                         tagsById={tagsById}
-                        className="max-h-14 flex-wrap px-3 pb-3"
+                        maxLines={2}
+                        className="px-3 pb-3"
                       />
                       {/* Floats over the banner now, so give it a readable pad. */}
                       <div className="absolute top-1 right-1 rounded-md bg-background/60">
