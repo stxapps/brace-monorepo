@@ -75,6 +75,22 @@ export function ListLayout({
     rows.length ? rows[rows.length - 1].index : -1,
   );
 
+  // Infinite scroll: grow the page automatically as the bottom row comes within
+  // `overscan` of the viewport (the last virtualized index reaches the end).
+  // `ShowMore` below stays as the keyboard/AT fallback and the "there's more" cue.
+  // `showMore` grows `limit` by a fixed step per call and `rows` is a fresh array
+  // every render, so we gate on the loaded count: fire once per page, re-arm only
+  // once the next page's rows actually land (`links.length` changes).
+  const autoLoadedForRef = useRef(-1);
+  useEffect(() => {
+    if (!hasMore) return;
+    const last = rows[rows.length - 1];
+    if (last && last.index >= links.length - 1 && autoLoadedForRef.current !== links.length) {
+      autoLoadedForRef.current = links.length;
+      showMore();
+    }
+  }, [rows, hasMore, links.length, showMore]);
+
   if (links.length === 0) return <EmptyState isLoading={isLoading} />;
 
   return (
