@@ -39,8 +39,10 @@ const DEFAULT_COLUMNS = 3;
 // two title lines 40 + padding 24) + up to two chip lines + pb-3 (56 —
 // LinkTagChips maxLines={2} measures the fit, so the block never exceeds two
 // lines) + the row's pb-4 (16). Cards with less content keep the height — the
-// anchor's flex-1 absorbs the slack — so the row estimate stays exact. Height is
-// fixed regardless of card WIDTH, so a variable column count leaves it exact.
+// grid stretches every card to the row height and the unused space falls at the
+// BOTTOM (content flows top-down; the anchor is NOT flex-1) — so the row estimate
+// stays exact. Height is fixed regardless of card WIDTH, so a variable column
+// count leaves it exact.
 const ROW_HEIGHT = 280;
 const SCROLL_TOP_THRESHOLD = 8;
 
@@ -146,12 +148,14 @@ export function CardLayout({
                     >
                       {/* The tag chips are buttons, so they sit OUTSIDE the anchor
                           as the card's bottom block (same no-button-in-anchor rule
-                          as LinkRowMenu); the anchor's flex-1 pins them there. */}
+                          as LinkRowMenu). The anchor is NOT flex-1: content flows
+                          top-down and the fixed-height slack falls below the tags
+                          (reads as bottom padding, not a mid-card gap). */}
                       <a
                         href={link.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex min-w-0 flex-1 flex-col"
+                        className="flex min-w-0 flex-col"
                         // In bulk-edit mode the card's click toggles selection
                         // instead of opening the link (middle/cmd-click still
                         // opens); shift-click extends a range over `links`.
