@@ -95,7 +95,7 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
           className="size-12 rounded-md bg-white/95 object-contain p-1.5 shadow-sm"
         />
       ) : (
-        <span aria-hidden className="select-none text-4xl font-semibold text-white/95">
+        <span aria-hidden className="text-4xl font-semibold text-white/95 select-none">
           {initialFromHost(host)}
         </span>
       )}
