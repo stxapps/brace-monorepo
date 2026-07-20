@@ -101,12 +101,12 @@ export function CardLayout({
   // `showMore` grows `limit` by a fixed step per call and `rows` is a fresh array
   // every render, so we gate on the loaded count: fire once per page, re-arm only
   // once the next page's rows actually land (`links.length` changes).
-  const autoLoadedForRef = useRef(-1);
+  const autoLoadedLengthRef = useRef(-1);
   useEffect(() => {
     if (!hasMore) return;
     const last = rows[rows.length - 1];
-    if (last && last.index >= rowCount - 1 && autoLoadedForRef.current !== links.length) {
-      autoLoadedForRef.current = links.length;
+    if (last && last.index >= rowCount - 1 && autoLoadedLengthRef.current !== links.length) {
+      autoLoadedLengthRef.current = links.length;
       showMore();
     }
   }, [rows, hasMore, rowCount, links.length, showMore]);
