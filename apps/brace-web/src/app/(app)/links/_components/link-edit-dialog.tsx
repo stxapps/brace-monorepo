@@ -62,7 +62,7 @@ export function LinkEditDialog() {
     <LinkEditForm
       key={editing.link.path}
       link={editing.link}
-      focusTags={editing.focus === 'tags'}
+      focus={editing.focus}
       onClose={closeEditor}
     />
   );
@@ -81,11 +81,11 @@ function sameIds(a: string[], b: string[]): boolean {
 
 function LinkEditForm({
   link,
-  focusTags,
+  focus,
   onClose,
 }: {
   link: LinkView;
-  focusTags: boolean;
+  focus?: 'tags' | 'note';
   onClose: () => void;
 }) {
   const { update, saveCustomImage, deleteCustomImage } = useLinkMutations();
@@ -329,16 +329,27 @@ function LinkEditForm({
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-tag">Tags</Label>
-              <TagsField id="edit-tag" value={tagIds} onChange={setTagIds} autoFocus={focusTags} />
+              <TagsField
+                id="edit-tag"
+                value={tagIds}
+                onChange={setTagIds}
+                autoFocus={focus === 'tags'}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-note">Note</Label>
+              {/* The row menu's "View note" lands here (focus === 'note'): the
+                  note has no read-only surface — the layouts are fixed-height, so
+                  a row can only badge it — and at LINK_NOTE_MAX a textarea reads
+                  as well as any viewer would, with the edit already in hand.
+                  Focusing also scrolls this last field into view. */}
               <Textarea
                 id="edit-note"
                 maxLength={LINK_NOTE_MAX}
                 placeholder="Optional note"
                 value={note}
+                autoFocus={focus === 'note'}
                 onChange={(e) => setNote(e.target.value)}
               />
             </div>

@@ -19,6 +19,7 @@ import {
   LinkRowMenu,
   LinkRowSelect,
   LinkTagChips,
+  NoteBadge,
   PinnedBadge,
   RefreshPill,
   ShowMore,
@@ -187,6 +188,7 @@ export function ListLayout({
                   >
                     <span className="flex items-center gap-1.5">
                       {pinned && <PinnedBadge />}
+                      {link.note && <NoteBadge note={link.note} />}
                       <span className="truncate text-sm font-medium">
                         {link.title || displayUrl(link.url)}
                       </span>

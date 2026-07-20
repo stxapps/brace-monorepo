@@ -21,6 +21,7 @@ import {
   LinkRowMenu,
   LinkRowSelect,
   LinkTagChips,
+  NoteBadge,
   PinnedBadge,
   RefreshPill,
   ShowMore,
@@ -43,6 +44,11 @@ const DEFAULT_COLUMNS = 3;
 // BOTTOM (content flows top-down; the anchor is NOT flex-1) — so the row estimate
 // stays exact. Height is fixed regardless of card WIDTH, so a variable column
 // count leaves it exact.
+//
+// No line is budgeted for the link's note: a fixed estimate can't be conditional,
+// so an inline note would cost its line on EVERY card — and most links have none.
+// Both layouts therefore badge it (NoteBadge) and leave the text to hover and the
+// row menu's "View note".
 const ROW_HEIGHT = 280;
 const SCROLL_TOP_THRESHOLD = 8;
 
@@ -177,6 +183,7 @@ export function CardLayout({
                         <div className="flex min-w-0 flex-col gap-2 p-3">
                           <div className="flex items-center gap-2">
                             {pinned && <PinnedBadge />}
+                            {link.note && <NoteBadge note={link.note} />}
                             <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
                             <span className="truncate text-xs text-muted-foreground">
                               {hostFromText(link.url)}

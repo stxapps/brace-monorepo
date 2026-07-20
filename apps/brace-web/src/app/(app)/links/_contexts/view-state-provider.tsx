@@ -57,10 +57,12 @@ import { useLinksPage } from './page-provider';
 
 // An open edit-dialog request: the link's row snapshot (the dialog re-resolves
 // freshness at save time — useLinkMutations.update re-reads before merging) and
-// optionally which section to land focused ('tags' for the menu's "Edit tags").
+// optionally which section to land focused ('tags' for the menu's "Edit tags",
+// 'note' for its "View note" — the note has no read-only surface of its own, so
+// viewing it IS opening the editor on that field).
 export interface LinkEditRequest {
   link: LinkView;
-  focus?: 'tags';
+  focus?: 'tags' | 'note';
 }
 
 interface LinksViewStateValue {
@@ -74,7 +76,7 @@ interface LinksViewStateValue {
   setMenuOpen: (open: boolean) => void;
   // The link edit dialog: the open request (null = closed) and its controls.
   editing: LinkEditRequest | null;
-  openEditor: (link: LinkView, focus?: 'tags') => void;
+  openEditor: (link: LinkView, focus?: 'tags' | 'note') => void;
   closeEditor: () => void;
   // The permanent-delete confirmation: the links awaiting it (null = none; an
   // empty request is ignored, so a non-null value always has at least one).
@@ -128,7 +130,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     setOpenMenus((n) => Math.max(0, n + (open ? 1 : -1)));
   }, []);
 
-  const openEditor = useCallback((link: LinkView, focus?: 'tags') => {
+  const openEditor = useCallback((link: LinkView, focus?: 'tags' | 'note') => {
     setEditing({ link, focus });
   }, []);
   const closeEditor = useCallback(() => setEditing(null), []);

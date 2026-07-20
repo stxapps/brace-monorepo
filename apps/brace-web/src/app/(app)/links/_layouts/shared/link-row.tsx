@@ -14,6 +14,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  StickyNote,
   Tags,
   Trash2,
   Undo2,
@@ -122,6 +123,16 @@ export function LinkRowMenu({
         ) : (
           <>
             {copyLink}
+            {/* Only when there IS a note — this item is the way to READ one that
+                the fixed-height row can only badge (NoteBadge below). Adding a
+                note is plain Edit, so an always-on item would just duplicate it.
+                Absent in the Trash variant for the same reason edit/move are. */}
+            {link.note && (
+              <DropdownMenuItem onSelect={() => openEditor(link, 'note')}>
+                <StickyNote className="size-4" />
+                View note
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => openEditor(link)}>
               <Pencil className="size-4" />
               Edit
@@ -232,4 +243,19 @@ export function LinkRowSelect({ link, links }: { link: LinkView; links: readonly
 // A small pin glyph marking a pinned row at a glance.
 export function PinnedBadge() {
   return <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />;
+}
+
+// Its sibling for the link's note, used by BOTH layouts. Both are fixed-height
+// (the row/card estimate must stay exact for the virtualizer), so an inline note
+// would cost its line on every row, noteless ones included — and most links have
+// none. So the badge marks that a note exists and the text stays one hover
+// (`title`) or one row menu "View note" away. `title` is why this is a <span>
+// wrapper rather than the bare icon — the tooltip needs a box, and this sits
+// inside the row's <a>, so it must stay non-interactive.
+export function NoteBadge({ note }: { note: string }) {
+  return (
+    <span className="flex shrink-0 items-center" title={note}>
+      <StickyNote className="size-3.5 text-muted-foreground" aria-label="Has note" />
+    </span>
+  );
 }

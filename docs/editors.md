@@ -205,6 +205,31 @@ editors:
   **editors** only (leave it out on both move-to menus). Adding a fourth consumer
   means deciding both, not copying the nearest call site — and a future bulk
   "Move to" (see below) is a _menu_, not an editor.
+- **The row menu's "View note"** is the reason the edit dialog takes a
+  `focus?: 'tags' | 'note'` (`LinkEditRequest` in `view-state-provider`) rather
+  than the boolean it started as. **The note has no read-only surface** — viewing
+  it IS opening the editor on that field, which is why the item routes to
+  `openEditor(link, 'note')` exactly as "Edit tags" routes to `'tags'`. That's a
+  deliberate no: a separate note dialog would need its own page-level hoisting
+  and `engaged` handling (rows are virtualized and repaint under sync — see
+  invariant 4), and at `LINK_NOTE_MAX` a `Textarea` reads as well as a viewer
+  would, with the edit already in hand. The item shows only when `link.note` is
+  set (adding one is plain **Edit**) and is absent from the Trash variant, like
+  the other edit affordances. A new "land focused on X" entry point should widen
+  this union, not grow a surface.
+- **The layouts show the note as a badge, never inline.** Both are FIXED-height
+  (`ROW_HEIGHT` — the virtualizer's estimate must stay exact), so a note line
+  can't be conditional: it would be budgeted on every row, noteless ones
+  included, and most links have none. So each row renders `NoteBadge` beside
+  `PinnedBadge` — card (280) and list (70) alike — carrying the text in `title`
+  for hover, with "View note" above as the real read path. This is a deliberate
+  trade against `note`'s own rationale in `entities.ts`, which caps the field
+  (`LINK_NOTE_MAX`) precisely so it CAN be shown in a list view; the density won.
+  If that's ever revisited, the card layout is where the line fits (one clamped
+  `text-xs` line ≈ +20px, `ROW_HEIGHT` 300) — and its budget comment has the
+  arithmetic. Either way the field must stay inline on the link: were it to move
+  to a `files/` blob (the deferred `noteId`), the layouts would lose the cheap
+  read that makes even the badge possible.
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker
   components — it renders its own `NavTree`. But it renders it over the **same
   `useLists`/`useTags` trees** and the same `@stxapps/shared` tree helpers
