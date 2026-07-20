@@ -135,7 +135,7 @@ export function CardLayout({
                         <LinkPreviewImage
                           link={link}
                           className="h-28 w-full shrink-0"
-                          iconClassName="size-6 rounded"
+                          fallback="panel"
                         />
                         <div className="flex min-w-0 flex-col gap-2 p-3">
                           <div className="flex items-center gap-2">
