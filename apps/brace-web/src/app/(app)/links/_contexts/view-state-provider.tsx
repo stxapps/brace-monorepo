@@ -96,6 +96,12 @@ interface LinksViewStateValue {
   // blob before acting (see useLinkMutations.update/destroy).
   selectedLinks: ReadonlyMap<string, LinkView>;
   toggleSelected: (link: LinkView) => void;
+  // Shift-click range: select every row between the last-toggled anchor and
+  // `link` (inclusive) within the currently displayed order `orderedLinks`,
+  // adding them to the selection. Falls back to a plain toggle when there's no
+  // usable anchor (first click, or the anchor scrolled out of the list). The
+  // anchor stays put so repeated shift-clicks re-extend from the same origin.
+  selectRange: (link: LinkView, orderedLinks: readonly LinkView[]) => void;
   // Replace the selection with the given rows / clear it without leaving
   // bulk-edit mode — the two sides of the toolbar's Select-all checkbox.
   selectAll: (links: LinkView[]) => void;
@@ -112,6 +118,11 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   const [retagging, setRetagging] = useState<LinkView[] | null>(null);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [selectedLinks, setSelectedLinks] = useState<ReadonlyMap<string, LinkView>>(new Map());
+  // The `link.path` a shift-click range extends FROM — the last row toggled on
+  // its own. A ref (not state): it only feeds the next selectRange call, never
+  // renders. Kept in sync by toggleSelected; reset whenever the selection is
+  // replaced wholesale (selectAll / clearSelected / exitBulkEdit).
+  const anchorPathRef = useRef<string | null>(null);
 
   const setMenuOpen = useCallback((open: boolean) => {
     setOpenMenus((n) => Math.max(0, n + (open ? 1 : -1)));
@@ -136,8 +147,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   const exitBulkEdit = useCallback(() => {
     setBulkEditing(false);
     setSelectedLinks(new Map());
+    anchorPathRef.current = null;
   }, []);
   const toggleSelected = useCallback((link: LinkView) => {
+    anchorPathRef.current = link.path;
     setSelectedLinks((prev) => {
       const next = new Map(prev);
       if (next.has(link.path)) next.delete(link.path);
@@ -145,10 +158,36 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       return next;
     });
   }, []);
+  const selectRange = useCallback(
+    (link: LinkView, orderedLinks: readonly LinkView[]) => {
+      const anchorPath = anchorPathRef.current;
+      const targetIndex = orderedLinks.findIndex((l) => l.path === link.path);
+      const anchorIndex =
+        anchorPath === null ? -1 : orderedLinks.findIndex((l) => l.path === anchorPath);
+      // No usable anchor (or either endpoint scrolled out of the current list):
+      // fall back to a plain toggle, which also (re)sets the anchor.
+      if (anchorIndex === -1 || targetIndex === -1) {
+        toggleSelected(link);
+        return;
+      }
+      const [lo, hi] =
+        anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+      setSelectedLinks((prev) => {
+        const next = new Map(prev);
+        for (let i = lo; i <= hi; i++) next.set(orderedLinks[i].path, orderedLinks[i]);
+        return next;
+      });
+    },
+    [toggleSelected],
+  );
   const selectAll = useCallback((links: LinkView[]) => {
     setSelectedLinks(new Map(links.map((link) => [link.path, link])));
+    anchorPathRef.current = null;
   }, []);
-  const clearSelected = useCallback(() => setSelectedLinks(new Map()), []);
+  const clearSelected = useCallback(() => {
+    setSelectedLinks(new Map());
+    anchorPathRef.current = null;
+  }, []);
 
   // Navigating to another view (sidebar click, back button, deep link) exits
   // bulk-edit mode — see the header comment. Keyed on the query's identity, the
@@ -186,6 +225,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       exitBulkEdit,
       selectedLinks,
       toggleSelected,
+      selectRange,
       selectAll,
       clearSelected,
     }),
@@ -207,6 +247,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       exitBulkEdit,
       selectedLinks,
       toggleSelected,
+      selectRange,
       selectAll,
       clearSelected,
     ],

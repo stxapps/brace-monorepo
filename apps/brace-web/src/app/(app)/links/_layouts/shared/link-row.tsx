@@ -205,15 +205,22 @@ export function LinkRowMenu({
 // to the menu trigger's footprint (size-8) so the swap doesn't shift the row.
 // It toggles the same hoisted selection the row's own click does (in bulk mode
 // the layouts intercept the anchor click) — the checkbox is the visible state
-// plus a small dedicated target, not a separate mechanism.
-export function LinkRowSelect({ link }: { link: LinkView }) {
-  const { selectedLinks, toggleSelected } = useLinksViewState();
+// plus a small dedicated target, not a separate mechanism. Shift-click extends a
+// range over `links` (the displayed order) just like the row click. We drive it
+// off the checkbox's `onClick` rather than `onCheckedChange` because only the
+// mouse event carries `shiftKey`; keyboard activation (space) fires a click with
+// `shiftKey` false, so it still plain-toggles.
+export function LinkRowSelect({ link, links }: { link: LinkView; links: readonly LinkView[] }) {
+  const { selectedLinks, toggleSelected, selectRange } = useLinksViewState();
 
   return (
     <span className="flex size-8 shrink-0 items-center justify-center">
       <Checkbox
         checked={selectedLinks.has(link.path)}
-        onCheckedChange={() => toggleSelected(link)}
+        onClick={(e) => {
+          if (e.shiftKey) selectRange(link, links);
+          else toggleSelected(link);
+        }}
         aria-label="Select link"
       />
     </span>

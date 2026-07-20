@@ -44,7 +44,8 @@ export function ListLayout({
   applyPending,
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
+  const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
+    useLinksViewState();
   const tagsById = useTagMap();
 
   // This layout owns the scroll position; reset the shared flag on mount (fresh
@@ -90,11 +91,13 @@ export function ListLayout({
             const pinned = row.index < pinnedCount;
             const selected = bulkEditing && selectedLinks.has(link.path);
             // In bulk-edit mode a click toggles selection instead of opening the
-            // link (middle/cmd-click still opens). Shared by both row anchors.
+            // link (middle/cmd-click still opens); shift-click extends a range
+            // over `links` (the displayed order). Shared by both row anchors.
             const onRowClick = bulkEditing
               ? (e: React.MouseEvent) => {
                   e.preventDefault();
-                  toggleSelected(link);
+                  if (e.shiftKey) selectRange(link, links);
+                  else toggleSelected(link);
                 }
               : undefined;
             return (
@@ -151,7 +154,7 @@ export function ListLayout({
                   <LinkTagChips link={link} tagsById={tagsById} className="mt-0.5" />
                 </span>
                 {bulkEditing ? (
-                  <LinkRowSelect link={link} />
+                  <LinkRowSelect link={link} links={links} />
                 ) : (
                   <LinkRowMenu
                     link={link}

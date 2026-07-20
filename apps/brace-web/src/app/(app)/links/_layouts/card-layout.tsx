@@ -45,7 +45,8 @@ export function CardLayout({
   applyPending,
 }: LinkLayoutProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
+  const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
+    useLinksViewState();
   const tagsById = useTagMap();
   const rowCount = Math.ceil(links.length / COLUMNS);
 
@@ -119,12 +120,14 @@ export function CardLayout({
                         rel="noreferrer"
                         className="flex min-w-0 flex-1 flex-col"
                         // In bulk-edit mode the card's click toggles selection
-                        // instead of opening the link (middle/cmd-click still opens).
+                        // instead of opening the link (middle/cmd-click still
+                        // opens); shift-click extends a range over `links`.
                         onClick={
                           bulkEditing
                             ? (e) => {
                                 e.preventDefault();
-                                toggleSelected(link);
+                                if (e.shiftKey) selectRange(link, links);
+                                else toggleSelected(link);
                               }
                             : undefined
                         }
@@ -156,7 +159,7 @@ export function CardLayout({
                       {/* Floats over the banner now, so give it a readable pad. */}
                       <div className="absolute top-1 right-1 rounded-md bg-background/60">
                         {bulkEditing ? (
-                          <LinkRowSelect link={link} />
+                          <LinkRowSelect link={link} links={links} />
                         ) : (
                           <LinkRowMenu
                             link={link}
