@@ -1,9 +1,10 @@
 'use client';
 
 // The topbar search: a persistent BASIC box (global word search over the combined
-// url⊕title — the free rung) plus an ADVANCED popover (field-scoped url/title,
-// multi-list/multi-tag — the Plus `searchEditor` rung). Both commit through
-// `setQuery` (page-provider): they write the URL, and `query`/`selection` re-derive
+// url⊕title — the free rung) plus an ADVANCED popover (the all/any/none word trio
+// over that same haystack, field-scoped url/title, and tri-state include/exclude
+// lists/tags with any/all tag matching — the Plus `searchEditor` rung). Both commit
+// through `setQuery` (page-provider): they write the URL, and `query`/`selection` re-derive
 // from it, so the box always reflects the committed query and a `?text=…` deep link
 // rehydrates it.
 //
@@ -13,7 +14,7 @@
 // contrast, edits the FULL current query in place (WYSIWYG on the URL) — it snapshots
 // the committed query on open, so it can refine what's already active.
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Lock, Search, SlidersHorizontal, X } from 'lucide-react';
 import Link from 'next/link';
 
@@ -48,7 +49,7 @@ function words(raw: string): string[] {
 // it; neither does a bare global text search.
 function hasAdvancedFilters(q: LinkQuery): boolean {
   // Substring predicates the basic box cannot render (it shows `text.all` only —
-  // the any/none forms are deep-link-only, and initDraft ignores them too).
+  // the other forms live in the advanced editor, which is closed chrome).
   const hidden =
     q.text.any.length +
     q.text.none.length +
@@ -75,54 +76,124 @@ function hasAdvancedFilters(q: LinkQuery): boolean {
 
 // The advanced popover's editable snapshot — raw strings for the word fields (so
 // spaces survive mid-typing; split to words only on submit) and id lists for the
-// multi-selects. Only the bare relations the UI emits (`*.all` words, `*.any`
-// lists/tags); the suffixed none/all forms stay deep-link-only.
+// tri-state checklists. Covers the whole grammar EXCEPT the field-scoped
+// url/title any/none forms, which stay deep-link-only on purpose: `text`'s
+// combined url⊕title haystack subsumes them in practice, and they'd cost four
+// more inputs for the tail of the tail. So open → Search round-trips everything
+// else. Tags carry ONE include set + a match mode (any|all) rather than both
+// positive relations at once — a hand-built deep link with both `tag-any` and
+// `tag-all` collapses to `all` mode over their union (WYSIWYG: the checkboxes
+// show exactly the set that will run).
 interface Draft {
-  text: string;
+  textAll: string;
+  textAny: string;
+  textNone: string;
   url: string;
   title: string;
-  lists: string[];
-  tags: string[];
+  listsAny: string[];
+  listsNone: string[];
+  tagsInclude: string[];
+  tagsMode: 'any' | 'all';
+  tagsNone: string[];
 }
 
 function initDraft(q: LinkQuery): Draft {
+  const tagsMode: Draft['tagsMode'] = q.tags.all.length > 0 ? 'all' : 'any';
   return {
-    text: q.text.all.join(' '),
+    textAll: q.text.all.join(' '),
+    textAny: q.text.any.join(' '),
+    textNone: q.text.none.join(' '),
     url: q.url.all.join(' '),
     title: q.title.all.join(' '),
-    lists: q.lists.any,
-    tags: q.tags.any,
+    listsAny: q.lists.any,
+    listsNone: q.lists.none,
+    tagsInclude: tagsMode === 'all' ? [...new Set([...q.tags.all, ...q.tags.any])] : q.tags.any,
+    tagsMode,
+    tagsNone: q.tags.none,
   };
 }
 
-function MultiCheckList({
+// A tri-state checklist: each row cycles off → include (check) → exclude (minus)
+// → off, feeding the clause's positive (`any`/`all`) and `none` arrays. The
+// Checkbox's `indeterminate` state doubles as the exclude visual (it renders the
+// minus icon); since indeterminate ≠ excluded semantically, the aria-label spells
+// the real state out. `action` renders on the label row (the tags match toggle);
+// without one, a static ✓/− legend teaches the cycle.
+function TriCheckList({
   label,
   options,
-  value,
+  include,
+  exclude,
   onChange,
+  action,
 }: {
   label: string;
   options: { id: string; name: string; depth: number }[];
-  value: string[];
-  onChange: (ids: string[]) => void;
+  include: string[];
+  exclude: string[];
+  onChange: (include: string[], exclude: string[]) => void;
+  action?: ReactNode;
 }) {
   if (options.length === 0) return null;
-  const toggle = (id: string) =>
-    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  const cycle = (id: string) => {
+    if (include.includes(id)) {
+      onChange(
+        include.filter((v) => v !== id),
+        [...exclude, id],
+      );
+    } else if (exclude.includes(id)) {
+      onChange(
+        include,
+        exclude.filter((v) => v !== id),
+      );
+    } else {
+      onChange([...include, id], exclude);
+    }
+  };
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex h-6 items-center justify-between">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        {action ?? (
+          <span aria-hidden className="text-[10px] text-muted-foreground">
+            ✓ include · − exclude
+          </span>
+        )}
+      </div>
       <div className="max-h-32 overflow-y-auto rounded-md border border-border p-1">
-        {options.map((o) => (
-          <label
-            key={o.id}
-            className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-muted"
-            style={o.depth > 0 ? { paddingLeft: `${o.depth * 12 + 6}px` } : undefined}
-          >
-            <Checkbox checked={value.includes(o.id)} onCheckedChange={() => toggle(o.id)} />
-            <span className="truncate">{o.name}</span>
-          </label>
-        ))}
+        {options.map((o) => {
+          const state = include.includes(o.id)
+            ? 'include'
+            : exclude.includes(o.id)
+              ? 'exclude'
+              : 'off';
+          return (
+            <label
+              key={o.id}
+              className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-muted"
+              style={o.depth > 0 ? { paddingLeft: `${o.depth * 12 + 6}px` } : undefined}
+            >
+              <Checkbox
+                checked={state === 'include' ? true : state === 'exclude' ? 'indeterminate' : false}
+                onCheckedChange={() => cycle(o.id)}
+                aria-label={`${o.name}: ${
+                  state === 'include'
+                    ? 'included'
+                    : state === 'exclude'
+                      ? 'excluded'
+                      : 'not selected'
+                }`}
+              />
+              <span
+                className={
+                  state === 'exclude' ? 'truncate text-muted-foreground line-through' : 'truncate'
+                }
+              >
+                {o.name}
+              </span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );
@@ -205,11 +276,22 @@ function AdvancedSearch() {
     }
     const q = emptyQuery();
     q.sort = query.sort; // ordering isn't a search field — keep the active sort
-    q.text.all = words(draft.text);
+    q.text.all = words(draft.textAll);
+    q.text.any = words(draft.textAny);
+    q.text.none = words(draft.textNone);
     q.url.all = words(draft.url);
     q.title.all = words(draft.title);
-    q.lists.any = draft.lists;
-    q.tags.any = draft.tags;
+    q.lists.any = draft.listsAny;
+    q.lists.none = draft.listsNone;
+    // A single included tag commits as `any` regardless of mode (the two are the
+    // same set for one tag) — `any` keeps the sidebar highlight and the clean
+    // `?tag=` URL, where `all` would resolve `selection` to `none`.
+    if (draft.tagsMode === 'all' && draft.tagsInclude.length > 1) {
+      q.tags.all = draft.tagsInclude;
+    } else {
+      q.tags.any = draft.tagsInclude;
+    }
+    q.tags.none = draft.tagsNone;
     setQuery(q);
     setOpen(false);
   };
@@ -235,15 +317,52 @@ function AdvancedSearch() {
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">Advanced search</p>
           {!entitlements.searchEditor && <LockedBanner />}
+          {/* The word trio (Google-advanced-search shape) over the combined
+              url⊕title haystack — text.all / text.any / text.none. Because the
+              haystack contains the url, "None of these words" also covers the
+              practical exclude-a-domain case. */}
           <Field className="gap-1">
-            <FieldLabel htmlFor="adv-text" className="text-xs font-normal text-muted-foreground">
-              Text (URL or title)
+            <FieldLabel
+              htmlFor="adv-text-all"
+              className="text-xs font-normal text-muted-foreground"
+            >
+              All of these words (URL or title)
             </FieldLabel>
             <Input
-              id="adv-text"
-              value={draft.text}
-              placeholder="words anywhere"
-              onChange={(e) => setDraft((d) => ({ ...d, text: e.target.value }))}
+              id="adv-text-all"
+              value={draft.textAll}
+              placeholder="every word must match"
+              onChange={(e) => setDraft((d) => ({ ...d, textAll: e.target.value }))}
+              className="h-8"
+            />
+          </Field>
+          <Field className="gap-1">
+            <FieldLabel
+              htmlFor="adv-text-any"
+              className="text-xs font-normal text-muted-foreground"
+            >
+              Any of these words
+            </FieldLabel>
+            <Input
+              id="adv-text-any"
+              value={draft.textAny}
+              placeholder="at least one matches"
+              onChange={(e) => setDraft((d) => ({ ...d, textAny: e.target.value }))}
+              className="h-8"
+            />
+          </Field>
+          <Field className="gap-1">
+            <FieldLabel
+              htmlFor="adv-text-none"
+              className="text-xs font-normal text-muted-foreground"
+            >
+              None of these words
+            </FieldLabel>
+            <Input
+              id="adv-text-none"
+              value={draft.textNone}
+              placeholder="exclude matches"
+              onChange={(e) => setDraft((d) => ({ ...d, textNone: e.target.value }))}
               className="h-8"
             />
           </Field>
@@ -269,17 +388,42 @@ function AdvancedSearch() {
               className="h-8"
             />
           </Field>
-          <MultiCheckList
+          <TriCheckList
             label="Lists"
             options={listOptions}
-            value={draft.lists}
-            onChange={(l) => setDraft((d) => ({ ...d, lists: l }))}
+            include={draft.listsAny}
+            exclude={draft.listsNone}
+            onChange={(include, exclude) =>
+              setDraft((d) => ({ ...d, listsAny: include, listsNone: exclude }))
+            }
           />
-          <MultiCheckList
+          <TriCheckList
             label="Tags"
             options={tagOptions}
-            value={draft.tags}
-            onChange={(t) => setDraft((d) => ({ ...d, tags: t }))}
+            include={draft.tagsInclude}
+            exclude={draft.tagsNone}
+            onChange={(include, exclude) =>
+              setDraft((d) => ({ ...d, tagsInclude: include, tagsNone: exclude }))
+            }
+            // The match toggle only matters once ≥2 tags are included (any ≡ all
+            // for one tag); below that the ✓/− legend takes the slot.
+            action={
+              draft.tagsInclude.length >= 2 ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground">Match</span>
+                  {(['any', 'all'] as const).map((mode) => (
+                    <Button
+                      key={mode}
+                      variant={draft.tagsMode === mode ? 'secondary' : 'ghost'}
+                      size="xs"
+                      onClick={() => setDraft((d) => ({ ...d, tagsMode: mode }))}
+                    >
+                      {mode}
+                    </Button>
+                  ))}
+                </div>
+              ) : undefined
+            }
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setDraft(initDraft(emptyQuery()))}>

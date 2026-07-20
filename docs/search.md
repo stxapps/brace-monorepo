@@ -78,10 +78,10 @@ a single symmetric `setQuery`:
 Both write the URL; both let `query`/`selection` re-derive from it. The asymmetry is
 why there's no single wide `setQuery(LinkQuery)` for navigation: a full inverse
 serializer is only justified once a writer needs the whole grammar, and the **advanced
-search form is exactly that writer** — it builds url/title words + multi-list +
-multi-tag and commits them. Before it existed, the suffixed grammar forms were
-deep-link-only, so no serializer was warranted; the advanced editor is what flips
-that.
+search form is exactly that writer** — it builds text/url/title word clauses +
+include/exclude lists + any/all/none tags and commits them. Before it existed, the
+suffixed grammar forms were deep-link-only, so no serializer was warranted; the
+advanced editor is what flips that.
 
 ### selection is a projection, never set
 
@@ -131,11 +131,37 @@ ladder") and `packages/shared/src/iap/plans.ts` (`searchEditor`).
   (keeping sort), so a search spans the library rather than the list you were on. An
   empty box returns home.
 - **Advanced popover** — an anchored panel (not a modal: search is iterative, so the
-  results stay visible while you refine). Text / URL / Title word fields + multi-list
-  and multi-tag checkboxes, submitting the full query through the same `setQuery`. It
-  snapshots the committed query on open, so it edits the current query in place. A dot
+  results stay visible while you refine). It exposes nearly the whole grammar:
+  - the **word trio** over the combined url⊕title haystack — _All / Any / None of
+    these words_ → `text.all` / `text.any` / `text.none` (the familiar
+    Google-advanced-search shape; since the haystack contains the url, "None"
+    also covers the practical exclude-a-domain case);
+  - field-scoped **URL contains** / **Title contains** → `url.all` / `title.all`;
+  - **tri-state list/tag checklists** — each row cycles include → exclude → off
+    (`lists.any`/`lists.none`, tags likewise), with a **Match any/all** toggle on
+    the included tags (`tags.any` vs `tags.all`, shown once ≥2 are included). A
+    single included tag always commits as `any` — the same set either way, and
+    `any` keeps the sidebar highlight and the clean `?tag=` URL where `all` would
+    project `selection` to `none`.
+
+  It submits the full query through the same `setQuery` and snapshots the
+  committed query on open, so it edits the current query in place and
+  **round-trips every clause it renders**. The only grammar forms it does _not_
+  render are the field-scoped `url`/`title` `any`/`none` — deep-link-only on
+  purpose: `text.any`/`text.none` subsume them in practice, and covering them
+  would cost four more inputs for the tail of the tail. Committing from the
+  editor drops those four if a hand-built deep link carried them (WYSIWYG: what
+  the form shows is exactly what runs); likewise a deep link carrying _both_
+  `tag-any` and `tag-all` collapses to `all` mode over their union on open. A dot
   on the trigger marks a committed query carrying filters beyond a single-axis
   selection.
+
+  The additions land on the read engine's cheap paths: `tags.all` is index-driven
+  like `tags.any` (the tag driver), list/tag excludes are column predicates (no
+  blob decode), and `text.any`/`text.none` cost the same as `text.all` (any text
+  clause already forces the extraction join) — see
+  [client-queries.md](./client-queries.md).
+
 - **The Plus gate lives in the form, not the write path.** Free users see the trigger
   (visible, not hidden) but opening it presents the upgrade path instead of the
   fields — so the query grammar and URL contract stay tier-agnostic (a Plus user's
