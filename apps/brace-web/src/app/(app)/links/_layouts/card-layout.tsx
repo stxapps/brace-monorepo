@@ -1,7 +1,8 @@
 'use client';
 
 // Grid-of-previews layout. Virtualized by ROW (each virtual item is a row of
-// `COLUMNS` cards) — the simplest way to virtualize a uniform grid: divide the
+// `columns` cards, where `columns` tracks the container width) — the simplest
+// way to virtualize a uniform grid: divide the
 // link list into chunks and lay each chunk out with a flex/grid row. Card height
 // is fixed so the row estimate stays exact.
 
@@ -9,6 +10,7 @@ import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
+import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -26,12 +28,19 @@ import {
   useTagMap,
 } from './shared';
 
-const COLUMNS = 3;
+// Column count tracks the scroll container's content width (below) rather than a
+// fixed 3, so cards keep a comfortable width from the extension popup up to a
+// wide monitor. `MIN_CARD_WIDTH` is the smallest a card may get before we drop a
+// column; `CARD_GAP` is the grid `gap-4` (16px), needed by the fit math.
+const MIN_CARD_WIDTH = 300;
+const CARD_GAP = 16;
+const DEFAULT_COLUMNS = 3;
 // Fixed card budget: preview banner (112) + p-3 text block (host 20 + gap 8 +
 // two title lines 40 + padding 24) + up to two chip lines + pb-3 (56 —
 // LinkTagChips maxLines={2} measures the fit, so the block never exceeds two
 // lines) + the row's pb-4 (16). Cards with less content keep the height — the
-// anchor's flex-1 absorbs the slack — so the row estimate stays exact.
+// anchor's flex-1 absorbs the slack — so the row estimate stays exact. Height is
+// fixed regardless of card WIDTH, so a variable column count leaves it exact.
 const ROW_HEIGHT = 280;
 const SCROLL_TOP_THRESHOLD = 8;
 
@@ -48,7 +57,15 @@ export function CardLayout({
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
   const tagsById = useTagMap();
-  const rowCount = Math.ceil(links.length / COLUMNS);
+  // Fit as many `MIN_CARD_WIDTH` cards (plus gaps) as the content box holds; fall
+  // back to `DEFAULT_COLUMNS` until the first measurement lands so there's no
+  // 1-column flash on the initial paint (matches the prior fixed layout).
+  const contentWidth = useElementWidth(scrollRef);
+  const columns =
+    contentWidth > 0
+      ? Math.max(1, Math.floor((contentWidth + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP)))
+      : DEFAULT_COLUMNS;
+  const rowCount = Math.ceil(links.length / columns);
 
   useEffect(() => {
     setScrolled(false);
@@ -67,13 +84,13 @@ export function CardLayout({
     overscan: 4,
   });
 
-  // Virtual items are ROWS of COLUMNS cards, so the displayed LINK range is the first row's
+  // Virtual items are ROWS of `columns` cards, so the displayed LINK range is the first row's
   // first card through the last row's last card (the hook clamps the tail to `links.length`).
   const rows = virtualizer.getVirtualItems();
   useReportDisplayedLinkPaths(
     links,
-    rows.length ? rows[0].index * COLUMNS : 0,
-    rows.length ? rows[rows.length - 1].index * COLUMNS + COLUMNS - 1 : -1,
+    rows.length ? rows[0].index * columns : 0,
+    rows.length ? rows[rows.length - 1].index * columns + columns - 1 : -1,
   );
 
   // Infinite scroll: grow the page automatically as the last ROW comes within
@@ -104,15 +121,15 @@ export function CardLayout({
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
           {rows.map((virtualRow) => {
-            const start = virtualRow.index * COLUMNS;
-            const rowLinks = links.slice(start, start + COLUMNS);
+            const start = virtualRow.index * columns;
+            const rowLinks = links.slice(start, start + columns);
             return (
               <div
                 key={virtualRow.key}
                 className="absolute inset-x-0 grid gap-4 pb-4"
                 style={{
                   height: ROW_HEIGHT,
-                  gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))`,
+                  gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
