@@ -200,9 +200,11 @@ export function LinkRowMenu({
   );
 }
 
-// The bulk-edit stand-in for LinkRowMenu: each layout swaps its menu slot for
-// this checkbox while `bulkEditing` is on, so the row geometry stays put. Sized
-// to the menu trigger's footprint (size-8) so the swap doesn't shift the row.
+// The bulk-edit selection checkbox, shown while `bulkEditing` is on. Each layout
+// places it to fit its form factor: the card overlays it at the banner corner
+// (where its menu floats), while the list gives it a leading-edge column and
+// hides the menu. Sized to the menu trigger's footprint (size-8) so it reads as a
+// peer of the row's other action widgets.
 // It toggles the same hoisted selection the row's own click does (in bulk mode
 // the layouts intercept the anchor click) — the checkbox is the visible state
 // plus a small dedicated target, not a separate mechanism. Shift-click extends a

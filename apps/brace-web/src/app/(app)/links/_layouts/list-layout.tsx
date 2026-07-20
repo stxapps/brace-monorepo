@@ -34,6 +34,31 @@ const ROW_HEIGHT = 70;
 // background sync is staged behind the refresh pill (see view-state-provider).
 const SCROLL_TOP_THRESHOLD = 8;
 
+// Compact, localized "added N ago" for the wide-pane date column. Intl.RelativeTimeFormat
+// only formats a (count, unit) pair, so we pick the largest unit that fits and hand it the
+// count; `numeric: 'auto'` yields "yesterday"/"last week" where they read better than
+// "1 … ago", and `style: 'short'` keeps the column narrow ("3 days ago", "2 mo. ago").
+const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {
+  numeric: 'auto',
+  style: 'short',
+});
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 60 * 60 * 1000],
+  ['month', 30 * 24 * 60 * 60 * 1000],
+  ['week', 7 * 24 * 60 * 60 * 1000],
+  ['day', 24 * 60 * 60 * 1000],
+  ['hour', 60 * 60 * 1000],
+  ['minute', 60 * 1000],
+];
+function formatRelativeTime(epochMs: number): string {
+  const diff = epochMs - Date.now(); // < 0 for the past
+  const abs = Math.abs(diff);
+  for (const [unit, ms] of RELATIVE_UNITS) {
+    if (abs >= ms) return relativeTimeFormat.format(Math.round(diff / ms), unit);
+  }
+  return relativeTimeFormat.format(Math.round(diff / 1000), 'second');
+}
+
 export function ListLayout({
   links,
   pinnedCount,
@@ -98,7 +123,10 @@ export function ListLayout({
       <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
       <div
         ref={scrollRef}
-        className="h-full overflow-y-auto"
+        // `@container` so the date column below can gate on the PANE width (not the
+        // viewport) — the pane widens/narrows with the collapsible sidebar without a
+        // window resize, so a viewport `lg:` breakpoint would be wrong here.
+        className="@container h-full overflow-y-auto"
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
@@ -124,6 +152,11 @@ export function ListLayout({
                 }`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
               >
+                {/* Bulk-edit selection sits at the row's LEADING edge (a scannable
+                    checkbox column), pushing the image/text right; the row menu is
+                    hidden while selecting. The thumbnail stays — it's the row's
+                    at-a-glance identity — so the checkbox is inserted, not swapped in. */}
+                {bulkEditing && <LinkRowSelect link={link} links={links} />}
                 {/* Two sibling anchors (image, text) rather than one wrapping the
                     whole row: the tag chips are buttons and may not nest inside an
                     <a> (same rule as LinkRowMenu), so the chips sit in the text
@@ -169,9 +202,18 @@ export function ListLayout({
                   </a>
                   <LinkTagChips link={link} tagsById={tagsById} className="mt-0.5" />
                 </span>
-                {bulkEditing ? (
-                  <LinkRowSelect link={link} links={links} />
-                ) : (
+                {/* Added-date column — only when the PANE is wide enough (@lg
+                    container width), so it never crowds the title on a narrow pane
+                    or in the extension popup. dateTime/title carry the exact instant
+                    for AT and hover; the visible text is the compact relative form. */}
+                <time
+                  dateTime={new Date(link.createdAt).toISOString()}
+                  title={new Date(link.createdAt).toLocaleString()}
+                  className="hidden shrink-0 text-xs whitespace-nowrap text-muted-foreground @lg:block"
+                >
+                  {formatRelativeTime(link.createdAt)}
+                </time>
+                {!bulkEditing && (
                   <LinkRowMenu
                     link={link}
                     pinned={pinned}
