@@ -231,12 +231,45 @@ export interface LockRecord {
   hideList?: boolean;
 }
 
+// One site's favicon, keyed by DISPLAY HOST (`hostFromUrl` — www-stripped, so it
+// matches the string the layouts render beside it). Per HOST, not per link: a
+// 5k-link library resolves to a few hundred distinct hosts, so this table holds
+// hundreds of ~1-2KB icons, not thousands of blobs.
+//
+// This is a CACHE of public, re-fetchable bytes, which is why it's device-local
+// (like `localSettings` and `locks`) and NOT an extraction facet: a favicon is
+// nobody's user data, so it earns no `files/{id}.enc` blob, no encryption, no op-log
+// entry, and no quota charge. A fresh device just re-fetches. Storing it per-link in
+// `extractions/` would mint one synced blob per link to represent one icon per site —
+// see docs/link-extraction.md.
+//
+// Still wiped on sign-out (clear-data.ts) and by delete-all-data: the SET of hosts
+// is user data even though each icon isn't, so a second user on this device must not
+// read the first's browsing shape out of it.
+export interface FaviconRecord {
+  // The display host (`hostFromUrl`), e.g. `github.com` — never a full URL.
+  host: string;
+  // `ok` — `bytes` holds the icon. `none` — this host has no reachable favicon
+  // (404, non-image, the extractor declined). A negative is RECORDED rather than
+  // just skipped so a reload doesn't re-buy a fetch for every iconless host; it
+  // ages out via FAVICON_RETRY_MS (favicon-store.ts) so a site that later adds one
+  // is picked up.
+  status: 'ok' | 'none';
+  // Raw icon bytes, present iff `status === 'ok'`. Rendered by sniffing (an <img>
+  // object URL detects ico/png/svg from the bytes), so no content-type is stored —
+  // same reasoning as the extract contract's `imageBase64`.
+  bytes?: Uint8Array;
+  // When this row was last resolved — the age the `none` retry is measured from.
+  fetchedAt: number;
+}
+
 class BraceDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
   items!: EntityTable<ItemRecord, 'path'>;
   pendingOps!: Table<PendingOpRecord, [string, string]>;
   localSettings!: EntityTable<LocalSettingsRecord, 'id'>;
   locks!: EntityTable<LockRecord, 'id'>;
+  favicons!: EntityTable<FaviconRecord, 'host'>;
 
   constructor() {
     super('brace-data');
@@ -275,6 +308,9 @@ class BraceDb extends Dexie {
       localSettings: 'id',
       // Device-local locks — one row per lock, keyed by APP_LOCK_ID / list id.
       locks: 'id',
+      // Device-local favicon cache — one row per display host. Primary key only:
+      // every read is an exact `get(host)` from a rendered row, never a scan.
+      favicons: 'host',
     });
   }
 }

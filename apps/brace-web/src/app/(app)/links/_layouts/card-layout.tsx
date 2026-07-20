@@ -13,7 +13,7 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
-  faviconUrl,
+  Favicon,
   type LinkLayoutProps,
   LinkPreviewImage,
   LinkRowMenu,
@@ -137,13 +137,7 @@ export function CardLayout({
                         <div className="flex min-w-0 flex-col gap-2 p-3">
                           <div className="flex items-center gap-2">
                             {pinned && <PinnedBadge />}
-                            <img
-                              src={faviconUrl(link.url)}
-                              alt=""
-                              referrerPolicy="no-referrer"
-                              className="size-4 shrink-0 rounded"
-                              loading="lazy"
-                            />
+                            <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
                             <span className="truncate text-xs text-muted-foreground">
                               {hostFromText(link.url)}
                             </span>

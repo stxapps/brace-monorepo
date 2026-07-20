@@ -52,8 +52,10 @@ export async function deleteAllData(args: {
   // Local synced state, wiped to match the (now empty) server: the decrypted
   // items, their decoded-plaintext cache, and the locks (they guard lists that
   // no longer exist — same reset clearData applies, and the empty library needs
-  // no shoulder-surfing gate until new locks are set).
-  await Promise.all([db.items.clear(), db.locks.clear()]);
+  // no shoulder-surfing gate until new locks are set). The favicon cache goes too:
+  // it isn't synced state, but it's derived FROM the wiped links, so leaving it
+  // would let the deleted library's hosts be read back off the device.
+  await Promise.all([db.items.clear(), db.locks.clear(), db.favicons.clear()]);
   clearDecodeCache();
 
   // Reset the sync bookkeeping to the seeded-new-account state: cursor (0, '')

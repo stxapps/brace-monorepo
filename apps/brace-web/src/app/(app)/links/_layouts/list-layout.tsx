@@ -13,6 +13,7 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
+  Favicon,
   type LinkLayoutProps,
   LinkPreviewImage,
   LinkRowMenu,
@@ -138,8 +139,13 @@ export function ListLayout({
                         {link.title || displayUrl(link.url)}
                       </span>
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {hostFromText(link.url)}
+                    {/* size-3.5 so the icon sits inside the host line's 16px
+                        budget — the row is fixed-height (ROW_HEIGHT). */}
+                    <span className="flex items-center gap-1.5">
+                      <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0" />
+                      <span className="truncate text-xs text-muted-foreground">
+                        {hostFromText(link.url)}
+                      </span>
                     </span>
                   </a>
                   <LinkTagChips link={link} tagsById={tagsById} className="mt-0.5" />

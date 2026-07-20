@@ -1,5 +1,6 @@
 import {
   ExtractionProvider,
+  FaviconProvider,
   FileContentProvider,
   LockProvider,
   SyncProvider,
@@ -26,7 +27,9 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 // waits for a ready store) and serves both AppLockGate here and the links
 // page's list-lock surfaces. FileContentProvider (on-demand `files/` blobs for
 // the link preview images) only needs the session + api client, so it sits with
-// the other sync-layer providers, above the gates.
+// the other sync-layer providers, above the gates. FaviconProvider (the per-host
+// icon cache) sits beside it for the same reason — it needs only the extract
+// client + the serverExtraction opt-in, and its rows are device-local.
 // DanglingExtractionSweep is a render-null trigger, not a gate: it fires the
 // once-per-session dangling-extraction janitor after the first completed sync
 // cycle. Mounted HERE (brace-web only, inside SyncProvider) on purpose — see its
@@ -39,15 +42,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <DanglingExtractionSweep />
         <ExtractionProvider>
           <FileContentProvider>
-            <LockProvider>
-              <AppLockGate>
-                <InitialSyncGate>
-                  <PaywallProvider>
-                    <div className="min-h-screen">{children}</div>
-                  </PaywallProvider>
-                </InitialSyncGate>
-              </AppLockGate>
-            </LockProvider>
+            <FaviconProvider>
+              <LockProvider>
+                <AppLockGate>
+                  <InitialSyncGate>
+                    <PaywallProvider>
+                      <div className="min-h-screen">{children}</div>
+                    </PaywallProvider>
+                  </InitialSyncGate>
+                </AppLockGate>
+              </LockProvider>
+            </FaviconProvider>
           </FileContentProvider>
         </ExtractionProvider>
       </SyncProvider>
