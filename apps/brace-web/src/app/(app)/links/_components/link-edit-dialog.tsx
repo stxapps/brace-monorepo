@@ -108,6 +108,13 @@ function LinkEditForm({
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Where focus lands on open. Radix would otherwise focus the first focusable
+  // (the title input) and override any per-field autoFocus, so we drive it
+  // ourselves from the dialog's onOpenAutoFocus (below) via these refs.
+  const titleRef = useRef<HTMLInputElement>(null);
+  const tagsRef = useRef<HTMLDivElement>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+
   // The stored image the preview shows when no fresh pick is pending: the
   // override-wins resolution, except 'clear' previews the post-clear fallback
   // (the extracted image, or nothing). Local bytes only (readFileBytes) — a blob
@@ -228,7 +235,20 @@ function LinkEditForm({
       {/* Cap to the viewport and scroll the fields region (below) rather than
           the whole dialog, so the header and Save/Cancel footer stay pinned
           when the form (image preview + tags + note) outgrows a short screen. */}
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md">
+      <DialogContent
+        className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md"
+        // Radix's default open-autofocus grabs the first focusable — the title
+        // input — so "View note"/"Edit tags" would still land on title. Take
+        // over: focus the field the opener asked for. The tags trigger rings
+        // itself off its own focus state (see TagsField), so a plain focus() is
+        // enough for all three.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          if (focus === 'note') noteRef.current?.focus();
+          else if (focus === 'tags') tagsRef.current?.focus();
+          else titleRef.current?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Edit link</DialogTitle>
           <DialogDescription className="truncate">{link.url}</DialogDescription>
@@ -241,6 +261,7 @@ function LinkEditForm({
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-title">Title</Label>
               <Input
+                ref={titleRef}
                 id="edit-title"
                 maxLength={LINK_TITLE_MAX}
                 placeholder={extractedTitle ?? hostFromText(link.url)}
@@ -329,12 +350,7 @@ function LinkEditForm({
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-tag">Tags</Label>
-              <TagsField
-                id="edit-tag"
-                value={tagIds}
-                onChange={setTagIds}
-                autoFocus={focus === 'tags'}
-              />
+              <TagsField ref={tagsRef} id="edit-tag" value={tagIds} onChange={setTagIds} />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -345,11 +361,11 @@ function LinkEditForm({
                   as well as any viewer would, with the edit already in hand.
                   Focusing also scrolls this last field into view. */}
               <Textarea
+                ref={noteRef}
                 id="edit-note"
                 maxLength={LINK_NOTE_MAX}
                 placeholder="Optional note"
                 value={note}
-                autoFocus={focus === 'note'}
                 onChange={(e) => setNote(e.target.value)}
               />
             </div>

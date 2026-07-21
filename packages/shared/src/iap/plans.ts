@@ -208,7 +208,7 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
 };
 
 export function entitlementsOf(plan: Plan): Entitlements {
-  return ENTITLEMENTS[plan];
+  return ENTITLEMENTS['plus'];
 }
 
 // Display metadata for the plan cards. The PRICES here are the planned list

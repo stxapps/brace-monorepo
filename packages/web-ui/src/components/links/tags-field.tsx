@@ -12,7 +12,7 @@
 // the chip a beat later. Wired to web-react like ListSelect (and the auth
 // forms) — see docs/architecture.md on the ui → react-logic layering.
 
-import { useId, useMemo, useState } from 'react';
+import { type Ref, useId, useMemo, useState } from 'react';
 import { ChevronsUpDownIcon, X } from 'lucide-react';
 
 import { flattenTree } from '@stxapps/shared';
@@ -26,21 +26,30 @@ export function TagsField({
   id,
   value,
   onChange,
-  autoFocus,
+  ref,
 }: {
   // The labelled form-control id (htmlFor target), landing on the trigger.
   id?: string;
   // The chosen tag ids, in chosen order.
   value: string[];
   onChange: (tagIds: string[]) => void;
-  // Open the picker on mount — for an editor opened straight onto tags. The
-  // token-combobox analog of focusing the old text field: focus lands in the
-  // command's search input.
-  autoFocus?: boolean;
+  // A ref onto the combobox trigger, so an editor opened straight onto tags can
+  // move focus here. Focus rings the trigger and stops — it does NOT open the
+  // popover (the token-combobox has no text field to seed; the ring is the
+  // "you're on tags" cue, and the user opens the picker deliberately). Radix's
+  // PopoverTrigger asChild composes this with its own ref onto the div.
+  ref?: Ref<HTMLDivElement>;
 }) {
   const tags = useTags();
   const { findOrCreate } = useTagMutations();
-  const [open, setOpen] = useState(Boolean(autoFocus));
+  const [open, setOpen] = useState(false);
+  // The focus ring is state-driven, not `:focus-visible`: a programmatic
+  // `.focus()` (the edit dialog landing on tags) doesn't reliably match
+  // `:focus-visible` (the browser gates it on the last input modality), and
+  // plain `:focus` blinks off the instant a click opens the popover and moves
+  // focus into the search field. Tracking focus ourselves and OR-ing in `open`
+  // keeps the ring steady from focus through open until the control is left.
+  const [focused, setFocused] = useState(false);
   // aria-controls target: names the popover's list so the combobox trigger is
   // valid even while the content is unmounted (closed).
   const listId = useId();
@@ -71,16 +80,21 @@ export function TagsField({
             nested in a button is invalid HTML. role/tabIndex + the key handler
             give it the combobox affordances by hand (Radix wires the click). */}
         <div
+          ref={ref}
           id={id}
           role="combobox"
           aria-controls={listId}
           aria-expanded={open}
           tabIndex={0}
           className={cn(
-            'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-2xl border border-input',
+            'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-2xl border',
             'bg-input/30 px-3 py-1.5 text-sm outline-none',
-            'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            focused || open ? 'border-ring ring-[3px] ring-ring/50' : 'border-input',
           )}
+          // onFocus/onBlur (React's bubbling focusin/focusout) also cover focus
+          // moving to a chip's ✕ button inside the div — that stays "focused".
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
               e.preventDefault();
