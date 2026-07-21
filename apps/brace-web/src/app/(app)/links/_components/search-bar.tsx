@@ -119,6 +119,12 @@ function initDraft(q: LinkQuery): Draft {
 // minus icon); since indeterminate ≠ excluded semantically, the aria-label spells
 // the real state out. `action` renders on the label row (the tags match toggle);
 // without one, a static ✓/− legend teaches the cycle.
+// Above this many options, the checklist gets a filter box so a big list/tag
+// tree stays navigable without scrolling. Filtering only hides rows from view;
+// it never touches the include/exclude sets, so a selection made under one
+// filter survives changing or clearing it.
+const FILTER_THRESHOLD = 8;
+
 function TriCheckList({
   label,
   options,
@@ -134,6 +140,7 @@ function TriCheckList({
   onChange: (include: string[], exclude: string[]) => void;
   action?: ReactNode;
 }) {
+  const [filter, setFilter] = useState('');
   if (options.length === 0) return null;
   const cycle = (id: string) => {
     if (include.includes(id)) {
@@ -150,6 +157,11 @@ function TriCheckList({
       onChange([...include, id], exclude);
     }
   };
+  const showFilter = options.length > FILTER_THRESHOLD;
+  const needle = filter.trim().toLowerCase();
+  const visible = needle
+    ? options.filter((o) => o.name.toLowerCase().includes(needle))
+    : options;
   return (
     <div className="flex flex-col gap-1">
       <div className="flex h-6 items-center justify-between">
@@ -160,8 +172,20 @@ function TriCheckList({
           </span>
         )}
       </div>
+      {showFilter && (
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={`Filter ${label.toLowerCase()}…`}
+          aria-label={`Filter ${label.toLowerCase()}`}
+          className="h-7 text-sm"
+        />
+      )}
       <div className="max-h-32 overflow-y-auto rounded-md border border-border p-1">
-        {options.map((o) => {
+        {visible.length === 0 && (
+          <p className="px-1.5 py-1 text-sm text-muted-foreground">No matches</p>
+        )}
+        {visible.map((o) => {
           const state = include.includes(o.id)
             ? 'include'
             : exclude.includes(o.id)
