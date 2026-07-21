@@ -98,7 +98,7 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
         <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bulk-tags">Tags</Label>
-            <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} autoFocus />
+            <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} />
             <p className="text-xs text-muted-foreground">
               Only tags shared by every selected link are shown; a tag on just some of them is left
               untouched.
