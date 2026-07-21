@@ -59,6 +59,9 @@ export function Main() {
 
 function UnlockedMain() {
   const { linksLayout } = useSettings();
+  // The resolved sort is intrinsic to the query (page-provider), so read it off
+  // the same context the reads run through and hand it to the layout's date column.
+  const { query } = useLinksPage();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
 
   // An unknown layout (synced from a client that has one we don't) renders as the
@@ -74,6 +77,7 @@ function UnlockedMain() {
       <div className="min-h-0 flex-1">
         <Layout
           links={links}
+          sortOn={query.sortOn}
           pinnedCount={pinnedCount}
           hasMore={hasMore}
           showMore={showMore}

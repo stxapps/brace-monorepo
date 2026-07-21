@@ -35,7 +35,8 @@ const ROW_HEIGHT = 70;
 // background sync is staged behind the refresh pill (see view-state-provider).
 const SCROLL_TOP_THRESHOLD = 8;
 
-// Compact, localized "added N ago" for the wide-pane date column. Intl.RelativeTimeFormat
+// Compact, localized "N ago" for the wide-pane date column (the sorted field —
+// created or updated; the row supplies the verb). Intl.RelativeTimeFormat
 // only formats a (count, unit) pair, so we pick the largest unit that fits and hand it the
 // count; `numeric: 'auto'` yields "yesterday"/"last week" where they read better than
 // "1 … ago", and `style: 'short'` keeps the column narrow ("3 days ago", "2 mo. ago").
@@ -62,6 +63,7 @@ function formatRelativeTime(epochMs: number): string {
 
 export function ListLayout({
   links,
+  sortOn,
   pinnedCount,
   hasMore,
   showMore,
@@ -69,6 +71,11 @@ export function ListLayout({
   hasPending,
   applyPending,
 }: LinkLayoutProps) {
+  // The date column shows the field the rows are SORTED by, so the relative values
+  // read top-to-bottom in order — showing createdAt while sorted by updatedAt would
+  // look out of order. The verb names which instant it is (the visible text is bare
+  // to keep the column narrow, so "Added"/"Updated" rides the title + aria-label).
+  const dateVerb = sortOn === 'createdAt' ? 'Added' : 'Updated';
   const scrollRef = useRef<HTMLDivElement>(null);
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
@@ -204,16 +211,19 @@ export function ListLayout({
                   </a>
                   <LinkTagChips link={link} tagsById={tagsById} className="mt-0.5" />
                 </span>
-                {/* Added-date column — only when the PANE is wide enough (@lg
+                {/* Sorted-field date column — only when the PANE is wide enough (@lg
                     container width), so it never crowds the title on a narrow pane
-                    or in the extension popup. dateTime/title carry the exact instant
-                    for AT and hover; the visible text is the compact relative form. */}
+                    or in the extension popup. Shows the createdAt/updatedAt value the
+                    rows are ordered by (see dateVerb above). dateTime carries the exact
+                    instant; title/aria-label prefix the verb so the field is legible
+                    to hover and AT (the bare visible text can't say which it is). */}
                 <time
-                  dateTime={new Date(link.createdAt).toISOString()}
-                  title={new Date(link.createdAt).toLocaleString()}
+                  dateTime={new Date(link[sortOn]).toISOString()}
+                  title={`${dateVerb} ${new Date(link[sortOn]).toLocaleString()}`}
+                  aria-label={`${dateVerb} ${formatRelativeTime(link[sortOn])}`}
                   className="hidden shrink-0 text-xs whitespace-nowrap text-muted-foreground @xl:block"
                 >
-                  {formatRelativeTime(link.createdAt)}
+                  {formatRelativeTime(link[sortOn])}
                 </time>
                 {!bulkEditing && (
                   <LinkRowMenu
