@@ -267,12 +267,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
       className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/30 px-4"
     >
       <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Exit bulk edit"
-          onClick={exitBulkEdit}
-        >
+        <Button variant="ghost" size="icon-sm" aria-label="Exit bulk edit" onClick={exitBulkEdit}>
           <X className="size-4" />
         </Button>
         <Checkbox

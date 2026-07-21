@@ -147,17 +147,17 @@ export function ListLayout({
             // over `links` (the displayed order). Shared by both row anchors.
             const onRowClick = bulkEditing
               ? (e: React.MouseEvent) => {
-                e.preventDefault();
-                if (e.shiftKey) selectRange(link, links);
-                else toggleSelected(link);
-              }
+                  e.preventDefault();
+                  if (e.shiftKey) selectRange(link, links);
+                  else toggleSelected(link);
+                }
               : undefined;
             return (
               <div
                 key={link.path}
                 className={`absolute inset-x-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
                   selected ? 'bg-muted' : 'hover:bg-muted/50'
-                  }`}
+                }`}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
               >
                 {/* Bulk-edit selection sits at the row's LEADING edge (a scannable

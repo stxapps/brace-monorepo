@@ -153,8 +153,9 @@ export function CardLayout({
                   return (
                     <div
                       key={link.path}
-                      className={`relative flex flex-col overflow-hidden rounded-lg border border-border ${selected ? 'bg-muted' : 'hover:bg-muted/50'
-                        }`}
+                      className={`relative flex flex-col overflow-hidden rounded-lg border border-border ${
+                        selected ? 'bg-muted' : 'hover:bg-muted/50'
+                      }`}
                     >
                       {/* The tag chips are buttons, so they sit OUTSIDE the anchor
                           as the card's bottom block (same no-button-in-anchor rule
@@ -172,10 +173,10 @@ export function CardLayout({
                         onClick={
                           bulkEditing
                             ? (e) => {
-                              e.preventDefault();
-                              if (e.shiftKey) selectRange(link, links);
-                              else toggleSelected(link);
-                            }
+                                e.preventDefault();
+                                if (e.shiftKey) selectRange(link, links);
+                                else toggleSelected(link);
+                              }
                             : undefined
                         }
                       >
