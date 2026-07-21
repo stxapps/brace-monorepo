@@ -1,8 +1,10 @@
 'use client';
 
 // The toolbar shown while bulk-edit mode is on (view-state-provider
-// `bulkEditing`): Select all + the selected count on the left, the actions on
-// the right. It acts on the hoisted `selectedLinks` snapshot map; the one thing
+// `bulkEditing`): an exit (✕) affordance + Select all + the selected count on
+// the left, the actions on the right — the dismiss control anchors the left
+// edge, away from the destructive actions (Remove / Delete permanently) that
+// end the right cluster. It acts on the hoisted `selectedLinks` snapshot map; the one thing
 // it takes from outside is `links` — the rows the active layout is showing
 // (Main passes the same useLinks result it hands the layout) — which feeds
 // Select all and puts the copied URLs in display order. The action set mirrors
@@ -48,21 +50,27 @@
 //
 // The button set is fixed per view and a button DISABLES when its target set is
 // empty (rather than appearing/disappearing), so the toolbar doesn't reflow
-// under the user mid-multi-select. One bulk action runs at a time (`busy`), and
-// every completed action exits bulk-edit mode.
+// under the user mid-multi-select. What DOES vary is where the secondary actions
+// live: on a narrow pane the whole row wouldn't fit, so Edit tags / Pin / Unpin /
+// Archive collapse into a ⋯ overflow menu (COLLAPSE_WIDTH), leaving Copy, Move to,
+// and the destructive Remove inline. That split is driven by the pane WIDTH, not
+// the selection, so it still never shifts mid-multi-select. One bulk action runs
+// at a time (`busy`), and every completed action exits bulk-edit mode.
 
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Archive,
   ArchiveRestore,
   Copy,
   FolderInput,
+  MoreHorizontal,
   Pin,
   PinOff,
   Tags,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
 
 import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
@@ -79,13 +87,36 @@ import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
+import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
 
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
 type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'remove';
+
+// Below this container width the secondary actions (Edit tags, Pin, Unpin,
+// Archive) collapse into a ⋯ overflow menu so the fixed button row never spills
+// off a narrow pane (the collapsible sidebar can widen the sidebar / shrink this
+// pane without a window resize, and the extension popup is narrower still).
+// Copy, Move to, and the destructive Remove stay inline at every width. Measured
+// via `useElementWidth` (not a CSS container query) so each action is declared
+// once and rendered as either a Button or a menu item — no duplicated markup.
+// Tuned to roughly where the widest inline set (the normal non-Trash view, seven
+// right-hand buttons) stops fitting; below the return we keep the full set inline
+// until the first measurement lands (width 0), matching card-layout's approach.
+const COLLAPSE_WIDTH = 900;
+
+// One secondary action, renderable as an inline Button or an overflow menu item.
+type SecondaryAction = {
+  key: string;
+  icon: ReactNode;
+  label: string;
+  disabled: boolean;
+  run: () => void;
+};
 
 export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const { selection } = useLinksPage();
@@ -109,6 +140,13 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(copiedTimer.current), []);
+
+  // Track the toolbar's own width so the secondary actions collapse into a ⋯
+  // menu on a narrow pane (see COLLAPSE_WIDTH). The root is held as STATE (via a
+  // callback ref) rather than a RefObject so useElementWidth re-measures when the
+  // toolbar mounts on entering bulk-edit — a RefObject would leave width at 0.
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const width = useElementWidth(rootEl);
 
   // Live pin membership, so Pin/Unpin split the selection correctly even as a
   // pin lands from another device mid-selection.
@@ -170,9 +208,73 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
 
   const disabled = count === 0 || busy !== null;
 
+  // Keep the full set inline until the first measurement (width 0) so a wide
+  // pane doesn't flash the ⋯ menu on mount.
+  const collapsed = width > 0 && width < COLLAPSE_WIDTH;
+
+  // The collapsible middle of the non-Trash action set, declared once. Archive
+  // flips to Unarchive (and its target set) inside the Archive view, matching the
+  // inline pair the row menu shows.
+  const secondaryActions: SecondaryAction[] = [
+    {
+      key: 'tags',
+      icon: <Tags className="size-4" />,
+      label: 'Edit tags',
+      disabled: disabled || actionable.length === 0,
+      run: () => requestRetag(actionable),
+    },
+    {
+      key: 'pin',
+      icon: <Pin className="size-4" />,
+      label: busy === 'pin' ? 'Pinning…' : 'Pin',
+      disabled: disabled || toPin.length === 0,
+      // Reversed so the first-selected link ends up topmost: pin() inserts each
+      // at the top of the pinned section. Already-pinned links are skipped, so
+      // their manual order isn't churned.
+      run: () => void runBulk('pin', [...toPin].reverse(), (link) => pin(link)),
+    },
+    {
+      key: 'unpin',
+      icon: <PinOff className="size-4" />,
+      label: busy === 'unpin' ? 'Unpinning…' : 'Unpin',
+      disabled: disabled || toUnpin.length === 0,
+      run: () => void runBulk('unpin', toUnpin, (link) => unpin(link)),
+    },
+    inArchive
+      ? {
+          key: 'archive',
+          icon: <ArchiveRestore className="size-4" />,
+          label: busy === 'archive' ? 'Unarchiving…' : 'Unarchive',
+          disabled,
+          run: () =>
+            void runBulk('archive', actionable, (link) =>
+              update(link, { listId: DEFAULT_LIST_ID }),
+            ),
+        }
+      : {
+          key: 'archive',
+          icon: <Archive className="size-4" />,
+          label: busy === 'archive' ? 'Archiving…' : 'Archive',
+          disabled: disabled || toArchive.length === 0,
+          run: () =>
+            void runBulk('archive', toArchive, (link) => update(link, { listId: ARCHIVE_ID })),
+        },
+  ];
+
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/30 px-4">
+    <div
+      ref={setRootEl}
+      className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/30 px-4"
+    >
       <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Exit bulk edit"
+          onClick={exitBulkEdit}
+        >
+          <X className="size-4" />
+        </Button>
         <Checkbox
           aria-label="Select all"
           disabled={links.length === 0}
@@ -229,64 +331,44 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
                 />
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled || actionable.length === 0}
-              onClick={() => requestRetag(actionable)}
-            >
-              <Tags className="size-4" />
-              Edit tags
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled || toPin.length === 0}
-              onClick={() =>
-                // Reversed so the first-selected link ends up topmost: pin()
-                // inserts each at the top of the pinned section. Already-pinned
-                // links are skipped, so their manual order isn't churned.
-                void runBulk('pin', [...toPin].reverse(), (link) => pin(link))
-              }
-            >
-              <Pin className="size-4" />
-              {busy === 'pin' ? 'Pinning…' : 'Pin'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={disabled || toUnpin.length === 0}
-              onClick={() => void runBulk('unpin', toUnpin, (link) => unpin(link))}
-            >
-              <PinOff className="size-4" />
-              {busy === 'unpin' ? 'Unpinning…' : 'Unpin'}
-            </Button>
-            {inArchive ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={disabled}
-                onClick={() =>
-                  void runBulk('archive', actionable, (link) =>
-                    update(link, { listId: DEFAULT_LIST_ID }),
-                  )
-                }
-              >
-                <ArchiveRestore className="size-4" />
-                {busy === 'archive' ? 'Unarchiving…' : 'Unarchive'}
-              </Button>
+            {collapsed ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label="More actions"
+                    disabled={disabled || actionable.length === 0}
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  {secondaryActions.map((action) => (
+                    <DropdownMenuItem
+                      key={action.key}
+                      disabled={action.disabled}
+                      onSelect={action.run}
+                    >
+                      {action.icon}
+                      {action.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={disabled || toArchive.length === 0}
-                onClick={() =>
-                  void runBulk('archive', toArchive, (link) => update(link, { listId: ARCHIVE_ID }))
-                }
-              >
-                <Archive className="size-4" />
-                {busy === 'archive' ? 'Archiving…' : 'Archive'}
-              </Button>
+              secondaryActions.map((action) => (
+                <Button
+                  key={action.key}
+                  variant="outline"
+                  size="sm"
+                  disabled={action.disabled}
+                  onClick={action.run}
+                >
+                  {action.icon}
+                  {action.label}
+                </Button>
+              ))
             )}
             <Button
               variant="destructive"
@@ -301,9 +383,6 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
             </Button>
           </>
         )}
-        <Button variant="ghost" size="sm" onClick={exitBulkEdit}>
-          Cancel
-        </Button>
       </div>
     </div>
   );

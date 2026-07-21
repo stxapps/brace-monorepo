@@ -6,7 +6,7 @@
 // link list into chunks and lay each chunk out with a flex/grid row. Card height
 // is fixed so the row estimate stays exact.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
@@ -61,14 +61,19 @@ export function CardLayout({
   hasPending,
   applyPending,
 }: LinkLayoutProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // The scroll container as STATE (via a callback ref), not a RefObject: that's
+  // what lets useElementWidth re-measure when the element mounts. It matters here
+  // because the div is absent while EmptyState shows, so a RefObject would leave
+  // the width stuck at 0 (→ DEFAULT_COLUMNS) after a 0→N links transition. The
+  // virtualizer and scrollTo read the same node.
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
   const tagsById = useTagMap();
   // Fit as many `MIN_CARD_WIDTH` cards (plus gaps) as the content box holds; fall
   // back to `DEFAULT_COLUMNS` until the first measurement lands so there's no
   // 1-column flash on the initial paint (matches the prior fixed layout).
-  const contentWidth = useElementWidth(scrollRef);
+  const contentWidth = useElementWidth(scrollEl);
   const columns =
     contentWidth > 0
       ? Math.max(1, Math.floor((contentWidth + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP)))
@@ -82,12 +87,12 @@ export function CardLayout({
 
   const applyAndScrollTop = () => {
     applyPending();
-    scrollRef.current?.scrollTo({ top: 0 });
+    scrollEl?.scrollTo({ top: 0 });
   };
 
   const virtualizer = useVirtualizer({
     count: rowCount,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollEl,
     estimateSize: () => ROW_HEIGHT,
     overscan: 4,
   });
@@ -123,7 +128,7 @@ export function CardLayout({
     <div className="relative h-full">
       <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
       <div
-        ref={scrollRef}
+        ref={setScrollEl}
         className="h-full overflow-y-auto p-4"
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
