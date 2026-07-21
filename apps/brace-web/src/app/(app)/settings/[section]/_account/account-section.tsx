@@ -305,7 +305,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       : !ownPasswordParse.success
         ? (ownPasswordParse.error?.issues[0]?.message ?? 'Invalid password')
         : guessesLog10 !== null && guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
-          ? 'Too predictable — add a few more words, or generate a passphrase instead.'
+          ? 'Too predictable — add a few more words, or generate a password instead.'
           : null;
   const proofReady = useRecovery ? recoveryCode !== '' : currentPassword !== '';
 
@@ -410,18 +410,18 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 
         {mode === 'generated' ? (
           <div className="flex flex-col gap-2">
-            <Label>New passphrase</Label>
+            <Label>New password</Label>
             <p className="text-sm text-muted-foreground">
-              We generated a strong passphrase for you. Save it in your password manager — there is
-              no way to reset it if it&apos;s lost.
+              We generated a strong password for you. Save it in your password manager — there is no
+              way to reset it if it&apos;s lost.
             </p>
             <ShowOnceSecret
               id="cp-passphrase-saved"
               secret={passphrase}
-              label="Your new passphrase"
+              label="Your new password"
               saved={passphraseSaved}
               onSavedChange={setPassphraseSaved}
-              confirmLabel="I've saved my new passphrase somewhere safe."
+              confirmLabel="I've saved my new password somewhere safe."
             />
             <div className="flex items-center justify-between">
               <button
@@ -464,8 +464,8 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
               <p className="text-sm text-destructive">{ownPasswordError}</p>
             ) : null}
             <p className="text-sm text-muted-foreground">
-              A generated passphrase is stronger than most typed passwords. If you use your own,
-              make it long and unique.{' '}
+              A password of random words is stronger than most passwords you&apos;d type. If you use
+              your own, make it long and unique.{' '}
               <button
                 type="button"
                 onClick={() => {

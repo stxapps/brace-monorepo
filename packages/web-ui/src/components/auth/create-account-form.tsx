@@ -176,7 +176,7 @@ export function CreateAccountForm() {
         : !ownPasswordParse.success
           ? (ownPasswordParse.error?.issues[0]?.message ?? 'Invalid password')
           : guessesLog10 !== null && guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
-            ? 'Too predictable — add a few more words, or generate a passphrase instead.'
+            ? 'Too predictable — add a few more words, or generate a password instead.'
             : null;
 
     return (
@@ -206,18 +206,18 @@ export function CreateAccountForm() {
 
         {mode === 'generated' ? (
           <Field>
-            <FieldLabel>Your passphrase</FieldLabel>
+            <FieldLabel>Your password</FieldLabel>
             <FieldDescription>
-              We generated a strong passphrase for you. Save it in your password manager — there is
-              no way to reset it if it&apos;s lost.
+              We generated a strong password for you. Save it in your password manager — there is no
+              way to reset it if it&apos;s lost.
             </FieldDescription>
             <ShowOnceSecret
               id="passphrase-saved"
               secret={passphrase}
-              label="Your passphrase"
+              label="Your password"
               saved={passphraseSaved}
               onSavedChange={setPassphraseSaved}
-              confirmLabel="I've saved my passphrase somewhere safe."
+              confirmLabel="I've saved my password somewhere safe."
             />
             <div className="flex items-center justify-between">
               <button
@@ -252,8 +252,8 @@ export function CreateAccountForm() {
               <FieldDescription className="text-destructive">{ownPasswordError}</FieldDescription>
             ) : null}
             <FieldDescription>
-              A generated passphrase is stronger than most typed passwords. If you use your own,
-              make it long and unique — there is no way to reset it if it&apos;s lost.{' '}
+              A password of random words is stronger than most passwords you&apos;d type. If you use
+              your own, make it long and unique — there is no way to reset it if it&apos;s lost.{' '}
               <button
                 type="button"
                 onClick={() => setMode('generated')}
