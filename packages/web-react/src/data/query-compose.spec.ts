@@ -8,7 +8,8 @@ const q = (any: string[], none: string[] = []): LinkQuery => ({
   text: { any: [], all: [], none: [] },
   url: { any: [], all: [], none: [] },
   title: { any: [], all: [], none: [] },
-  sort: 'updatedAt',
+  sortOn: 'updatedAt',
+  sortOrder: 'desc',
 });
 
 describe('excludeLists', () => {

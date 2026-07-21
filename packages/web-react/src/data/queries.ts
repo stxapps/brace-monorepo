@@ -18,6 +18,8 @@ import type {
   Extraction,
   ExtractionItem,
   LinkItem,
+  LinkSortOn,
+  LinkSortOrder,
   ListItem,
   PinItem,
   SettingsGeneral,
@@ -108,10 +110,12 @@ export interface ListClause {
   none: string[];
 }
 
-// How results are ordered, descending (newest first): `updatedAt` = date
-// modified, `createdAt` = date added. Each is backed by its own compound index
-// (db.ts), so either sort is index-served, not sorted in memory.
-export type LinkSort = 'updatedAt' | 'createdAt';
+// How results are ordered, along two orthogonal axes (`LinkSortOn`/`LinkSortOrder`
+// live in @stxapps/shared beside the synced-setting writer enums): `sortOn` is the
+// field — `updatedAt` = date modified, `createdAt` = date added — and `sortOrder` the
+// direction (`desc` = newest first). Each field is backed by its own compound index
+// (db.ts), served in either direction by walking that index forward or reversed, so
+// no sort runs in memory.
 
 // A fully-described link query. Clauses AND across fields (a link must satisfy
 // every non-empty one). Cross-field OR is intentionally not expressible — that's
@@ -128,7 +132,13 @@ export interface LinkQuery {
   text: Clause;
   url: Clause;
   title: Clause;
-  sort: LinkSort;
+  // Ordering, not a filter. Resolved by the app's read edge (brace-web page-provider):
+  // a global synced setting (settings/general.enc) with an optional READ-ONLY URL
+  // override (`?sort`/`?order`, hand-typed) — the URL wins when present, else the
+  // setting. By the time a query reaches this layer it's a concrete field+direction.
+  // See docs/search.md.
+  sortOn: LinkSortOn;
+  sortOrder: LinkSortOrder;
 }
 
 // A blank query — every clause empty, default sort. The base the search UI builds
@@ -142,7 +152,8 @@ export function emptyQuery(): LinkQuery {
     text: { any: [], all: [], none: [] },
     url: { any: [], all: [], none: [] },
     title: { any: [], all: [], none: [] },
-    sort: 'updatedAt',
+    sortOn: 'updatedAt',
+    sortOrder: 'desc',
   };
 }
 
@@ -755,7 +766,7 @@ function textMatches(link: LinkItem, extraction: Extraction | undefined, q: Link
 // timestamps are projected on every type (projection.ts), so each sort reuses the
 // same two link indexes; only the ordering component differs.
 const SORT_INDEXES: Record<
-  LinkSort,
+  LinkSortOn,
   { type: string; list: string; column: 'itemUpdatedAt' | 'itemCreatedAt' }
 > = {
   updatedAt: {
@@ -775,17 +786,18 @@ const SORT_INDEXES: Record<
 // no decode of the whole library, exact total. `exclude` drops the pinned links
 // already surfaced by the overlay; every one of them falls in THIS range (it
 // matched the same query), so the rest-count is exactly `total - exclude.size`.
+// The index is ascending by nature; `desc` (newest first) walks it reversed.
 async function rangeFastPath(
   index: string,
   key: string,
   limit: number,
   exclude: Set<string>,
+  desc: boolean,
 ): Promise<RestResult> {
   const range = db.items.where(index).between([key, Dexie.minKey], [key, Dexie.maxKey], true, true);
+  const ordered = range.clone();
   const [records, total] = await Promise.all([
-    range
-      .clone()
-      .reverse()
+    (desc ? ordered.reverse() : ordered)
       .filter((record) => !exclude.has(record.path))
       .limit(limit)
       .toArray(),
@@ -806,9 +818,14 @@ async function finishFromCandidates(
   limit: number,
   exclude: Set<string>,
 ): Promise<RestResult> {
-  const { column } = SORT_INDEXES[q.sort];
+  const { column } = SORT_INDEXES[q.sortOn];
+  const desc = q.sortOrder === 'desc';
   const survivors = candidates.filter((r) => !exclude.has(r.path) && columnMatches(r, q));
-  survivors.sort((a, b) => (b[column] ?? 0) - (a[column] ?? 0));
+  survivors.sort((a, b) => {
+    const av = a[column] ?? 0;
+    const bv = b[column] ?? 0;
+    return desc ? bv - av : av - bv;
+  });
 
   if (!hasTextClause(q)) {
     return {
@@ -874,8 +891,8 @@ interface RestResult {
 }
 
 // One page of the link library for `query` MINUS `exclude`, ordered by
-// `query.sort` (descending — newest first). Picks the cheapest driver for the
-// clauses present:
+// `query.sortOn`/`query.sortOrder` (default: newest-modified first). Picks the
+// cheapest driver for the clauses present:
 //   - single list / no filters → index-ordered fast path (exact count).
 //   - positive tag clause → drive the selective `*itemTagIds` index, finish over
 //     that subset (a tag's links, never the whole library), sorted in JS.
@@ -887,7 +904,16 @@ async function readRest(
   limit: number,
   exclude: Set<string>,
 ): Promise<RestResult> {
-  const index = SORT_INDEXES[query.sort];
+  const index = SORT_INDEXES[query.sortOn];
+  const desc = query.sortOrder === 'desc';
+  // The `[..+itemUpdatedAt|itemCreatedAt]` index is ascending; `desc` reverses the
+  // walk. Applied to every ordered scan below so all drivers honor the direction.
+  const linkRange = () => {
+    const range = db.items
+      .where(index.type)
+      .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true);
+    return desc ? range.reverse() : range;
+  };
   const onlyLists =
     clauseEmpty(query.tags) &&
     clauseEmpty(query.url) &&
@@ -896,10 +922,10 @@ async function readRest(
 
   if (onlyLists && query.lists.none.length === 0) {
     if (query.lists.any.length === 1) {
-      return rangeFastPath(index.list, query.lists.any[0], limit, exclude);
+      return rangeFastPath(index.list, query.lists.any[0], limit, exclude, desc);
     }
     if (query.lists.any.length === 0) {
-      return rangeFastPath(index.type, 'link', limit, exclude);
+      return rangeFastPath(index.type, 'link', limit, exclude, desc);
     }
   }
 
@@ -916,22 +942,16 @@ async function readRest(
   // `extractions/`): gather every column-filtered survivor in sort order, then join +
   // filter + page.
   if (needsExtractionJoin(query)) {
-    const survivors = await db.items
-      .where(index.type)
-      .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
-      .reverse()
+    const survivors = await linkRange()
       .filter((record) => !exclude.has(record.path) && columnMatches(record, query))
       .toArray();
     return finishWithExtractionSearch(survivors, query, limit);
   }
 
-  // No positive tag clause and no title/text clause: walk all links newest-first, filtering
+  // No positive tag clause and no title/text clause: walk all links in sort order, filtering
   // as we go on columns + url (decoded link). The `filter` stops once `limit + 1` pass
   // (one past the page detects `hasMore`), so it touches a bounded slice, not the library.
-  const records = await db.items
-    .where(index.type)
-    .between(['link', Dexie.minKey], ['link', Dexie.maxKey], true, true)
-    .reverse()
+  const records = await linkRange()
     .filter((record) => {
       if (exclude.has(record.path) || !columnMatches(record, query)) return false;
       const link = decodeCachedLink(record);

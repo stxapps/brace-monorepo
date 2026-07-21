@@ -159,9 +159,7 @@ function TriCheckList({
   };
   const showFilter = options.length > FILTER_THRESHOLD;
   const needle = filter.trim().toLowerCase();
-  const visible = needle
-    ? options.filter((o) => o.name.toLowerCase().includes(needle))
-    : options;
+  const visible = needle ? options.filter((o) => o.name.toLowerCase().includes(needle)) : options;
   return (
     <div className="flex flex-col gap-1">
       <div className="flex h-6 items-center justify-between">
@@ -298,8 +296,10 @@ function AdvancedSearch() {
       paywall.show('searchEditor', () => setGated(false));
       return;
     }
+    // Sort isn't a search field — it's a global synced setting applied by
+    // use-links, so a committed search carries only the default sort (harmless:
+    // use-links overrides it). No sort to preserve here anymore.
     const q = emptyQuery();
-    q.sort = query.sort; // ordering isn't a search field — keep the active sort
     q.text.all = words(draft.textAll);
     q.text.any = words(draft.textAny);
     q.text.none = words(draft.textNone);
@@ -474,14 +474,14 @@ export function SearchBar() {
 
   const submitBasic = () => {
     const w = words(text);
-    // GLOBAL: replace the whole query with just the text (keeping sort). An empty
-    // box returns home (the default inbox, via an empty query).
+    // GLOBAL: replace the whole query with just the text. An empty box returns home
+    // (the default inbox, via an empty query). Sort is a global synced setting
+    // applied by use-links, not part of the query, so there's nothing to carry over.
     if (w.length === 0) {
       setQuery(emptyQuery());
       return;
     }
     const q = emptyQuery();
-    q.sort = query.sort;
     q.text.all = w;
     setQuery(q);
   };

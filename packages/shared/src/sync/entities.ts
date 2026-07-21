@@ -287,6 +287,35 @@ export type Extraction = z.infer<typeof extractionSchema>;
 export const LINKS_LAYOUTS = ['list', 'card'] as const;
 export type LinksLayout = (typeof LINKS_LAYOUTS)[number];
 
+// How the links library is ORDERED — a synced account preference (see
+// `settingsGeneralSchema`'s `sortOn`/`sortOrder` below), split into two orthogonal
+// axes so each round-trips and defaults independently under the file's looseObject
+// rule: `sortOn` is the field (date modified vs. date added), `sortOrder` the
+// direction. Both are the WRITER's enumerations — what a UI offers and a client may
+// store — NOT what the read edge validates against (the persisted values parse as
+// free `z.string()`, exactly like `linksLayout`, so a value a newer client stores
+// round-trips instead of dropping the settings blob). The read side coerces an
+// unknown/absent value back to a known one with the helpers below.
+export const LINK_SORT_ONS = ['updatedAt', 'createdAt'] as const;
+export type LinkSortOn = (typeof LINK_SORT_ONS)[number];
+
+export const LINK_SORT_ORDERS = ['asc', 'desc'] as const;
+export type LinkSortOrder = (typeof LINK_SORT_ORDERS)[number];
+
+// Narrow a PERSISTED sort value (a free `string`/`undefined` off the tolerant read
+// schema) to a known enum member, falling back to the default — the read edge's
+// counterpart of the writer enums above. The default matches `emptyQuery` in the
+// web read layer: newest-modified-first. Without this, an unknown future value would
+// index the sort tables to `undefined` and crash the read; with it, the unknown value
+// still round-trips at the storage layer (looseObject) while rendering falls back.
+export function coerceLinkSortOn(value: string | undefined): LinkSortOn {
+  return LINK_SORT_ONS.includes(value as LinkSortOn) ? (value as LinkSortOn) : 'updatedAt';
+}
+
+export function coerceLinkSortOrder(value: string | undefined): LinkSortOrder {
+  return LINK_SORT_ORDERS.includes(value as LinkSortOrder) ? (value as LinkSortOrder) : 'desc';
+}
+
 // The synced theme preference — the same three fields as `@stxapps/shared`'s
 // `ThemeState` (`mode` + the two `custom`-mode crossover times), stored inside
 // `settings/general.enc` (the "Sync" tab). The device-local alternative ("Device"
@@ -364,6 +393,16 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),
+  // The SYNCED links sort — the two orthogonal axes (see LINK_SORT_ONS /
+  // LINK_SORT_ORDERS above): `sortOn` the field (date modified vs. added),
+  // `sortOrder` the direction. Global-only (no device split, unlike `linksLayout`):
+  // the synced value IS the applied one. OPTIONAL and a free `z.string()` for the
+  // same reason as `linksLayout` — a strict enum would fail this whole parse on an
+  // older client if a newer one stored an unknown value, taking every other setting
+  // down with it. The read edge coerces each with `coerceLinkSort*` and falls back to
+  // the default (`updatedAt` / `desc`); an unknown value round-trips untouched.
+  sortOn: z.string().optional().catch(undefined),
+  sortOrder: z.string().optional().catch(undefined),
   // The SYNCED theme (the Settings → theme "Sync" tab). OPTIONAL like `linksLayout`:
   // absent until the user picks a synced theme, and an older client that never wrote
   // it still parses — `looseObject` round-trips it. Permissive by design (see

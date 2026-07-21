@@ -23,6 +23,8 @@ import {
   type Link,
   linkSchema,
   type LinksLayout,
+  type LinkSortOn,
+  type LinkSortOrder,
   type List,
   listSchema,
   pathFromId,
@@ -333,6 +335,8 @@ export async function writeSettingsGeneral(
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
     theme?: ThemeState;
+    sortOn?: LinkSortOn;
+    sortOrder?: LinkSortOrder;
   },
 ): Promise<void> {
   const now = Date.now();

@@ -15,7 +15,7 @@
 
 import { useCallback, useMemo } from 'react';
 
-import type { LinksLayout, ThemeState } from '@stxapps/shared';
+import type { LinksLayout, LinkSortOn, LinkSortOrder, ThemeState } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -33,6 +33,10 @@ export interface SettingMutations {
   // Toggle the SYNCED server-extraction opt-in (the second, explicit opt-in); writes
   // settings/general.enc + syncs, so every device honors the same choice.
   setServerExtraction: (enabled: boolean) => Promise<void>;
+  // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
+  // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
+  setSortOn: (sortOn: LinkSortOn) => Promise<void>;
+  setSortOrder: (sortOrder: LinkSortOrder) => Promise<void>;
   // Switch which theme source the app renders (Sync vs Device) — device-local.
   setThemeSource: (source: ThemeSource) => Promise<void>;
   // Set the SYNCED theme (the theme "Sync" tab); writes settings/general.enc + syncs.
@@ -73,6 +77,24 @@ export function useSettingMutations(): SettingMutations {
     [username, requestSync],
   );
 
+  const setSortOn = useCallback(
+    async (sortOn: LinkSortOn) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, { sortOn });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const setSortOrder = useCallback(
+    async (sortOrder: LinkSortOrder) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, { sortOrder });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
   const setThemeSource = useCallback(
     (source: ThemeSource) => setLocalSettings({ themeSource: source }),
     [],
@@ -95,6 +117,8 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setSortOn,
+      setSortOrder,
       setThemeSource,
       setSyncTheme,
       setLocalTheme,
@@ -104,6 +128,8 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setSortOn,
+      setSortOrder,
       setThemeSource,
       setSyncTheme,
       setLocalTheme,

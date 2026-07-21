@@ -33,7 +33,8 @@ tag  / tag-any  / tag-all  / tag-none
 text / text-all / text-any / text-none (words over the COMBINED url⊕title)
 url  / url-all  / url-any  / url-none   (substring words, url only)
 title/ title-all/ title-any/ title-none
-sort = created | updated               (ordering, default updated)
+sort  = updatedAt | createdAt          (ordering field  — READ-ONLY override)
+order = asc | desc                      (ordering dir    — READ-ONLY override)
 ```
 
 - The **bare name is sugar** for the common relation: `list`/`tag` → `any` (include
@@ -47,6 +48,18 @@ sort = created | updated               (ordering, default updated)
   lists clause (Show All is the absence of a list filter, not a filter), and a URL
   with **no filter params at all** injects the default inbox (`lists.any =
 [My List]`). This injection is load-bearing for the projection below.
+- **`sort`/`order` are not filters.** Ordering is a **global synced setting**
+  (`settings/general.enc` — Settings → Misc), and the URL params are only an
+  **optional, hand-typed, read-only override** of it: present and known → they win;
+  absent or unknown → the setting's value (the default the provider passes into
+  `parseLinkQuery`). They're deliberately **out of the filter-key set**, so `?sort=…`
+  alone still resolves to the default inbox rather than counting as a filter. And the
+  setters (`hrefForSelection`/`hrefForQuery`) **don't serialize them back**, so a
+  hand-typed sort is dropped on the next sidebar nav or committed search — making it
+  survive interaction is the future per-view sort UI (serialize both builders, gated
+  on ≠ the setting). The resolution lives in the provider, the one place the URL and
+  the setting are both in scope; the read layer (`readLinks`) receives a concrete
+  field+direction. See business-model.md for where sort sits in the tiering.
 
 **`text` is the basic rung; `url`/`title` are the advanced rungs.** `text` matches
 its words against the **combined `url ⊕ title` haystack** (host lives inside url), so
@@ -127,9 +140,10 @@ ladder") and `packages/shared/src/iap/plans.ts` (`searchEditor`).
 
 - **Basic box** — always visible (the free daily-loop feature shouldn't sit behind a
   click). Type + Enter commits `?text=…`; results reshape the main pane. **Basic
-  search is GLOBAL by design**: submitting replaces the whole query with just its text
-  (keeping sort), so a search spans the library rather than the list you were on. An
-  empty box returns home.
+  search is GLOBAL by design**: submitting replaces the whole query with just its text,
+  so a search spans the library rather than the list you were on. An empty box returns
+  home. (Sort isn't part of the committed query — it's the global setting resolved by
+  the provider — so a search neither carries nor needs to preserve it.)
 - **Advanced popover** — an anchored panel (not a modal: search is iterative, so the
   results stay visible while you refine). It exposes nearly the whole grammar:
   - the **word trio** over the combined url⊕title haystack — _All / Any / None of

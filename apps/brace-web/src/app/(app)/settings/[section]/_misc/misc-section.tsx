@@ -16,11 +16,25 @@
 // AppLockGate in the (app) layout.
 
 import { useState } from 'react';
-import { Clock, LayoutGrid, List, Monitor, Moon, Sun } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarPlus,
+  Clock,
+  LayoutGrid,
+  List,
+  Monitor,
+  Moon,
+  Sun,
+} from 'lucide-react';
 
 import {
+  LINK_SORT_ONS,
+  LINK_SORT_ORDERS,
   LINKS_LAYOUTS,
   type LinksLayout,
+  type LinkSortOn,
+  type LinkSortOrder,
   THEME_MODES,
   type ThemeMode,
   type ThemeState,
@@ -56,6 +70,36 @@ const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: R
       icon: <LayoutGrid className="size-4" />,
     },
   };
+
+const SORT_ON_OPTIONS: Record<LinkSortOn, { label: string; hint: string; icon: React.ReactNode }> =
+  {
+    updatedAt: {
+      label: 'Date modified',
+      hint: 'Order by when a link was last changed.',
+      icon: <Clock className="size-4" />,
+    },
+    createdAt: {
+      label: 'Date added',
+      hint: 'Order by when a link was saved.',
+      icon: <CalendarPlus className="size-4" />,
+    },
+  };
+
+const SORT_ORDER_OPTIONS: Record<
+  LinkSortOrder,
+  { label: string; hint: string; icon: React.ReactNode }
+> = {
+  desc: {
+    label: 'Newest first',
+    hint: 'The most recent links at the top.',
+    icon: <ArrowDown className="size-4" />,
+  },
+  asc: {
+    label: 'Oldest first',
+    hint: 'The oldest links at the top.',
+    icon: <ArrowUp className="size-4" />,
+  },
+};
 
 const THEME_MODE_OPTIONS: Record<
   ThemeMode,
@@ -217,6 +261,8 @@ export function MiscSection() {
     linksLayoutSource,
     syncLinksLayout,
     localLinksLayout,
+    sortOn,
+    sortOrder,
     themeSource,
     syncTheme,
     localTheme,
@@ -225,6 +271,8 @@ export function MiscSection() {
     setLinksLayoutSource,
     setSyncLinksLayout,
     setLocalLinksLayout,
+    setSortOn,
+    setSortOrder,
     setThemeSource,
     setSyncTheme,
     setLocalTheme,
@@ -289,6 +337,62 @@ export function MiscSection() {
             />
           </TabsContent>
         </Tabs>
+      </section>
+
+      <section className="mt-10">
+        <h3 className="text-base font-medium">Link sort</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Choose how your saved links are ordered. This applies across all your devices.
+        </p>
+
+        {/* Global-only (synced), so no Sync/Device tabs — the two axes are set
+            directly. The RadioGroup value is the raw persisted string, so an unknown
+            future value simply shows nothing selected (like the layout radios). */}
+        <div className="mt-4">
+          <Label className="text-sm font-medium">Sort by</Label>
+          <RadioGroup
+            value={sortOn}
+            onValueChange={(v) => run(setSortOn(v as LinkSortOn))}
+            className="mt-2"
+          >
+            {LINK_SORT_ONS.map((on) => {
+              const { label, hint, icon } = SORT_ON_OPTIONS[on];
+              return (
+                <OptionRow
+                  key={on}
+                  id={`sort-on-${on}`}
+                  value={on}
+                  label={label}
+                  hint={hint}
+                  icon={icon}
+                />
+              );
+            })}
+          </RadioGroup>
+        </div>
+
+        <div className="mt-4">
+          <Label className="text-sm font-medium">Order</Label>
+          <RadioGroup
+            value={sortOrder}
+            onValueChange={(v) => run(setSortOrder(v as LinkSortOrder))}
+            className="mt-2"
+          >
+            {LINK_SORT_ORDERS.map((order) => {
+              const { label, hint, icon } = SORT_ORDER_OPTIONS[order];
+              return (
+                <OptionRow
+                  key={order}
+                  id={`sort-order-${order}`}
+                  value={order}
+                  label={label}
+                  hint={hint}
+                  icon={icon}
+                />
+              );
+            })}
+          </RadioGroup>
+        </div>
       </section>
 
       <section className="mt-10">

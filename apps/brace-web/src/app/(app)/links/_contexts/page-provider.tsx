@@ -21,8 +21,17 @@
 import { createContext, Suspense, useCallback, useContext, useMemo } from 'react';
 import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/navigation';
 
-import { ALL_ID, DEFAULT_LIST_ID } from '@stxapps/shared';
-import type { LinkQuery } from '@stxapps/web-react';
+import {
+  ALL_ID,
+  coerceLinkSortOn,
+  coerceLinkSortOrder,
+  DEFAULT_LIST_ID,
+  LINK_SORT_ONS,
+  LINK_SORT_ORDERS,
+  type LinkSortOn,
+  type LinkSortOrder,
+} from '@stxapps/shared';
+import { type LinkQuery, useSettings } from '@stxapps/web-react';
 
 // The single-axis view the sidebar highlights and the topbar names — a lossy
 // PROJECTION of `query` onto one axis (via `selectionFromQuery`; never set
@@ -72,7 +81,11 @@ function hrefForQuery(query: LinkQuery): string {
     append(`${field}-any`, clause.any);
     append(`${field}-none`, clause.none);
   }
-  if (query.sort === 'createdAt') params.set('sort', 'created'); // `updatedAt` is the default
+  // Sort is deliberately NOT serialized back: the URL `?sort`/`?order` params are a
+  // READ-ONLY (hand-typed) override of the global synced default (parseLinkQuery
+  // below), so the setters emit clean URLs that fall back to the setting. A committed
+  // search or a sidebar nav therefore drops a hand-typed sort — making it survive
+  // interaction is the future per-view feature (serialize here, gated on ≠ default).
 
   const qs = params.toString();
   return qs ? `/links?${qs}` : '/links';
@@ -85,7 +98,12 @@ function hrefForQuery(query: LinkQuery): string {
 //   text / text-all / text-any / text-none (words over the combined url⊕title)
 //   url  / url-all  / url-any  / url-none  (substring words, url only)
 //   title/ title-all/ title-any/ title-none
-//   sort = created | updated               (ordering, default updated)
+//   sort  = updatedAt | createdAt          (ordering field — READ-ONLY override)
+//   order = asc | desc                      (ordering direction — READ-ONLY override)
+// `sort`/`order` are an OPTIONAL override of the global synced sort setting: present
+// (hand-typed) → they win; absent/unknown → the setting's value (the default the
+// provider passes in). They're NOT filters (not in FILTER_KEYS), so `?sort=…` alone
+// still resolves to the default inbox, and the setters don't serialize them back.
 // The bare name is sugar for the common relation: `list`/`tag` → `any` (include),
 // `text`/`url`/`title` → `all` (must contain every word). Clauses AND across fields.
 // Values are REPEATED keys (`?tag=a&tag=b` / `?text=foo&text=bar`), never `+`
@@ -120,7 +138,26 @@ function words(raw: string[]): string[] {
   return raw.map((w) => w.trim().toLowerCase()).filter((w) => w.length > 0);
 }
 
-function parseLinkQuery(searchParams: ReadonlyURLSearchParams): LinkQuery {
+// The URL sort override, or `undefined` when the param is absent OR holds a value
+// this build doesn't know — either way the caller falls back to the setting default.
+// Values are the exact enum literals (no friendly-name map); hand-typed only.
+function sortOnParam(searchParams: ReadonlyURLSearchParams): LinkSortOn | undefined {
+  const value = searchParams.get('sort');
+  return LINK_SORT_ONS.includes(value as LinkSortOn) ? (value as LinkSortOn) : undefined;
+}
+
+function sortOrderParam(searchParams: ReadonlyURLSearchParams): LinkSortOrder | undefined {
+  const value = searchParams.get('order');
+  return LINK_SORT_ORDERS.includes(value as LinkSortOrder) ? (value as LinkSortOrder) : undefined;
+}
+
+// `sortOn`/`sortOrder` are passed in ALREADY RESOLVED (URL override ?? setting
+// default — the provider computes them), so this just stamps them onto the query.
+function parseLinkQuery(
+  searchParams: ReadonlyURLSearchParams,
+  sortOn: LinkSortOn,
+  sortOrder: LinkSortOrder,
+): LinkQuery {
   const query: LinkQuery = {
     lists: {
       // `all` is the show-everything pseudo-list, not a real filter — drop it.
@@ -150,10 +187,9 @@ function parseLinkQuery(searchParams: ReadonlyURLSearchParams): LinkQuery {
       any: words(searchParams.getAll('title-any')),
       none: words(searchParams.getAll('title-none')),
     },
-    // Ordering, not a filter: `?sort=created` (date added) vs the default
-    // `updated` (date modified). Deliberately NOT in FILTER_KEYS, so `?sort=…`
-    // alone still falls back to the default list below.
-    sort: searchParams.get('sort') === 'created' ? 'createdAt' : 'updatedAt',
+    // Ordering: the already-resolved URL-override-or-setting sort (see the header).
+    sortOn,
+    sortOrder,
   };
 
   // No filter params at all → the default inbox (My List). `?list=all` IS a param
@@ -222,10 +258,23 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Sort is a GLOBAL synced setting with an optional READ-ONLY URL override: the
+  // hand-typed `?sort`/`?order` win, else the synced value (coerced from its tolerant
+  // `string` shape). Resolved here — the one place both the URL and the setting are
+  // visible — then stamped onto the query, so use-links needs no sort logic.
+  const { sortOn: settingSortOn, sortOrder: settingSortOrder } = useSettings();
+  const sortOn = sortOnParam(searchParams) ?? coerceLinkSortOn(settingSortOn);
+  const sortOrder = sortOrderParam(searchParams) ?? coerceLinkSortOrder(settingSortOrder);
+
   // The main pane's full filter — same URL, the whole grammar. Memoized on the
-  // params so its identity is stable across renders (it's a useLiveQuery dep in
-  // useLinks); a new object only when the URL actually changes.
-  const query = useMemo<LinkQuery>(() => parseLinkQuery(searchParams), [searchParams]);
+  // params + the resolved sort so its identity is stable across renders (it's a
+  // useLiveQuery dep in useLinks); a new object only when the URL or the applied
+  // sort actually changes. Depending on the RESOLVED sort (not the raw setting)
+  // means a setting change while a URL override is active doesn't churn the query.
+  const query = useMemo<LinkQuery>(
+    () => parseLinkQuery(searchParams, sortOn, sortOrder),
+    [searchParams, sortOn, sortOrder],
+  );
 
   // Selection is a derived PROJECTION of the query — not a separate read of the URL
   // — so it can never disagree with what the main pane shows: a global search

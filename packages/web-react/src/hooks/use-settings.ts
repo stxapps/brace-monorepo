@@ -63,6 +63,13 @@ export interface Settings {
   // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
   // sends a saved URL to `brace-extractor` (see docs/link-extraction.md).
   serverExtraction: boolean;
+  // The SYNCED links sort — global-only (no device split), so the synced value IS
+  // the applied one. Typed `string` for the same forward-compat reason as
+  // `linksLayout`: a newer client's value round-trips and reaches the Settings UI
+  // intact (showing no selection when unknown). use-links coerces these to a known
+  // `LinkSortOn`/`LinkSortOrder` before ordering the read (coerceLinkSort*).
+  sortOn: string;
+  sortOrder: string;
   // The theme the app should apply right now — `localTheme` when the active source is
   // `local`, else the synced `syncTheme`. The ThemeProvider consumes this (the way
   // main.tsx consumes `linksLayout`) to resolve/apply light-vs-dark and to keep the
@@ -89,6 +96,13 @@ export function useSettings(): Settings {
   // Off by default: absent (older client / never toggled) reads as opted-out.
   const serverExtraction = general?.serverExtraction ?? false;
 
+  // Global-only: the synced value is the applied one (no source resolution like
+  // layout/theme). Passed through raw (`string`) so an unknown future value reaches
+  // the Settings UI and round-trips; the defaults ('updatedAt'/'desc') match
+  // `emptyQuery`, and use-links coerces before ordering the read.
+  const sortOn = general?.sortOn ?? 'updatedAt';
+  const sortOrder = general?.sortOrder ?? 'desc';
+
   // Coerce both sources through `coerceThemeState`: the synced value is permissively
   // typed (entities.ts) so an odd persisted value never drops the settings blob, and
   // the device value can predate this feature (older `localSettings` row) — both
@@ -114,6 +128,8 @@ export function useSettings(): Settings {
     syncLinksLayout,
     localLinksLayout,
     serverExtraction,
+    sortOn,
+    sortOrder,
     theme,
     themeSource,
     syncTheme,

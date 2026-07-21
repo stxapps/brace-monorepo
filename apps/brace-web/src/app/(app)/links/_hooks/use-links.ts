@@ -86,6 +86,16 @@ export function useLinks(): UseLinksResult {
   const { engaged } = useLinksViewState();
   const [limit, setLimit] = useState(PAGE_SIZE);
 
+  // Why suppression lives HERE (the read edge) and not up in page-provider, next
+  // to where `query` is authored: it must run DOWNSTREAM of `selection`. Both locks
+  // and trash suppress by adding to `lists.none` (via `excludeLists` below), and
+  // `selectionFromQuery` collapses ANY `lists.none` to `{ kind: 'none' }` — so folding
+  // suppression into the provider's `query` would strip the sidebar highlight off Show
+  // All and every tag/search view (their selection would read as `none`). page-provider
+  // derives `selection` from the un-suppressed query on purpose; suppression is a read
+  // policy layered on a complete query, not part of authoring it — unlike sort, which
+  // IS intrinsic to the query (URL override ?? synced setting) and so resolves up there.
+  //
   // The list ids the reads suppress, for two independent reasons:
   //
   //   LOCKS — lock-provider's coverage set (descendants included), ALWAYS. This is
@@ -124,7 +134,9 @@ export function useLinks(): UseLinksResult {
   // repaints immediately — the user's own action). `lockedListIds` is identity-stable
   // from lock-provider's memo, so `suppressedListIds` is stable per URL, and
   // `excludeLists` returns the SAME reference when there's nothing to exclude — so
-  // this memo stays stable then too.
+  // this memo stays stable then too. (The applied sort is already resolved into
+  // `urlQuery` by page-provider — URL override or synced setting — so a sort change
+  // arrives as a new `urlQuery` and flows through here untouched.)
   const query = useMemo(
     () => excludeLists(urlQuery, suppressedListIds),
     [urlQuery, suppressedListIds],
