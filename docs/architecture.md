@@ -89,10 +89,11 @@ _vs._ brace-extension.
   See setup.md), **Uniwind**
   for Tailwind classes (styling — a Metro-plugin, Tailwind **v4** CSS-first
   binding; see the version note below), **react-native-reusables** for
-  shadcn-style components (copied into the app via its CLI, like shadcn on web;
-  the CLI auto-detects Uniwind vs NativeWind and pulls the matching component
-  variant — there is no `expo-ui` package: with a single expo app, components
-  live in the app until a second expo surface exists), **expo-sqlite + drizzle**
+  shadcn-style components (copied into the app like shadcn on web — into
+  `src/components/ui/`, by hand from the Uniwind registry variant, since its
+  CLI needs tsconfig path aliases this app doesn't have; see setup.md — there
+  is no `expo-ui` package: with a single expo app, components live in the app
+  until a second expo surface exists), **expo-sqlite + drizzle**
   as the Dexie analogue (drizzle's `useLiveQuery` ≈ Dexie `liveQuery`),
   **expo-file-system** for decrypted file blobs (see `expo-crypto`),
   **FlashList** in place of TanStack Virtual, and the same TanStack Query /

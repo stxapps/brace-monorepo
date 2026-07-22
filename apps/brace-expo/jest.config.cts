@@ -36,9 +36,11 @@ module.exports = {
   // fractional-indexing via @stxapps/shared's barrel, @noble/ed25519 via
   // @stxapps/expo-crypto — same block as @stxapps/expo-react's jest config), or
   // their `export` syntax breaks require(). Metro has no such allowlist, so
-  // runtime needs nothing.
+  // runtime needs nothing. @rn-primitives (react-native-reusables' primitives)
+  // ships raw JSX in its dist like the RN packages do, so it joins the
+  // allowlist too.
   transformIgnorePatterns: [
-    `/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|${esmNodeModules.join('|')}))`,
+    `/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|@rn-primitives|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|${esmNodeModules.join('|')}))`,
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

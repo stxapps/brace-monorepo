@@ -206,14 +206,32 @@ version split is gone. Wiring (already done):
   `react-native-safe-area-context`) need `withUniwind(Component)` to accept
   `className`; `View`/`Text` and reanimated components accept it directly.
 - components come from **react-native-reusables** (the shadcn analogue —
-  same copy-into-the-app model), added like shadcn on web:
-  npx @react-native-reusables/cli@latest add <component>
-  (run inside `apps/brace-expo`; the CLI auto-detects Uniwind and adds the
-  Uniwind component variant — if it prompts for a `tailwind.config.js` path,
-  press enter to skip, since Uniwind is config-less. Components land in the app,
-  not a package — there is deliberately no `expo-ui` lib while brace-expo is the
-  only expo app). Components that animate will pull in `react-native-reanimated`
-  / `react-native-worklets` (already installed, SDK 54-pinned at root).
+  same copy-into-the-app model), landing in `src/components/ui/` (the mirror of
+  `packages/web-ui/src/components/ui/` — in the app, not a package: there is
+  deliberately no `expo-ui` lib while brace-expo is the only expo app). But
+  **the CLI doesn't work here — copy from the registry by hand.**
+  `npx @react-native-reusables/cli@latest add <component>` resolves its write
+  paths through tsconfig `paths` aliases (`tsconfig-paths`), and brace-expo has
+  none — apps in this workspace use relative imports (web-ui only satisfied the
+  shadcn CLI via its `@stxapps/web-ui/*` self-alias + package `exports`, which
+  an app has no reason to grow). Even `--yes` still blocks on an interactive
+  components.json prompt. So instead fetch the Uniwind variant straight from
+  the registry the CLI reads —
+  `https://reactnativereusables.com/r/uniwind/<component>.json` (`files[].content`)
+  — write it to `src/components/ui/<component>.tsx`, and rewrite the
+  `@/registry/uniwind/*` imports to relative (`../../lib/utils` for `cn` —
+  which lives at `src/lib/utils.ts`, byte-identical to web-ui's — and `./text`
+  etc. for registry siblings). Declare any `dependencies` the registry entry
+  lists per the root-pin + app-`*` convention (done so far:
+  `@rn-primitives/slot`, `class-variance-authority`, `clsx`, `tailwind-merge`).
+  Keep the copy otherwise verbatim so future upstream diffs stay legible; local
+  changes are flagged in a header comment per file (`text.tsx` carries
+  `font-sans` in its base variant — see the font section). One jest catch:
+  `@rn-primitives/*` ships raw JSX in its dist (expects the consumer's
+  Metro/babel to transform, like RN packages), so `@rn-primitives` is in
+  `jest.config.cts`'s `transformIgnorePatterns` allowlist. Components that
+  animate will pull in `react-native-reanimated` / `react-native-worklets`
+  (already installed, SDK 54-pinned at root).
 - jest: `uniwind` is mocked (its className→style bridge needs the Metro
   transform / native runtime — the HOC becomes identity in tests) and `*.css`
   imports map to an empty module (`src/testing/css-mock.js`), alongside the
@@ -248,9 +266,11 @@ no splash gate, and no flash. Wiring (already done):
   plugin resolves from the package.
 - **Uniwind binding**: `global.css` sets `--font-sans: 'Inter'`, so the
   `font-sans` utility emits `fontFamily: 'Inter'`. RN has no CSS cascade, so
-  `font-sans` is applied where text renders; once the react-native-reusables
-  `Text` component is added, put it in that component's base variant to make
-  Inter the app-wide default.
+  `font-sans` must be applied where text renders — it lives in the
+  react-native-reusables `Text` base variant (`src/components/ui/text.tsx`, a
+  deliberate local addition to the registry copy), making Inter the app-wide
+  default wherever that `Text` is used; only text rendered outside it needs an
+  explicit `font-sans`.
 - **verify a real build**: the embed only takes effect after a native build
   (`npx expo prebuild` + run on device/simulator) — it can't be exercised by
   jest or Metro alone.
@@ -285,7 +305,7 @@ This can only be exercised on a native build, not jest/Metro.
 
 - npx nx g @nx/next:app apps/brace-docs
 
-#### dependencies
+#### serwist
 
 - npm install serwist -w @stxapps/brace-web
 - npm install @serwist/next -w @stxapps/brace-web

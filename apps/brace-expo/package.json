@@ -17,11 +17,14 @@
     "@expo/metro-config": "*",
     "@hookform/resolvers": "*",
     "@react-native-community/netinfo": "*",
+    "@rn-primitives/slot": "*",
     "@shopify/flash-list": "*",
     "@stxapps/expo-crypto": "*",
     "@stxapps/expo-react": "*",
     "@tanstack/react-query": "*",
     "@testing-library/react-native": "*",
+    "class-variance-authority": "*",
+    "clsx": "*",
     "expo": "*",
     "expo-build-properties": "*",
     "expo-constants": "*",
@@ -51,6 +54,7 @@
     "react-native-svg-transformer": "*",
     "react-native-web": "*",
     "react-native-worklets": "*",
+    "tailwind-merge": "*",
     "tailwindcss": "^4.3.0",
     "uniwind": "*"
   }
