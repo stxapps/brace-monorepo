@@ -97,9 +97,7 @@ export function CreateAccountForm() {
   // (see PASSWORD_MIN_GUESSES_LOG10).
   // null = estimator still loading; stay closed until it's ready.
   const ownPasswordOk =
-    ownPasswordParse.success &&
-    guessesLog10 !== null &&
-    guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
+    ownPasswordParse.success && guessesLog10 !== null && guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
 
   const passwordChosen = mode === 'generated' ? passphraseSaved : ownPasswordOk;
   const canContinueSetup = usernameValid && usernameAvailable && passwordChosen;
@@ -201,8 +199,8 @@ export function CreateAccountForm() {
           <View className="gap-2">
             <Text className="text-sm font-medium">Your password</Text>
             <Text className="text-muted-foreground text-sm">
-              We generated a strong password for you. Save it in your password manager — there is
-              no way to reset it if it&apos;s lost.
+              We generated a strong password for you. Save it in your password manager — there is no
+              way to reset it if it&apos;s lost.
             </Text>
             <ShowOnceSecret
               secret={passphrase}
@@ -238,9 +236,8 @@ export function CreateAccountForm() {
               <Text className="text-destructive text-sm">{ownPasswordError}</Text>
             ) : null}
             <Text className="text-muted-foreground text-sm">
-              A password of random words is stronger than most passwords you&apos;d type. If you
-              use your own, make it long and unique — there is no way to reset it if it&apos;s
-              lost.
+              A password of random words is stronger than most passwords you&apos;d type. If you use
+              your own, make it long and unique — there is no way to reset it if it&apos;s lost.
             </Text>
             <Pressable onPress={() => setMode('generated')} className="self-start py-1">
               <Text className="text-muted-foreground text-sm underline">Generate one instead</Text>

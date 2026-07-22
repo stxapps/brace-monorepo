@@ -106,7 +106,10 @@ export function PasswordStrengthMeter({ displayScore }: { displayScore: number |
     <View className="flex-row items-center gap-2" aria-live="polite">
       <View className="flex-1 flex-row gap-1">
         {[0, 1, 2, 3].map((i) => (
-          <View key={i} className={cn('h-1.5 flex-1 rounded-full', i < filled ? tone : 'bg-border')} />
+          <View
+            key={i}
+            className={cn('h-1.5 flex-1 rounded-full', i < filled ? tone : 'bg-border')}
+          />
         ))}
       </View>
       <Text

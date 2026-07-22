@@ -192,9 +192,7 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
         </Button>
         {error ? <Text className="text-destructive text-sm">{error}</Text> : null}
         <Pressable onPress={onUsePassword} className="items-center py-2">
-          <Text className="text-muted-foreground text-sm underline">
-            Use your password instead
-          </Text>
+          <Text className="text-muted-foreground text-sm underline">Use your password instead</Text>
         </Pressable>
       </View>
     </View>
