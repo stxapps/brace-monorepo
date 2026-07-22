@@ -4,12 +4,16 @@ import { sha512 } from '@noble/hashes/sha2';
 
 import {
   bytesToHex,
+  canonicalizePassword,
   dekWrapAad,
   deriveUserSalt,
   DOOR_PASSWORD,
+  DOOR_RECOVERY,
   type DoorType,
   HKDF_INFO_AUTH_SEED,
   HKDF_INFO_ENCRYPTION_KEY,
+  HKDF_INFO_RECOVERY_KEK,
+  normalizeRecoveryCode,
   utf8,
 } from '@stxapps/shared';
 
@@ -52,16 +56,24 @@ export interface Door {
   iv: Uint8Array;
 }
 
-// create-account result: the live keys PLUS the wrapped password door to send to
-// the server. (Sign-in returns a bare Account — the door already exists.)
+// create-account result: the live keys PLUS the wrapped doors to send to the
+// server. The password door is always present; the recovery door is present iff
+// the caller supplied a recovery code (it's skippable — docs/account.md).
+// (Sign-in returns a bare Account — the doors already exist.)
 export interface NewAccount extends Account {
   passwordDoor: Door;
+  recoveryDoor?: Door;
 }
 
 // The credential miss from unlockAccount: the GCM tag failed, meaning a wrong
 // password — or a tampered/swapped blob, deliberately indistinguishable. Same
 // contract as web-crypto's WrongPasswordError.
 export class WrongPasswordError extends Error {}
+
+// The recovery-door analogue of WrongPasswordError: the GCM tag failed unwrapping
+// the recovery door, i.e. a wrong/mistyped recovery code (or a swapped blob).
+// Same contract as web-crypto's WrongRecoveryCodeError.
+export class WrongRecoveryCodeError extends Error {}
 
 // HKDF needs a salt; the DEK is already uniformly random, so an empty salt is the
 // standard choice (RFC 5869 treats it as a string of zeros).
@@ -97,26 +109,62 @@ function deriveFromDek(dek: Uint8Array): Account {
 // The password door's KEK: Argon2id(password, per-user salt) — see web-crypto's
 // derivePasswordKek. The salt is computed by @stxapps/shared so every platform
 // produces byte-identical KEKs; the ~1–3s Argon2id runs native (argon2.ts).
+// Canonicalize (trim + NFC) so equivalent encodings of the same password derive
+// one KEK on every platform — the frozen contract (see canonicalizePassword).
 async function derivePasswordKek(username: string, password: string): Promise<Uint8Array> {
   const salt = deriveUserSalt(username);
-  return deriveArgon2Hash(password, salt);
+  return deriveArgon2Hash(canonicalizePassword(password), salt);
 }
 
-// create-account — the same flow as web-crypto's createAccount:
+// The recovery door's KEK: HKDF over the NORMALIZED recovery code — see
+// web-crypto's deriveRecoveryKek. The code is already high-entropy (CSPRNG ≥256
+// bits — generateRecoveryCode), so a cheap HKDF suffices; no Argon2id (that's
+// only for the low-entropy password). Normalizing first means a code typed with
+// its display grouping or Crockford confusables still derives the same KEK.
+function deriveRecoveryKek(recoveryCode: string): Uint8Array {
+  return hkdf(utf8(normalizeRecoveryCode(recoveryCode)), HKDF_INFO_RECOVERY_KEK, 32);
+}
+
+// Wrap one copy of the DEK under a door's KEK → the `account_keys` row to
+// persist. The AAD binds the ciphertext to its doorType (dekWrapAad), so a
+// server can't pass one door's blob off as another's.
+async function wrapDek(kek: Uint8Array, doorType: DoorType, dek: Uint8Array): Promise<Door> {
+  const { iv, ciphertext } = await encrypt(kek, dek, dekWrapAad(doorType));
+  return { doorType, wrappedDek: ciphertext, iv };
+}
+
+// create-account — the same flow as web-crypto's createAccount. The root of the
+// account is a fresh RANDOM DEK, wrapped under the password door (always) and,
+// if a recovery code is supplied, the recovery door too — both wrap the SAME
+// DEK. Recovery is SKIPPABLE (docs/account.md), so the recovery door is opt-in
+// via `opts.recoveryCode`.
 //
 //   DEK          = randomBytes(32)                        (the real root)
 //   password-KEK = Argon2id(password, salt)               (native, off the JS thread)
 //   passwordDoor = AES-256-GCM(password-KEK, DEK, aad = doorType)
+//   recoveryDoor = AES-256-GCM(recovery-KEK, DEK, aad = doorType)   [optional]
 //   DEK --HKDF--> Ed25519 keypair (publicKey + sign) + AES-256-GCM key
-export async function createAccount(username: string, password: string): Promise<NewAccount> {
+//
+// (Door management — changePasswordDoor / regenerateRecoveryDoor — stays
+// web-only until the change-password flow ports to expo.)
+export async function createAccount(
+  username: string,
+  password: string,
+  opts?: { recoveryCode?: string },
+): Promise<NewAccount> {
   const dek = new Uint8Array(randomBytes(32));
 
-  const kek = await derivePasswordKek(username, password);
-  const { iv, ciphertext } = await encrypt(kek, dek, dekWrapAad(DOOR_PASSWORD));
+  const passwordKek = await derivePasswordKek(username, password);
+  const passwordDoor = await wrapDek(passwordKek, DOOR_PASSWORD, dek);
+
+  let recoveryDoor: Door | undefined;
+  if (opts?.recoveryCode !== undefined) {
+    recoveryDoor = await wrapDek(deriveRecoveryKek(opts.recoveryCode), DOOR_RECOVERY, dek);
+  }
 
   const account = deriveFromDek(dek);
 
-  return { ...account, passwordDoor: { doorType: DOOR_PASSWORD, wrappedDek: ciphertext, iv } };
+  return recoveryDoor ? { ...account, passwordDoor, recoveryDoor } : { ...account, passwordDoor };
 }
 
 // sign-in — the same flow as web-crypto's unlockAccount: re-derive the
@@ -142,6 +190,31 @@ export async function unlockAccount(
     // distinguish the cases to the caller. Only THIS throw is the credential
     // miss; a derivePasswordKek failure above propagates raw.
     throw new WrongPasswordError('Incorrect username or password');
+  }
+
+  return deriveFromDek(dek);
+}
+
+// sign-in via the RECOVERY door — the escape hatch when the password is lost.
+// The recovery code unwraps the SAME DEK and derives the SAME keys (identical
+// publicKey), so the resulting session is indistinguishable from a password
+// sign-in. A wrong code fails as WrongRecoveryCodeError — same contract as
+// web-crypto's unlockAccountWithRecovery.
+export async function unlockAccountWithRecovery(
+  recoveryCode: string,
+  door: { wrappedDek: Uint8Array; iv: Uint8Array },
+): Promise<Account> {
+  const kek = deriveRecoveryKek(recoveryCode);
+
+  let dek: Uint8Array;
+  try {
+    dek = await decrypt(
+      kek,
+      { iv: door.iv, ciphertext: door.wrappedDek },
+      dekWrapAad(DOOR_RECOVERY),
+    );
+  } catch {
+    throw new WrongRecoveryCodeError('Invalid recovery code');
   }
 
   return deriveFromDek(dek);

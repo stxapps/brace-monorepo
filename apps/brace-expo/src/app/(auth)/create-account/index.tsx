@@ -1,17 +1,29 @@
-import { Text } from 'react-native';
 import { Link } from 'expo-router';
 
-import { Screen } from '../../../components/screen';
+import { Text } from '../../../components/ui/text';
+import { AuthScreen } from '../../../features/auth/auth-screen';
+import { CreateAccountForm } from '../../../features/auth/create-account-form';
 
-// `/create-account`. Placeholder — the real form is the native port of
-// web-ui's CreateAccountForm (built on @stxapps/expo-react's useCreateAccount)
-// once that lands. Mirrors brace-web's `(auth)/create-account/page.tsx`.
+// `/create-account` — mirrors brace-web's `(auth)/create-account/page.tsx`:
+// the card chrome (AuthScreen ≈ the web layout's Card + this page's
+// CardHeader/Content/Footer) around the shared ceremony form. Thin by design —
+// the UI lives in `src/features/auth/` because every file under the app root
+// becomes a route (no `_`-private folders in expo-router).
 export default function CreateAccountScreen() {
   return (
-    <Screen title="Create account">
-      <Link href="/sign-in" asChild>
-        <Text className="text-primary font-sans text-base underline">Sign in</Text>
-      </Link>
-    </Screen>
+    <AuthScreen
+      title="Create account"
+      description="Start saving links to visit later."
+      footer={
+        <Text className="text-muted-foreground text-sm">
+          Already have an account?{' '}
+          <Link href="/sign-in">
+            <Text className="text-foreground text-sm font-medium underline">Sign in</Text>
+          </Link>
+        </Text>
+      }
+    >
+      <CreateAccountForm />
+    </AuthScreen>
   );
 }

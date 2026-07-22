@@ -17,6 +17,7 @@ export * from './data/share-store';
 export * from './data/share-upload';
 export * from './data/subscription-store';
 export * from './data/sync-store';
+export * from './hooks/use-create-account';
 export * from './lib/auth-api-client';
 export * from './lib/query-managers';
 export * from './sync/engine';
