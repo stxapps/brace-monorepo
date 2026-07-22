@@ -17,14 +17,18 @@ import { useNavigation } from 'expo-router';
 import { Menu, Search } from 'lucide-react-native';
 
 import { useLists, useTags } from '@stxapps/expo-react';
-import { ALL_LABEL, emptyQuery, flattenTree } from '@stxapps/shared';
+import { ALL_LABEL, DEFAULT_LIST_ID, flattenTree } from '@stxapps/shared';
 
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { MoreOptionsMenu } from './more-options-menu';
 import { useLinksPage } from './page-provider';
-import { useLinksViewState } from './view-state-provider';
+import { type SimpleSelection, useLinksViewState } from './view-state-provider';
+
+// Where a dismissed search lands when there's no `preSearch` snapshot to
+// restore — the default inbox (serializes to the bare `/links`).
+const HOME_SELECTION: SimpleSelection = { kind: 'list', id: DEFAULT_LIST_ID };
 
 function useSelectionLabel(): string {
   const { selection } = useLinksPage();
@@ -47,21 +51,38 @@ function useSelectionLabel(): string {
 export function Topbar() {
   const label = useSelectionLabel();
   const navigation = useNavigation();
-  const { selection, setQuery } = useLinksPage();
-  const { searchOpen, setSearchOpen } = useLinksViewState();
+  const { selection, setSimpleQuery } = useLinksPage();
+  const { searchOpen, setSearchOpen, preSearch, setPreSearch } = useLinksViewState();
+
+  // The bar's rendered visibility (same expression in search-bar.tsx): the
+  // explicit toggle, OR-ed with the one invariant the query can express — a
+  // committed search that resolves `selection` to 'none' has no other surface
+  // (no drawer highlight, generic title), so the bar force-shows even when
+  // `searchOpen` is false (the back gesture returning to a `?text=` URL after
+  // a dismiss). Only OR the two — the query alone can't decide visibility: a
+  // single-list/tag advanced search projects to a SIMPLE selection, and the
+  // bar must survive that commit.
+  const searchVisible = searchOpen || selection.kind === 'none';
 
   const toggleSearch = () => {
-    if (!searchOpen) {
+    if (!searchVisible) {
+      // Snapshot where the user is, so dismissing a committed search returns
+      // here. Always simple in this branch — a 'none' selection forces the bar
+      // visible, so opening can't happen under one (TS narrows `selection` to
+      // `SimpleSelection` through the `searchVisible` alias).
+      setPreSearch(selection);
       setSearchOpen(true);
       return;
     }
     setSearchOpen(false);
-    // Closing DISMISSES the search: a committed search resolves `selection` to
-    // 'none' (no drawer highlight, generic title), so with the bar gone it
-    // would keep filtering the list with no visible surface left to show or
-    // clear it — return home instead. A plain list/tag view (bar opened but
-    // nothing committed) just hides the bar.
-    if (selection.kind === 'none') setQuery(emptyQuery());
+    // Closing DISMISSES the search: with the bar gone, a committed search
+    // ('none' selection) would keep filtering the list with no visible surface
+    // left to show or clear it — return to where the search began, or home if
+    // there's no snapshot. Both targets are `SimpleSelection`s, so neither can
+    // resolve back to 'none' and force the bar open again. A plain list/tag
+    // view (nothing committed, or a single-list/tag advanced search) just
+    // hides the bar and stays put.
+    if (selection.kind === 'none') setSimpleQuery(preSearch ?? HOME_SELECTION);
   };
 
   return (
@@ -80,15 +101,15 @@ export function Topbar() {
         <Pressable
           onPress={toggleSearch}
           aria-label="Search"
-          aria-expanded={searchOpen}
+          aria-expanded={searchVisible}
           className={cn(
             'size-10 items-center justify-center rounded-md',
-            searchOpen && 'bg-muted',
+            searchVisible && 'bg-muted',
           )}
         >
           <Icon
             as={Search}
-            className={cn('size-5', searchOpen ? 'text-foreground' : 'text-muted-foreground')}
+            className={cn('size-5', searchVisible ? 'text-foreground' : 'text-muted-foreground')}
           />
         </Pressable>
         <MoreOptionsMenu />

@@ -8,8 +8,9 @@
 //
 //  - Web's box is persistent topbar chrome; on this narrow screen the bar is a
 //    full-width row summoned below the topbar by its search toggle
-//    (view-state-provider `searchOpen`) — same slot the bulk-edit toolbar will
-//    share. Mounting auto-focuses the input.
+//    (view-state-provider `searchOpen`, OR-ed with a committed-search check —
+//    see the visibility comment in `SearchBar`) — same slot the bulk-edit
+//    toolbar will share. Mounting auto-focuses the input.
 //  - The advanced editor is a full-height page-sheet Modal, not a popover: five
 //    inputs plus two tri-state checklists don't fit a 320px anchored panel on a
 //    phone, and the keyboard would cover half of it.
@@ -449,7 +450,7 @@ function AdvancedSearch() {
 
 export function SearchBar() {
   const { searchOpen } = useLinksViewState();
-  const { query, setQuery } = useLinksPage();
+  const { query, setQuery, selection } = useLinksPage();
 
   // Basic box: a draft synced from the committed text. Navigation clears text →
   // the box empties; a basic/advanced search sets it → the box shows it.
@@ -457,7 +458,11 @@ export function SearchBar() {
   const [text, setText] = useState(committedText);
   useEffect(() => setText(committedText), [committedText]);
 
-  if (!searchOpen) return null;
+  // Rendered visibility — the topbar's `searchVisible`, same expression (the
+  // rationale lives there): the explicit toggle OR a committed search with no
+  // other surface ('none' selection), so e.g. a back gesture into a `?text=`
+  // URL re-shows the bar without a toggle press.
+  if (!searchOpen && selection.kind !== 'none') return null;
 
   const submitBasic = () => {
     const w = words(text);
