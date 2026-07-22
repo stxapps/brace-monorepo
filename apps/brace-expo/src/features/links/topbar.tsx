@@ -11,7 +11,8 @@
 // as the list's pull-to-refresh — the gesture is the platform idiom, the menu
 // entry carries the error/retry affordance.
 
-import { Pressable, View } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { BackHandler, Pressable, View } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { useNavigation } from 'expo-router';
 import { Menu, Search } from 'lucide-react-native';
@@ -64,6 +65,36 @@ export function Topbar() {
   // bar must survive that commit.
   const searchVisible = searchOpen || selection.kind === 'none';
 
+  // Closing DISMISSES the search: with the bar gone, a committed search
+  // ('none' selection) would keep filtering the list with no visible surface
+  // left to show or clear it — return to where the search began, or home if
+  // there's no snapshot. Both targets are `SimpleSelection`s, so neither can
+  // resolve back to 'none' and force the bar open again. A plain list/tag
+  // view (nothing committed, or a single-list/tag advanced search) just
+  // hides the bar and stays put. The two close paths — the toggle and the
+  // Android back press below — share this one body so the restore semantics
+  // can't drift.
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    if (selection.kind === 'none') setSimpleQuery(preSearch ?? HOME_SELECTION);
+  }, [selection, setSimpleQuery, preSearch, setSearchOpen]);
+
+  // Android back closes the search UI before it navigates — the platform
+  // cascade (keyboard → search → navigation; the IME consumes the first press
+  // itself). Registered only while the bar shows, so back keeps its navigation
+  // meaning on a plain view — and re-registering on open puts this handler
+  // ahead of the navigator's own (BackHandler runs listeners newest-first).
+  // Inert on iOS: hardwareBackPress never fires there, and the swipe-back
+  // gesture deliberately stays navigation.
+  useEffect(() => {
+    if (!searchVisible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeSearch();
+      return true; // consumed — don't navigate
+    });
+    return () => sub.remove();
+  }, [searchVisible, closeSearch]);
+
   const toggleSearch = () => {
     if (!searchVisible) {
       // Snapshot where the user is, so dismissing a committed search returns
@@ -74,15 +105,7 @@ export function Topbar() {
       setSearchOpen(true);
       return;
     }
-    setSearchOpen(false);
-    // Closing DISMISSES the search: with the bar gone, a committed search
-    // ('none' selection) would keep filtering the list with no visible surface
-    // left to show or clear it — return to where the search began, or home if
-    // there's no snapshot. Both targets are `SimpleSelection`s, so neither can
-    // resolve back to 'none' and force the bar open again. A plain list/tag
-    // view (nothing committed, or a single-list/tag advanced search) just
-    // hides the bar and stays put.
-    if (selection.kind === 'none') setSimpleQuery(preSearch ?? HOME_SELECTION);
+    closeSearch();
   };
 
   return (
