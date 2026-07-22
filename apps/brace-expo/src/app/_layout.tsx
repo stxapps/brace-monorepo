@@ -1,3 +1,4 @@
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -37,19 +38,28 @@ import '../../global.css';
 // so one auth state is shared across every route group: the `(app)` AuthGuard,
 // the `(auth)` GuestGuard, and the landing's future AuthedHomeRedirect all read
 // the same `useAuth`. It hydrates the session from secure-store once on mount.
+//
+// KeyboardProvider is react-native-keyboard-controller's root: it feeds the
+// WindowInsetsAnimation-synced keyboard values that KeyboardAwareScrollView
+// (auth screens, future editors) animates from. Needed on both platforms —
+// with edge-to-edge (enforced on Android 15+) `adjustResize` no longer resizes
+// the window, so Android overlays the keyboard just like iOS. Outermost so any
+// screen in any route group can consume keyboard state.
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
   useQueryManagers();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ApiClientProvider client={apiClient}>
-        <AuthProvider>
-          <StatusBar style="auto" />
-          <Stack screenOptions={{ headerShown: false }} />
-        </AuthProvider>
-      </ApiClientProvider>
-    </QueryClientProvider>
+    <KeyboardProvider>
+      <QueryClientProvider client={queryClient}>
+        <ApiClientProvider client={apiClient}>
+          <AuthProvider>
+            <StatusBar style="auto" />
+            <Stack screenOptions={{ headerShown: false }} />
+          </AuthProvider>
+        </ApiClientProvider>
+      </QueryClientProvider>
+    </KeyboardProvider>
   );
 }

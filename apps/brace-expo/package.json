@@ -51,6 +51,7 @@
     "react": "*",
     "react-hook-form": "*",
     "react-native": "*",
+    "react-native-keyboard-controller": "*",
     "react-native-nitro-modules": "*",
     "react-native-quick-base64": "*",
     "react-native-quick-crypto": "*",
