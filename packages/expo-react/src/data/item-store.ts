@@ -119,17 +119,26 @@ export async function markItemDataFile(path: string, hasDataFile: boolean): Prom
   getDb().update(items).set({ hasDataFile }).where(eq(items.path, path)).run();
 }
 
+// The tx-taking body of deleteItems — for callers that must compose the row +
+// junction delete into a LARGER transaction (the write edge in mutations.ts
+// drops the record and enqueues its pending delete atomically), mirroring
+// putItemsTx. The invariant is unchanged: junction rows go with their `items`
+// row, in the same transaction.
+export function deleteItemsTx(tx: DbTx, paths: string[]): void {
+  for (const batch of chunk(paths, IN_BATCH)) {
+    tx.delete(items).where(inArray(items.path, batch)).run();
+    tx.delete(itemTagIds).where(inArray(itemTagIds.path, batch)).run();
+    tx.delete(itemFacetStatuses).where(inArray(itemFacetStatuses.path, batch)).run();
+  }
+}
+
 // Delete rows and their junction rows, one transaction. The on-disk plaintext of
 // `files/` paths is the caller's half (file-store.ts) — rows first, files after,
 // so a crash in between leaves only invisible orphan files (clear-data.ts).
 export async function deleteItems(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   getDb().transaction((tx) => {
-    for (const batch of chunk(paths, IN_BATCH)) {
-      tx.delete(items).where(inArray(items.path, batch)).run();
-      tx.delete(itemTagIds).where(inArray(itemTagIds.path, batch)).run();
-      tx.delete(itemFacetStatuses).where(inArray(itemFacetStatuses.path, batch)).run();
-    }
+    deleteItemsTx(tx, paths);
   });
 }
 

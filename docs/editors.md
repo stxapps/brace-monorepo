@@ -346,3 +346,17 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
   bulk edit can't strip tags the user couldn't see. An all-identical-tags
   selection degenerates to plain edit-in-place. It upholds the §invariants
   (copy-to-draft, dirty close guard, minimal per-link patches).
+
+**On brace-expo** the mode is ported with the same selection/action semantics
+(`features/links/` — `view-state-provider` holds the selection and the hoisted
+`retagging`/`destroying` requests; `useLinkMutations`/`usePinMutations` live in
+`@stxapps/expo-react`), with phone-shaped chrome: entry is the ⋯ menu's
+"Select links" (no topbar slot), the toolbar is the **bottom-anchored**
+`BulkEditBar` rendered by Main (✕ / count / Select all in its top row, actions
+below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
+at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
+it), Move to is a dialog listing the list tree instead of the anchored
+`ListCommand` popover, and the bulk tags dialog is a chip toggler over the
+existing tags (no new-tag creation until the full edit dialog's tags field is
+ported). Web's shift-click `selectRange` has no touch analogue and is not
+ported.

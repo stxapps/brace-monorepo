@@ -14,9 +14,15 @@
 //    window web closes with IndexedDB's rw-lock is closed the same way here.
 //
 // Ported so far: the shared primitives plus writeLink / writeList / writeTag /
-// writeExtraction — what the share sheet needs (docs/share-sheet.md). The
-// remaining siblings (writePin, writeSettingsGeneral, the deletes,
-// bulkWriteEntities) arrive verbatim with the features that need them.
+// writeExtraction (what the share sheet needs — docs/share-sheet.md) and
+// writePin + the deletes (deleteLink / deletePin / deleteExtraction /
+// deleteFile — what bulk edit's pin/unpin, remove, and destroy need). One
+// platform divergence on deleteFile: web's decrypted content bytes live in the
+// Dexie record itself, so dropping the record IS the delete; here they live on
+// disk (file-store.ts), so the row delete is followed by deleteDataFile — rows
+// first, files after, the same crash-safe order clear-data uses. The remaining
+// siblings (writeSettingsGeneral, deleteList, deleteTag, bulkWriteEntities)
+// arrive verbatim with the features that need them.
 
 import { eq } from 'drizzle-orm';
 
@@ -25,11 +31,15 @@ import {
   EXTRACTIONS_PREFIX,
   extractionSchema,
   type Facet,
+  FILES_PREFIX,
   type Link,
   linkSchema,
   type List,
   listSchema,
   pathFromId,
+  type Pin,
+  PINS_PREFIX,
+  pinSchema,
   type Tag,
   tagSchema,
   utf8,
@@ -37,8 +47,9 @@ import {
 } from '@stxapps/shared';
 
 import { type DbTx, getDb, items } from './db';
-import { type ItemRow, putItemsTx } from './item-store';
-import { enqueuePutTx } from './pending-store';
+import { deleteDataFile } from './file-store';
+import { deleteItemsTx, type ItemRow, putItemsTx } from './item-store';
+import { enqueueDeleteTx, enqueuePutTx } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
@@ -78,6 +89,22 @@ function writeEntity<T extends WithPath<object>>(username: string, item: T): voi
   writeEntityWith(username, path, () => entity);
 }
 
+// Delete one entity by path: drop the local row (with its junction rows —
+// deleteItemsTx keeps the db.ts invariant) and queue the server delete in the
+// SAME transaction, mirroring writeBytesWith's atomicity (web's deleteEntity;
+// see there for the full semantics: `baseUpdatedAt` is the reconcile base, a
+// path with no local row is a local no-op + harmless tombstone upstream).
+// Entity-agnostic; the named per-namespace deletes below are the public
+// surface, and callers gate the higher-level rules.
+function deleteEntity(username: string, path: string): void {
+  getDb().transaction((tx: DbTx) => {
+    const existing = tx.select().from(items).where(eq(items.path, path)).get();
+    const baseUpdatedAt = existing?.updatedAt ?? 0;
+    deleteItemsTx(tx, [path]);
+    enqueueDeleteTx(tx, username, path, baseUpdatedAt);
+  });
+}
+
 // The user-authored fields a link edit may touch — see web-react mutations.ts
 // (the extracted display fields live in `extractions/{id}.enc`, never here).
 export type LinkPatch = Partial<
@@ -104,6 +131,13 @@ export async function writeLink(
     throw new Error(`writeLink: invalid link ${link.path}`);
   }
   writeEntity(username, next);
+}
+
+// Delete one link: drop its `links/{id}.enc`. Thin like web's — higher-level
+// cleanup (its pin, its extraction, its `files/` content) is the caller's
+// concern (use-link-mutations.destroy).
+export async function deleteLink(username: string, link: WithPath<Link>): Promise<void> {
+  deleteEntity(username, link.path);
 }
 
 // Apply a patch to a list and write it — create (new `lists/{id}.enc`) or edit.
@@ -147,6 +181,34 @@ export async function writeTag(
     throw new Error(`writeTag: invalid tag ${tag.id}`);
   }
   writeEntity(username, next);
+}
+
+// Apply a patch to a pin and write it — the put side of pin/reorder. Same body
+// as web's writePin (only `rank` is ever patched today).
+export async function writePin(
+  username: string,
+  pin: WithPath<Pin>,
+  patch: Partial<Pick<Pin, 'rank'>>,
+): Promise<void> {
+  const now = Date.now();
+  const next: WithPath<Pin> = {
+    ...pin,
+    ...patch,
+    createdAt: pin.createdAt === 0 ? now : pin.createdAt,
+    updatedAt: now,
+  };
+  const { path: _path, ...blob } = next;
+  if (!pinSchema.safeParse(blob).success) {
+    throw new Error(`writePin: invalid pin ${pin.id}`);
+  }
+  writeEntity(username, next);
+}
+
+// Unpin: delete the link's `pins/{id}.enc` marker. Keyed by the link's id (a
+// pin shadows its link — shared entities.ts), like web's deletePin, so callers
+// never build the path themselves. The link itself is untouched.
+export async function deletePin(username: string, linkId: string): Promise<void> {
+  deleteEntity(username, pathFromId(linkId, PINS_PREFIX));
 }
 
 // One extraction facet name / the machine-written display fields / one
@@ -201,4 +263,25 @@ export async function writeExtraction(
     }
     return next;
   });
+}
+
+// Delete one link's `extractions/{id}.enc` — the machine half's counterpart of
+// deleteLink, keyed by the link's id like writeExtraction. The `files/` blobs
+// the extraction references are the caller's concern (same split as
+// deleteLink's header).
+export async function deleteExtraction(username: string, linkId: string): Promise<void> {
+  deleteEntity(username, pathFromId(linkId, EXTRACTIONS_PREFIX));
+}
+
+// Delete a `files/{id}.enc` content blob — web's deleteFile, plus the expo
+// half: the decrypted bytes live ON DISK here (file-store.ts), not in the row,
+// so the row delete is followed by the plaintext file's — rows first, files
+// after, so a crash in between leaves only an invisible orphan file
+// (clear-data's order). Metadata-before-content on the way down: callers drop
+// the reference (via writeLink/writeExtraction) before or with this; a
+// briefly-dangling ref reads as "no bytes" (readFileBytes → undefined).
+export async function deleteFile(username: string, fileId: string): Promise<void> {
+  const path = pathFromId(fileId, FILES_PREFIX);
+  deleteEntity(username, path);
+  deleteDataFile(path);
 }

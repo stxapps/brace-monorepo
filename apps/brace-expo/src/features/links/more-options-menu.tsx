@@ -12,9 +12,10 @@
 //    transition is the click's feedback) — holding a native dropdown open works
 //    against the platform idiom, so the trigger's error dot (or its absence) is
 //    the outcome surface instead. requestSync coalesces, so re-taps are safe.
-//  - Web's Bulk edit lives OUTSIDE the menu (its own topbar button); here it
-//    joins the menu when the bulk-edit feature is ported (selection state, the
-//    action toolbar, and the mutation hooks don't exist on expo yet).
+//  - Web's Bulk edit lives OUTSIDE the menu (its own topbar toggle); a phone
+//    topbar has no slot to spare, so it lives here as "Select links" — entering
+//    the mode only (never a toggle: while the mode is on, the bulk bar's ✕ and
+//    the Android back press are the exits, and this menu is still reachable).
 //  - Support opens the brace-web page in the system browser — the web app's
 //    origin comes from EXPO_PUBLIC_WEB_URL (inlined by Metro from `.env.<mode>`,
 //    same convention as lib/api-client.ts).
@@ -25,7 +26,15 @@
 
 import { Linking, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { CircleAlert, LifeBuoy, LogOut, MoreHorizontal, RefreshCw, Settings } from 'lucide-react-native';
+import {
+  CircleAlert,
+  LifeBuoy,
+  LogOut,
+  MoreHorizontal,
+  RefreshCw,
+  Settings,
+  SquareCheckBig,
+} from 'lucide-react-native';
 
 import { useSignOut, useSync } from '@stxapps/expo-react';
 import { getSyncPhase } from '@stxapps/shared';
@@ -39,12 +48,14 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { useLinksViewState } from './view-state-provider';
 
 const webUrl = process.env.EXPO_PUBLIC_WEB_URL;
 if (!webUrl) throw new Error('EXPO_PUBLIC_WEB_URL is not set');
 
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, requestSync } = useSync();
+  const { enterBulkEdit } = useLinksViewState();
   const signOut = useSignOut();
   const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
@@ -79,6 +90,10 @@ export function MoreOptionsMenu() {
               <Text>{phase === 'syncing' ? 'Syncing…' : 'Sync'}</Text>
             </>
           )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onPress={enterBulkEdit}>
+          <Icon as={SquareCheckBig} className="size-4" />
+          <Text>Select links</Text>
         </DropdownMenuItem>
         <DropdownMenuItem onPress={() => router.push('/settings')}>
           <Icon as={Settings} className="size-4" />

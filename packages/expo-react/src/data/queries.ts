@@ -19,10 +19,11 @@
 //    listener (hooks/use-live-read.ts), not from tracking which ranges a
 //    querier touched — helpers can await freely.
 //
-// Ported so far: the namespace reads (lists/tags/pins/settings) and the link
-// library query (`readLinks`) — what the links screen needs. The remaining
-// siblings (the by-url/by-id lookups, the extraction tallies and drain pages)
-// arrive verbatim with the features that need them.
+// Ported so far: the namespace reads (lists/tags/pins/settings), the link
+// library query (`readLinks`), and the by-id lookups (`readLinkById`,
+// `readExtraction` — the write edge's re-read-before-merge and destroy's
+// satellite sweep). The remaining siblings (the by-url lookups, the extraction
+// tallies and drain pages) arrive verbatim with the features that need them.
 
 import {
   and,
@@ -81,7 +82,7 @@ import {
 import { chunk } from '@stxapps/shared';
 
 import { getDb, items, itemTagIds } from './db';
-import { bulkGetItems, type ItemRow } from './item-store';
+import { bulkGetItems, getItem, type ItemRow } from './item-store';
 import { parseBlob } from './projection';
 
 // The read-layer facade re-exports (web queries.ts does the same): the typed
@@ -267,6 +268,24 @@ export function readPins(): Promise<PinItem[]> {
 export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined> {
   const row = getDb().select().from(items).where(eq(items.path, SETTINGS_GENERAL_PATH)).get();
   return parseBlob(row?.data ?? undefined, settingsGeneralSchema);
+}
+
+// One link by its id (the `{id}` of its `links/{id}.enc`), or undefined — the
+// direct-path lookup behind the write edge's re-read-before-merge
+// (use-link-mutations.update/destroy). An exact-path read + cached decode.
+export async function readLinkById(linkId: string): Promise<LinkItem | undefined> {
+  const row = await getItem(pathFromId(linkId, LINKS_PREFIX));
+  if (!row) return undefined;
+  return decodeCachedLink(row);
+}
+
+// The extraction bookkeeping entity for one link id, or undefined if none has
+// synced/been written yet — web's readExtraction, verbatim: a direct
+// exact-path read + cached decode (the path is derived from the id, no scan).
+export async function readExtraction(linkId: string): Promise<ExtractionItem | undefined> {
+  const row = await getItem(pathFromId(linkId, EXTRACTIONS_PREFIX));
+  if (!row) return undefined;
+  return decodeCachedExtraction(row);
 }
 
 // --- link query --------------------------------------------------------------

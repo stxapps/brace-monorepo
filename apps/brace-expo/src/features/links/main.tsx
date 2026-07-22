@@ -14,7 +14,14 @@
 //    the user asking for fresh content at the top.
 //  - Rows are text-first: the preview image / favicon need the file store and
 //    a favicon source, which arrive with extraction support on this platform.
-//  - A row press opens the URL in the system browser (web's anchor).
+//  - A row press opens the URL in the system browser (web's anchor) — except in
+//    bulk-edit mode (view-state `bulkEditing`), where rows grow a leading
+//    checkbox and a press toggles selection instead (web's selectable rows).
+//    The mode's chrome is the bottom-anchored BulkEditBar, rendered HERE (not
+//    the screen) because it needs this pane's `links` for Select all and
+//    display-order Copy — the same reason web's Main passes its useLinks result
+//    to the toolbar. Pull-to-refresh is suspended while the mode is on (its
+//    applyPending would repaint rows under the selection).
 //
 // The date column shows the field the rows are SORTED by (web's rationale:
 // relative values must read top-to-bottom in order). Formatted by hand rather
@@ -29,8 +36,10 @@ import { Pin, RefreshCw, StickyNote } from 'lucide-react-native';
 import { type LinkView, type TagItem, useSync, useTags } from '@stxapps/expo-react';
 import { displayUrl, hostFromText, type LinkSortOn, type TreeNode } from '@stxapps/shared';
 
+import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { BulkEditBar } from './bulk-edit-bar';
 import { useLinksPage } from './page-provider';
 import { useLinks } from './use-links';
 import { useLinksViewState } from './view-state-provider';
@@ -120,11 +129,19 @@ function LinkRow({
   pinned,
   sortOn,
   tagsById,
+  selectMode,
+  selected,
+  onToggle,
 }: {
   link: LinkView;
   pinned: boolean;
   sortOn: LinkSortOn;
   tagsById: Map<string, string>;
+  // Bulk-edit mode: a leading checkbox appears and a press toggles selection
+  // instead of opening the URL (web's selectable rows).
+  selectMode: boolean;
+  selected: boolean;
+  onToggle: () => void;
 }) {
   const chips = link.tagIds
     .map((id) => ({ id, name: tagsById.get(id) }))
@@ -133,9 +150,18 @@ function LinkRow({
 
   return (
     <Pressable
-      onPress={() => void Linking.openURL(link.url)}
+      onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
+      accessibilityState={selectMode ? { selected } : undefined}
       className="border-border active:bg-muted/50 flex-row items-center gap-3 border-b py-3 pr-2 pl-4"
     >
+      {selectMode && (
+        <Checkbox
+          aria-label={`Select ${link.title || displayUrl(link.url)}`}
+          checked={selected}
+          onCheckedChange={onToggle}
+          className="shrink-0"
+        />
+      )}
       <View className="min-w-0 flex-1">
         <View className="flex-row items-center gap-1.5">
           {pinned && (
@@ -186,10 +212,18 @@ export function Main() {
   // the same context the reads run through and hand it to the date column.
   const { query } = useLinksPage();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
-  const { setScrolled } = useLinksViewState();
+  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
   const { bgSyncStatus, requestSync } = useSync();
   const tagsById = useTagMap();
   const listRef = useRef<FlashListRef<LinkView>>(null);
+
+  // FlashList compares extraData by reference to decide whether rows must
+  // re-render; memoized so scroll-flag renders of this pane don't force a
+  // re-render of every row, while a selection toggle (new map identity) does.
+  const selectionExtra = useMemo(
+    () => ({ bulkEditing, selectedLinks }),
+    [bulkEditing, selectedLinks],
+  );
 
   // Pull-to-refresh: the spinner is OUR gesture's, so it's local state armed on
   // pull and released when the cycle it kicked settles — binding it straight to
@@ -211,42 +245,55 @@ export function Main() {
     listRef.current?.scrollToOffset({ offset: 0 });
   };
 
-  if (links.length === 0) return <EmptyState isLoading={isLoading} />;
-
   return (
-    <View className="relative min-h-0 flex-1">
-      <RefreshPill show={hasPending} onPress={applyAndScrollTop} />
-      <FlashList
-        ref={listRef}
-        data={links}
-        keyExtractor={(link) => link.path}
-        renderItem={({ item, index }) => (
-          <LinkRow
-            link={item}
-            pinned={index < pinnedCount}
-            sortOn={query.sortOn}
-            tagsById={tagsById}
-          />
-        )}
-        onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}
-        // Infinite scroll: grow the page as the end nears. `showMore` grows the
-        // read's `limit`; re-arming is implicit — FlashList only re-fires after
-        // the content grows.
-        onEndReached={() => {
-          if (hasMore) showMore();
-        }}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              applyPending();
-              requestSync();
+    <>
+      {links.length === 0 ? (
+        <EmptyState isLoading={isLoading} />
+      ) : (
+        <View className="relative min-h-0 flex-1">
+          <RefreshPill show={hasPending} onPress={applyAndScrollTop} />
+          <FlashList
+            ref={listRef}
+            data={links}
+            extraData={selectionExtra}
+            keyExtractor={(link) => link.path}
+            renderItem={({ item, index }) => (
+              <LinkRow
+                link={item}
+                pinned={index < pinnedCount}
+                sortOn={query.sortOn}
+                tagsById={tagsById}
+                selectMode={bulkEditing}
+                selected={selectedLinks.has(item.path)}
+                onToggle={() => toggleSelected(item)}
+              />
+            )}
+            onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}
+            // Infinite scroll: grow the page as the end nears. `showMore` grows the
+            // read's `limit`; re-arming is implicit — FlashList only re-fires after
+            // the content grows.
+            onEndReached={() => {
+              if (hasMore) showMore();
             }}
+            onEndReachedThreshold={0.5}
+            // Suspended in bulk-edit mode (see the header); `enabled` is
+            // Android-only, so the control is omitted entirely instead.
+            refreshControl={
+              bulkEditing ? undefined : (
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={() => {
+                    setRefreshing(true);
+                    applyPending();
+                    requestSync();
+                  }}
+                />
+              )
+            }
           />
-        }
-      />
-    </View>
+        </View>
+      )}
+      <BulkEditBar links={links} />
+    </>
   );
 }

@@ -11,7 +11,15 @@
 // error surface (the full status card lives in Settings → Data). Only errors get
 // the dot: a spinner there would flicker on every edit's sub-second cycle.
 
-import { CircleAlert, LifeBuoy, Loader2, LogOut, MoreHorizontal, RefreshCw, Settings } from 'lucide-react';
+import {
+  CircleAlert,
+  LifeBuoy,
+  Loader2,
+  LogOut,
+  MoreHorizontal,
+  RefreshCw,
+  Settings,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { getSyncPhase } from '@stxapps/shared';

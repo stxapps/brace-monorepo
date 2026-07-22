@@ -236,10 +236,20 @@ function TriCheckList({
                   )}
                 >
                   {state === 'include' && (
-                    <Icon as={Check} size={12} strokeWidth={3.5} className="text-primary-foreground" />
+                    <Icon
+                      as={Check}
+                      size={12}
+                      strokeWidth={3.5}
+                      className="text-primary-foreground"
+                    />
                   )}
                   {state === 'exclude' && (
-                    <Icon as={Minus} size={12} strokeWidth={3.5} className="text-primary-foreground" />
+                    <Icon
+                      as={Minus}
+                      size={12}
+                      strokeWidth={3.5}
+                      className="text-primary-foreground"
+                    />
                   )}
                 </View>
                 <Text
@@ -449,7 +459,7 @@ function AdvancedSearch() {
 }
 
 export function SearchBar() {
-  const { searchOpen } = useLinksViewState();
+  const { searchOpen, bulkEditing } = useLinksViewState();
   const { query, setQuery, selection } = useLinksPage();
 
   // Basic box: a draft synced from the committed text. Navigation clears text →
@@ -461,7 +471,10 @@ export function SearchBar() {
   // Rendered visibility — the topbar's `searchVisible`, same expression (the
   // rationale lives there): the explicit toggle OR a committed search with no
   // other surface ('none' selection), so e.g. a back gesture into a `?text=`
-  // URL re-shows the bar without a toggle press.
+  // URL re-shows the bar without a toggle press. Bulk-edit mode suspends the
+  // bar (its chrome is the mode's — exiting restores it); the committed query
+  // keeps filtering the list underneath either way.
+  if (bulkEditing) return null;
   if (!searchOpen && selection.kind !== 'none') return null;
 
   const submitBasic = () => {
