@@ -20,6 +20,8 @@
     "@react-navigation/drawer": "*",
     "@react-navigation/native": "*",
     "@rn-primitives/checkbox": "*",
+    "@rn-primitives/dropdown-menu": "*",
+    "@rn-primitives/portal": "*",
     "@rn-primitives/slot": "*",
     "@shopify/flash-list": "*",
     "@stxapps/expo-crypto": "*",

@@ -10,6 +10,15 @@
 // editing / destroying / retagging / bulkEditing) arrive with the features
 // that own them: the row menu, the hoisted dialogs, and bulk edit are not on
 // this screen yet.
+//
+// Also home to `searchOpen` — whether the search bar row is mounted below the
+// topbar. On web the search box is persistent topbar chrome; on this narrow
+// screen it's summoned by the topbar's search toggle, which makes it the same
+// kind of transient chrome state as web's `bulkEditing` (whose toolbar row
+// this bar shares its slot with — the two will be mutually exclusive when bulk
+// edit lands). An OPEN bar is not an engagement signal: the list only changes
+// when a search commits (a navigation), so a background repaint under the bar
+// disturbs nothing.
 
 import { createContext, useContext, useMemo, useState } from 'react';
 
@@ -19,16 +28,20 @@ interface LinksViewStateValue {
   engaged: boolean;
   // The list's scroll position crossed (or returned to) the top.
   setScrolled: (scrolled: boolean) => void;
+  // The search bar row below the topbar is shown (topbar's search toggle).
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
 }
 
 const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
 
 export function LinksViewStateProvider({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const value = useMemo<LinksViewStateValue>(
-    () => ({ engaged: scrolled, setScrolled }),
-    [scrolled],
+    () => ({ engaged: scrolled, setScrolled, searchOpen, setSearchOpen }),
+    [scrolled, searchOpen],
   );
 
   return <LinksViewStateContext.Provider value={value}>{children}</LinksViewStateContext.Provider>;

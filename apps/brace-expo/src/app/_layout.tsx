@@ -1,5 +1,6 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { PortalHost } from '@rn-primitives/portal';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -52,6 +53,11 @@ import '../../global.css';
 // ((app)/links/_layout.tsx); flex-1 so it doesn't collapse the app to zero
 // height. Outermost even around KeyboardProvider — gestures must win the
 // responder chain from the first touch.
+//
+// PortalHost is @rn-primitives/portal's default host: floating primitive
+// content (the links topbar's dropdown menu) portals into it so it renders
+// above the screen tree. Last sibling of the Stack so portaled content draws
+// on top; inside the providers so it can still read their contexts.
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
@@ -65,6 +71,7 @@ export default function RootLayout() {
             <AuthProvider>
               <StatusBar style="auto" />
               <Stack screenOptions={{ headerShown: false }} />
+              <PortalHost />
             </AuthProvider>
           </ApiClientProvider>
         </QueryClientProvider>
