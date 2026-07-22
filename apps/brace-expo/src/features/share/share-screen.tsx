@@ -20,7 +20,15 @@
 // as the share's destination.
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
@@ -47,19 +55,47 @@ const SAVED_DISMISS_MS = 900;
 // sheet (height/background from app.json) — fill it. On Android the activity
 // is translucent and full-screen — render the bottom sheet ourselves, with a
 // tap-to-dismiss backdrop.
+//
+// Keyboard: BOTH hosts overlay it, so the sheet must move itself. The iOS host
+// view is bottom-pinned at a fixed height with no keyboard logic of its own
+// (ShareExtensionViewController), and ShareActivity's manifest `adjustResize`
+// no longer resizes — edge-to-edge is process-global (the generated
+// ReactNativeApplicationEntryPoint flips RN's static flag, and RN core's
+// ReactActivityDelegate applies it to EVERY ReactActivity, ShareActivity
+// included), and a translucent window never resized for the keyboard anyway.
+// Deliberately a plain KeyboardAvoidingView behavior="padding", NOT
+// react-native-keyboard-controller like the app tree (root _layout.tsx): its
+// iOS native layer is built on UIApplication.shared, unavailable in an
+// extension process (expo-share-extension's APPLICATION_EXTENSION_API_ONLY=No
+// only makes such pods compile, not work) — and one plain KAV keeps the two
+// hosts rendering the same tree. The ScrollView keeps the squeezed content
+// (tag input, Add) reachable while the keyboard is up; the list picker's own
+// ScrollView nests inside it, hence its nestedScrollEnabled.
+// `keyboardShouldPersistTaps` lets a tap on a row/button land while the
+// keyboard is up instead of only dismissing it.
 function Sheet({ children }: { children: React.ReactNode }) {
   if (Platform.OS === 'ios') {
-    return <View className="flex-1 bg-white p-4 dark:bg-gray-900">{children}</View>;
+    return (
+      <KeyboardAvoidingView behavior="padding" className="flex-1 bg-white dark:bg-gray-900">
+        <ScrollView contentContainerClassName="p-4" keyboardShouldPersistTaps="handled">
+          {children}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
   }
   return (
-    <View className="flex-1 justify-end">
+    <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
       <Pressable
         testID="share-backdrop"
         onPress={closeShareSheet}
         className="absolute top-0 right-0 bottom-0 left-0 bg-black/40"
       />
-      <View className="max-h-[85%] rounded-t-2xl bg-white p-4 dark:bg-gray-900">{children}</View>
-    </View>
+      <View className="max-h-[85%] rounded-t-2xl bg-white dark:bg-gray-900">
+        <ScrollView contentContainerClassName="p-4" keyboardShouldPersistTaps="handled">
+          {children}
+        </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

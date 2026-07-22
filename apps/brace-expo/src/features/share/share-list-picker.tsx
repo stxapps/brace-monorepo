@@ -39,7 +39,15 @@ export function ShareListPicker({
 
   return (
     <View>
-      <ScrollView className="mt-1 max-h-40">
+      {/* nestedScrollEnabled: this scrolls inside the Sheet's outer ScrollView
+          (Android needs the explicit opt-in; iOS nests natively).
+          keyboardShouldPersistTaps: picking a row right after typing a name
+          must land while the keyboard is still up. */}
+      <ScrollView
+        className="mt-1 max-h-40"
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
         {newList && (
           <Pressable
             testID="share-new-list"
