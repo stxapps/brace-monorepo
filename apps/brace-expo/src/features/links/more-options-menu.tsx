@@ -1,5 +1,6 @@
 // The overflow menu behind the topbar's ⋯ button — the expo port of brace-web's
-// MoreOptionsMenu (`(app)/links/_panes/topbar.tsx`, the canonical doc): account-
+// MoreOptionsMenu (`(app)/links/_components/more-options-menu.tsx`, the
+// canonical doc): account-
 // and session-level actions that don't warrant their own topbar slot, with the
 // same phase-adaptive Sync entry and the error dot on the trigger — still the
 // links screen's only always-visible sync-error surface (pull-to-refresh gives
