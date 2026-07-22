@@ -235,7 +235,10 @@ const schema = {
   locks,
 };
 
-const DB_NAME = 'brace-data.db';
+// Exported for the read edge's change subscription (hooks/use-live-read.ts):
+// expo-sqlite's addDatabaseChangeListener reports changes across every open
+// database, so subscribers filter events to this one by name.
+export const DB_NAME = 'brace-data.db';
 
 // Idempotent DDL, run on every open (the greenfield no-migrations policy —
 // header). Index set mirrors web-react db.ts's Dexie stores line: `updated_at`

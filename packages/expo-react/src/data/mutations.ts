@@ -33,16 +33,13 @@ import {
   type Tag,
   tagSchema,
   utf8,
+  type WithPath,
 } from '@stxapps/shared';
 
 import { type DbTx, getDb, items } from './db';
 import { type ItemRow, putItemsTx } from './item-store';
 import { enqueuePutTx } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
-
-// A decoded entity + its `items` path — web-react defines this in queries.ts
-// (the read edge); until expo grows its read edge, the write edge owns it.
-export type WithPath<T extends object> = T & { path: string };
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
 // INSIDE the transaction from the path's current row — the base primitive every

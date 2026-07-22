@@ -76,8 +76,9 @@ _vs._ brace-extension.
   per-response byte ceiling, timeout, content-type allowlist. See
   [link-extraction.md](./link-extraction.md) — _server extraction_.
 - **brace-expo** — Expo mobile app. The crypto/account layer is
-  `@stxapps/expo-crypto` below; the RN-specific React logic lives in
-  `@stxapps/expo-react` below (the local-first data layer is still to come).
+  `@stxapps/expo-crypto` below; the RN-specific React logic — including the
+  local-first data layer (write edge, sync engine, and read edge) — lives in
+  `@stxapps/expo-react` below.
   The client stack mirrors the web apps with the RN equivalents: **expo-router**
   for file-based routing (routes in `src/app/`, the analogue of brace-web's
   Next.js App Router — the same `(app)`/`(auth)` route groups and
@@ -190,25 +191,32 @@ _vs._ brace-extension.
 - expo-only React hooks/contexts/logic — the `platform:expo` sibling of
   `web-react` (same React-logic layer, but free to use React Native and Expo
   APIs). Home of the brace-expo local-first stack as it gets built: the
-  expo-sqlite + drizzle store and data layer, the sync-engine bindings, and
-  the editor/auth hooks — plus what exists today: the session store
-  (`data/session-store.ts`, web-react's sibling — expo-secure-store-backed
-  since the key is raw bytes; `AFTER_FIRST_UNLOCK` for background sync, plus a
-  sandbox sentinel file so an iOS reinstall doesn't resurrect the Keychain's
-  old session), the first slice of the expo-sqlite + drizzle store
-  (`data/db.ts` — lazy-opened, change-listener on for drizzle's `useLiveQuery`,
-  idempotent DDL per the greenfield no-migrations policy — holding the `locks`
-  table behind `data/lock-store.ts`, web lock-store's sibling; lock verifiers
-  are deliberately NOT in secure-store — they're one-way PBKDF2 pairs gating
-  already-decrypted data, and the pure covering logic both platforms share is
-  `computeCoverage` in `@stxapps/shared` `sync/lock-coverage.ts`), and
-  `useQueryManagers` (rewires TanStack Query's browser-only
-  online/focus managers to NetInfo and AppState). Native modules it builds on
-  (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
-  **peerDependencies** — the
-  app owns them so Expo autolinking sees them (the same pattern `expo-crypto`
-  uses for `react-native-quick-crypto`). See _dependency versions_ below for the
-  version each slot declares, and why `expo-modules-core` is declared nowhere.
+  expo-sqlite + drizzle store and data layer (write edge in `data/mutations.ts`
+  - `data/item-store.ts`/`data/projection.ts`, sync engine in `sync/`, and the
+    **read edge** — `data/queries.ts`, web-react queries.ts's SQLite port, plus
+    the `useLiveRead` change-listener hook standing in for Dexie's liveQuery and
+    the `useLists`/`useTags`/`useSettings` hooks over it; the shared query
+    GRAMMAR — `LinkQuery`, `emptyQuery`, `excludeLists` — was hoisted to
+    `@stxapps/shared` `sync/link-query.ts` when this second engine arrived, the
+    same move as `WithPath`/`LinkItem` → `sync/items.ts`), the remaining editor
+    hooks — plus: the session store
+    (`data/session-store.ts`, web-react's sibling — expo-secure-store-backed
+    since the key is raw bytes; `AFTER_FIRST_UNLOCK` for background sync, plus a
+    sandbox sentinel file so an iOS reinstall doesn't resurrect the Keychain's
+    old session), the first slice of the expo-sqlite + drizzle store
+    (`data/db.ts` — lazy-opened, change-listener on for drizzle's `useLiveQuery`,
+    idempotent DDL per the greenfield no-migrations policy — holding the `locks`
+    table behind `data/lock-store.ts`, web lock-store's sibling; lock verifiers
+    are deliberately NOT in secure-store — they're one-way PBKDF2 pairs gating
+    already-decrypted data, and the pure covering logic both platforms share is
+    `computeCoverage` in `@stxapps/shared` `sync/lock-coverage.ts`), and
+    `useQueryManagers` (rewires TanStack Query's browser-only
+    online/focus managers to NetInfo and AppState). Native modules it builds on
+    (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
+    **peerDependencies** — the
+    app owns them so Expo autolinking sees them (the same pattern `expo-crypto`
+    uses for `react-native-quick-crypto`). See _dependency versions_ below for the
+    version each slot declares, and why `expo-modules-core` is declared nowhere.
 
 ### dependency rules
 

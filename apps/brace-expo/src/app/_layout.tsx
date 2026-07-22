@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
@@ -45,21 +46,29 @@ import '../../global.css';
 // with edge-to-edge (enforced on Android 15+) `adjustResize` no longer resizes
 // the window, so Android overlays the keyboard just like iOS. Outermost so any
 // screen in any route group can consume keyboard state.
+//
+// GestureHandlerRootView is react-native-gesture-handler's root, required once
+// at the very top of the tree for the links Drawer's swipe gesture
+// ((app)/links/_layout.tsx); flex-1 so it doesn't collapse the app to zero
+// height. Outermost even around KeyboardProvider — gestures must win the
+// responder chain from the first touch.
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
   useQueryManagers();
 
   return (
-    <KeyboardProvider>
-      <QueryClientProvider client={queryClient}>
-        <ApiClientProvider client={apiClient}>
-          <AuthProvider>
-            <StatusBar style="auto" />
-            <Stack screenOptions={{ headerShown: false }} />
-          </AuthProvider>
-        </ApiClientProvider>
-      </QueryClientProvider>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
+          <ApiClientProvider client={apiClient}>
+            <AuthProvider>
+              <StatusBar style="auto" />
+              <Stack screenOptions={{ headerShown: false }} />
+            </AuthProvider>
+          </ApiClientProvider>
+        </QueryClientProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

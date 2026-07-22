@@ -15,11 +15,12 @@ import Dexie from 'dexie';
 import type { z } from 'zod';
 
 import type {
+  Clause,
   Extraction,
   ExtractionItem,
   LinkItem,
+  LinkQuery,
   LinkSortOn,
-  LinkSortOrder,
   ListItem,
   PinItem,
   SettingsGeneral,
@@ -90,72 +91,13 @@ export type LinkView = LinkItem & {
 
 // --- the query grammar -------------------------------------------------------
 
-// One filter clause over a multi-valued or text field. Three relations, ANDed
-// together, each ignored when empty:
-//   any  — match if the field has/contains ANY of these (OR / include-any)
-//   all  — match if it has/contains ALL of these (AND / include-all)
-//   none — match if it has/contains NONE of these (NOT / exclude)
-// For tags `any/all/none` apply to the link's tag-id set; for `url`/`title` they
-// apply to lowercased substring word matches.
-export interface Clause {
-  any: string[];
-  all: string[];
-  none: string[];
-}
-
-// A link belongs to exactly ONE list, so `all` (in two lists at once) is always
-// empty — lists support only `any` (in one of these) and `none` (in none).
-export interface ListClause {
-  any: string[];
-  none: string[];
-}
-
-// How results are ordered, along two orthogonal axes (`LinkSortOn`/`LinkSortOrder`
-// live in @stxapps/shared beside the synced-setting writer enums): `sortOn` is the
-// field — `updatedAt` = date modified, `createdAt` = date added — and `sortOrder` the
-// direction (`desc` = newest first). Each field is backed by its own compound index
-// (db.ts), served in either direction by walking that index forward or reversed, so
-// no sort runs in memory.
-
-// A fully-described link query. Clauses AND across fields (a link must satisfy
-// every non-empty one). Cross-field OR is intentionally not expressible — that's
-// a structured-AST concern, out of scope.
-export interface LinkQuery {
-  lists: ListClause;
-  tags: Clause;
-  // Basic search: substring words matched against the COMBINED url⊕title haystack
-  // (host lives inside url), so a word may land in EITHER field — the "search
-  // words, all links" free rung, one clause behind one box. `url`/`title` below are
-  // the field-scoped (advanced) counterparts; `text` ANDs with them and with
-  // lists/tags like every other clause. It carries the title half, so — like a
-  // `title` clause — it forces the link↔extraction join (see needsExtractionJoin).
-  text: Clause;
-  url: Clause;
-  title: Clause;
-  // Ordering, not a filter. Resolved by the app's read edge (brace-web page-provider):
-  // a global synced setting (settings/general.enc) with an optional READ-ONLY URL
-  // override (`?sort`/`?order`, hand-typed) — the URL wins when present, else the
-  // setting. By the time a query reaches this layer it's a concrete field+direction.
-  // See docs/search.md.
-  sortOn: LinkSortOn;
-  sortOrder: LinkSortOrder;
-}
-
-// A blank query — every clause empty, default sort. The base the search UI builds
-// on (spread + fill the fields it sets), so callers never hand-assemble the full
-// clause shape (and can't drift from it when a field is added). A factory, not a
-// shared const, so no caller can mutate a shared clause array.
-export function emptyQuery(): LinkQuery {
-  return {
-    lists: { any: [], none: [] },
-    tags: { any: [], all: [], none: [] },
-    text: { any: [], all: [], none: [] },
-    url: { any: [], all: [], none: [] },
-    title: { any: [], all: [], none: [] },
-    sortOn: 'updatedAt',
-    sortOrder: 'desc',
-  };
-}
+// The grammar (`Clause`/`ListClause`/`LinkQuery`, `emptyQuery`) moved to
+// `@stxapps/shared` (sync/link-query.ts) when brace-expo grew its own read
+// layer — it's the cross-platform contract both engines evaluate, like the
+// typed item bundles above. Re-exported here so the web-react data-layer
+// surface (and its barrel) keeps carrying it for app consumers.
+export type { Clause, LinkQuery, ListClause } from '@stxapps/shared';
+export { emptyQuery } from '@stxapps/shared';
 
 // One page of results. `total` is the exact match count ONLY when it's a cheap
 // index `.count()` (a plain browse view); it's `undefined` once any predicate
@@ -183,12 +125,11 @@ export interface LinksResult {
 
 // --- query composition -------------------------------------------------------
 
-// Pure query-grammar transforms live in query-compose.ts (no Dexie/decode, so
-// they're unit-testable without loading this read engine). Re-exported here so
-// queries.ts stays the single read-layer facade — `excludeLists` folds a set of
-// list ids (e.g. lock coverage) out of a query while preserving readRest's fast
-// path; see that file and use-links for the policy that drives it.
-export { excludeLists } from './query-compose';
+// `excludeLists` (fold a set of list ids — e.g. lock coverage — out of a query
+// while preserving readRest's fast path) moved to shared with the grammar it
+// transforms; see sync/link-query.ts and use-links for the policy that drives
+// it. Re-exported for the same facade reason as the grammar above.
+export { excludeLists } from '@stxapps/shared';
 
 // --- decode ------------------------------------------------------------------
 

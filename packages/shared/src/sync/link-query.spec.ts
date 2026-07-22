@@ -1,5 +1,4 @@
-import type { LinkQuery } from './queries';
-import { excludeLists } from './query-compose';
+import { excludeLists, type LinkQuery } from './link-query';
 
 // A base query with the given list clause; other clauses empty, sort fixed.
 const q = (any: string[], none: string[] = []): LinkQuery => ({
@@ -35,7 +34,7 @@ describe('excludeLists', () => {
 
   // A positive list filter already excludes everything outside it, so an excluded
   // id is REMOVED from `any` rather than added to `none` — keeping a still-allowed
-  // single-list view on readRest's fast path.
+  // single-list view on the read layers' fast path.
   it('removes excluded ids from `any`, leaving the fast path intact', () => {
     const result = excludeLists(q(['a', 'b', 'c']), new Set(['b']));
     expect(result.lists.any).toEqual(['a', 'c']);
@@ -44,7 +43,7 @@ describe('excludeLists', () => {
 
   // If exclusion empties `any` (every requested list is excluded), the query must
   // match NOTHING — not fall through to "no list filter". The ids stay in `any`
-  // AND go into `none`, which columnMatches resolves to zero.
+  // AND go into `none`, which the column predicate resolves to zero.
   it('matches nothing when every requested list is excluded', () => {
     const result = excludeLists(q(['a', 'b'], ['pre']), new Set(['a', 'b']));
     expect(result.lists.any).toEqual(['a', 'b']);
