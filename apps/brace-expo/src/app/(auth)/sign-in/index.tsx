@@ -1,17 +1,29 @@
-import { Text } from 'react-native';
 import { Link } from 'expo-router';
 
-import { Screen } from '../../../components/screen';
+import { Text } from '../../../components/ui/text';
+import { AuthScreen } from '../../../features/auth/auth-screen';
+import { SignInForm } from '../../../features/auth/sign-in-form';
 
-// `/sign-in`. Placeholder — the real form is the native port of
-// web-ui's SignInForm (built on @stxapps/expo-react's useSignIn) once that
-// lands. Mirrors brace-web's `(auth)/sign-in/page.tsx`.
+// `/sign-in` — mirrors brace-web's `(auth)/sign-in/page.tsx`: the card chrome
+// (AuthScreen ≈ the web layout's Card + this page's CardHeader/Content/Footer)
+// around the sign-in form. Thin by design — the UI lives in
+// `src/features/auth/` because every file under the app root becomes a route
+// (no `_`-private folders in expo-router).
 export default function SignInScreen() {
   return (
-    <Screen title="Sign in">
-      <Link href="/create-account" asChild>
-        <Text className="text-primary font-sans text-base underline">Create account</Text>
-      </Link>
-    </Screen>
+    <AuthScreen
+      title="Sign in"
+      description="Welcome back to Brace."
+      footer={
+        <Text className="text-muted-foreground text-sm">
+          New to Brace?{' '}
+          <Link href="/create-account">
+            <Text className="text-foreground text-sm font-medium underline">Create account</Text>
+          </Link>
+        </Text>
+      }
+    >
+      <SignInForm />
+    </AuthScreen>
   );
 }
