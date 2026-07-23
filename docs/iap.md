@@ -38,8 +38,11 @@ device that can sync can ask.
 | brace-api | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                      |
 | brace-api | `lib/quota.ts`                           | `checkPutQuota(entitlements, usage, paths)` at `files/sign`                                                                                |
 | react     | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                         |
+| shared    | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)         |
+| brace-api | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                 |
 | web-react | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                        |
 | brace-web | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal                                                                                           |
+| brace-expo| `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)      |
 
 `purchases` is **global** (DIRECTORY*DB, not an account shard) because webhook
 events after the first arrive keyed by the \_provider's* subscription id with no
@@ -108,14 +111,58 @@ the paywall) vs `quota_exceeded` (a **capacity** gate on an entitled plan —
 over-quota or downgraded account degrades to **read-only-plus-delete, never
 data loss**.
 
-### brace-expo later (App Store / Play Store)
+### the purchase flow (store IAP — brace-expo)
 
-The seam is already shaped: `POST /v1/iap/verify` (contract live, server answers 501) takes `{ source: 'appstore' | 'playstore', productId, token }`; the store
-verifiers land with the Expo app, writing the same `purchases` rows (statuses
-normalized at the edge, like the Paddle mapping in `lib/paddle.ts`), plus
-`appstore/notify` (JWS) and `playstore/notify` (Pub/Sub) webhook routes. The
-fold, `iap/status`, and the quota gate don't change at all. `source: 'manual'`
-covers comps/lifetime grants (non-expiring rows) meanwhile.
+The client library is **expo-iap** (the OpenIAP successor to the deprecated
+react-native-iap; Expo Modules-based, config plugin in `app.json`, native — so
+`npx expo prebuild` required). `apps/brace-expo/src/lib/iap.ts` is the
+`lib/paddle.ts` sibling: lazy store connection, global purchase listeners
+routed to the open checkout's handlers, and the verify-then-finish protocol.
+The store product ids are OURS and identical in sandbox and production (unlike
+Paddle's per-env `pri_…` ids), so they're shared constants —
+`iap/store-products.ts` in `@stxapps/shared` — read by both the client
+(`fetchProducts`, the purchase request) and the server (productId → plan, the
+authoritative mapping).
+
+The flow inverts Paddle's direction: a store purchase is a **client-side event**
+the server only learns about from the receipt the app submits.
+
+1. **Purchase** — the section's upgrade card opens the store's own sheet
+   (`requestPurchase`); prices shown come from the fetched product's
+   `displayPrice` (the store's localized, tax-correct number — the USD table is
+   only placeholder copy).
+2. **Verify** — on the purchase event the app POSTs `/v1/iap/verify`
+   `{ source, productId, token }` (App Store transaction id / Play purchase
+   token). The token is only a **lookup key**: brace-api fetches the
+   authoritative state server-to-server — App Store Server API
+   `subscriptions/{transactionId}` (ES256 JWT; production falls back to the
+   sandbox host on 404 for App Review) or Play Developer API
+   `subscriptionsv2.get` (service-account OAuth) — normalizes the status at the
+   edge (`lib/appstore.ts` / `lib/playstore.ts`, the `lib/paddle.ts` siblings),
+   and upserts the same `purchases` row. **This call is what binds
+   subscription → account** (first sight is for life, the webhook rule); a
+   replayed token 409s (`purchase_bound`). The response is the fresh fold — no
+   post-checkout polling (the webhook lag that polling covers on web doesn't
+   exist here).
+3. **Finish** — only after the server has recorded it does the app
+   `finishTransaction`. A failed verify leaves the transaction unfinished, so
+   the store REPLAYS it on the next connection — the built-in retry;
+   "Restore purchases" re-drives the same verify for anything the store holds
+   (App-Review-required, and the reinstall/new-device recovery).
+4. **Notifications** — renewals/cancellations reach brace-api via
+   `appstore/notify` (App Store Server Notifications V2) and `playstore/notify`
+   (Pub/Sub RTDN push, guarded by a static `?token=` secret). Neither verifies
+   provider signatures: the pushed payload is used only to find WHICH
+   subscription changed, and the facts are **re-fetched from the store's API**
+   (the call-back pattern — a forged POST can only make the server re-read the
+   truth, bounded by the webhook rate tier). Log-and-ACK like Paddle;
+   notifications carry no account and rely on the binding verify created.
+
+The fold, `iap/status`, and the quota gate don't change at all. Manage/cancel
+for store purchases lives in the platform store's own surface (the app
+deep-links to it); a Paddle purchase seen from the app gets a
+"manage on the web" note, the converse of the web's store note.
+`source: 'manual'` covers comps/lifetime grants (non-expiring rows).
 
 ### config per env
 
@@ -125,6 +172,17 @@ covers comps/lifetime grants (non-expiring rows) meanwhile.
   `PADDLE_WEBHOOK_SECRET` + `PADDLE_API_KEY` via `wrangler secret put`
   (`.dev.vars` locally). Register the webhook destination per env at
   `…/v1/iap/paddle/webhook`, subscribed to `subscription.*` events.
+- **brace-api, store IAP** (`wrangler.jsonc`): `APPSTORE_API_BASE` (sandbox host
+  for development/staging, production host for production — production also
+  falls back to sandbox on 404 in code, for App Review),
+  `APPSTORE_ISSUER_ID`/`APPSTORE_KEY_ID`/`APPSTORE_BUNDLE_ID`,
+  `PLAY_PACKAGE_NAME`/`PLAY_SA_EMAIL`; secrets `APPSTORE_PRIVATE_KEY` (the
+  In-App Purchase key's PKCS#8 PEM), `PLAY_SA_PRIVATE_KEY` (the service
+  account's), and `PLAY_NOTIFY_TOKEN` (the push-endpoint guard) via
+  `wrangler secret put` (`.dev.vars` locally). Register per env: App Store
+  Server Notifications V2 → `…/v1/iap/appstore/notify`; Play RTDN Pub/Sub push
+  → `…/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>`. No store product-id
+  vars — those are shared constants (`iap/store-products.ts`).
 - **brace-web** (`.env.*`): `NEXT_PUBLIC_PADDLE_ENV` +
   `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (client tokens are public by design).
 - **CSP note**: when brace-web's CSP ships (it lives in the **CloudFront response
@@ -149,7 +207,9 @@ covers comps/lifetime grants (non-expiring rows) meanwhile.
   tell a preview image from a heavy blob), client extractors must skip those
   heavier facets on free accounts themselves — the bytes/count quota is only a
   backstop, not the feature gate.
-- **Store verifiers** — with brace-expo.
+- **Plan change on the stores** — same gap as Paddle's Plus→Pro: a store
+  crossgrade (both plans share one App Store subscription group / Play
+  subscription) is its own flow; until then upgrade cards show only on free.
 - **Privacy note** — payment inherently deanonymizes (Paddle holds email +
   payment identity). brace-api stores only `userId ↔ subscription id ↔ ctm_…`;
   keep it that minimal so "the server knows who pays but still can't read

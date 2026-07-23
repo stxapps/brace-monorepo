@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto';
 import path from 'node:path';
 
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
@@ -47,6 +48,18 @@ export default defineConfig(async () => {
             // so the test pool provides a known value for the webhook signature
             // tests (routes/iap.spec.ts) to sign with.
             PADDLE_WEBHOOK_SECRET: 'test-webhook-secret',
+            // Store-IAP secrets (also `wrangler secret put` in deployed envs).
+            // The private keys must be REAL keys — lib/appstore.ts /
+            // lib/playstore.ts import them via crypto.subtle before signing the
+            // store-API JWTs — but the store endpoints themselves are fetchMock'd
+            // in routes/iap.spec.ts, so throwaway per-run keys are exactly right.
+            APPSTORE_PRIVATE_KEY: generateKeyPairSync('ec', { namedCurve: 'P-256' })
+              .privateKey.export({ type: 'pkcs8', format: 'pem' })
+              .toString(),
+            PLAY_SA_PRIVATE_KEY: generateKeyPairSync('rsa', { modulusLength: 2048 })
+              .privateKey.export({ type: 'pkcs8', format: 'pem' })
+              .toString(),
+            PLAY_NOTIFY_TOKEN: 'test-notify-token',
           },
         },
       }),

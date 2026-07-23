@@ -45,6 +45,7 @@
     "expo-document-picker": "*",
     "expo-file-system": "*",
     "expo-font": "*",
+    "expo-iap": "*",
     "expo-image-manipulator": "*",
     "expo-image-picker": "*",
     "expo-linking": "*",

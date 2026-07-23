@@ -90,6 +90,19 @@ deliberately no `expo-image`: the only image surface so far is the edit
 screen's preview, which core RN `Image` renders fine from a plaintext
 `file://` uri; add expo-image when list/card previews land with extraction.
 
+#### expo-iap (brace-expo)
+
+Store IAP for the subscription section (docs/iap.md — the store purchase flow).
+`expo-iap` is the OpenIAP successor to the deprecated react-native-iap (same
+maintainer; the old repo is archived). Added per the normal convention: `*` in
+the app, real pin (`^4.7.0`) in the root `package.json`. Its config plugin is in
+`app.json` (`"expo-iap"` — it wires the Android BILLING permission and the
+native OpenIAP SDKs), and it's a native module — `npx expo prebuild` required;
+the store sheet itself only works on a real device/simulator with a store
+account (jest/Metro can't exercise it). No API keys on the client: server-side
+verification config lives in brace-api's `wrangler.jsonc` (docs/iap.md — config
+per env).
+
 #### expo-router (brace-expo)
 
 File-based routing, the RN analogue of brace-web's Next.js App Router — routes

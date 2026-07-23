@@ -75,6 +75,19 @@
         "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
         "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
+        // Store IAP (routes/iap.ts verify + notify; lib/appstore.ts,
+        // lib/playstore.ts). Local dev talks to the App Store SANDBOX host. The
+        // private keys + the Play push token are SECRETS — put them in .dev.vars
+        // locally: APPSTORE_PRIVATE_KEY, PLAY_SA_PRIVATE_KEY, PLAY_NOTIFY_TOKEN
+        // (multiline PEMs in .dev.vars: quote the value and use \n escapes).
+        // Store product ids are NOT env config — they're shared constants
+        // (@stxapps/shared iap/store-products.ts), identical across envs.
+        "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
+        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
+        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_BUNDLE_ID": "to.brace.app",
+        "PLAY_PACKAGE_NAME": "to.brace.app",
+        "PLAY_SA_EMAIL": "TODO: Play service account client_email",
       },
       // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
       // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions
@@ -170,6 +183,21 @@
         "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
         "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
+        // Store IAP — staging verifies against the App Store SANDBOX. Secrets,
+        // set separately:
+        //   wrangler secret put APPSTORE_PRIVATE_KEY --env staging
+        //   wrangler secret put PLAY_SA_PRIVATE_KEY --env staging
+        //   wrangler secret put PLAY_NOTIFY_TOKEN --env staging
+        // Register the webhooks per env: App Store Connect → App Store Server
+        // Notifications V2 (sandbox URL) → https://api.staging.brace.to/v1/iap/appstore/notify;
+        // Play Console RTDN Pub/Sub push →
+        // https://api.staging.brace.to/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>.
+        "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
+        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
+        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_BUNDLE_ID": "to.brace.app",
+        "PLAY_PACKAGE_NAME": "to.brace.app",
+        "PLAY_SA_EMAIL": "TODO: Play service account client_email",
       },
       "d1_databases": [
         {
@@ -256,6 +284,22 @@
         "PADDLE_API_BASE": "https://api.paddle.com",
         "PADDLE_PRICE_ID_PLUS": "TODO: live pri_… id for Plus (yearly)",
         "PADDLE_PRICE_ID_PRO": "TODO: live pri_… id for Pro (yearly)",
+        // Store IAP — production verifies against the PRODUCTION App Store host
+        // (with the code-level sandbox fallback on 404 for App Review — see
+        // lib/appstore.ts). Secrets, set separately:
+        //   wrangler secret put APPSTORE_PRIVATE_KEY --env production
+        //   wrangler secret put PLAY_SA_PRIVATE_KEY --env production
+        //   wrangler secret put PLAY_NOTIFY_TOKEN --env production
+        // Register the webhooks: App Store Connect → App Store Server
+        // Notifications V2 (production URL) → https://api.brace.to/v1/iap/appstore/notify;
+        // Play Console RTDN Pub/Sub push →
+        // https://api.brace.to/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>.
+        "APPSTORE_API_BASE": "https://api.storekit.itunes.apple.com",
+        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
+        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_BUNDLE_ID": "to.brace.app",
+        "PLAY_PACKAGE_NAME": "to.brace.app",
+        "PLAY_SA_EMAIL": "TODO: Play service account client_email",
       },
       "d1_databases": [
         {

@@ -12,26 +12,53 @@ import {
   type SubscriptionStatus,
 } from '@stxapps/shared';
 
-import type { AppEnv } from '../lib/env';
+import { appstoreNotificationTransactionId } from '../lib/appstore';
+import type { AppEnv, Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { paddleEventSchema, verifyPaddleSignature } from '../lib/paddle';
+import { playNotificationPurchaseToken } from '../lib/playstore';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
 import {
   applyPaddleEvent,
+  applyStoreNotification,
   createPaddlePortalSession,
   createPaddleTransaction,
   getSubscriptionStatus,
+  verifyStorePurchase,
 } from '../services/iap';
 
 // IAP routes: the client-facing subscription surface (status/verify/portal, all
-// contract-typed in @stxapps/shared) plus the Paddle webhook. Every route
-// carries its own '/v1/…' path, so this sub-app mounts at the root in app.ts.
+// contract-typed in @stxapps/shared) plus the provider webhooks (Paddle, App
+// Store, Play Store). Every route carries its own '/v1/…' path, so this sub-app
+// mounts at the root in app.ts.
 
-// The webhook path is NOT a shared contract (its request shape is Paddle's and
-// no client calls it), so its path lives here. Registered in the Paddle
-// dashboard as a notification destination per env.
+// The webhook paths are NOT shared contracts (their request shapes are the
+// providers', and no client of the shared package ever calls them), so they
+// live here. Each is registered with its provider per env: Paddle as a
+// notification destination, App Store as the App Store Server Notifications V2
+// URL (App Store Connect), Play as a Pub/Sub push subscription endpoint on the
+// RTDN topic (with `?token=` carrying PLAY_NOTIFY_TOKEN).
 export const PADDLE_WEBHOOK_PATH = `${API_V1}/iap/paddle/webhook`;
+export const APPSTORE_NOTIFY_PATH = `${API_V1}/iap/appstore/notify`;
+export const PLAYSTORE_NOTIFY_PATH = `${API_V1}/iap/playstore/notify`;
+
+// The store verifiers need per-source config (JWT signing keys etc. — see
+// lib/env.ts). Checked up front so a missing secret is a clear 500, not a
+// garbage outbound request.
+function requireStoreConfig(env: Bindings | undefined, source: 'appstore' | 'playstore'): void {
+  const ok =
+    source === 'appstore'
+      ? env?.APPSTORE_API_BASE &&
+        env.APPSTORE_ISSUER_ID &&
+        env.APPSTORE_KEY_ID &&
+        env.APPSTORE_BUNDLE_ID &&
+        env.APPSTORE_PRIVATE_KEY
+      : env?.PLAY_PACKAGE_NAME && env?.PLAY_SA_EMAIL && env?.PLAY_SA_PRIVATE_KEY;
+  if (!ok) {
+    throw new HttpError(500, 'not_configured', `${source} verification is not configured`);
+  }
+}
 
 export const iapRoutes = new Hono<AppEnv>()
   // --- status — the fold every device reads + caches ------------------------
@@ -53,23 +80,23 @@ export const iapRoutes = new Hono<AppEnv>()
       return c.json(body);
     },
   )
-  // --- verify — the store-receipt seam, reserved for brace-expo -------------
+  // --- verify — the store-receipt seam (brace-expo) -------------------------
   .post(
     iapVerifyEndpoint.path,
     requireAuth,
-    // Tight + per-user: once implemented, every call verifies a receipt against
-    // the App Store / Play API (an outbound request). Pre-wired now so the cap
-    // is already in place when the Expo verifier lands.
+    // Tight + per-user: every call verifies a receipt against the App Store /
+    // Play API (an outbound request).
     rateLimit('tight', userRateLimitKey),
     zValidator('json', iapVerifyEndpoint.request),
-    () => {
-      // The contract is live so store clients have a stable shape to build
-      // against; the App Store / Play verifiers land with the Expo app.
-      throw new HttpError(
-        501,
-        'not_implemented',
-        'Store receipt verification is not available yet',
+    async (c) => {
+      const req = c.req.valid('json');
+      requireStoreConfig(c.env, req.source);
+      const body: SubscriptionStatus = await verifyStorePurchase(
+        c.env,
+        c.get('session').userId,
+        req,
       );
+      return c.json(body);
     },
   )
   // --- portal — mint a Paddle customer-portal session URL -------------------
@@ -121,5 +148,75 @@ export const iapRoutes = new Hono<AppEnv>()
     }
 
     await applyPaddleEvent(c.env, parsed.data);
+    return c.json({ ok: true });
+  })
+  // --- store notifications — server-to-server, both call-back-authenticated -
+  // Same webhook posture as Paddle (baseline-exempt, 'webhook' tier — see
+  // app.ts), but authenticated DIFFERENTLY: the pushed payload is used only to
+  // find WHICH subscription changed, and the facts are re-fetched from the
+  // store's API (call-back pattern — lib/appstore.ts / lib/playstore.ts), so
+  // neither route verifies provider signatures (no x5c chain, no OIDC). A
+  // forged POST can only make us re-read the truth, bounded by the rate limit.
+  // Past parsing everything is log-and-ACK (both stores redeliver on non-200);
+  // the one deliberate non-200 is the store API being unreachable, where a
+  // redelivery is exactly right.
+  //
+  // Play: the Pub/Sub push endpoint for Real-time Developer Notifications.
+  .post(PLAYSTORE_NOTIFY_PATH, rateLimit('webhook'), async (c) => {
+    // The static `?token=` secret (Google's recommended push-endpoint guard)
+    // makes junk rejectable before any outbound work.
+    const secret = c.env?.PLAY_NOTIFY_TOKEN;
+    if (!secret) {
+      throw new HttpError(500, 'not_configured', 'Play notification token is not configured');
+    }
+    if (c.req.query('token') !== secret) {
+      throw new HttpError(401, 'invalid_token', 'Bad push token');
+    }
+    requireStoreConfig(c.env, 'playstore');
+
+    let json: unknown;
+    try {
+      json = await c.req.json();
+    } catch {
+      console.error('playstore notify: body is not JSON');
+      return c.json({ ok: true });
+    }
+    const purchaseToken = playNotificationPurchaseToken(json);
+    if (!purchaseToken) {
+      // Test notifications and one-time-product events land here — expected.
+      return c.json({ ok: true });
+    }
+
+    await applyStoreNotification(c.env, 'playstore', purchaseToken);
+    return c.json({ ok: true });
+  })
+  // App Store: Server Notifications V2 ({ signedPayload: JWS }).
+  .post(APPSTORE_NOTIFY_PATH, rateLimit('webhook'), async (c) => {
+    requireStoreConfig(c.env, 'appstore');
+
+    let json: unknown;
+    try {
+      json = await c.req.json();
+    } catch {
+      console.error('appstore notify: body is not JSON');
+      return c.json({ ok: true });
+    }
+    const signedPayload =
+      typeof json === 'object' && json !== null && 'signedPayload' in json
+        ? (json as { signedPayload: unknown }).signedPayload
+        : null;
+    if (typeof signedPayload !== 'string') {
+      console.error('appstore notify: no signedPayload');
+      return c.json({ ok: true });
+    }
+
+    const transactionId = appstoreNotificationTransactionId(signedPayload);
+    if (!transactionId) {
+      // Notification types without a transaction (e.g. the TEST ping App Store
+      // Connect sends when registering the URL) land here — expected.
+      return c.json({ ok: true });
+    }
+
+    await applyStoreNotification(c.env, 'appstore', transactionId);
     return c.json({ ok: true });
   });

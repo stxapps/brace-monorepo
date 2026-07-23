@@ -1,16 +1,20 @@
 import {
   type Entitlements,
   entitlementsOf,
+  type IapVerifyRequest,
   type PaidPlan,
   type Plan,
+  planOfStoreProduct,
   type SubscriptionStatus,
 } from '@stxapps/shared';
 
 import { type PurchaseEntity, purchasesRepo } from '../db/repositories/purchases';
+import { fetchAppstoreSubscription, type StoreSubscriptionSnapshot } from '../lib/appstore';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { normalizePaddleStatus, type PaddleEvent, paddleTimeToMs } from '../lib/paddle';
+import { fetchPlaystoreSubscription } from '../lib/playstore';
 
 // Subscription/entitlement service. Purchases land in DIRECTORY_DB (written by
 // the provider webhooks / future store verifiers); this service owns the FOLD
@@ -172,6 +176,142 @@ export async function applyPaddleEvent(env: Bindings, event: PaddleEvent): Promi
         ? paddleTimeToMs(data.scheduled_change.effective_at)
         : null),
     eventOccurredAt: occurredAt,
+  });
+}
+
+// --- store IAP (brace-expo) -------------------------------------------------
+
+// Fetch a store subscription's authoritative state (the token is only a lookup
+// key — see the trust-model notes in lib/appstore.ts / lib/playstore.ts).
+async function fetchStoreSubscription(
+  env: Bindings,
+  source: 'appstore' | 'playstore',
+  token: string,
+): Promise<StoreSubscriptionSnapshot | null> {
+  return source === 'appstore'
+    ? fetchAppstoreSubscription(env, token)
+    : fetchPlaystoreSubscription(env, token);
+}
+
+// The `iap/verify` seam: the app hands over its store's proof of purchase
+// (App Store transaction id / Play purchase token), the server fetches the
+// authoritative state from the store's API, records the purchase bound to the
+// SESSION's account, and returns the fresh fold. Unlike Paddle — where checkout
+// carries our userId straight to the webhook — a store purchase is a
+// client-side event the server only learns about here, so THIS call is what
+// binds subscription → account (first sight is for life, same rule as the
+// webhook upsert; store notifications carry no account and rely on the binding
+// this call created).
+export async function verifyStorePurchase(
+  env: Bindings,
+  userId: string,
+  req: IapVerifyRequest,
+): Promise<SubscriptionStatus> {
+  let snapshot: StoreSubscriptionSnapshot | null;
+  try {
+    snapshot = await fetchStoreSubscription(env, req.source, req.token);
+  } catch (e) {
+    // The store API erring/unreachable is retryable — mirror paddle_unavailable.
+    console.error(`verifyStorePurchase: ${req.source} fetch failed`, e);
+    throw new HttpError(502, 'store_unavailable', 'Could not reach the store, please retry');
+  }
+  if (!snapshot) {
+    throw new HttpError(422, 'invalid_receipt', 'The store did not recognize this purchase');
+  }
+
+  // Plan from the STORE's productId (never the request's — that field is
+  // advisory, the same never-trust-custom_data rule as the Paddle price map).
+  const plan = planOfStoreProduct(snapshot.productId);
+  if (!plan) {
+    console.error(`verifyStorePurchase: unknown product "${snapshot.productId}"`);
+    throw new HttpError(422, 'invalid_receipt', 'The store did not recognize this purchase');
+  }
+
+  // First sight binds the subscription to this account for life. A replay of
+  // someone else's token can't re-point it (the upsert never updates user_id);
+  // surface the conflict instead of silently recording a row the caller's fold
+  // will never include.
+  const repo = purchasesRepo(env.DIRECTORY_DB);
+  const existing = await repo.findBySourceExternalId(req.source, snapshot.externalId);
+  if (existing && existing.userId !== userId) {
+    throw new HttpError(
+      409,
+      'purchase_bound',
+      'This store subscription is already linked to another Brace account',
+    );
+  }
+
+  await repo.upsertFromProvider({
+    id: newId(),
+    userId,
+    source: req.source,
+    externalId: snapshot.externalId,
+    plan,
+    status: snapshot.status,
+    providerCustomerId: null,
+    expiresAt: snapshot.expiresAt,
+    canceledAt: snapshot.canceledAt,
+    // State fetched later is newer — fetch time orders refetch-based writes
+    // (verify + notifications), the same axis Paddle's occurred_at orders.
+    eventOccurredAt: Date.now(),
+  });
+
+  return getSubscriptionStatus(env, userId);
+}
+
+// Apply one store notification by RE-FETCHING authoritative state (call-back
+// pattern — the pushed payload is never trusted for facts, so neither route
+// needs provider signature verification). Log-and-drop like applyPaddleEvent:
+// the notify routes must ACK regardless, or the store redelivers forever.
+// `token` is the store's lookup key (App Store originalTransactionId / Play
+// purchase token) extracted by the lib decoder.
+export async function applyStoreNotification(
+  env: Bindings,
+  source: 'appstore' | 'playstore',
+  token: string,
+): Promise<void> {
+  let snapshot: StoreSubscriptionSnapshot | null;
+  try {
+    snapshot = await fetchStoreSubscription(env, source, token);
+  } catch (e) {
+    // The store API being down is the one case worth a redelivery — rethrow so
+    // the route non-200s and the store retries later.
+    console.error(`applyStoreNotification: ${source} fetch failed`, e);
+    throw e;
+  }
+  if (!snapshot) {
+    console.error(`applyStoreNotification: ${source} lookup resolved nothing`);
+    return;
+  }
+
+  const plan = planOfStoreProduct(snapshot.productId);
+  if (!plan) {
+    console.error(`applyStoreNotification: unknown product "${snapshot.productId}"`);
+    return;
+  }
+
+  // Notifications carry no account: the binding must already exist from the
+  // purchase-time `iap/verify`. A notification for a never-verified
+  // subscription (e.g. it arrived before the app's verify call landed) is
+  // dropped — the app's verify (or the next notification after it) records it.
+  const repo = purchasesRepo(env.DIRECTORY_DB);
+  const existing = await repo.findBySourceExternalId(source, snapshot.externalId);
+  if (!existing) {
+    console.error(`applyStoreNotification: no binding for ${source} ${snapshot.externalId}`);
+    return;
+  }
+
+  await repo.upsertFromProvider({
+    id: newId(),
+    userId: existing.userId,
+    source,
+    externalId: snapshot.externalId,
+    plan,
+    status: snapshot.status,
+    providerCustomerId: null,
+    expiresAt: snapshot.expiresAt,
+    canceledAt: snapshot.canceledAt,
+    eventOccurredAt: Date.now(),
   });
 }
 

@@ -22,6 +22,7 @@ export * from './extract/endpoints';
 export * from './extract/retry';
 export * from './iap/endpoints';
 export * from './iap/plans';
+export * from './iap/store-products';
 export * from './import/bundle';
 export * from './import/csv';
 export * from './import/detect';

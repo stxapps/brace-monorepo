@@ -81,6 +81,35 @@ export type Bindings = {
   PADDLE_WEBHOOK_SECRET: string;
   PADDLE_API_KEY: string;
 
+  // --- store IAP (brace-expo) ----------------------------------------------
+  // App Store / Play Store verification (routes/iap.ts `iap/verify` + the
+  // notify webhooks; lib/appstore.ts, lib/playstore.ts). Unlike Paddle there
+  // are no per-env product ids here — store product ids are ours and identical
+  // across sandbox/production, so they live in @stxapps/shared
+  // (iap/store-products.ts).
+  //
+  // App Store Server API: base is per-env (sandbox for development/staging,
+  // production for production — production also falls back to sandbox on 404
+  // for App Review, see lib/appstore.ts). ISSUER_ID/KEY_ID identify the In-App
+  // Purchase key (App Store Connect → Integrations); the key's PKCS#8 PEM is a
+  // SECRET (`wrangler secret put APPSTORE_PRIVATE_KEY --env …`; .dev.vars
+  // locally).
+  APPSTORE_API_BASE: string;
+  APPSTORE_ISSUER_ID: string;
+  APPSTORE_KEY_ID: string;
+  APPSTORE_BUNDLE_ID: string;
+  APPSTORE_PRIVATE_KEY: string;
+  // Play Developer API: a service account with "View financial data" on the
+  // Play Console account. SA_EMAIL is the account's client_email; the key's
+  // PKCS#8 PEM (the JSON's private_key field) is a SECRET
+  // (`wrangler secret put PLAY_SA_PRIVATE_KEY --env …`). PLAY_NOTIFY_TOKEN is
+  // the static `?token=` guard on the Pub/Sub push endpoint (any long random
+  // string; also a SECRET) — include it in the push subscription's URL.
+  PLAY_PACKAGE_NAME: string;
+  PLAY_SA_EMAIL: string;
+  PLAY_SA_PRIVATE_KEY: string;
+  PLAY_NOTIFY_TOKEN: string;
+
   // --- Rate limiting — native binding, one binding per volume "tier" -------
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"
   // is expressed as the tight tier (10 req / 10s). Counters are per-colo.
