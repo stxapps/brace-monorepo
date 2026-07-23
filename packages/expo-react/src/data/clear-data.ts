@@ -18,6 +18,7 @@
 import { clearDecodeCache } from '@stxapps/shared';
 
 import {
+  favicons,
   getDb,
   itemFacetStatuses,
   items,
@@ -28,6 +29,7 @@ import {
   subscriptionStatus,
   syncMeta,
 } from './db';
+import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { clearShareData } from './share-store';
 
@@ -45,9 +47,15 @@ export async function clearData(): Promise<void> {
     // The device's last-known subscription copy — same "next account must not
     // inherit this one's state" reason as localSettings (subscription-store.ts).
     tx.delete(subscriptionStatus).run();
+    // The favicon cache: no icon is a secret, but the SET of hosts is the
+    // account's browsing shape (db.ts `favicons` — web's rule, verbatim).
+    tx.delete(favicons).run();
   });
   // Decrypted `files/` blobs on disk — mirrors the items wipe (file-store.ts).
   clearDataFiles();
+  // Cached icon files — the file half of the favicons wipe (favicon-store.ts;
+  // same tables-first fail-safe ordering).
+  clearFaviconFiles();
   // The share sheet's App Group artifacts (iOS taxonomy snapshot + outbox) —
   // they name the account's lists/tags and may hold undrained URLs
   // (share-store.ts).

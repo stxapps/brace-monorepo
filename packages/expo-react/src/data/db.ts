@@ -224,6 +224,21 @@ export const locks = sqliteTable('locks', {
   hideList: integer('hide_list', { mode: 'boolean' }),
 });
 
+// The device-local, per-HOST favicon cache — web-react db.ts `FaviconRecord`
+// is the canonical doc (why per-host not per-link, why a recorded `none`
+// verdict, why it's never synced yet still wiped on sign-out — the SET of
+// hosts is the user's browsing shape). Unlike web, the row holds NO bytes: an
+// `ok` verdict's icon lives as a plaintext file on disk (favicon-store.ts —
+// the `files/` content pattern), so the render path is a derived `file://`
+// uri and the per-mount reads the scrolling rows pay stay off the BLOB.
+export const favicons = sqliteTable('favicons', {
+  // The display host (`hostFromText`), e.g. `github.com` — never a full URL.
+  host: text('host').primaryKey(),
+  status: text('status', { enum: ['ok', 'none'] }).notNull(),
+  // When this row was last resolved — the age the `none` retry is measured from.
+  fetchedAt: integer('fetched_at').notNull(),
+});
+
 const schema = {
   syncMeta,
   items,
@@ -233,6 +248,7 @@ const schema = {
   localSettings,
   subscriptionStatus,
   locks,
+  favicons,
 };
 
 // Exported for the read edge's change subscription (hooks/use-live-read.ts):
@@ -314,6 +330,11 @@ const DDL = `
     salt TEXT NOT NULL,
     hash TEXT NOT NULL,
     hide_list INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS favicons (
+    host TEXT PRIMARY KEY NOT NULL,
+    status TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL
   );
 `;
 

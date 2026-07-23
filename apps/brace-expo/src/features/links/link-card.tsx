@@ -17,7 +17,7 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
-import { LinkPreviewImage } from './link-media';
+import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
@@ -57,6 +57,7 @@ export function LinkCard({
           <View className="flex-row items-center gap-1.5">
             {pinned && <PinnedBadge />}
             {link.note !== undefined && link.note !== '' && <NoteBadge />}
+            <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
             <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1 text-xs">
               {host}
             </Text>

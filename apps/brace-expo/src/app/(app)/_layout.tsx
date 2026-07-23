@@ -1,6 +1,12 @@
 import { Stack } from 'expo-router';
 
-import { FileContentProvider, LockProvider, ShareBridge, SyncProvider } from '@stxapps/expo-react';
+import {
+  FaviconProvider,
+  FileContentProvider,
+  LockProvider,
+  ShareBridge,
+  SyncProvider,
+} from '@stxapps/expo-react';
 
 import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
@@ -23,6 +29,9 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 //   FileContentProvider — on-demand `files/` blobs for the link preview
 //                  images. Only needs the session + api client, so it sits with
 //                  the sync-layer providers, above the gates (web's placement).
+//   FaviconProvider — the per-host icon cache, beside it for the same reason
+//                  (web's placement); it needs only the extraction opt-in and
+//                  its rows are device-local.
 //   LockProvider — the device-local app/list locks state. Needs SyncProvider
 //                  (its orphan sweep waits for a ready store) and serves both
 //                  AppLockGate here and the links/settings lock surfaces.
@@ -47,28 +56,30 @@ export default function AppLayout() {
       <SyncProvider>
         <ShareBridge />
         <FileContentProvider>
-          <LockProvider>
-            <AppLockGate>
-              <InitialSyncGate>
-                <PaywallProvider>
-                  <Stack screenOptions={{ headerShown: false }}>
-                    {/* The link editors present modally (iOS pageSheet; Android
-                        slides up) — router screens, not RN Modals, so keyboard-
-                        controller and portals work inside them (see
-                        features/links/link-add-screen.tsx). */}
-                    <Stack.Screen
-                      name="add-link"
-                      options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                    />
-                    <Stack.Screen
-                      name="edit-link"
-                      options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                    />
-                  </Stack>
-                </PaywallProvider>
-              </InitialSyncGate>
-            </AppLockGate>
-          </LockProvider>
+          <FaviconProvider>
+            <LockProvider>
+              <AppLockGate>
+                <InitialSyncGate>
+                  <PaywallProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                      {/* The link editors present modally (iOS pageSheet; Android
+                          slides up) — router screens, not RN Modals, so keyboard-
+                          controller and portals work inside them (see
+                          features/links/link-add-screen.tsx). */}
+                      <Stack.Screen
+                        name="add-link"
+                        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                      />
+                      <Stack.Screen
+                        name="edit-link"
+                        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                      />
+                    </Stack>
+                  </PaywallProvider>
+                </InitialSyncGate>
+              </AppLockGate>
+            </LockProvider>
+          </FaviconProvider>
         </FileContentProvider>
       </SyncProvider>
     </AuthGuard>

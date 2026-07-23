@@ -1,34 +1,37 @@
-// The item's image presentation chain — the expo port of brace-web's
+// The item's icon/image presentation chain — the expo port of brace-web's
 // `_layouts/shared/link-media.tsx` (canonical doc for the chain's design: the
-// deterministic Monogram, why the fallbacks are steady states, the fixed-size
-// contract with the layouts). Shared by both link-item renderers (link-row,
-// link-card). Divergences here:
+// deterministic Monogram, the Favicon that falls back to it, why the fallbacks
+// are steady states, the fixed-size contract with the layouts). Shared by both
+// link-item renderers (link-row, link-card). Divergences here:
 //
-//  - No Favicon component: the per-host favicon cache (web's FaviconProvider +
-//    the extractor's image proxy) has no source on this platform yet, so every
-//    fallback resolves straight to the monogram — web's own steady state when
-//    serverExtraction is off. The chain keeps web's shape (icon | panel) so the
-//    favicon slots in here, not in the renderers, when it lands.
-//  - The image is core RN Image over the local plaintext `file://` uri
-//    (useImageFileUri — content lives decrypted on disk, file-store.ts), the
-//    same idiom as the edit screen's preview (setup.md: expo-image arrives
-//    when it earns its keep).
-//  - Monogram is a View tile, not SVG: its one consumer is the row's fixed
-//    icon slot, so the letter size is fixed too (10/16 of the size-4 tile,
-//    web's viewBox ratio) instead of scaling with the box.
+//  - Favicons come from expo-react's device-local per-host cache
+//    (useFaviconUri — a DIRECT native fetch under the extraction opt-in, no
+//    extractor proxy; see favicon-provider.tsx), as the cached icon file's
+//    `file://` uri rather than an object URL. Native decoders don't cover
+//    every byte stream a host may serve (the provider's sniff pre-filters),
+//    so the render keeps an onError backstop: a favicon that fails to DECODE
+//    falls back to the monogram instead of a blank tile.
+//  - Images are core RN Image over local plaintext uris (useImageFileUri —
+//    content lives decrypted on disk, file-store.ts), the same idiom as the
+//    edit screen's preview (setup.md: expo-image arrives when it earns its
+//    keep).
+//  - Monogram is a View tile, not SVG: its consumers are the small fixed icon
+//    slots, so the letter size is fixed too (10/16 of the size-4 tile, web's
+//    viewBox ratio) instead of scaling with the box.
 //  - RN's color parser wants the comma hsl() syntax (web's space-separated
 //    form isn't universally parsed), hence the style props.
 
+import { useState } from 'react';
 import { Image, View } from 'react-native';
 
-import { type LinkView, useImageFileUri } from '@stxapps/expo-react';
+import { type LinkView, useFaviconUri, useImageFileUri } from '@stxapps/expo-react';
 import { hostFromText, hueFromHost, initialFromHost } from '@stxapps/shared';
 
 import { Text } from '../../components/ui/text';
 
 // A deterministic monogram for a host — web's Monogram: an icon-less site still
-// gets a consistent mark to recognize rows by, and the tile never changes under
-// the user when a real favicon source later lands.
+// gets a consistent mark to recognize rows by (and the tile never changes under
+// the user when the real icon later lands).
 function Monogram({ host, className }: { host: string; className: string }) {
   return (
     <View
@@ -41,19 +44,66 @@ function Monogram({ host, className }: { host: string; className: string }) {
   );
 }
 
+// The decode-failure memory behind the onError backstop (see the header): the
+// uri that failed, so the component falls back to the monogram for it — and
+// resets automatically when the cache serves a different uri.
+function useBrokenUri(): [(uri: string) => boolean, (uri: string) => void] {
+  const [brokenUri, setBrokenUri] = useState<string>();
+  return [(uri) => uri === brokenUri, setBrokenUri];
+}
+
+// The site's favicon, keyed by DISPLAY HOST — web's Favicon: cached per host
+// and fetched at most once per host per device (useFaviconUri /
+// favicon-provider). Falls back to the monogram whenever there are no bytes to
+// show — in flight, no reachable favicon, or (by design, not failure) for
+// every host while the extraction opt-in is off. So the fallback is a steady
+// state, not just a loading state.
+export function Favicon({ host, className }: { host: string; className: string }) {
+  const uri = useFaviconUri(host);
+  const [isBroken, markBroken] = useBrokenUri();
+  if (!uri || isBroken(uri)) return <Monogram host={host} className={className} />;
+  // contain, not cover: a favicon is a whole mark, so it letterboxes rather
+  // than crops (unlike the preview image, which is a photo filled into a box).
+  return (
+    <Image
+      source={{ uri }}
+      accessibilityIgnoresInvertColors
+      resizeMode="contain"
+      className={className}
+      onError={() => markBroken(uri)}
+    />
+  );
+}
+
 // The image-less card fallback: a full-bleed panel painted with the host's hue
-// (same hsl family as the Monogram tile) with a large centered letter, so an
-// image-less card reads as an intentional colored block — web's
-// PreviewFallbackPanel on its no-favicon branch, the only branch here.
+// (same hsl family as the Monogram tile) — web's PreviewFallbackPanel: the real
+// favicon, when present, sits centered on a white chip (its own light
+// background, so it never clashes with the panel hue); with no favicon — the
+// default while the extraction opt-in is off — the panel carries a large
+// centered letter instead.
 function PreviewFallbackPanel({ host, className }: { host: string; className: string }) {
+  const uri = useFaviconUri(host);
+  const [isBroken, markBroken] = useBrokenUri();
   return (
     <View
       className={`items-center justify-center ${className}`}
       style={{ backgroundColor: `hsl(${hueFromHost(host)}, 45%, 45%)` }}
     >
-      <Text aria-hidden className="text-4xl font-semibold text-white/95">
-        {initialFromHost(host)}
-      </Text>
+      {uri && !isBroken(uri) ? (
+        <View className="rounded-md bg-white/95 p-1.5 shadow-sm">
+          <Image
+            source={{ uri }}
+            accessibilityIgnoresInvertColors
+            resizeMode="contain"
+            className="size-9"
+            onError={() => markBroken(uri)}
+          />
+        </View>
+      ) : (
+        <Text aria-hidden className="text-4xl font-semibold text-white/95">
+          {initialFromHost(host)}
+        </Text>
+      )}
     </View>
   );
 }
@@ -63,7 +113,7 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
 // and fetched on demand the moment the item mounts (FlashList items are
 // virtualized, so mounted = displayed — useImageFileUri adds the settle delay).
 // Until a uri exists — or when the link has no image at all — the slot shows a
-// fallback keyed by `fallback`: the small monogram tile on a muted background
+// fallback keyed by `fallback`: the small site favicon on a muted background
 // (`icon`, the row's compact slot) or the full-bleed hue panel (`panel`, the
 // card's banner). Either way the placeholder still identifies the link and the
 // geometry never shifts — both call sites pass a FIXED-size `className` (the
@@ -98,7 +148,7 @@ export function LinkPreviewImage({
   }
   return (
     <View className={`bg-muted items-center justify-center ${className}`}>
-      <Monogram host={host} className={iconClassName ?? ''} />
+      <Favicon host={host} className={iconClassName ?? ''} />
     </View>
   );
 }

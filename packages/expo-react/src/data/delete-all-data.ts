@@ -11,7 +11,8 @@
 import { type ApiClient, clearDecodeCache, dataDeleteAllEndpoint } from '@stxapps/shared';
 
 import { awaitInflightSync } from '../sync/engine';
-import { getDb, itemFacetStatuses, items, itemTagIds, locks } from './db';
+import { favicons, getDb, itemFacetStatuses, items, itemTagIds, locks } from './db';
+import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { clearPendingOps } from './pending-store';
 import { seedNewAccount } from './sync-store';
@@ -43,14 +44,18 @@ export async function deleteAllData(args: {
   // Local synced state, wiped to match the (now empty) server: the decrypted
   // items (rows + their junction tables + the on-disk plaintext blobs), their
   // decoded-plaintext cache, and the locks (they guard lists that no longer
-  // exist — same reset clearData applies).
+  // exist — same reset clearData applies). The favicon cache goes too: it isn't
+  // synced state, but it's derived FROM the wiped links, so leaving it would
+  // let the deleted library's hosts be read back off the device (web's rule).
   getDb().transaction((tx) => {
     tx.delete(items).run();
     tx.delete(itemTagIds).run();
     tx.delete(itemFacetStatuses).run();
     tx.delete(locks).run();
+    tx.delete(favicons).run();
   });
   clearDataFiles();
+  clearFaviconFiles();
   clearDecodeCache();
 
   // Reset the sync bookkeeping to the seeded-new-account state: cursor (0, '')

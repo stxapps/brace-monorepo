@@ -402,7 +402,9 @@ The site icon a row renders beside its host is enrichment, but it deliberately
 sits **outside** everything above: not a facet, not in `extractions/`, no
 `files/` blob, not synced. It's a **device-local, per-host cache** — on web the
 `db.favicons` table (filled by web-react's `FaviconProvider`, read by
-`useFaviconUrl`), on expo a sqlite sibling when its data layer lands — holding
+`useFaviconUrl`), on expo the sqlite `favicons` table + on-disk icon files
+(expo-react's `FaviconProvider` / `useFaviconUri` — the row keeps the verdict,
+the render is a derived `file://` uri) — holding
 raw icon bytes, or a recorded `none` verdict (with a long retry TTL) so an
 iconless host doesn't re-buy its fetch on every reload. A row shows the cached
 icon or falls back to its **monogram**; nothing ever waits on it. Three

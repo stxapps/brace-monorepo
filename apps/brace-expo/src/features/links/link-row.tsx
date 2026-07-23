@@ -1,8 +1,8 @@
 // Dense one-row-per-link item, the default `linksLayout` — the expo port of
 // brace-web's list-layout row (`_layouts/list-layout.tsx` is the canonical doc
 // for the row anatomy). The leading 64×40 thumbnail is the row's at-a-glance
-// identity (web's LinkPreviewImage slot — link-media.tsx); the host line keeps
-// no favicon beside it, since that chain has no source on this platform yet.
+// identity, and the host line carries the site favicon (both from
+// link-media.tsx, web's slots).
 //
 // The date column shows the field the rows are SORTED by (web's rationale:
 // relative values must read top-to-bottom in order). Formatted by hand rather
@@ -15,7 +15,7 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
-import { LinkPreviewImage } from './link-media';
+import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
@@ -81,9 +81,14 @@ export function LinkRow({
             {link.title || displayUrl(link.url)}
           </Text>
         </View>
-        <Text numberOfLines={1} className="text-muted-foreground text-xs">
-          {hostFromText(link.url)}
-        </Text>
+        {/* size-3.5 icon so the host line stays inside its slim budget (web's
+            list layout, verbatim). */}
+        <View className="flex-row items-center gap-1.5">
+          <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
+          <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1 text-xs">
+            {hostFromText(link.url)}
+          </Text>
+        </View>
         <LinkTagChips link={link} tagsById={tagsById} className="mt-1" />
       </View>
       <Text className="text-muted-foreground shrink-0 text-xs">
