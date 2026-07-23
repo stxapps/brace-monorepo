@@ -40,4 +40,5 @@ export * from './sync/status';
 export * from './sync/system-lists';
 export * from './sync/tree';
 export * from './theme/theme';
+export * from './url/host-identity';
 export * from './url/url';

@@ -5,25 +5,14 @@
 // falls back to either a small favicon (list) or a full-bleed hue panel (card).
 // Shared by both link layouts.
 
-import { hostFromText } from '@stxapps/shared';
+// The letter/hue derivations (initialFromHost/hueFromHost) live in
+// @stxapps/shared (url/host-identity.ts): brace-expo's card panel is a second
+// consumer, and the same host must paint the same letter on the same hue on
+// every surface. They stay free functions (not buried in Monogram) so the
+// full-bleed panel below can paint the hue as its own background without
+// drawing a nested tile.
+import { hostFromText, hueFromHost, initialFromHost } from '@stxapps/shared';
 import { type LinkView, useFaviconUrl, useImageFileUrl } from '@stxapps/web-react';
-
-// The two deterministic, pure derivations that give an icon-less host a stable
-// identity — the same host always draws the same letter on the same hue, in the
-// rows, the card panel, and the monogram tile alike. Kept as free functions (not
-// buried in Monogram) so the full-bleed panel below can paint the hue as its own
-// background without drawing a nested tile.
-function initialFromHost(host: string): string {
-  return (/[a-z0-9]/i.exec(host)?.[0] ?? '?').toUpperCase();
-}
-// Cheap string hash → hue. Only the HUE varies: callers pair it with fixed
-// saturation/lightness (45%/45%) where white text stays legible on every hue and
-// in both themes.
-function hueFromHost(host: string): number {
-  let hash = 0;
-  for (let i = 0; i < host.length; i++) hash = (hash * 31 + host.charCodeAt(i)) | 0;
-  return Math.abs(hash) % 360;
-}
 
 // A deterministic monogram for a host — the favicon's stand-in. Pure and stable:
 // an icon-less site still gets a consistent mark to recognize rows by (and the
