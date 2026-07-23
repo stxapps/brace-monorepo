@@ -19,10 +19,6 @@
 //  - Support opens the brace-web page in the system browser — the web app's
 //    origin comes from EXPO_PUBLIC_WEB_URL (inlined by Metro from `.env.<mode>`,
 //    same convention as lib/api-client.ts).
-//  - No InitialSyncGate on this platform yet ((app)/_layout's TODO), so unlike
-//    web, storeStatus CAN be pre-'ready' here; those phases ('checking' /
-//    'initial-syncing' / 'initial-error') just show the plain Sync label until
-//    the gate lands and owns them.
 
 import { Linking, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -59,6 +55,8 @@ export function MoreOptionsMenu() {
   const signOut = useSignOut();
   const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
+  // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
+  // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const syncError = phase === 'cycle-error';
 
   return (

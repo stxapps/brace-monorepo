@@ -4,6 +4,7 @@ import { LockProvider, ShareBridge, SyncProvider } from '@stxapps/expo-react';
 
 import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
+import { InitialSyncGate } from '../../components/initial-sync-gate';
 import { PaywallProvider } from '../../contexts/paywall-provider';
 
 // The signed-in app group — `/links`, `/settings`. Mirrors brace-web's
@@ -24,13 +25,13 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 //                  AppLockGate here and the links/settings lock surfaces.
 //   AppLockGate  — the device-local app lock (Settings → Misc). A content
 //                  swap, never a redirect; sync keeps running behind the lock
-//                  screen since the sync providers sit above it.
+//                  screen since the sync providers sit above it. Sits ABOVE
+//                  InitialSyncGate so the lock screen is the first thing shown
+//                  (it covers even the decrypting screen).
+//   InitialSyncGate — "is the local store ready?" Renders a decrypting screen
+//                  on first sync, then the app. Never redirects (sync-provider).
 //   PaywallProvider — the hoisted upgrade dialog behind the entitlement gates
 //                  (locks, nested lists).
-//
-// TODO(auth): InitialSyncGate still needs porting — it slots between
-// AppLockGate and PaywallProvider like web's. Until it lands, screens see the
-// store while its status is still 'checking'/'syncing-initial'.
 //
 // ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
 // drains the iOS extension's outbox through the write edge on launch/foreground
@@ -44,9 +45,11 @@ export default function AppLayout() {
         <ShareBridge />
         <LockProvider>
           <AppLockGate>
-            <PaywallProvider>
-              <Stack screenOptions={{ headerShown: false }} />
-            </PaywallProvider>
+            <InitialSyncGate>
+              <PaywallProvider>
+                <Stack screenOptions={{ headerShown: false }} />
+              </PaywallProvider>
+            </InitialSyncGate>
           </AppLockGate>
         </LockProvider>
       </SyncProvider>

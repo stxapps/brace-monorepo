@@ -57,14 +57,14 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // (@stxapps/shared's getSyncPhase — the same derivation as web and the ⋯ menu)
 // with an icon, an optional detail, and the single relevant action (Sync now /
 // Retry). Sync is status-based, not a percentage, so there's no progress bar;
-// the pending-changes line is the "how much is left" signal instead. Unlike
-// web, there is no InitialSyncGate on this platform yet, so the pre-'ready'
-// phases can show here too — they render their shared labels with a spinner.
+// the pending-changes line is the "how much is left" signal instead.
 function SyncStatus() {
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
-  const isError = phase === 'cycle-error' || phase === 'initial-error';
+  // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
+  // 'initial-error' and its retryInitialSync belong to the gate's own screen.
+  const isError = phase === 'cycle-error';
 
   const icon = isError ? (
     <Icon as={CircleAlert} className="text-destructive size-4" />
