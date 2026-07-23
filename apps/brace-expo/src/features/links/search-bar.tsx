@@ -17,21 +17,27 @@
 //  - The tri-state rows hand-roll their check/minus box: the reusables Checkbox
 //    primitive is boolean-only (web leans on Radix's `indeterminate` for the
 //    exclude visual).
-//  - No Plus gate yet — see the TODO(iap) in `apply`.
+//  - The Plus gate fires at Search like web, but the paywall dialog portals to
+//    the root PortalHost, which Android draws BEHIND this Modal's native
+//    window — so instead of keeping the sheet open under the paywall, the
+//    sheet closes while it shows and "Not now" reopens it, draft intact (see
+//    `apply`).
 
 import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, Minus, Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Check, Lock, Minus, Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
-import { useLists, useTags } from '@stxapps/expo-react';
+import { useEntitlements, useLists, useTags } from '@stxapps/expo-react';
 import { emptyQuery, flattenTree, type LinkQuery } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
 import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
@@ -270,10 +276,34 @@ function TriCheckList({
   );
 }
 
+// The Plus gate's banner — web's LockedBanner (canonical doc: why free users
+// get the FULL editor to try and the wall fires only at Search, the peak-intent
+// moment; the banner's "See plans" is the door for the user who wants the offer
+// without building a query first). One native change: "See plans" must close
+// the sheet before routing — the Modal is a native window that would cover the
+// pushed Subscription screen.
+function LockedBanner({ onSeePlans }: { onSeePlans: () => void }) {
+  return (
+    <View className="bg-muted flex-row items-start gap-2 rounded-md px-3 py-2">
+      <Icon as={Lock} className="text-muted-foreground mt-0.5 size-3.5" />
+      <Text className="text-muted-foreground min-w-0 flex-1 text-xs">
+        A <Text className="text-foreground text-xs font-medium">Plus</Text> feature. Build your
+        query, then upgrade to run it.{' '}
+        <Text onPress={onSeePlans} className="text-primary text-xs font-medium">
+          See plans
+        </Text>
+      </Text>
+    </View>
+  );
+}
+
 function AdvancedSearch() {
   const { query, setQuery } = useLinksPage();
   const lists = useLists();
   const tags = useTags();
+  const { entitlements } = useEntitlements();
+  const paywall = usePaywall();
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => initDraft(query));
@@ -295,11 +325,21 @@ function AdvancedSearch() {
   );
 
   const apply = () => {
-    // TODO(iap): web gates this commit on the `searchEditor` entitlement — the
-    // paywall fires at the Search press, keeping the sheet (and the draft) open
-    // behind it so "Not now" preserves what the user built. Entitlements + the
-    // paywall provider aren't ported to expo yet (see the (app)/_layout TODO);
-    // add the gate here when they land.
+    // The gate: a free user built a query to try the feature — pressing Search
+    // is the payoff moment, so route to the paywall instead of committing.
+    // Web keeps its popover open BEHIND the paywall; here the paywall dialog
+    // portals to the root PortalHost, which Android draws behind this Modal's
+    // native window (iOS's FullWindowOverlay would layer fine, but behavior
+    // stays uniform) — so close the sheet and reopen it on "Not now". The
+    // draft is this component's state, not the Modal's, so what the user built
+    // survives the round trip. Upgrading skips onDismiss (see
+    // paywall-provider), leaving the sheet closed under the Subscription
+    // screen.
+    if (!entitlements.searchEditor) {
+      setOpen(false);
+      paywall.show('searchEditor', () => setOpen(true));
+      return;
+    }
     const q = emptyQuery();
     q.text.all = words(draft.textAll);
     q.text.any = words(draft.textAny);
@@ -361,6 +401,14 @@ function AdvancedSearch() {
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 p-4">
+              {!entitlements.searchEditor && (
+                <LockedBanner
+                  onSeePlans={() => {
+                    setOpen(false);
+                    router.push('/settings/subscription');
+                  }}
+                />
+              )}
               {/* The word trio (Google-advanced-search shape) over the combined
                   url⊕title haystack — text.all / text.any / text.none. Because
                   the haystack contains the url, "None of these words" also
