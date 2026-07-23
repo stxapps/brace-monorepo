@@ -1,8 +1,10 @@
 ## safe area, viewport & insets
 
 How brace apps deal with notches/rounded corners (safe-area insets), scrollbar
-width, and viewport sizing — and the gotchas that make these disagree. Lives in
-`@stxapps/web-ui` (web-only). See [architecture.md](./architecture.md) for layering.
+width, and viewport sizing — and the gotchas that make these disagree. The web
+helpers live in `@stxapps/web-ui` (web-only); the last two sections cover the
+brace-expo side (native safe area and the keyboard). See
+[architecture.md](./architecture.md) for layering.
 
 ### the core problem: "width" is not one number
 
@@ -170,3 +172,94 @@ measurement per event for the whole app. Follow the same rule for any future
 "global truth" input (scroll position, etc.): hoist it into one shared
 `useSyncExternalStore`, don't let every component subscribe and measure
 independently.
+
+### safe area on native (brace-expo)
+
+The same notch/home-indicator problem, but the mechanics differ from web: there
+is no `env()`/CSS cascade — insets come from **react-native-safe-area-context**,
+and both apps' surfaces are edge-to-edge by default (iOS always was; Android
+15+ enforces it), so every screen must handle them.
+
+- **Provider: already there — don't add one.** expo-router's
+  NavigationContainer mounts react-navigation's `SafeAreaProviderCompat`, so
+  screens can use `SafeAreaView`/`useSafeAreaInsets` with **no explicit
+  `SafeAreaProvider` in `_layout.tsx`** (see its header comment). The one tree
+  outside any provider is the share sheet — `share-screen.tsx` uses no
+  safe-area API at all: the iOS host sheet is positioned by the system, and
+  Android's bottom sheet + backdrop fill the window by design.
+- **Screens: `SafeAreaView` from `react-native-safe-area-context`** (never the
+  deprecated RN-core one), wrapped once per file as
+  `const StyledSafeAreaView = withUniwind(SafeAreaView)` so it accepts
+  `className` — it's a composite component, not a core host like `View`/`Text`
+  (the note in `components/landing.tsx`). The standard shape is
+  `<StyledSafeAreaView className="bg-background flex-1">` around the screen:
+  padding paints inside the box, so the background fills edge-to-edge under
+  the notch while content is inset — the native mirror of web's blanket
+  `safe-area` div, with the same caveat: once a bar should bleed to the edge
+  with only its contents inset, switch to the `edges` prop / per-side inset
+  styles.
+- **Why the native `SafeAreaView` and not `useSafeAreaInsets` + padding:** it
+  measures **its own** insets natively, per window and per container — inside
+  the AdvancedSearch `Modal` it correctly supplies the status-bar inset on
+  Android's full-screen modal and near-zero top inset inside iOS's pageSheet
+  (`search-bar.tsx`), with no context reaching across the Modal's window
+  boundary and no first-frame flash. Reach for `useSafeAreaInsets()` only when
+  you need the numbers (e.g. as a prop, below).
+- **Portaled content does NOT inherit screen insets.** `Dialog`/`AlertDialog`/
+  `DropdownMenu` content portals to the root `PortalHost` (wrapped in
+  react-native-screens' `FullWindowOverlay` on iOS) — outside every screen's
+  `SafeAreaView`. It's safe by different means:
+  - **Centered dialogs** (`ui/dialog.tsx`, `ui/alert-dialog.tsx`): the overlay
+    is `absoluteFill` + centered with padding; centered content never reaches
+    the unsafe edges, so no inset work.
+  - **Anchored menus** (`ui/dropdown-menu.tsx`): @rn-primitives positions
+    against the measured trigger with `avoidCollisions` (default on); its
+    `insets` prop is the extra collision padding — the native analogue of
+    Radix's `collisionPadding` (rule 1 in _popups & dialogs_ above). Current
+    triggers all sit inside safe-area'd chrome, so nothing passes it yet; a
+    trigger near a raw screen edge should pass
+    `insets={useSafeAreaInsets()}`.
+  - **Hand-rolled absolute positioning** (a future toast, a bottom bar in an
+    overlay): nothing inherits — apply `useSafeAreaInsets()` offsets yourself,
+    the native mirror of web's hand-rolled rule 2.
+
+### keyboard avoidance on native (brace-expo)
+
+On web the keyboard is a viewport concern (`visualViewport` shrinks — see
+above). On native the keyboard **overlays** the window on both platforms —
+with edge-to-edge (enforced on Android 15+) `adjustResize` no longer resizes,
+so Android behaves like iOS — and content must move itself. Two mechanisms
+exist, and **the presentation container decides which, not the feature**:
+
+| surface                                                       | mechanism                                                           | examples                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper | `auth-screen.tsx`, `settings/[section].tsx` |
+| RN `Modal`                                                    | plain `KeyboardAvoidingView behavior="padding"`                     | AdvancedSearch (`links/search-bar.tsx`)     |
+| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here | `share/share-screen.tsx` `Sheet`            |
+
+- **The default is react-native-keyboard-controller.** Its `KeyboardProvider`
+  mounts once at the root (`src/app/_layout.tsx`) and feeds
+  WindowInsetsAnimation-synced keyboard values; screens consume them via
+  `KeyboardAwareScrollView` (wrapped with `withUniwind` for `className`).
+- **The unit of handling is the screen/scroll container, not the leaf.**
+  Components rendered inside an already-keyboard-aware screen — the settings
+  sections (`lists-section.tsx`, `tags-section.tsx`), future
+  `ListSelect`/`TagsField` cousins — declare nothing themselves. Don't nest a
+  second avoider; two stacked avoiders double the offset.
+- **Why RN `Modal` opts out:** a `Modal` is its own native window. React
+  context technically crosses the boundary, but the provider's native
+  `KeyboardControllerView` doesn't wrap the modal's window, so its animated
+  values can't drive content there. Hence plain
+  `KeyboardAvoidingView behavior="padding"` inside the Modal (AdvancedSearch's
+  in-file comment carries the local rationale).
+- **Why the share sheet can't use it at all** (the stronger constraint):
+  keyboard-controller's iOS layer is built on `UIApplication.shared`, which
+  doesn't exist in an app-extension process — expo-share-extension's
+  `APPLICATION_EXTENSION_API_ONLY=No` only makes such pods compile, not work.
+  Even nesting a fresh `KeyboardProvider` wouldn't help. Android's
+  `ShareActivity` could technically differ, but one plain KAV keeps the two
+  hosts rendering the same tree (docs/share-sheet.md).
+- **For a new surface, decide the presentation first; the keyboard answer
+  follows.** A future link-add/link-edit built as a router screen inherits the
+  keyboard-controller path for free; built as a page-sheet `Modal` (like
+  AdvancedSearch), it must carry its own plain `KeyboardAvoidingView`.

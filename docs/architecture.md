@@ -3,7 +3,9 @@
 Living reference for how the workspace is organized. See
 [setup.md](./setup.md) for the one-time scaffold commands,
 [safe-area.md](./safe-area.md) for safe-area insets, viewport sizing, and popup
-positioning, [local-first-sync.md](./local-first-sync.md) for the
+positioning on web and native (brace-expo's `SafeAreaView`-per-screen pattern
+and which surfaces use keyboard-controller vs. a plain `KeyboardAvoidingView`),
+[local-first-sync.md](./local-first-sync.md) for the
 local-first data path (local store + encrypted file sync),
 [client-queries.md](./client-queries.md) for the read edge (IndexedDB indexes,
 liveQuery + virtual scrolling, and why pagination is growing-`limit` +
