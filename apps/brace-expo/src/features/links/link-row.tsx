@@ -1,8 +1,8 @@
 // Dense one-row-per-link item, the default `linksLayout` — the expo port of
 // brace-web's list-layout row (`_layouts/list-layout.tsx` is the canonical doc
-// for the row anatomy). Text-first: the preview image / favicon need the file
-// store and a favicon source, which arrive with extraction support on this
-// platform.
+// for the row anatomy). The leading 64×40 thumbnail is the row's at-a-glance
+// identity (web's LinkPreviewImage slot — link-media.tsx); the host line keeps
+// no favicon beside it, since that chain has no source on this platform yet.
 //
 // The date column shows the field the rows are SORTED by (web's rationale:
 // relative values must read top-to-bottom in order). Formatted by hand rather
@@ -15,6 +15,7 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
+import { LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
@@ -63,6 +64,15 @@ export function LinkRow({
           className="shrink-0"
         />
       )}
+      {/* The thumbnail stays in bulk-edit mode — it's the row's at-a-glance
+          identity, so the checkbox is inserted, not swapped in (web's list
+          layout, verbatim). Fixed-size slot; `overflow-hidden` clips the
+          image's corners to the rounding. */}
+      <LinkPreviewImage
+        link={link}
+        className="h-10 w-16 shrink-0 overflow-hidden rounded"
+        iconClassName="size-4 rounded"
+      />
       <View className="min-w-0 flex-1">
         <View className="flex-row items-center gap-1.5">
           {pinned && <PinnedBadge />}

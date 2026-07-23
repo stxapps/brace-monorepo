@@ -1,11 +1,8 @@
 // Pieces shared by the two link-item renderers (link-row, link-card) and the
 // main pane — the expo port of brace-web's `_layouts/shared/` grab-bag
-// (layout-chrome, hooks, types, the badges; the tag chips and the row menu
-// have their own files on both platforms — link-tag-chips.tsx,
-// link-row-menu.tsx). Smaller on purpose: the favicon / preview-image chain
-// needs the file store + extraction (not on this platform yet), and the edit
-// dialog hasn't landed (the row menu omits its Edit / View note items
-// meanwhile).
+// (layout-chrome, hooks, types, the badges; the tag chips, the row menu, and
+// the preview-image chain have their own files on both platforms —
+// link-tag-chips.tsx, link-row-menu.tsx, link-media.tsx).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';

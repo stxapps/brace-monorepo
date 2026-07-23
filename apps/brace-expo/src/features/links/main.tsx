@@ -15,9 +15,10 @@
 //  - Pull-to-refresh triggers a sync cycle (web's overflow-menu Sync entry) —
 //    the mobile idiom; it also applies any held results, since the gesture is
 //    the user asking for fresh content at the top.
-//  - Items are text-first: the preview image / favicon need the file store and
-//    a favicon source, which arrive with extraction support on this platform
-//    (the card's banner shows the hue/monogram fallback panel meanwhile).
+//  - Items carry the preview image (link-media.tsx — local-first, fetched on
+//    demand as items mount) but no favicon: that chain still needs a favicon
+//    source on this platform (the monogram stands in, web's own steady state
+//    when serverExtraction is off).
 //  - An item press opens the URL in the system browser (web's anchor) — except
 //    in bulk-edit mode (view-state `bulkEditing`), where items grow a checkbox
 //    and a press toggles selection instead (web's selectable rows).

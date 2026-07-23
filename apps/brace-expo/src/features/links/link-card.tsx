@@ -6,42 +6,23 @@
 // FIXED height, web's rationale: cards with less content keep the height so the
 // grid rows stay aligned — content flows top-down and the unused space falls at
 // the BOTTOM (reads as bottom padding, not a mid-card gap). Budget: preview
-// panel (112) + p-3 text block (host line 16 + gap 8 + two title lines 40 +
-// padding 24) + one chip line + pb-3 (32) = 232. No date column (web parity)
+// slot (112 — image or fallback panel, fixed either way) + p-3 text block
+// (host line 16 + gap 8 + two title lines 40 + padding 24) + one chip line +
+// pb-3 (32) = 232. No date column (web parity)
 // and no inline note text (NoteBadge only — web's fixed-estimate rationale).
 
 import { Linking, Pressable, View } from 'react-native';
 
-import { displayUrl, hostFromText, hueFromHost, initialFromHost } from '@stxapps/shared';
+import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
+import { LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 
 const CARD_HEIGHT = 232;
-
-// The card's banner slot — web's LinkPreviewImage `fallback="panel"`: a
-// full-bleed panel painted with the host's hue plus a large centered monogram
-// letter, so an image-less card reads as an intentional colored block. On this
-// platform it's the ONLY state for now — the real preview image (and web's
-// favicon-on-white-chip variant) arrive with extraction + the file store. The
-// letter/hue derivations live in @stxapps/shared so the same host paints
-// identically here and on web. RN's color parser wants the comma hsl() syntax
-// (web's space-separated form isn't universally parsed), hence the style prop.
-function PreviewPanel({ host }: { host: string }) {
-  return (
-    <View
-      className="h-28 w-full items-center justify-center"
-      style={{ backgroundColor: `hsl(${hueFromHost(host)}, 45%, 45%)` }}
-    >
-      <Text aria-hidden className="text-4xl font-semibold text-white/95">
-        {initialFromHost(host)}
-      </Text>
-    </View>
-  );
-}
 
 export function LinkCard({
   link,
@@ -68,7 +49,10 @@ export function LinkCard({
           selected ? 'bg-muted' : 'active:bg-muted/50'
         }`}
       >
-        <PreviewPanel host={host} />
+        {/* The banner: the preview image once its bytes are resident (fetched
+            on demand by mounting — link-media.tsx), else the full-bleed hue
+            panel. Fixed h-28 either way (the height budget above). */}
+        <LinkPreviewImage link={link} className="h-28 w-full" fallback="panel" />
         <View className="gap-2 p-3">
           <View className="flex-row items-center gap-1.5">
             {pinned && <PinnedBadge />}
