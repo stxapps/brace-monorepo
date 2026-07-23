@@ -34,7 +34,7 @@ import {
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
-import { CreateRow } from './lists-section';
+import { CreateRow } from './rows';
 
 type SortDir = 'asc' | 'desc';
 

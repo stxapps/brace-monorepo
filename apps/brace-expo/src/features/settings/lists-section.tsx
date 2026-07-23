@@ -23,7 +23,6 @@ import {
   ArrowDownAZ,
   ArrowDownZA,
   ArrowUpDown,
-  Check,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -37,9 +36,7 @@ import {
   type LucideIcon,
   MoreHorizontal,
   Pencil,
-  Plus,
   Trash2,
-  X,
 } from 'lucide-react-native';
 
 import {
@@ -67,6 +64,7 @@ import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
+import { CreateRow } from './rows';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
@@ -219,68 +217,6 @@ function RowActions({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-// The create-a-list row pinned at the top. The plus turns into a cancel once
-// the field is active (focused or non-empty); a confirm (check) appears on the
-// right. Confirming prepends the new list to the root group.
-export function CreateRow({
-  placeholder,
-  onCreate,
-}: {
-  placeholder: string;
-  onCreate: (name: string) => Promise<void>;
-}) {
-  const [value, setValue] = useState('');
-  const [focused, setFocused] = useState(false);
-  const active = focused || value !== '';
-
-  const reset = () => {
-    setValue('');
-    setFocused(false);
-  };
-  const confirm = async () => {
-    if (value.trim() === '') return reset();
-    try {
-      await onCreate(value);
-      setValue('');
-    } catch {
-      // Keep the typed value for a retry; onCreate already surfaced the error.
-    }
-  };
-
-  return (
-    <View className="border-border flex-row items-center gap-1 border-b px-1 py-1.5">
-      <Pressable
-        aria-label={active ? 'Cancel' : placeholder}
-        className="size-9 items-center justify-center rounded-md"
-        onPress={() => {
-          if (active) reset();
-        }}
-      >
-        <Icon as={active ? X : Plus} className="text-muted-foreground size-4" />
-      </Pressable>
-      <Input
-        value={value}
-        placeholder={placeholder}
-        aria-label={`${placeholder} name`}
-        className="h-9 min-w-0 flex-1 border-transparent bg-transparent px-2 shadow-none"
-        onChangeText={setValue}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onSubmitEditing={() => void confirm()}
-      />
-      {active && (
-        <Pressable
-          aria-label="Create"
-          className="size-9 items-center justify-center rounded-md"
-          onPress={() => void confirm()}
-        >
-          <Icon as={Check} className="text-muted-foreground size-4" />
-        </Pressable>
-      )}
-    </View>
   );
 }
 

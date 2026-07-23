@@ -1,13 +1,24 @@
-// Small row primitives shared by the overview-style sections (Account, Data):
-// the tappable ActionRow that opens a sub-view and the BackLink every sub-view
-// puts at the top. Web keeps a copy per section (`_account/`/`_data/` are
-// self-contained folders by design); here the whole settings feature is one
-// folder, so the self-containment argument dissolves and one copy serves both.
+// Small row primitives shared across sections: the tappable ActionRow that
+// opens a sub-view and the BackLink every sub-view puts at the top (the
+// overview-style Account/Data sections), and the CreateRow pinned atop the
+// Lists and Tags tables. Web keeps a copy per section (`_account/`/`_lists/`/…
+// are self-contained folders by design); here the whole settings feature is
+// one folder, so the self-containment argument dissolves and one copy serves
+// all.
 
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react-native';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  type LucideIcon,
+  Plus,
+  X,
+} from 'lucide-react-native';
 
 import { Icon } from '../../components/ui/icon';
+import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 
@@ -44,6 +55,69 @@ export function ActionRow({
       </View>
       <Icon as={ChevronRight} className="text-muted-foreground size-4 shrink-0" />
     </Pressable>
+  );
+}
+
+// The create-an-item row pinned at the top of the Lists and Tags tables. The
+// plus turns into a cancel once the field is active (focused or non-empty); a
+// confirm (check) appears on the right. Confirming hands the name to onCreate
+// (both sections prepend into the root group at rank 0).
+export function CreateRow({
+  placeholder,
+  onCreate,
+}: {
+  placeholder: string;
+  onCreate: (name: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState('');
+  const [focused, setFocused] = useState(false);
+  const active = focused || value !== '';
+
+  const reset = () => {
+    setValue('');
+    setFocused(false);
+  };
+  const confirm = async () => {
+    if (value.trim() === '') return reset();
+    try {
+      await onCreate(value);
+      setValue('');
+    } catch {
+      // Keep the typed value for a retry; onCreate already surfaced the error.
+    }
+  };
+
+  return (
+    <View className="border-border flex-row items-center gap-1 border-b px-1 py-1.5">
+      <Pressable
+        aria-label={active ? 'Cancel' : placeholder}
+        className="size-9 items-center justify-center rounded-md"
+        onPress={() => {
+          if (active) reset();
+        }}
+      >
+        <Icon as={active ? X : Plus} className="text-muted-foreground size-4" />
+      </Pressable>
+      <Input
+        value={value}
+        placeholder={placeholder}
+        aria-label={`${placeholder} name`}
+        className="h-9 min-w-0 flex-1 border-transparent bg-transparent px-2 shadow-none"
+        onChangeText={setValue}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onSubmitEditing={() => void confirm()}
+      />
+      {active && (
+        <Pressable
+          aria-label="Create"
+          className="size-9 items-center justify-center rounded-md"
+          onPress={() => void confirm()}
+        >
+          <Icon as={Check} className="text-muted-foreground size-4" />
+        </Pressable>
+      )}
+    </View>
   );
 }
 
