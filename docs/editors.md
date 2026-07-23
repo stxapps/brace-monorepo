@@ -392,9 +392,8 @@ it), Move to is a dialog embedding the native `ListCommand` cousin instead of
 the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
 menu — same `excludeIds`/`disabledIds` wiring, no `onCreate`/`root`; the Lists
 settings reparent dialog embeds the same body with `root`, like web), and the
-bulk tags dialog is a chip toggler over the
-existing tags (no new-tag creation — the native `TagsField` cousin the in-app
-editors render could be wired here when wanted; it just hasn't been; the
-single-link case no longer rides this dialog anyway — the row menu's Edit tags
-pushes `/edit-link` focused on tags, like web). Web's shift-click `selectRange`
-has no touch analogue and is not ported.
+bulk tags dialog seeds the same native `TagsField` cousin the in-app editors
+render (like web's seeds `TagsField` — filter input and reuse-or-mint Create
+included; the single-link case no longer rides this dialog anyway — the row
+menu's Edit tags pushes `/edit-link` focused on tags, like web). Web's
+shift-click `selectRange` has no touch analogue and is not ported.

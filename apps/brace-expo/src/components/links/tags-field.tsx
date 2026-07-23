@@ -10,11 +10,14 @@ import { Icon } from '../ui/icon';
 import { Input } from '../ui/input';
 import { Text } from '../ui/text';
 
-// The tag editor for the link editors — the native cousin of web-ui's
-// TagsField + TagsCommand pair (those headers are canonical: controlled value,
-// reuse-or-mint by name via findOrCreate). No popover shell here: on a phone
-// the whole field renders INLINE — the BulkTagsDialog chip-toggler idiom (every
-// tag is a chip, selected = in `value`) with the create affordance folded in:
+// The tag editor shared by every link-tags surface — the add/edit screens and
+// BulkTagsDialog (which, like web's, seeds one TagsField and saves the diff) —
+// the native cousin of web-ui's TagsField + TagsCommand pair (those headers
+// are canonical: controlled value, reuse-or-mint by name via findOrCreate).
+// No popover shell here, so no shell/body split either (web's TagsCommand has
+// no expo counterpart — the popover body IS this whole inline field): every
+// tag renders as a chip, selected = in `value`, with the create affordance
+// folded in:
 //
 //  - The input filters the chips as you type (the searchable-command stand-in)
 //    and doubles as the new tag's name field.

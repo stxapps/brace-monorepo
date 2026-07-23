@@ -4,7 +4,11 @@
 // the selected links' tags, saved as a DIFF against that seed — added tags are
 // added to every link, removed seed tags removed from every link, and a tag
 // only SOME links carry is never shown as selected and never touched, so a
-// bulk edit can't silently strip tags the user couldn't see). Hoisted to the
+// bulk edit can't silently strip tags the user couldn't see). Like web, the
+// field is one TagsField over the whole selection — the same native cousin the
+// add/edit screens render (components/links/tags-field), so bulk retag gets
+// its filter input and reuse-or-mint Create for free; the diff semantics live
+// entirely in the save below. Hoisted to the
 // screen level and driven by view-state-provider's `retagging`, like the
 // destroy confirm; while open it holds `engaged` so a background sync won't
 // repaint the list under the modal. The editor invariants (docs/editors.md)
@@ -12,23 +16,13 @@
 // every open starts fresh), dirty means exactly "Save would write something",
 // and the accidental close vectors (overlay press, the ✕) are swallowed while
 // dirty — the explicit Cancel bypasses the guard.
-//
-// Divergences from web:
-//
-//  - The field is a chip toggler over the flattened tag tree (the
-//    ShareTagsPicker idiom) instead of web's TagsField chips + popover — every
-//    tag renders as a chip, selected = in the draft; the seed's shared tags
-//    start selected.
-//  - No new-tag creation here — that arrives with the full edit dialog's tags
-//    field (web's TagsField `allowCreate`); bulk retag over existing tags is
-//    the common case.
 
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView } from 'react-native';
 
-import { type LinkView, useLinkMutations, useTags } from '@stxapps/expo-react';
-import { flattenTree } from '@stxapps/shared';
+import { type LinkView, useLinkMutations } from '@stxapps/expo-react';
 
+import { TagsField } from '../../components/links/tags-field';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -39,7 +33,6 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { Text } from '../../components/ui/text';
-import { cn } from '../../lib/utils';
 import { useLinksViewState } from './view-state-provider';
 
 export function BulkTagsDialog() {
@@ -57,12 +50,6 @@ function sameIds(a: string[], b: string[]): boolean {
 function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => void }) {
   const { exitBulkEdit } = useLinksViewState();
   const { update } = useLinkMutations();
-  const tags = useTags();
-
-  const options = useMemo(
-    () => flattenTree(tags).map((n) => ({ id: n.item.id, name: n.item.name })),
-    [tags],
-  );
 
   // The seed: tags EVERY selected link carries, in the first link's order (a
   // stable, user-recognizable chip order). Snapshotted once at mount — draft
@@ -74,10 +61,6 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
   const [saving, setSaving] = useState(false);
 
   const isDirty = !sameIds(tagIds, seed);
-
-  const toggle = (id: string) => {
-    setTagIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
-  };
 
   const onSave = async () => {
     if (saving) return;
@@ -109,35 +92,15 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             {links.length === 1 ? 'link' : 'links'}; a removed tag is removed from all of them.
           </DialogDescription>
         </DialogHeader>
-        {options.length === 0 ? (
-          <Text className="text-muted-foreground text-sm">No tags yet.</Text>
-        ) : (
-          <ScrollView className="max-h-60" nestedScrollEnabled>
-            <View className="flex-row flex-wrap gap-2">
-              {options.map((o) => {
-                const selected = tagIds.includes(o.id);
-                return (
-                  <Pressable
-                    key={o.id}
-                    onPress={() => toggle(o.id)}
-                    accessibilityRole="checkbox"
-                    aria-label={`${o.name}: ${selected ? 'selected' : 'not selected'}`}
-                    className={cn('rounded-full px-3 py-1.5', selected ? 'bg-primary' : 'bg-muted')}
-                  >
-                    <Text
-                      className={cn(
-                        'text-sm',
-                        selected ? 'text-primary-foreground' : 'text-muted-foreground',
-                      )}
-                    >
-                      {o.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </ScrollView>
-        )}
+        {/* The chip area can outgrow a dialog (unlike the edit screens' own
+            scrolling form), so the field sits in a capped scroll; taps must
+            land while the filter keyboard is still up. A tag minted here
+            persists even if the user then cancels — web's accepted
+            mint-then-cancel cost — and lands selected in the draft, so the
+            dirty guard engages. */}
+        <ScrollView className="max-h-60" nestedScrollEnabled keyboardShouldPersistTaps="handled">
+          <TagsField value={tagIds} onChange={setTagIds} />
+        </ScrollView>
         <Text className="text-muted-foreground text-xs">
           Only tags shared by every selected link start selected; a tag on just some of them is left
           untouched.
