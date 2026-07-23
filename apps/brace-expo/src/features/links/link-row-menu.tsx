@@ -200,7 +200,7 @@ export function LinkRowMenu({
       </DropdownMenu>
       {/* The link's own list plays `sharedListId` (checked + disabled — a single
           link's list is trivially the shared one), keeping the tree's shape and
-          the user's bearings intact, like web's ListCommand disabledIds. */}
+          the user's bearings intact via ListCommand's disabledIds, like web. */}
       {moveOpen && (
         <MoveToDialog
           open

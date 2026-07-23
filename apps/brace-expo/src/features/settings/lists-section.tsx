@@ -10,13 +10,14 @@
 //    touching the mutations.
 //  - "Move to" opens a hoisted picker DIALOG instead of web's ListCommand
 //    submenu — a scrollable tree inside a nested dropdown doesn't fit a phone;
-//    the exclusion rules (forbiddenParentIds, current parent disabled, "Top
-//    level" target) are identical.
+//    the dialog embeds the shared ListCommand body (components/links/
+//    list-command), so the exclusion rules (forbiddenParentIds, current parent
+//    disabled, "Top level" target) are web's, verbatim.
 //  - Rename focuses via a ref after the menu closes (no Radix
 //    onCloseAutoFocus on native).
 
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import {
   Archive,
   ArrowDownAZ,
@@ -51,6 +52,7 @@ import {
 } from '@stxapps/expo-react';
 import { ARCHIVE_ID, isSystemListId, type ListItem, MY_LIST_ID, TRASH_ID } from '@stxapps/shared';
 
+import { ListCommand } from '../../components/links/list-command';
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
@@ -65,7 +67,6 @@ import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
-import { cn } from '../../lib/utils';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
@@ -389,68 +390,41 @@ function Row({
 }
 
 // The hoisted "Move to" picker — the dialog stand-in for web's ListCommand
-// submenu: "Top level" first, then every list at its tree indent, minus the
-// forbidden parents (the row's own subtree, no-children containers); the
-// current parent shows but is disabled.
+// submenu, embedding the same shared ListCommand body
+// (components/links/list-command): "Top level" first (the `root` opt-in),
+// then every list at its tree indent, minus the forbidden parents (the row's
+// own subtree, no-children containers); the current parent shows but is
+// disabled — `value`/`disabledIds`/`root`, exactly web's reparent-menu
+// wiring. ListCommand reads the live tree itself, full and collapse-free, so
+// every candidate parent shows.
 function MoveToDialog({
   row,
-  rows,
   excludeIds,
   onSelect,
   onClose,
 }: {
   row: ListRow;
-  // The FULL flattened tree (no collapse) so every candidate parent shows.
-  rows: ListRow[];
   excludeIds: ReadonlySet<string>;
   onSelect: (parentId: string | null) => void;
   onClose: () => void;
 }) {
-  const candidates = rows.filter((r) => !excludeIds.has(r.item.id));
-
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-full max-w-sm">
         <DialogHeader>
           <DialogTitle>Move “{row.item.name}” to</DialogTitle>
         </DialogHeader>
-        <ScrollView className="max-h-80" nestedScrollEnabled>
-          <Pressable
-            disabled={row.parentId === null}
-            onPress={() => onSelect(null)}
-            className={cn(
-              'flex-row items-center gap-2 rounded-md px-2 py-2.5',
-              row.parentId === null && 'opacity-50',
-            )}
-          >
-            <Icon as={CornerUpRight} className="text-muted-foreground size-4" />
-            <Text className="text-sm">Top level</Text>
-            {row.parentId === null && (
-              <Text className="text-muted-foreground text-xs">current</Text>
-            )}
-          </Pressable>
-          {candidates.map((candidate) => {
-            const current = candidate.item.id === row.parentId;
-            return (
-              <Pressable
-                key={candidate.item.id}
-                disabled={current}
-                onPress={() => onSelect(candidate.item.id)}
-                className={cn(
-                  'flex-row items-center gap-2 rounded-md px-2 py-2.5',
-                  current && 'opacity-50',
-                )}
-                style={candidate.depth > 0 ? { paddingLeft: 8 + candidate.depth * 16 } : undefined}
-              >
-                <Icon as={listIcon(candidate.item.id)} className="text-muted-foreground size-4" />
-                <Text numberOfLines={1} className="min-w-0 flex-1 text-sm">
-                  {candidate.item.name}
-                </Text>
-                {current && <Text className="text-muted-foreground text-xs">current</Text>}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <ListCommand
+          value={row.parentId ?? undefined}
+          excludeIds={[...excludeIds]}
+          disabledIds={row.parentId !== null ? [row.parentId] : undefined}
+          root={{
+            label: 'Top level',
+            selected: row.parentId === null,
+            onSelect: () => onSelect(null),
+          }}
+          onSelect={onSelect}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -476,7 +450,8 @@ export function ListsSection() {
   const [movingId, setMovingId] = useState<string | null>(null);
 
   const rows = useMemo(() => flattenToRows(lists, collapsedIds), [lists, collapsedIds]);
-  // The picker needs every row regardless of collapse state.
+  // The moving row must be findable regardless of collapse state (its own
+  // ancestors may be collapsed); the picker's rows are ListCommand's own read.
   const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
   const movingRow = movingId ? allRows.find((r) => r.item.id === movingId) : undefined;
 
@@ -602,7 +577,6 @@ export function ListsSection() {
       {movingRow && (
         <MoveToDialog
           row={movingRow}
-          rows={allRows}
           excludeIds={forbiddenParentIds(lists, movingRow.item.id)}
           onSelect={(parentId) => moveTo(movingRow, parentId)}
           onClose={() => setMovingId(null)}

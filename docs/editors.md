@@ -49,7 +49,9 @@ end** (expo-image-picker → `resizeImage` uri→uri → `saveCustomImage` →
 `writeFile` path-to-path copy) — file bytes never enter the JS heap, the
 platform's file-store doctrine. They can't render the web pickers (`web-ui` is
 `platform:web`), so they share **in-app native cousins** in
-`apps/brace-expo/src/components/links/` (`list-select.tsx` / `tags-field.tsx` /
+`apps/brace-expo/src/components/links/` (`list-select.tsx` over the shared
+`list-command.tsx` body — the same shell/body split as web, with dialogs
+standing in for anchored popovers — plus `tags-field.tsx` /
 `link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks. Unlike
 the share sheet's snapshot-fed pickers, these run in-process and therefore
 follow the web rule: they create **immediately** (top-level, index 0,
@@ -386,8 +388,11 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
 `BulkEditBar` rendered by Main (✕ / count / Select all in its top row, actions
 below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
 at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
-it), Move to is a dialog listing the list tree instead of the anchored
-`ListCommand` popover, and the bulk tags dialog is a chip toggler over the
+it), Move to is a dialog embedding the native `ListCommand` cousin instead of
+the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
+menu — same `excludeIds`/`disabledIds` wiring, no `onCreate`/`root`; the Lists
+settings reparent dialog embeds the same body with `root`, like web), and the
+bulk tags dialog is a chip toggler over the
 existing tags (no new-tag creation — the native `TagsField` cousin the in-app
 editors render could be wired here when wanted; it just hasn't been; the
 single-link case no longer rides this dialog anyway — the row menu's Edit tags
