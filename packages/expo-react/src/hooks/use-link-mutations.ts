@@ -1,15 +1,15 @@
 // Edit operations for links, bound to the active account and wired to a sync
 // kick — the expo port of web-react's use-link-mutations (that file is the
 // canonical doc for each op's semantics: the one-file-per-entity LWW model,
-// the re-read-before-merge, destroy's satellite sweep). Ported so far:
-// `create` (the add editor's quick-add), `update` (the general edit every bulk
-// action rides — move list, retag, archive, restore, trash are all patches)
-// and `destroy` (the permanent delete behind Trash's "Delete permanently").
-// The remaining siblings (`saveCustomImage`, `deleteCustomImage`) arrive with
-// the full edit editor — they need image picking + resizing not on this
-// platform yet.
+// the re-read-before-merge, destroy's satellite sweep, saveCustomImage's
+// content-before-metadata ordering). The full set is ported; one platform
+// divergence: `saveCustomImage` takes a picked file's uri+dimensions rather
+// than bytes — content stays out of the JS heap here (file-store.ts), so the
+// resize (lib/resize-image.ts) and the store write (mutations.ts writeFile)
+// are both uri/path-to-path.
 
 import { useCallback, useMemo } from 'react';
+import { File } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
 import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
@@ -22,9 +22,11 @@ import {
   deleteLink,
   deletePin,
   type LinkPatch,
+  writeFile,
   writeLink,
 } from '../data/mutations';
 import { linkIdOf, type LinkItem, readExtraction, readLinkById } from '../data/queries';
+import { resizeImage, type ResizeImageSource } from '../lib/resize-image';
 
 // What the add form collects — web-react's LinkDraft, verbatim. `title` is
 // intentionally absent: a link is saved from just a URL, and its title is
@@ -53,6 +55,15 @@ export interface LinkMutations {
   // extraction) references, its `extractions/{id}.enc`, its pin, then the link
   // itself. Irreversible — callers confirm first; "move to Trash" is `update`.
   destroy: (link: LinkItem) => Promise<void>;
+  // Persist a user-picked image as a new `files/{id}.enc` (dimension-capped via
+  // resizeImage — the client-side thumbnailing step) and return the file id to
+  // store as `customImageId`. Content-before-metadata: call this FIRST, then
+  // `update` with the returned id (which also kicks the sync). Takes the picked
+  // file's uri + reported dimensions (not bytes — see the header).
+  saveCustomImage: (source: ResizeImageSource) => Promise<string>;
+  // Drop a replaced/cleared custom image's `files/{id}.enc` blob. Call AFTER the
+  // `update` that removed/replaced the reference.
+  deleteCustomImage: (fileId: string) => Promise<void>;
 }
 
 export function useLinkMutations(): LinkMutations {
@@ -142,5 +153,37 @@ export function useLinkMutations(): LinkMutations {
     [username, requestSync],
   );
 
-  return useMemo<LinkMutations>(() => ({ create, update, destroy }), [create, update, destroy]);
+  const saveCustomImage = useCallback(
+    async (source: ResizeImageSource) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+
+      const fileId = newId();
+      // Cap dimensions before it's stored (docs/link-extraction.md — thumbnailing
+      // is a client step, bounding the per-user quota); resizeImage falls back to
+      // the original uri for anything it can't process, so this never rejects a
+      // pick. Callers may have resized at pick time already — within-cap input
+      // passes through untouched, so the backstop costs nothing.
+      const capped = await resizeImage(source);
+      await writeFile(username, fileId, new File(capped.uri));
+      // No sync kick here: the caller follows with `update({ customImageId })`,
+      // which kicks it — content-before-metadata within one drain.
+      return fileId;
+    },
+    [username],
+  );
+
+  const deleteCustomImage = useCallback(
+    async (fileId: string) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+
+      await deleteFile(username, fileId);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  return useMemo<LinkMutations>(
+    () => ({ create, update, destroy, saveCustomImage, deleteCustomImage }),
+    [create, update, destroy, saveCustomImage, deleteCustomImage],
+  );
 }

@@ -42,6 +42,12 @@
       ],
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Brace uses your photo library to let you pick a custom preview image for a saved link."
+        }
+      ],
+      [
         "expo-share-extension",
         {
           "activationRules": [{ "type": "url", "max": 1 }, { "type": "text" }],

@@ -20,7 +20,7 @@ reverse).
 
 ### the editing surfaces
 
-Five surfaces edit a link's user-authored fields. They split into **create** (a
+Six surfaces edit a link's user-authored fields. They split into **create** (a
 URL + list/tags/note, title/image back-filled later by extraction) and **full
 edit** (every `links/{id}.enc` field, including the `customTitle`/`customImageId`
 overrides). Create collects a strict subset of edit's fields.
@@ -31,21 +31,30 @@ overrides). Create collects a strict subset of edit's fields.
 | web quick-add popover  | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
 | web edit dialog        | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
 | brace-expo quick-add   | `apps/brace-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind "Advanced"         |
+| brace-expo edit screen | `apps/brace-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
 | brace-expo share sheet | `apps/brace-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
-The brace-expo quick-add is the web popover's behavioral twin (same two-tier
-URL validation with Confirm/Restore, same quota banner, same `advancedDirty`
-close guard) presented phone-shaped: a FAB on the links screen
-(`add-link-fab.tsx`) pushes a modal-presented expo-router screen — a router
-screen, not an RN `Modal`, so keyboard-controller and portalled dialogs work
-inside it (docs/safe-area.md — the presentation decides the keyboard
-mechanism). It can't render the web pickers (`web-ui` is `platform:web`), so it
-carries **in-app native cousins** in `apps/brace-expo/src/components/links/`
-(`list-select.tsx` / `tags-field.tsx` / `link-quota-banner.tsx`) wired to
-`@stxapps/expo-react`'s live hooks. Unlike the share sheet's snapshot-fed
-pickers, these run in-process and therefore follow the web rule: they create
-**immediately** (top-level, index 0, case-insensitive reuse) — see "web pickers
-create IMMEDIATELY; the share sheet DEFERS" below.
+The two brace-expo in-app editors are the web pair's behavioral twins (same
+validation, same quota banner on create, same dirty close guard — swipe-down /
+Android-back swallowed via `usePreventRemove`) presented phone-shaped: both
+are **modal-presented expo-router screens** (`/add-link` pushed by the links
+screen's FAB, `/edit-link` pushed by the row menu with a `linkId` + optional
+`focus` param) — router screens, not RN `Modal`s, so keyboard-controller and
+portalled dialogs work inside them (docs/safe-area.md — the presentation
+decides the keyboard mechanism). Two structural consequences: the edit screen
+needs **no hoisted `editing` view state** (web hoists its dialog because
+virtualized rows repaint under it; a pushed screen isn't row-anchored and its
+draft is a snapshot), and its custom-image flow is **uri/path-based end to
+end** (expo-image-picker → `resizeImage` uri→uri → `saveCustomImage` →
+`writeFile` path-to-path copy) — file bytes never enter the JS heap, the
+platform's file-store doctrine. They can't render the web pickers (`web-ui` is
+`platform:web`), so they share **in-app native cousins** in
+`apps/brace-expo/src/components/links/` (`list-select.tsx` / `tags-field.tsx` /
+`link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks. Unlike
+the share sheet's snapshot-fed pickers, these run in-process and therefore
+follow the web rule: they create **immediately** (top-level, index 0,
+case-insensitive reuse) — see "web pickers create IMMEDIATELY; the share sheet
+DEFERS" below.
 
 The share sheet is the RN member of the create family
 ([share-sheet.md](./share-sheet.md) is its own map — the two native shells, the
@@ -231,7 +240,11 @@ editors:
   would, with the edit already in hand. The item shows only when `link.note` is
   set (adding one is plain **Edit**) and is absent from the Trash variant, like
   the other edit affordances. A new "land focused on X" entry point should widen
-  this union, not grow a surface.
+  this union, not grow a surface. On brace-expo the same items push `/edit-link`
+  with the same `focus` union as a route param — with one native divergence:
+  `focus` **scrolls** the field into view instead of focusing it, because
+  focusing a native input summons the keyboard over the very note "View note"
+  came to read (web's `focus()` has no such side effect).
 - **The layouts show the note as a badge, never inline.** Both are FIXED-height
   (`ROW_HEIGHT` — the virtualizer's estimate must stay exact), so a note line
   can't be conditional: it would be budgeted on every row, noteless ones
@@ -282,11 +295,14 @@ resurrecting stale fields.
   `cleanTitle` on the extraction side — same constant, so an override and an
   extracted title are bounded identically.
 - **Image resize** is centralized in the data layer, not repeated per editor. The
-  edit dialog is the only surface that picks a custom image; it routes the picked
-  bytes through `useLinkMutations.saveCustomImage`, which caps dimensions via
-  `resizeImage` (`packages/web-react/src/lib/resize-image.ts`,
-  `createImageBitmap` + `OffscreenCanvas`, longest side ≤ 1024, re-encoded JPEG)
-  before the blob lands in `files/{id}.enc`. `resizeImage` never throws — an
+  edit surfaces are the only ones that pick a custom image; each routes the pick
+  through its platform's `useLinkMutations.saveCustomImage`, which caps
+  dimensions via `resizeImage` before the blob lands in `files/{id}.enc` — web's
+  is bytes-in/bytes-out (`packages/web-react/src/lib/resize-image.ts`,
+  `createImageBitmap` + `OffscreenCanvas`), expo's is uri-in/uri-out
+  (`packages/expo-react/src/lib/resize-image.ts`, expo-image-manipulator — file
+  bytes never enter the JS heap), both to the same spec: longest side ≤ 1024,
+  re-encoded JPEG. `resizeImage` never throws — an
   undecodable input (SVG, corrupt bytes) falls back to the original, so a resize
   hiccup costs a larger blob, never the pick. **Any future editor that accepts
   image bytes must route them through `saveCustomImage` (or call `resizeImage`
@@ -372,7 +388,8 @@ below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
 at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
 it), Move to is a dialog listing the list tree instead of the anchored
 `ListCommand` popover, and the bulk tags dialog is a chip toggler over the
-existing tags (no new-tag creation — the native `TagsField` cousin now exists
-for the quick-add, so wiring creation here is possible when wanted; it just
-hasn't been). Web's shift-click `selectRange` has no touch analogue and is not
-ported.
+existing tags (no new-tag creation — the native `TagsField` cousin the in-app
+editors render could be wired here when wanted; it just hasn't been; the
+single-link case no longer rides this dialog anyway — the row menu's Edit tags
+pushes `/edit-link` focused on tags, like web). Web's shift-click `selectRange`
+has no touch analogue and is not ported.

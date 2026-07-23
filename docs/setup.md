@@ -73,6 +73,23 @@ Flag notes:
   real jest 30 deterministically (every project, including brace-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
+#### expo-image-picker + expo-image-manipulator (brace-expo)
+
+The edit screen's custom-image flow (pick + client-side resize —
+docs/editors.md, invariant 2). Added like expo-router below:
+
+    npx expo install expo-image-picker expo-image-manipulator
+
+(run inside `apps/brace-expo`; then move each to `*` in the app and pin the
+real version in the root `package.json`, per the normal convention).
+`expo-image-manipulator` is also a peerDependency `*` of `@stxapps/expo-react`
+(its `lib/resize-image.ts` — the NetInfo/expo-sqlite pattern). `app.json`
+carries the `expo-image-picker` config plugin with a `photosPermission`
+string. Both are native modules — `npx expo prebuild` required. There is
+deliberately no `expo-image`: the only image surface so far is the edit
+screen's preview, which core RN `Image` renders fine from a plaintext
+`file://` uri; add expo-image when list/card previews land with extraction.
+
 #### expo-router (brace-expo)
 
 File-based routing, the RN analogue of brace-web's Next.js App Router — routes

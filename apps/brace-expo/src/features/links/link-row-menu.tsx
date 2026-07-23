@@ -11,10 +11,12 @@
 // off the pinned section's ends. Divergences from web:
 //
 //  - Copy link goes through expo-clipboard (web's navigator.clipboard).
-//  - No Edit / View note items yet — both open web's page-level edit dialog,
-//    which hasn't landed on this platform. Edit tags reuses the hoisted
-//    BulkTagsDialog with a single-link request instead: for one link the seed
-//    is exactly its tags, so the diff semantics collapse to a plain tag editor.
+//  - View note / Edit / Edit tags PUSH the modal edit-link route (web opens
+//    the page-level hoisted dialog instead — hoisted there because virtualized
+//    rows repaint under an open dialog; a pushed screen isn't row-anchored, so
+//    no `editing` view state exists here). The `focus` param is web's
+//    LinkEditRequest focus: 'note' scrolls to the note (the only way to READ
+//    one — the fixed-height rows can only badge it), 'tags' to the tag field.
 //  - Move to opens the shared MoveToDialog (a dropdown-anchored ListCommand
 //    submenu doesn't fit a phone — the bulk bar's rationale). Mounted only
 //    while open: the dialog holds a live list read, and this component renders
@@ -32,6 +34,7 @@
 
 import { Pressable } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import {
   Archive,
   ArchiveRestore,
@@ -40,14 +43,16 @@ import {
   Copy,
   FolderInput,
   MoreHorizontal,
+  Pencil,
   Pin,
   PinOff,
+  StickyNote,
   Tags,
   Trash2,
   Undo2,
 } from 'lucide-react-native';
 
-import { type LinkView, useLinkMutations, usePinMutations } from '@stxapps/expo-react';
+import { linkIdOf, type LinkView, useLinkMutations, usePinMutations } from '@stxapps/expo-react';
 import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 
 import {
@@ -74,14 +79,22 @@ export function LinkRowMenu({
   isFirst: boolean;
   isLast: boolean;
 }) {
+  const router = useRouter();
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
-  const { requestDestroy, requestRetag } = useLinksViewState();
+  const { requestDestroy } = useLinksViewState();
   const [, onMenuOpenChange] = useEngagedOpen();
   const [moveOpen, setMoveOpen] = useEngagedOpen();
 
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
+
+  const openEditor = (focus?: 'tags' | 'note') => {
+    router.push({
+      pathname: '/edit-link',
+      params: { linkId: linkIdOf(link), ...(focus ? { focus } : {}) },
+    });
+  };
 
   const copyLink = (
     <DropdownMenuItem onPress={() => void Clipboard.setStringAsync(link.url)}>
@@ -118,11 +131,26 @@ export function LinkRowMenu({
           ) : (
             <>
               {copyLink}
+              {/* Only when there IS a note — this item is the way to READ one
+                  that the fixed-height row can only badge. Adding a note is
+                  plain Edit, so an always-on item would just duplicate it.
+                  Absent in the Trash variant for the same reason edit/move
+                  are. */}
+              {link.note && (
+                <DropdownMenuItem onPress={() => openEditor('note')}>
+                  <Icon as={StickyNote} className="size-4" />
+                  <Text>View note</Text>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onPress={() => openEditor()}>
+                <Icon as={Pencil} className="size-4" />
+                <Text>Edit</Text>
+              </DropdownMenuItem>
               <DropdownMenuItem onPress={() => setMoveOpen(true)}>
                 <Icon as={FolderInput} className="size-4" />
                 <Text>Move to</Text>
               </DropdownMenuItem>
-              <DropdownMenuItem onPress={() => requestRetag([link])}>
+              <DropdownMenuItem onPress={() => openEditor('tags')}>
                 <Icon as={Tags} className="size-4" />
                 <Text>Edit tags</Text>
               </DropdownMenuItem>

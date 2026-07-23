@@ -45,6 +45,8 @@
     "expo-document-picker": "*",
     "expo-file-system": "*",
     "expo-font": "*",
+    "expo-image-manipulator": "*",
+    "expo-image-picker": "*",
     "expo-linking": "*",
     "expo-router": "*",
     "expo-secure-store": "*",

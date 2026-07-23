@@ -15,9 +15,12 @@
 // menu — is open; its trigger lives in a virtualized item, so a repaint could
 // move or unmount it out from under the user. Counted, not a bool, so one
 // opening as another closes can't leave it stuck — see shared.tsx
-// useEngagedOpen). Web's remaining engagement signal (`editing`) arrives with
-// the edit dialog, which is not on this platform yet. Web's `selectRange`
-// (shift-click) has no analogue on touch and is deliberately not ported.
+// useEngagedOpen). Web's remaining engagement signal (`editing`) is
+// deliberately NOT ported: the editor here is a pushed modal screen
+// (link-edit-screen.tsx), not a hoisted dialog — nothing row-anchored stays
+// mounted under it, and its draft is a snapshot, so a repaint beneath the
+// modal has nothing to disturb. Web's `selectRange` (shift-click) has no
+// analogue on touch and is deliberately not ported.
 //
 // Like web, navigating to another view exits bulk-edit mode (watched off the
 // page query's identity) — a selection made in one view can never be acted on

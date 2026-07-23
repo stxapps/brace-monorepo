@@ -17,8 +17,9 @@
 // writeExtraction (what the share sheet needs — docs/share-sheet.md), writePin
 // + the deletes (deleteLink / deletePin / deleteExtraction / deleteFile — what
 // bulk edit's pin/unpin, remove, and destroy need), and the settings-page trio
-// (writeSettingsGeneral, deleteList, deleteTag), and bulkWriteEntities (the
-// bulk-import primitive). One platform divergence on deleteFile and
+// (writeSettingsGeneral, deleteList, deleteTag), bulkWriteEntities (the
+// bulk-import primitive), and writeFile (the edit editor's custom-image save).
+// One platform divergence on writeFile, deleteFile, and
 // bulkWriteEntities: web's decrypted content bytes live in the Dexie record
 // itself, so dropping/putting the record IS the delete/restore; here they live
 // on disk (file-store.ts), so the row delete is followed by deleteDataFile —
@@ -27,6 +28,7 @@
 // LAST (the engine's materialize ordering).
 
 import { eq } from 'drizzle-orm';
+import type { File } from 'expo-file-system';
 
 import {
   type Extraction,
@@ -383,6 +385,33 @@ export async function writeExtraction(
 // deleteLink's header).
 export async function deleteExtraction(username: string, linkId: string): Promise<void> {
   deleteEntity(username, pathFromId(linkId, EXTRACTIONS_PREFIX));
+}
+
+// Persist a `files/{id}.enc` content blob from a local source file and queue
+// its upload — web's writeFile with the platform twist: web takes BYTES (they
+// live in the Dexie row), here the payload is a source `File` COPIED
+// path-to-path onto the store's location (file bytes never enter the JS heap —
+// file-store.ts's doctrine; the picker/resizer hand us a file uri, not bytes).
+// Ordering is bulkWriteEntities' content branch, verbatim: plaintext file
+// first, then the row+pending-op transaction (row carries no bytes), then the
+// `hasDataFile` flag LAST — a crash at any point reads as "not materialized".
+// The sync engine's uploadBlobs already handles the queued put (native encrypt
+// to a temp .enc, stream upload) with no further wiring.
+export async function writeFile(username: string, fileId: string, source: File): Promise<void> {
+  const path = pathFromId(fileId, FILES_PREFIX);
+
+  ensureDataFilesDir();
+  deleteDataFile(path);
+  source.copy(dataFileFor(path));
+
+  getDb().transaction((tx: DbTx) => {
+    const existing = tx.select().from(items).where(eq(items.path, path)).get();
+    const baseUpdatedAt = existing?.updatedAt ?? 0;
+    putItemsTx(tx, [toItemRecord(path, baseUpdatedAt)]);
+    enqueuePutTx(tx, username, path, baseUpdatedAt);
+  });
+
+  await markItemDataFile(path, true);
 }
 
 // Delete a `files/{id}.enc` content blob — web's deleteFile, plus the expo

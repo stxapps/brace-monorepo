@@ -63,6 +63,7 @@ import {
   dropCachedLink,
   EXTRACTIONS_PREFIX,
   extractionSchema,
+  FILES_PREFIX,
   getCachedExtraction,
   getCachedLink,
   LINKS_PREFIX,
@@ -85,6 +86,7 @@ import {
 import { chunk } from '@stxapps/shared';
 
 import { getDb, items, itemTagIds } from './db';
+import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, type ItemRow } from './item-store';
 import { parseBlob } from './projection';
 
@@ -337,6 +339,23 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   const row = await getItem(pathFromId(linkId, EXTRACTIONS_PREFIX));
   if (!row) return undefined;
   return decodeCachedExtraction(row);
+}
+
+// The local plaintext `file://` uri for a `files/{id}` content blob, or
+// undefined if this device hasn't materialized it — the platform's
+// readFileBytes analogue (web hands back the row's bytes; here content lives
+// decrypted ON DISK — file-store.ts — and the render path is the uri, not
+// bytes in the JS heap). LOCAL ONLY by design, like web's: no network, no
+// decrypt — a not-yet-downloaded blob is simply "absent" (the sync engine's
+// loadEntityContent is the download-if-missing path). Both halves are checked
+// — the row's `hasDataFile` bookkeeping AND the file's existence — so a
+// half-materialized crash state reads as absent, never as a broken uri.
+export async function readFileUri(fileId: string): Promise<string | undefined> {
+  const path = pathFromId(fileId, FILES_PREFIX);
+  const row = await getItem(path);
+  if (!row?.hasDataFile) return undefined;
+  const file = dataFileFor(path);
+  return file.exists ? file.uri : undefined;
 }
 
 // --- link query --------------------------------------------------------------
