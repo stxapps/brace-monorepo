@@ -5,7 +5,7 @@
 // same phase-adaptive Sync entry and the error dot on the trigger — still the
 // links screen's only always-visible sync-error surface (pull-to-refresh gives
 // the gesture but no error affordance; the full status card lives in Settings →
-// Data when it's ported). Only errors get the dot: a spinner there would flicker
+// Data). Only errors get the dot: a spinner there would flicker
 // on every edit's sub-second cycle. Divergences here:
 //
 //  - Selecting Sync CLOSES the menu (web keeps it open so the Syncing… → settled

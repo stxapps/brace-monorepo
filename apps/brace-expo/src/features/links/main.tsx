@@ -33,9 +33,10 @@ import { Linking, Pressable, RefreshControl, View } from 'react-native';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Pin, RefreshCw, StickyNote } from 'lucide-react-native';
 
-import { type LinkView, type TagItem, useSync, useTags } from '@stxapps/expo-react';
+import { type LinkView, type TagItem, useLocks, useSync, useTags } from '@stxapps/expo-react';
 import { displayUrl, hostFromText, type LinkSortOn, type TreeNode } from '@stxapps/shared';
 
+import { LockPane } from '../../components/lock-pane';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
@@ -208,6 +209,31 @@ function LinkRow({
 }
 
 export function Main() {
+  const { selection } = useLinksPage();
+  const { isListLocked, unlockList } = useLocks();
+
+  // The main pane's body while the selected list is locked — a SWAP for the
+  // list, not an overlay (web main.tsx's rationale): UnlockedMain (and its
+  // link query) simply doesn't mount, so the locked links are never fetched.
+  // Unlocking flips lock-provider's in-memory state and the list mounts fresh.
+  if (selection.kind === 'list' && isListLocked(selection.id)) {
+    const listId = selection.id;
+    return (
+      <View className="min-h-0 flex-1">
+        <LockPane
+          className="flex-1"
+          title="This list is locked"
+          description="Enter the list's password to view its links."
+          onUnlock={(password) => unlockList(listId, password)}
+        />
+      </View>
+    );
+  }
+
+  return <UnlockedMain />;
+}
+
+function UnlockedMain() {
   // The resolved sort is intrinsic to the query (page-provider), so read it off
   // the same context the reads run through and hand it to the date column.
   const { query } = useLinksPage();

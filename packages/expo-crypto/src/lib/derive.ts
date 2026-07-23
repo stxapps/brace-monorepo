@@ -65,6 +65,21 @@ export interface NewAccount extends Account {
   recoveryDoor?: Door;
 }
 
+// A wrapped DEK as it arrives from the server (the `account_keys` row's bytes) —
+// the shape every unwrap path takes. See web-crypto's WrappedDek.
+export interface WrappedDek {
+  wrappedDek: Uint8Array;
+  iv: Uint8Array;
+}
+
+// How a caller proves it may re-wrap the DEK (change password, regenerate
+// recovery): it presents an EXISTING door it can open — same contract as
+// web-crypto's DoorOpener (see there: a live session is deliberately NOT an
+// opener; door management always re-proves a door).
+export type DoorOpener =
+  | { kind: 'password'; username: string; password: string; door: WrappedDek }
+  | { kind: 'recovery'; recoveryCode: string; door: WrappedDek };
+
 // The credential miss from unlockAccount: the GCM tag failed, meaning a wrong
 // password — or a tampered/swapped blob, deliberately indistinguishable. Same
 // contract as web-crypto's WrongPasswordError.
@@ -144,9 +159,6 @@ async function wrapDek(kek: Uint8Array, doorType: DoorType, dek: Uint8Array): Pr
 //   passwordDoor = AES-256-GCM(password-KEK, DEK, aad = doorType)
 //   recoveryDoor = AES-256-GCM(recovery-KEK, DEK, aad = doorType)   [optional]
 //   DEK --HKDF--> Ed25519 keypair (publicKey + sign) + AES-256-GCM key
-//
-// (Door management — changePasswordDoor / regenerateRecoveryDoor — stays
-// web-only until the change-password flow ports to expo.)
 export async function createAccount(
   username: string,
   password: string,
@@ -167,6 +179,36 @@ export async function createAccount(
   return recoveryDoor ? { ...account, passwordDoor, recoveryDoor } : { ...account, passwordDoor };
 }
 
+// AEAD-unwrap the DEK from whichever door the opener presents — web-crypto's
+// openDek, verbatim in contract: a wrong secret yields a wrong KEK and the GCM
+// tag fails; that IS the credential check, mapped to the door-specific error
+// (nothing is compared server-side). Only the decrypt throw is a credential
+// miss; a KDF failure propagates raw.
+async function openDek(opener: DoorOpener): Promise<Uint8Array> {
+  if (opener.kind === 'password') {
+    const kek = await derivePasswordKek(opener.username, opener.password);
+    try {
+      return await decrypt(
+        kek,
+        { iv: opener.door.iv, ciphertext: opener.door.wrappedDek },
+        dekWrapAad(DOOR_PASSWORD),
+      );
+    } catch {
+      throw new WrongPasswordError('Incorrect username or password');
+    }
+  }
+  const kek = deriveRecoveryKek(opener.recoveryCode);
+  try {
+    return await decrypt(
+      kek,
+      { iv: opener.door.iv, ciphertext: opener.door.wrappedDek },
+      dekWrapAad(DOOR_RECOVERY),
+    );
+  } catch {
+    throw new WrongRecoveryCodeError('Invalid recovery code');
+  }
+}
+
 // sign-in — the same flow as web-crypto's unlockAccount: re-derive the
 // password-KEK and AEAD-unwrap the fetched password-door blob to recover the
 // DEK. A wrong password yields a wrong KEK and the GCM tag fails — that IS the
@@ -174,24 +216,9 @@ export async function createAccount(
 export async function unlockAccount(
   username: string,
   password: string,
-  door: { wrappedDek: Uint8Array; iv: Uint8Array },
+  door: WrappedDek,
 ): Promise<Account> {
-  const kek = await derivePasswordKek(username, password);
-
-  let dek: Uint8Array;
-  try {
-    dek = await decrypt(
-      kek,
-      { iv: door.iv, ciphertext: door.wrappedDek },
-      dekWrapAad(DOOR_PASSWORD),
-    );
-  } catch {
-    // Wrong password (or a tampered/swapped blob) — the GCM tag failed. Don't
-    // distinguish the cases to the caller. Only THIS throw is the credential
-    // miss; a derivePasswordKek failure above propagates raw.
-    throw new WrongPasswordError('Incorrect username or password');
-  }
-
+  const dek = await openDek({ kind: 'password', username, password, door });
   return deriveFromDek(dek);
 }
 
@@ -202,20 +229,43 @@ export async function unlockAccount(
 // web-crypto's unlockAccountWithRecovery.
 export async function unlockAccountWithRecovery(
   recoveryCode: string,
-  door: { wrappedDek: Uint8Array; iv: Uint8Array },
+  door: WrappedDek,
 ): Promise<Account> {
-  const kek = deriveRecoveryKek(recoveryCode);
-
-  let dek: Uint8Array;
-  try {
-    dek = await decrypt(
-      kek,
-      { iv: door.iv, ciphertext: door.wrappedDek },
-      dekWrapAad(DOOR_RECOVERY),
-    );
-  } catch {
-    throw new WrongRecoveryCodeError('Invalid recovery code');
-  }
-
+  const dek = await openDek({ kind: 'recovery', recoveryCode, door });
   return deriveFromDek(dek);
+}
+
+// Change the password door: prove an existing door (current password OR recovery
+// code) to recover the DEK, then re-wrap it under a NEW password-KEK — the same
+// TIER-1 door rotation as web-crypto's changePasswordDoor (see there: the DEK is
+// unchanged, so the keypair, publicKey, encryptionKey, and any live session all
+// stay valid; only the password-door `account_keys` row is replaced). Returns
+// BOTH the new door to persist AND the derived `account`, so the caller can sign
+// the change-password proof without opening the DEK a second time.
+export async function changePasswordDoor(
+  username: string,
+  newPassword: string,
+  opener: DoorOpener,
+): Promise<{ passwordDoor: Door; account: Account }> {
+  const dek = await openDek(opener);
+  const kek = await derivePasswordKek(username, newPassword);
+  const passwordDoor = await wrapDek(kek, DOOR_PASSWORD, dek);
+  const account = deriveFromDek(dek);
+  return { passwordDoor, account };
+}
+
+// Generate/regenerate the recovery door: prove an existing door, re-wrap the DEK
+// under a NEW recovery code's KEK — web-crypto's regenerateRecoveryDoor, same
+// tier-1 rotation as above. The caller mints `newRecoveryCode` with
+// generateRecoveryCode() and shows it once. Returns the new door plus the
+// derived `account` for signing the proof.
+export async function regenerateRecoveryDoor(
+  newRecoveryCode: string,
+  opener: DoorOpener,
+): Promise<{ recoveryDoor: Door; account: Account }> {
+  const dek = await openDek(opener);
+  const kek = deriveRecoveryKek(newRecoveryCode);
+  const recoveryDoor = await wrapDek(kek, DOOR_RECOVERY, dek);
+  const account = deriveFromDek(dek);
+  return { recoveryDoor, account };
 }

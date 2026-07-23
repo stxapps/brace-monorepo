@@ -20,8 +20,6 @@
 //  - No `pathFilter` in SyncDeps: selective sync exists for the brace-extension;
 //    brace-expo is a full-sync client and this package has no other consumer.
 //    Reintroduce it from web verbatim if a selective expo surface ever appears.
-//  - No `loadEntityContents` yet (web's batch materializer): it exists for the
-//    export flow, which hasn't been ported — bring it over with import/export.
 
 import type { File } from 'expo-file-system';
 
@@ -274,6 +272,73 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
   // next call simply redoes the work.
   await markItemDataFile(path, true);
   return plain;
+}
+
+// The BATCH materializer — web engine's loadEntityContents, for flows that need
+// many blobs resident at once (the export flow's download phase). Same
+// semantics per path as loadEntityContent — fetch, native-decrypt to disk, mark
+// the row, so re-runs are resumable — but signed in SIGN_BATCH pages (one
+// `files/sign` call per ~1000 paths instead of one per file) and fetched at the
+// upload fan-out (these are MB-sized media, not KB index blobs — web fans wider
+// because its downloads are small). Already-materialized files are skipped (and
+// don't count toward progress); a path that's unknown locally or 404s on GET
+// (deleted on another device, the delete op not yet pulled) lands in
+// `missingPaths` for the caller to report — never a thrown error. Any other
+// failure rejects.
+export async function loadEntityContents(
+  deps: SyncDeps,
+  paths: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ missingPaths: string[] }> {
+  deps = withRetryDeps(deps);
+
+  const records = await bulkGetItems(paths);
+  const missingPaths: string[] = [];
+  const wanted: string[] = [];
+  paths.forEach((path, i) => {
+    const rec = records[i];
+    if (!rec) missingPaths.push(path);
+    else if (!rec.hasDataFile || !dataFileFor(path).exists) wanted.push(path);
+  });
+
+  const total = wanted.length;
+  let done = 0;
+  const reportOne = (): void => {
+    done += 1;
+    onProgress?.(done, total);
+  };
+  onProgress?.(done, total);
+  for (const batch of chunk(wanted, SIGN_BATCH)) {
+    const urls = await signPaths(deps.api, 'get', batch);
+    await mapLimit(batch, UPLOAD_CONCURRENCY, async (path) => {
+      const url = urls.get(path);
+      let fetched = false;
+      if (url) {
+        const enc = newTempEncFile();
+        try {
+          try {
+            await getBlobToFile(url, enc);
+            fetched = true;
+          } catch (err: unknown) {
+            if (!(err instanceof BlobRequestError && err.status === 404)) throw err;
+          }
+          if (fetched) {
+            ensureDataFilesDir();
+            // Same deterministic-overwrite + flag-last ordering as
+            // loadEntityContent (see there).
+            deleteDataFile(path);
+            await decryptFile(enc.uri, dataFileFor(path).uri, deps.encryptionKey);
+          }
+        } finally {
+          if (enc.exists) enc.delete();
+        }
+      }
+      if (fetched) await markItemDataFile(path, true);
+      else missingPaths.push(path);
+      reportOne();
+    });
+  }
+  return { missingPaths };
 }
 
 // --- the cycle: incremental -------------------------------------------------

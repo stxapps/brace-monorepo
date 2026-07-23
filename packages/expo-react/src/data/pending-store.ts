@@ -5,7 +5,7 @@
 // side-effect-light — no network, no React — so the queue has one owner,
 // mirroring sync-store's ownership of the bookkeeping row.
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 
 import { type DbTx, getDb, pendingOps } from './db';
 
@@ -62,6 +62,17 @@ export function enqueueDeleteTx(
 // own meta-last ordering at push time, so insertion order doesn't matter here.
 export async function listPendingOps(username: string): Promise<PendingOpRecord[]> {
   return getDb().select().from(pendingOps).where(eq(pendingOps.username, username)).all();
+}
+
+// How many ops are queued for an account — the "N changes waiting to sync"
+// status line (use-pending-changes-count). A plain SQL count, no row decode.
+export async function countPendingOps(username: string): Promise<number> {
+  const row = getDb()
+    .select({ n: count() })
+    .from(pendingOps)
+    .where(eq(pendingOps.username, username))
+    .get();
+  return row?.n ?? 0;
 }
 
 // Drop the given paths from an account's queue — called after a commit returns

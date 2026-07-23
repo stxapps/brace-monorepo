@@ -1,18 +1,11 @@
-import { Text } from 'react-native';
-import { Link } from 'expo-router';
+import { Redirect } from 'expo-router';
 
-import { Screen } from '../../../components/screen';
+import { DEFAULT_SECTION_ID } from '../../../features/settings/sections';
 
-// `/settings`. Placeholder. brace-web splits settings into
-// `settings/[section]/page.tsx` (account/lists/tags/data/…); the expo-router
-// equivalent when those land is a dynamic route `settings/[section].tsx`
-// alongside this index. Mirrors brace-web's `(app)/settings/page.tsx`.
+// `/settings` has no section of its own — it's just the entry URL. Redirect to
+// the default section so we always land on a concrete `/settings/[section]`
+// route, mirroring brace-web's `(app)/settings/page.tsx` (`redirect(…)`).
+// `DEFAULT_SECTION_ID` stays the single source of truth for which one.
 export default function SettingsScreen() {
-  return (
-    <Screen title="Settings">
-      <Link href="/links" asChild>
-        <Text className="text-primary font-sans text-base underline">Back to links</Text>
-      </Link>
-    </Screen>
-  );
+  return <Redirect href={`/settings/${DEFAULT_SECTION_ID}`} />;
 }

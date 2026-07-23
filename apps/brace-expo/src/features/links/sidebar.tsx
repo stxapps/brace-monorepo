@@ -1,19 +1,19 @@
 // The links drawer's content — the expo port of brace-web's
 // `(app)/links/_panes/sidebar.tsx` (canonical doc: the two collapsible
 // sections — Lists as the system three + the user's own, Tags — as selectable
-// filters; parent rows carry a separate chevron hit target; a final utility
-// band with the Show All reset). On mobile the rail is a Drawer
-// ((app)/links/_layout.tsx), so selecting an entry also closes it. Ported so
-// far vs web: no filter box (worth its keep once accounts grow — arrives with
-// the count gate), no lock badges/hidden-list pruning (lock-provider isn't
-// ported), no Manage lists/tags links (their settings sections don't exist
-// yet), and collapse state is in-memory only (web persists to localStorage;
-// the device-local store can pick this up later — it resets per launch, which
-// is tolerable for a tree this small).
+// filters; parent rows carry a separate chevron hit target; hidden-list
+// pruning and the own-lock badge; a final utility band with the Show All reset
+// and the Manage lists/tags links out to settings). On mobile the rail is a
+// Drawer ((app)/links/_layout.tsx), so selecting an entry also closes it.
+// Ported so far vs web: no filter box (worth its keep once accounts grow —
+// arrives with the count gate), and collapse state is in-memory only (web
+// persists to localStorage; the device-local store can pick this up later —
+// it resets per launch, which is tolerable for a tree this small).
 
-import { Fragment, useCallback, useState } from 'react';
+import { Fragment, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   Archive,
   ChevronRight,
@@ -21,12 +21,14 @@ import {
   Hash,
   Inbox,
   Layers,
+  Lock,
   type LucideIcon,
+  Settings2,
   Trash2,
 } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
-import { useLists, useTags } from '@stxapps/expo-react';
+import { useLists, useLocks, useTags } from '@stxapps/expo-react';
 import {
   ALL_LABEL,
   ARCHIVE_ID,
@@ -73,6 +75,23 @@ function listIcon(id: string): LucideIcon {
   return Folder;
 }
 
+// Drop the currently-hidden lists (a locked lock with hideList — lock-provider's
+// closure set, so a hidden parent takes its subtree with it structurally too).
+// The lists stay reachable in Settings → Lists, which is the reveal path.
+function pruneHidden<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  hiddenIds: ReadonlySet<string>,
+): TreeNode<T>[] {
+  if (hiddenIds.size === 0) return nodes;
+  return nodes
+    .filter((node) => !hiddenIds.has(node.item.id))
+    .map((node) =>
+      node.children.length > 0
+        ? { ...node, children: pruneHidden(node.children, hiddenIds) }
+        : node,
+    );
+}
+
 function isActive(current: Selection, candidate: Selection): boolean {
   if (current.kind !== candidate.kind) return false;
   if (current.kind === 'list' || current.kind === 'tag') {
@@ -90,6 +109,7 @@ function NavItem({
   expanded,
   onToggle,
   showSlot = false,
+  badge,
 }: {
   icon: LucideIcon;
   label: string;
@@ -108,6 +128,8 @@ function NavItem({
   // In a tree, childless rows still reserve the chevron's width so their icons
   // line up under the parents' labels; standalone rows (Show All) pass false.
   showSlot?: boolean;
+  // Trailing marker (the own-lock badge), after the label.
+  badge?: ReactNode;
 }) {
   const { selection: current, setSimpleQuery } = useLinksPage();
   const active = isActive(current, selection);
@@ -156,6 +178,7 @@ function NavItem({
         >
           {label}
         </Text>
+        {badge && <View className="text-muted-foreground shrink-0">{badge}</View>}
       </Pressable>
     </View>
   );
@@ -171,6 +194,7 @@ function NavTree<T extends TreeItem & { name: string }>({
   onSelected,
   collapsed,
   onToggle,
+  badgeFor,
 }: {
   nodes: TreeNode<T>[];
   iconFor: (id: string) => LucideIcon;
@@ -178,6 +202,7 @@ function NavTree<T extends TreeItem & { name: string }>({
   onSelected: () => void;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
+  badgeFor?: (id: string) => ReactNode;
 }) {
   return (
     <>
@@ -195,6 +220,7 @@ function NavTree<T extends TreeItem & { name: string }>({
               expanded={hasChildren ? !isCollapsed : undefined}
               onToggle={hasChildren ? () => onToggle(node.item.id) : undefined}
               showSlot
+              badge={badgeFor?.(node.item.id)}
             />
             {hasChildren && !isCollapsed && (
               <NavTree
@@ -204,6 +230,7 @@ function NavTree<T extends TreeItem & { name: string }>({
                 onSelected={onSelected}
                 collapsed={collapsed}
                 onToggle={onToggle}
+                badgeFor={badgeFor}
               />
             )}
           </Fragment>
@@ -249,10 +276,53 @@ function Section({
   );
 }
 
+// A footer navigation row (Manage lists / tags). Not a filter selection — a
+// plain route push out to the settings section, closing the drawer with it.
+function FooterLink({
+  icon,
+  label,
+  href,
+  onSelected,
+}: {
+  icon: LucideIcon;
+  label: string;
+  href: string;
+  onSelected: () => void;
+}) {
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => {
+        router.push(href);
+        onSelected();
+      }}
+      className="w-full flex-row items-center gap-2 rounded-md px-2 py-2"
+    >
+      <Icon as={icon} className="text-muted-foreground size-4 shrink-0" />
+      <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1 text-sm">
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   const lists = useLists();
   const tags = useTags();
+  const { hiddenListIds, listLocks } = useLocks();
   const { collapsed, toggle } = useCollapsedIds();
+
+  // What the Lists section actually renders: the tree minus the hidden lists
+  // (locked + hideList). Their LINKS are excluded separately at the query
+  // layer (use-links); this is the navigation half of hiding.
+  const visibleLists = useMemo(() => pruneHidden(lists, hiddenListIds), [lists, hiddenListIds]);
+
+  // A lock marker on rows that carry their OWN engaged lock (children a lock
+  // merely covers stay unmarked — the locked ancestor is the visual cue).
+  const listBadge = (id: string) =>
+    listLocks.get(id)?.locked ? (
+      <Icon as={Lock} className="text-muted-foreground size-3.5" aria-label="Locked" />
+    ) : undefined;
 
   return (
     <StyledSafeAreaView className="bg-background flex-1">
@@ -263,12 +333,13 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
             selection (page-provider). */}
         <Section id={SECTION_LISTS} label="Lists" collapsed={collapsed} onToggle={toggle}>
           <NavTree
-            nodes={lists}
+            nodes={visibleLists}
             iconFor={listIcon}
             selectionFor={(id) => ({ kind: 'list', id })}
             onSelected={closeDrawer}
             collapsed={collapsed}
             onToggle={toggle}
+            badgeFor={listBadge}
           />
         </Section>
 
@@ -289,13 +360,26 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           )}
         </Section>
 
-        {/* Utility band: the Show All reset (the Manage lists/tags links join
-            it once the settings sections exist). */}
+        {/* Utility band: the Show All reset, a separator, then the Manage
+            links out to settings (web's footer band). */}
         <View className="border-border mt-3 flex-col gap-0.5 border-t pt-2">
           <NavItem
             icon={Layers}
             label={ALL_LABEL}
             selection={{ kind: 'all' }}
+            onSelected={closeDrawer}
+          />
+          <View className="border-border my-1 border-t" />
+          <FooterLink
+            icon={Settings2}
+            label="Manage lists"
+            href="/settings/lists"
+            onSelected={closeDrawer}
+          />
+          <FooterLink
+            icon={Settings2}
+            label="Manage tags"
+            href="/settings/tags"
             onSelected={closeDrawer}
           />
         </View>

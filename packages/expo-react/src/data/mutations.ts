@@ -14,15 +14,17 @@
 //    window web closes with IndexedDB's rw-lock is closed the same way here.
 //
 // Ported so far: the shared primitives plus writeLink / writeList / writeTag /
-// writeExtraction (what the share sheet needs — docs/share-sheet.md) and
-// writePin + the deletes (deleteLink / deletePin / deleteExtraction /
-// deleteFile — what bulk edit's pin/unpin, remove, and destroy need). One
-// platform divergence on deleteFile: web's decrypted content bytes live in the
-// Dexie record itself, so dropping the record IS the delete; here they live on
-// disk (file-store.ts), so the row delete is followed by deleteDataFile — rows
-// first, files after, the same crash-safe order clear-data uses. The remaining
-// siblings (writeSettingsGeneral, deleteList, deleteTag, bulkWriteEntities)
-// arrive verbatim with the features that need them.
+// writeExtraction (what the share sheet needs — docs/share-sheet.md), writePin
+// + the deletes (deleteLink / deletePin / deleteExtraction / deleteFile — what
+// bulk edit's pin/unpin, remove, and destroy need), and the settings-page trio
+// (writeSettingsGeneral, deleteList, deleteTag), and bulkWriteEntities (the
+// bulk-import primitive). One platform divergence on deleteFile and
+// bulkWriteEntities: web's decrypted content bytes live in the Dexie record
+// itself, so dropping/putting the record IS the delete/restore; here they live
+// on disk (file-store.ts), so the row delete is followed by deleteDataFile —
+// rows first, files after, the same crash-safe order clear-data uses — and a
+// restored blob's bytes land on disk with the row's `hasDataFile` flag marked
+// LAST (the engine's materialize ordering).
 
 import { eq } from 'drizzle-orm';
 
@@ -34,21 +36,28 @@ import {
   FILES_PREFIX,
   type Link,
   linkSchema,
+  type LinksLayout,
+  type LinkSortOn,
+  type LinkSortOrder,
   type List,
   listSchema,
   pathFromId,
   type Pin,
   PINS_PREFIX,
   pinSchema,
+  SETTINGS_GENERAL_PATH,
+  type SettingsGeneral,
+  settingsGeneralSchema,
   type Tag,
   tagSchema,
+  type ThemeState,
   utf8,
   type WithPath,
 } from '@stxapps/shared';
 
 import { type DbTx, getDb, items } from './db';
-import { deleteDataFile } from './file-store';
-import { deleteItemsTx, type ItemRow, putItemsTx } from './item-store';
+import { dataFileFor, deleteDataFile, ensureDataFilesDir } from './file-store';
+import { deleteItemsTx, type ItemRow, markItemDataFile, putItemsTx } from './item-store';
 import { enqueueDeleteTx, enqueuePutTx } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 
@@ -103,6 +112,58 @@ function deleteEntity(username: string, path: string): void {
     deleteItemsTx(tx, [path]);
     enqueueDeleteTx(tx, username, path, baseUpdatedAt);
   });
+}
+
+// One raw entity to restore: its items/R2 path + either the pathless plaintext
+// object (entity namespaces) or raw blob bytes (`files/` content) — web
+// mutations.ts's RawEntityEntry, verbatim.
+export interface RawEntityEntry {
+  path: string;
+  data: object | Uint8Array;
+}
+
+// Batched raw put — the bulk-import primitive (data/import-all-data.ts), web's
+// bulkWriteEntities in contract: N entities land atomically (rows + pending
+// ops in ONE transaction), createdAt/updatedAt are NOT restamped (a
+// Brace-backup restore round-trips the original timestamps), and callers
+// validate each blob against its namespace schema BEFORE calling. Platform
+// divergence: a `files/` content entry's bytes go to DISK (file-store), not
+// the row — file first, then the row+op transaction, then the `hasDataFile`
+// flag, so a crash at any point reads as "not materialized" and the store
+// never claims bytes the disk doesn't have (loadEntityContent's ordering).
+export async function bulkWriteEntities(
+  username: string,
+  entries: RawEntityEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+
+  const contentPaths: string[] = [];
+  for (const { path, data } of entries) {
+    if (!(data instanceof Uint8Array)) continue;
+    ensureDataFilesDir();
+    deleteDataFile(path);
+    const file = dataFileFor(path);
+    file.create({ intermediates: true, overwrite: true });
+    file.write(data);
+    contentPaths.push(path);
+  }
+
+  getDb().transaction((tx: DbTx) => {
+    for (const { path, data } of entries) {
+      const existing = tx.select().from(items).where(eq(items.path, path)).get();
+      const baseUpdatedAt = existing?.updatedAt ?? 0;
+      // Content rows carry no bytes (the disk file above is the payload);
+      // entity rows project their query columns from the encoded blob.
+      const record =
+        data instanceof Uint8Array
+          ? toItemRecord(path, baseUpdatedAt)
+          : toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(data)));
+      putItemsTx(tx, [record]);
+      enqueuePutTx(tx, username, path, baseUpdatedAt);
+    }
+  });
+
+  for (const path of contentPaths) await markItemDataFile(path, true);
 }
 
 // The user-authored fields a link edit may touch — see web-react mutations.ts
@@ -162,6 +223,13 @@ export async function writeList(
   writeEntity(username, next);
 }
 
+// Delete one list. Thin like web's deleteList — callers gate the higher-level
+// rules (system lists aren't deletable, a non-empty list keeps its links)
+// before reaching here (use-list-mutations.destroy).
+export async function deleteList(username: string, list: WithPath<List>): Promise<void> {
+  deleteEntity(username, list.path);
+}
+
 // Apply a patch to a tag and write it — create (new `tags/{id}.enc`) or edit.
 // Same body as web's writeTag.
 export async function writeTag(
@@ -181,6 +249,50 @@ export async function writeTag(
     throw new Error(`writeTag: invalid tag ${tag.id}`);
   }
   writeEntity(username, next);
+}
+
+// Delete one tag: drop its `tags/{id}.enc`. Thin like deleteList — a dangling
+// `tagIds` reference left on a link is NORMAL and skipped at read time (shared
+// entities.ts), so there's no link rewrite to do here.
+export async function deleteTag(username: string, tag: WithPath<Tag>): Promise<void> {
+  deleteEntity(username, tag.path);
+}
+
+// Patch the synced general-settings blob (`settings/general.enc`) and write it —
+// web's writeSettingsGeneral, verbatim in contract (see there: a single
+// well-known path, so it READS the current blob and merges inside the write
+// transaction; the loose schema round-trips unknown fields; writers stay strict
+// — `LinksLayout` — while readers stay forgiving).
+export async function writeSettingsGeneral(
+  username: string,
+  patch: {
+    linksLayout?: LinksLayout;
+    serverExtraction?: boolean;
+    theme?: ThemeState;
+    sortOn?: LinkSortOn;
+    sortOrder?: LinkSortOrder;
+  },
+): Promise<void> {
+  const now = Date.now();
+  writeEntityWith(username, SETTINGS_GENERAL_PATH, (existing) => {
+    const current: SettingsGeneral = parseBlob(
+      existing?.data ?? undefined,
+      settingsGeneralSchema,
+    ) ?? {
+      createdAt: 0,
+      updatedAt: 0,
+    };
+    const next: SettingsGeneral = {
+      ...current,
+      ...patch,
+      createdAt: current.createdAt === 0 ? now : current.createdAt,
+      updatedAt: now,
+    };
+    if (!settingsGeneralSchema.safeParse(next).success) {
+      throw new Error('writeSettingsGeneral: invalid settings');
+    }
+    return next;
+  });
 }
 
 // Apply a patch to a pin and write it — the put side of pin/reorder. Same body

@@ -7,10 +7,6 @@
 //  - The live read is expo-react's useLiveRead over expo-sqlite's change
 //    listener (readLinks touches `items` + the tag junction) instead of Dexie's
 //    useLiveQuery.
-//  - No lock suppression yet: lock-provider hasn't been ported, so the
-//    suppressed set is Trash alone (still gated on the query asking for it —
-//    web's trash policy, verbatim). Locks fold in here via `excludeLists` when
-//    they land.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -20,6 +16,7 @@ import {
   type LinksResult,
   readLinks,
   useLiveRead,
+  useLocks,
   useSync,
 } from '@stxapps/expo-react';
 import { TRASH_ID } from '@stxapps/shared';
@@ -57,15 +54,21 @@ export function useLinks(): UseLinksResult {
   const { query: urlQuery } = useLinksPage();
   const { localWriteNonce } = useSync();
   const { engaged } = useLinksViewState();
+  const { lockedListIds } = useLocks();
   const [limit, setLimit] = useState(PAGE_SIZE);
 
-  // TRASH is suppressed unless the query ASKS for it (web's read policy: Trash
-  // is a destination you visit, not content that resurfaces in browse/search).
-  // Locked lists join this set when lock-provider is ported.
+  // The list ids the reads suppress, for two independent reasons (web
+  // use-links's rationale, verbatim — see there): LOCKS — lock-provider's
+  // coverage set (descendants included), ALWAYS; this is the lock's
+  // enforcement EDGE, so every read path (Show All, tag views, search)
+  // excludes a locked list's links, and no query can opt out. TRASH — unless
+  // the query ASKS for it (Trash is a destination you visit, not content that
+  // resurfaces in browse/search). `lockedListIds` is identity-stable from
+  // lock-provider's memo, so this memo is stable per URL.
   const suppressedListIds = useMemo(() => {
-    if (urlQuery.lists.any.includes(TRASH_ID)) return new Set<string>();
-    return new Set([TRASH_ID]);
-  }, [urlQuery]);
+    if (urlQuery.lists.any.includes(TRASH_ID)) return lockedListIds;
+    return new Set([...lockedListIds, TRASH_ID]);
+  }, [urlQuery, lockedListIds]);
 
   // The query the reads actually run — `excludeLists` shapes the exclusion to
   // preserve the single-list fast path (see shared link-query.ts). Memoized so

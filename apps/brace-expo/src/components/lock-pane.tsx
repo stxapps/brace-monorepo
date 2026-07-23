@@ -1,0 +1,107 @@
+// The unlock surface shared by the two lock gates — the expo port of
+// brace-web's components/lock-pane.tsx (the canonical doc): AppLockGate renders
+// it full-screen, the links screen's list-lock pane renders it inside the main
+// pane. One password field, inline wrong-password error, and the recovery
+// escape hatch — locks are device-local, so "forgot the password" is always
+// solvable by signing out (which wipes every lock) and signing back in with the
+// account password.
+
+import { useState } from 'react';
+import { View } from 'react-native';
+import { Lock } from 'lucide-react-native';
+
+import { useSignOut } from '@stxapps/expo-react';
+
+import { cn } from '../lib/utils';
+import { Button } from './ui/button';
+import { Icon } from './ui/icon';
+import { Input } from './ui/input';
+import { Text } from './ui/text';
+
+export function LockPane({
+  title,
+  description,
+  onUnlock,
+  className,
+}: {
+  title: string;
+  description: string;
+  // Resolves false on a wrong password (the pane shows the inline error);
+  // anything else it may throw surfaces as the generic failure message.
+  onUnlock: (password: string) => Promise<boolean>;
+  // Sizing comes from the caller: flex-1 for the app gate, in-pane otherwise.
+  className?: string;
+}) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const signOut = useSignOut();
+
+  const submit = async () => {
+    if (busy) return;
+    if (password === '') {
+      setError('Please enter a password');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const ok = await onUnlock(password);
+      if (ok) setPassword('');
+      else setError('Password is not correct. Please try again.');
+    } catch {
+      setError('Could not unlock. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View className={cn('items-center justify-center gap-4 px-6 py-8', className)}>
+      <View className="bg-muted size-12 items-center justify-center rounded-full">
+        <Icon as={Lock} className="text-muted-foreground size-5" />
+      </View>
+      <View className="items-center">
+        <Text role="heading" className="text-lg font-semibold">
+          {title}
+        </Text>
+        <Text className="text-muted-foreground mt-1 text-center text-sm">{description}</Text>
+      </View>
+
+      <View className="w-full max-w-xs gap-3">
+        <Input
+          secureTextEntry
+          autoFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          placeholder="Password"
+          aria-label="Password"
+          value={password}
+          editable={!busy}
+          onChangeText={(text) => {
+            setPassword(text);
+            if (error) setError(null);
+          }}
+          onSubmitEditing={() => void submit()}
+        />
+        {error && <Text className="text-destructive text-sm">{error}</Text>}
+        <Button onPress={() => void submit()} disabled={busy}>
+          <Text>{busy ? 'Unlocking…' : 'Unlock'}</Text>
+        </Button>
+      </View>
+
+      <View className="max-w-xs">
+        <Text className="text-muted-foreground text-center text-xs">
+          Forgot the password? You can{' '}
+          <Text
+            className="text-muted-foreground text-xs underline"
+            onPress={() => !signOut.isPending && signOut.mutate()}
+          >
+            sign out
+          </Text>{' '}
+          and sign back in — signing out removes all locks on this device.
+        </Text>
+      </View>
+    </View>
+  );
+}

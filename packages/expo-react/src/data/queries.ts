@@ -270,6 +270,16 @@ export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined
   return parseBlob(row?.data ?? undefined, settingsGeneralSchema);
 }
 
+// How many links currently belong to `listId`, counted straight off the
+// `item_list_id` column — no blob decode (web's countLinksInList, over the
+// same projected column its list views range on). The "is this list empty?"
+// gate for deleting a list: a list with links can't be removed (see
+// use-list-mutations), since deleting it would orphan them.
+export async function countLinksInList(listId: string): Promise<number> {
+  const row = getDb().select({ n: count() }).from(items).where(eq(items.itemListId, listId)).get();
+  return row?.n ?? 0;
+}
+
 // One link by its id (the `{id}` of its `links/{id}.enc`), or undefined — the
 // direct-path lookup behind the write edge's re-read-before-merge
 // (use-link-mutations.update/destroy). An exact-path read + cached decode.

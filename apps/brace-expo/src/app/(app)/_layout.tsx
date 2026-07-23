@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
 
-import { ShareBridge, SyncProvider } from '@stxapps/expo-react';
+import { LockProvider, ShareBridge, SyncProvider } from '@stxapps/expo-react';
 
+import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
+import { PaywallProvider } from '../../contexts/paywall-provider';
 
 // The signed-in app group — `/links`, `/settings`. Mirrors brace-web's
 // `src/app/(app)`. A plain Stack for now; this is where a Tabs/Drawer navigator
@@ -16,12 +18,19 @@ import { AuthGuard } from '../../components/auth-guard';
 //                  AuthProvider mounted in the root `_layout`.
 //   SyncProvider — "is the local store ready?" It runs initial/incremental sync
 //                  and exposes storeStatus/requestSync to the app. Never
-//                  redirects; the InitialSyncGate below will read its status.
+//                  redirects.
+//   LockProvider — the device-local app/list locks state. Needs SyncProvider
+//                  (its orphan sweep waits for a ready store) and serves both
+//                  AppLockGate here and the links/settings lock surfaces.
+//   AppLockGate  — the device-local app lock (Settings → Misc). A content
+//                  swap, never a redirect; sync keeps running behind the lock
+//                  screen since the sync providers sit above it.
+//   PaywallProvider — the hoisted upgrade dialog behind the entitlement gates
+//                  (locks, nested lists).
 //
-// TODO(auth): the rest of brace-web's gate stack still needs porting once
-// @stxapps/expo-react ships it — inside SyncProvider: LockProvider → AppLockGate
-// → InitialSyncGate → PaywallProvider. Until InitialSyncGate lands, screens see
-// the store while its status is still 'checking'/'syncing-initial'.
+// TODO(auth): InitialSyncGate still needs porting — it slots between
+// AppLockGate and PaywallProvider like web's. Until it lands, screens see the
+// store while its status is still 'checking'/'syncing-initial'.
 //
 // ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
 // drains the iOS extension's outbox through the write edge on launch/foreground
@@ -33,7 +42,13 @@ export default function AppLayout() {
     <AuthGuard>
       <SyncProvider>
         <ShareBridge />
-        <Stack screenOptions={{ headerShown: false }} />
+        <LockProvider>
+          <AppLockGate>
+            <PaywallProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+            </PaywallProvider>
+          </AppLockGate>
+        </LockProvider>
       </SyncProvider>
     </AuthGuard>
   );
