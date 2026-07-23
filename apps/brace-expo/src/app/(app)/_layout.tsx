@@ -47,7 +47,16 @@ export default function AppLayout() {
           <AppLockGate>
             <InitialSyncGate>
               <PaywallProvider>
-                <Stack screenOptions={{ headerShown: false }} />
+                <Stack screenOptions={{ headerShown: false }}>
+                  {/* The quick-add editor presents modally (iOS pageSheet;
+                      Android slides up) — a router screen, not an RN Modal, so
+                      keyboard-controller and portals work inside it (see
+                      features/links/link-add-screen.tsx). */}
+                  <Stack.Screen
+                    name="add-link"
+                    options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                  />
+                </Stack>
               </PaywallProvider>
             </InitialSyncGate>
           </AppLockGate>

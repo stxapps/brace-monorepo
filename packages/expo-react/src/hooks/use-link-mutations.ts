@@ -1,15 +1,18 @@
 // Edit operations for links, bound to the active account and wired to a sync
 // kick — the expo port of web-react's use-link-mutations (that file is the
 // canonical doc for each op's semantics: the one-file-per-entity LWW model,
-// the re-read-before-merge, destroy's satellite sweep). Ported so far: `update`
-// (the general edit every bulk action rides — move list, retag, archive,
-// restore, trash are all patches) and `destroy` (the permanent delete behind
-// Trash's "Delete permanently"). The remaining siblings (`create`,
-// `saveCustomImage`, `deleteCustomImage`) arrive with the add/edit editors —
-// they need flows (quick-add, image picking + resizing) not on this platform
-// yet.
+// the re-read-before-merge, destroy's satellite sweep). Ported so far:
+// `create` (the add editor's quick-add), `update` (the general edit every bulk
+// action rides — move list, retag, archive, restore, trash are all patches)
+// and `destroy` (the permanent delete behind Trash's "Delete permanently").
+// The remaining siblings (`saveCustomImage`, `deleteCustomImage`) arrive with
+// the full edit editor — they need image picking + resizing not on this
+// platform yet.
 
 import { useCallback, useMemo } from 'react';
+
+import { newId } from '@stxapps/expo-crypto';
+import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -23,7 +26,25 @@ import {
 } from '../data/mutations';
 import { linkIdOf, type LinkItem, readExtraction, readLinkById } from '../data/queries';
 
+// What the add form collects — web-react's LinkDraft, verbatim. `title` is
+// intentionally absent: a link is saved from just a URL, and its title is
+// back-filled by a later metadata fetch. `listId` always resolves to a
+// concrete list at the call site (the active list, or My List as the inbox
+// default).
+export interface LinkDraft {
+  url: string;
+  listId: string;
+  tagIds: string[];
+  // Optional free-text note the user typed at save.
+  // Stored inline on the link (`note` on linkSchema); omitted/blank → no note.
+  note?: string;
+}
+
 export interface LinkMutations {
+  // Create a link from a draft. Returns the created link so the UI can
+  // focus/scroll to its new row, mirroring useListMutations.create. A blank URL
+  // is a no-op (returns null).
+  create: (draft: LinkDraft) => Promise<LinkItem | null>;
   // Patch a link's user-authored fields (LinkPatch — an explicitly-undefined
   // field clears it). Every caller rides this one op: move-to-list, archive,
   // restore, trash are all `{ listId }`; the edit dialog passes the full patch.
@@ -37,6 +58,40 @@ export interface LinkMutations {
 export function useLinkMutations(): LinkMutations {
   const { username } = useAuth();
   const { requestSync } = useSync();
+
+  const create = useCallback(
+    async (draft: LinkDraft) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+
+      const url = draft.url.trim();
+      if (url === '') return null;
+
+      const id = newId();
+      // createdAt: 0 → writeLink stamps it now (same first-write contract as
+      // writeList); path is the well-known store key its blob will live at. No title
+      // here: a link is saved from just a URL, and its title is filled later into the
+      // separate `extractions/{id}.enc` (the writer-split — see docs/link-extraction.md);
+      // a user-typed title would go in `customTitle`, which this quick-add doesn't collect.
+      const link: LinkItem = {
+        url,
+        tagIds: draft.tagIds,
+        listId: draft.listId,
+        createdAt: 0,
+        updatedAt: 0,
+        path: pathFromId(id, LINKS_PREFIX),
+      };
+
+      // A blank note stays absent (not an empty string) — keeps the link's blob
+      // minimal and matches "omitted → no note".
+      const note = draft.note?.trim();
+      if (note) link.note = note;
+
+      await writeLink(username, link, {});
+      requestSync();
+      return link;
+    },
+    [username, requestSync],
+  );
 
   const update = useCallback(
     async (link: LinkItem, patch: LinkPatch) => {
@@ -87,5 +142,5 @@ export function useLinkMutations(): LinkMutations {
     [username, requestSync],
   );
 
-  return useMemo<LinkMutations>(() => ({ update, destroy }), [update, destroy]);
+  return useMemo<LinkMutations>(() => ({ create, update, destroy }), [create, update, destroy]);
 }

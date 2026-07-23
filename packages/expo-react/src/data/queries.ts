@@ -20,10 +20,12 @@
 //    querier touched — helpers can await freely.
 //
 // Ported so far: the namespace reads (lists/tags/pins/settings), the link
-// library query (`readLinks`), and the by-id lookups (`readLinkById`,
+// library query (`readLinks`), the by-id lookups (`readLinkById`,
 // `readExtraction` — the write edge's re-read-before-merge and destroy's
-// satellite sweep). The remaining siblings (the by-url lookups, the extraction
-// tallies and drain pages) arrive verbatim with the features that need them.
+// satellite sweep), and the by-url lookups + quota count behind the add editor
+// (`readLinkByUrl`/`readLinkByUrlKey`, `countLinks`). The remaining siblings
+// (the extraction tallies and drain pages) arrive verbatim with the features
+// that need them.
 
 import {
   and,
@@ -55,6 +57,7 @@ import type {
   WithPath,
 } from '@stxapps/shared';
 import {
+  canonicalUrlKey,
   compareRank,
   dropCachedExtraction,
   dropCachedLink,
@@ -278,6 +281,44 @@ export async function readSettingsGeneral(): Promise<SettingsGeneral | undefined
 export async function countLinksInList(listId: string): Promise<number> {
   const row = getDb().select({ n: count() }).from(items).where(eq(items.itemListId, listId)).get();
   return row?.n ?? 0;
+}
+
+// Every link in the local store, counted the server's way: every `links/`
+// record, INCLUDING trashed ones (Trash is a listId, not a deletion — the blob
+// still exists, so the server counts it). The quota gate's count (see
+// use-link-quota, whose header carries the wedged-queue rationale); same rule
+// as readExistingLinks in import-all-data.ts. A primary-key range COUNT — no
+// blob decode (readNamespace's bounds pair, aggregated).
+export async function countLinks(): Promise<number> {
+  const row = getDb()
+    .select({ n: count() })
+    .from(items)
+    .where(and(gte(items.path, LINKS_PREFIX), lt(items.path, `${LINKS_PREFIX}￿`)))
+    .get();
+  return row?.n ?? 0;
+}
+
+// One link looked up by its exact stored URL, or undefined — web
+// readLinkByUrl's port (that header is canonical: exact match by design; for
+// "is this URL already saved?" use readLinkByUrlKey). Served by the partial
+// `idx_items_url` index (db.ts); `itemUrl` is links-only (projection.ts), so
+// the hit is a link.
+export async function readLinkByUrl(url: string): Promise<LinkItem | undefined> {
+  const row = getDb().select().from(items).where(eq(items.itemUrl, url)).limit(1).get();
+  return row ? decodeCachedLink(row) : undefined;
+}
+
+// One link that's the SAME RESOURCE as `url` under the canonical dedup
+// identity (canonicalUrlKey), or undefined — web readLinkByUrlKey's port (that
+// header is canonical: why the URL is keyed here, the raw-text fallback). The
+// add editor's duplicate/trashed check; served by the partial
+// `idx_items_url_key` index over the column projection.ts stamps at write.
+export async function readLinkByUrlKey(url: string): Promise<LinkItem | undefined> {
+  const key = canonicalUrlKey(url);
+  if (key === null) return readLinkByUrl(url);
+
+  const row = getDb().select().from(items).where(eq(items.itemUrlKey, key)).limit(1).get();
+  return row ? decodeCachedLink(row) : undefined;
 }
 
 // One link by its id (the `{id}` of its `links/{id}.enc`), or undefined — the

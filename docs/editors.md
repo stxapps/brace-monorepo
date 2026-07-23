@@ -20,7 +20,7 @@ reverse).
 
 ### the editing surfaces
 
-Four surfaces edit a link's user-authored fields. They split into **create** (a
+Five surfaces edit a link's user-authored fields. They split into **create** (a
 URL + list/tags/note, title/image back-filled later by extraction) and **full
 edit** (every `links/{id}.enc` field, including the `customTitle`/`customImageId`
 overrides). Create collects a strict subset of edit's fields.
@@ -30,7 +30,22 @@ overrides). Create collects a strict subset of edit's fields.
 | extension save editor  | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
 | web quick-add popover  | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
 | web edit dialog        | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
+| brace-expo quick-add   | `apps/brace-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind "Advanced"         |
 | brace-expo share sheet | `apps/brace-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
+
+The brace-expo quick-add is the web popover's behavioral twin (same two-tier
+URL validation with Confirm/Restore, same quota banner, same `advancedDirty`
+close guard) presented phone-shaped: a FAB on the links screen
+(`add-link-fab.tsx`) pushes a modal-presented expo-router screen — a router
+screen, not an RN `Modal`, so keyboard-controller and portalled dialogs work
+inside it (docs/safe-area.md — the presentation decides the keyboard
+mechanism). It can't render the web pickers (`web-ui` is `platform:web`), so it
+carries **in-app native cousins** in `apps/brace-expo/src/components/links/`
+(`list-select.tsx` / `tags-field.tsx` / `link-quota-banner.tsx`) wired to
+`@stxapps/expo-react`'s live hooks. Unlike the share sheet's snapshot-fed
+pickers, these run in-process and therefore follow the web rule: they create
+**immediately** (top-level, index 0, case-insensitive reuse) — see "web pickers
+create IMMEDIATELY; the share sheet DEFERS" below.
 
 The share sheet is the RN member of the create family
 ([share-sheet.md](./share-sheet.md) is its own map — the two native shells, the
@@ -357,6 +372,7 @@ below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
 at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
 it), Move to is a dialog listing the list tree instead of the anchored
 `ListCommand` popover, and the bulk tags dialog is a chip toggler over the
-existing tags (no new-tag creation until the full edit dialog's tags field is
-ported). Web's shift-click `selectRange` has no touch analogue and is not
+existing tags (no new-tag creation — the native `TagsField` cousin now exists
+for the quick-add, so wiring creation here is possible when wanted; it just
+hasn't been). Web's shift-click `selectRange` has no touch analogue and is not
 ported.

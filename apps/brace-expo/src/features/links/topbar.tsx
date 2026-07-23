@@ -5,9 +5,10 @@
 // trailing pair is the search toggle — web's persistent search box doesn't fit
 // a phone topbar, so it summons the SearchBar row below (view-state-provider
 // `searchOpen`) — and the ⋯ overflow menu (more-options-menu.tsx), which
-// absorbed the old direct Settings button. Web's remaining actions arrive with
-// their features: add (the editor — likely a FAB here, not a topbar slot) and
-// bulk edit (joins the ⋯ menu with its toolbar). Sync lives in the ⋯ menu AND
+// absorbed the old direct Settings button. Web's remaining actions live
+// elsewhere on this screen: add is the FAB over the list (add-link-fab.tsx —
+// no topbar slot), bulk edit is the ⋯ menu's "Select links" (with its
+// bottom-anchored toolbar). Sync lives in the ⋯ menu AND
 // as the list's pull-to-refresh — the gesture is the platform idiom, the menu
 // entry carries the error/retry affordance.
 

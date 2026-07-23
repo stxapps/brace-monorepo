@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
+import { AddLinkFab } from '../../../features/links/add-link-fab';
 import { BulkTagsDialog } from '../../../features/links/bulk-tags-dialog';
 import { LinkDestroyConfirm } from '../../../features/links/link-destroy-confirm';
 import { Main } from '../../../features/links/main';
@@ -32,6 +33,9 @@ export default function LinksScreen() {
           <Topbar />
           <SearchBar />
           <Main />
+          {/* Screen-level, not in Main: the add affordance survives Main's
+              LockPane/EmptyState swaps (web's topbar Add is always there). */}
+          <AddLinkFab />
         </View>
       </StyledSafeAreaView>
       <BulkTagsDialog />
