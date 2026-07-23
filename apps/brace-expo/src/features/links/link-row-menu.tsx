@@ -1,5 +1,5 @@
 // The per-item options menu shared by both item renderers — the expo port of
-// brace-web's LinkRowMenu (`_layouts/shared/link-row-widgets.tsx`, the canonical
+// brace-web's LinkRowMenu (`_layouts/shared/link-row-menu.tsx`, the canonical
 // doc for the menu shape: frequent actions first, destructive last behind a
 // separator; the variant keyed off the LINK's own `listId`, not the active
 // view, so a trashed/archived link gets the right menu in the All view and tag

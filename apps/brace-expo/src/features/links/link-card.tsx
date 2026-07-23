@@ -17,7 +17,8 @@ import { displayUrl, hostFromText, hueFromHost, initialFromHost } from '@stxapps
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
 import { LinkRowMenu } from './link-row-menu';
-import { type LinkItemProps, LinkTagChips, NoteBadge, PinnedBadge } from './shared';
+import { LinkTagChips } from './link-tag-chips';
+import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 
 const CARD_HEIGHT = 232;
 

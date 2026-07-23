@@ -16,7 +16,8 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
 import { LinkRowMenu } from './link-row-menu';
-import { type LinkItemProps, LinkTagChips, NoteBadge, PinnedBadge } from './shared';
+import { LinkTagChips } from './link-tag-chips';
+import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 
 const MINUTE = 60 * 1000;
 const RELATIVE_UNITS: [string, number][] = [
