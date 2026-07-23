@@ -6,6 +6,6 @@
 export { useReportDisplayedLinkPaths, useTagMap } from './hooks';
 export { EmptyState, RefreshPill, ShowMore } from './layout-chrome';
 export { Favicon, LinkPreviewImage } from './link-media';
-export { LinkRowMenu, LinkRowSelect, NoteBadge, PinnedBadge } from './link-row';
+export { LinkRowMenu, LinkRowSelect, NoteBadge, PinnedBadge } from './link-row-widgets';
 export { LinkTagChips } from './link-tag-chips';
 export type { LinkLayoutProps } from './types';

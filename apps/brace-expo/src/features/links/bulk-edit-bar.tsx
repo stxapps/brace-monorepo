@@ -30,13 +30,12 @@
 // readPins), so a pin landing from another device mid-selection is accounted
 // for — web's useLiveQuery(readPins), verbatim in spirit.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { BackHandler, Pressable, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
   Archive,
   ArchiveRestore,
-  Check,
   Copy,
   FolderInput,
   MoreHorizontal,
@@ -53,15 +52,13 @@ import {
   type LinkView,
   readPins,
   useLinkMutations,
-  useLists,
   useLiveRead,
   usePinMutations,
 } from '@stxapps/expo-react';
-import { ARCHIVE_ID, DEFAULT_LIST_ID, flattenTree, TRASH_ID } from '@stxapps/shared';
+import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,6 +67,7 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { MoveToDialog } from './move-to-dialog';
 import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
 
@@ -319,63 +317,5 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
         onSelect={onMoveTo}
       />
     </View>
-  );
-}
-
-// The Move-to picker — the phone stand-in for web's anchored ListCommand
-// popover: the merged list tree (system lists + user lists, depth-indented) in
-// a dialog. Trash is excluded (trashing is Remove, never a "move"); the
-// selection's shared list, if any, shows checked and disabled, like web.
-function MoveToDialog({
-  open,
-  onOpenChange,
-  sharedListId,
-  onSelect,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  sharedListId: string | undefined;
-  onSelect: (listId: string) => void;
-}) {
-  const lists = useLists();
-  const options = useMemo(
-    () =>
-      flattenTree(lists)
-        .filter((n) => n.item.id !== TRASH_ID)
-        .map((n) => ({ id: n.item.id, name: n.item.name, depth: n.depth })),
-    [lists],
-  );
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Move to</DialogTitle>
-        </DialogHeader>
-        <ScrollView className="max-h-80" nestedScrollEnabled>
-          {options.map((o) => (
-            <Pressable
-              key={o.id}
-              disabled={o.id === sharedListId}
-              onPress={() => onSelect(o.id)}
-              className="active:bg-muted flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5"
-              style={o.depth > 0 ? { paddingLeft: o.depth * 12 + 8 } : undefined}
-            >
-              <Text
-                numberOfLines={1}
-                className={
-                  o.id === sharedListId ? 'text-muted-foreground min-w-0 flex-1' : 'min-w-0 flex-1'
-                }
-              >
-                {o.name}
-              </Text>
-              {o.id === sharedListId && (
-                <Icon as={Check} className="text-muted-foreground size-4 shrink-0" />
-              )}
-            </Pressable>
-          ))}
-        </ScrollView>
-      </DialogContent>
-    </Dialog>
   );
 }

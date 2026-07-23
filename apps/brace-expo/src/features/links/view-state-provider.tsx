@@ -9,11 +9,15 @@
 // guard once scrolled away), plus the bulk-edit trio: `bulkEditing` (the mode
 // + its `selectedLinks` snapshot map, keyed by the stable `link.path` row
 // key), `destroying` (the hoisted permanent-delete confirmation —
-// LinkDestroyConfirm), and `retagging` (the hoisted bulk "Edit tags" dialog —
-// BulkTagsDialog). Web's remaining engagement signals (openMenus / editing)
-// arrive with the features that own them: the row menu and the edit dialog are
-// not on this screen yet. Web's `selectRange` (shift-click) has no analogue on
-// touch and is deliberately not ported.
+// LinkDestroyConfirm), `retagging` (the hoisted bulk "Edit tags" dialog —
+// BulkTagsDialog), and `openMenus` (web's counter, verbatim: a row's options
+// menu — or an overlay it spawned, the Move-to dialog / the chips' tag-overflow
+// menu — is open; its trigger lives in a virtualized item, so a repaint could
+// move or unmount it out from under the user. Counted, not a bool, so one
+// opening as another closes can't leave it stuck — see shared.tsx
+// useEngagedOpen). Web's remaining engagement signal (`editing`) arrives with
+// the edit dialog, which is not on this platform yet. Web's `selectRange`
+// (shift-click) has no analogue on touch and is deliberately not ported.
 //
 // Like web, navigating to another view exits bulk-edit mode (watched off the
 // page query's identity) — a selection made in one view can never be acted on
@@ -48,12 +52,15 @@ import { type Selection, useLinksPage } from './page-provider';
 export type SimpleSelection = Exclude<Selection, { kind: 'none' }>;
 
 interface LinksViewStateValue {
-  // True while a repaint would disrupt the user: scrolled past the top, a
-  // page-level dialog is up, or bulk-edit mode is on. useLinks stages sync
-  // results while this holds.
+  // True while a repaint would disrupt the user: scrolled past the top, a row
+  // menu is open, a page-level dialog is up, or bulk-edit mode is on. useLinks
+  // stages sync results while this holds.
   engaged: boolean;
   // The list's scroll position crossed (or returned to) the top.
   setScrolled: (scrolled: boolean) => void;
+  // An item-anchored overlay (row menu, Move-to dialog, tag-overflow menu)
+  // opened (true) or closed (false). Go through useEngagedOpen, not directly.
+  setMenuOpen: (open: boolean) => void;
   // The user summoned the search bar row below the topbar (topbar's search
   // toggle). Explicit chrome INTENT, not the rendered visibility — the bar
   // renders when `searchOpen || selection.kind === 'none'`, computed at its
@@ -96,12 +103,17 @@ const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
 
 export function LinksViewStateProvider({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
+  const [openMenus, setOpenMenus] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [preSearch, setPreSearch] = useState<SimpleSelection | null>(null);
   const [destroying, setDestroying] = useState<LinkView[] | null>(null);
   const [retagging, setRetagging] = useState<LinkView[] | null>(null);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [selectedLinks, setSelectedLinks] = useState<ReadonlyMap<string, LinkView>>(new Map());
+
+  const setMenuOpen = useCallback((open: boolean) => {
+    setOpenMenus((n) => Math.max(0, n + (open ? 1 : -1)));
+  }, []);
 
   const requestDestroy = useCallback((links: LinkView[]) => {
     if (links.length > 0) setDestroying(links);
@@ -146,8 +158,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
 
   const value = useMemo<LinksViewStateValue>(
     () => ({
-      engaged: scrolled || destroying !== null || retagging !== null || bulkEditing,
+      engaged:
+        scrolled || openMenus > 0 || destroying !== null || retagging !== null || bulkEditing,
       setScrolled,
+      setMenuOpen,
       searchOpen,
       setSearchOpen,
       preSearch,
@@ -168,6 +182,8 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     }),
     [
       scrolled,
+      openMenus,
+      setMenuOpen,
       searchOpen,
       preSearch,
       destroying,

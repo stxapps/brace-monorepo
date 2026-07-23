@@ -183,6 +183,11 @@ function UnlockedMain() {
               <Item
                 link={item}
                 pinned={index < pinnedCount}
+                // The pinned section's ends, for the row menu's Move up/down
+                // (meaningful only when pinned; pins sort first, so flat
+                // indexes 0..pinnedCount-1 are exactly the pinned section).
+                isFirst={index === 0}
+                isLast={index === pinnedCount - 1}
                 sortOn={query.sortOn}
                 tagsById={tagsById}
                 selectMode={bulkEditing}

@@ -16,6 +16,7 @@ import { displayUrl, hostFromText, hueFromHost, initialFromHost } from '@stxapps
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
+import { LinkRowMenu } from './link-row-menu';
 import { type LinkItemProps, LinkTagChips, NoteBadge, PinnedBadge } from './shared';
 
 const CARD_HEIGHT = 232;
@@ -44,6 +45,8 @@ function PreviewPanel({ host }: { host: string }) {
 export function LinkCard({
   link,
   pinned,
+  isFirst,
+  isLast,
   tagsById,
   selectMode,
   selected,
@@ -78,17 +81,22 @@ export function LinkCard({
           </Text>
         </View>
         <LinkTagChips link={link} tagsById={tagsById} className="px-3 pb-3" />
-        {/* Floats over the banner (web's corner slot, minus the row menu — not
-            on this platform yet), so give it a readable backdrop. */}
-        {selectMode && (
-          <View className="bg-background/60 absolute top-1 right-1 rounded-md p-1">
-            <Checkbox
-              aria-label={`Select ${link.title || displayUrl(link.url)}`}
-              checked={selected}
-              onCheckedChange={onToggle}
-            />
-          </View>
-        )}
+        {/* Floats over the banner (web's corner slot: the row menu, swapped for
+            the selection checkbox while bulk editing), so give it a readable
+            backdrop. */}
+        <View className="bg-background/60 absolute top-1 right-1 rounded-md">
+          {selectMode ? (
+            <View className="p-1">
+              <Checkbox
+                aria-label={`Select ${link.title || displayUrl(link.url)}`}
+                checked={selected}
+                onCheckedChange={onToggle}
+              />
+            </View>
+          ) : (
+            <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
+          )}
+        </View>
       </Pressable>
     </View>
   );

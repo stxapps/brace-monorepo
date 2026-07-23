@@ -15,6 +15,7 @@ import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
+import { LinkRowMenu } from './link-row-menu';
 import { type LinkItemProps, LinkTagChips, NoteBadge, PinnedBadge } from './shared';
 
 const MINUTE = 60 * 1000;
@@ -39,6 +40,8 @@ function formatRelativeTime(epochMs: number): string {
 export function LinkRow({
   link,
   pinned,
+  isFirst,
+  isLast,
   sortOn,
   tagsById,
   selectMode,
@@ -75,6 +78,9 @@ export function LinkRow({
       <Text className="text-muted-foreground shrink-0 text-xs">
         {formatRelativeTime(link[sortOn])}
       </Text>
+      {/* Hidden while selecting — the checkbox column stands in (web's list
+          layout, verbatim). */}
+      {!selectMode && <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />}
     </Pressable>
   );
 }
