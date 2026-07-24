@@ -43,7 +43,12 @@ client-queries.md, the tiering in business-model.md), and
 [share-sheet.md](./share-sheet.md) for the brace-expo share sheet (share from
 Safari/Chrome → pick list/tags → save; the iOS App Group snapshot/outbox next
 to a separate-process extension vs. Android's in-process translucent share
-activity, and why sync converges either way).
+activity, and why sync converges either way), and
+[locks.md](./locks.md) for the device-local app lock + list locks (the
+shoulder-surfing-deterrent threat model over already-decrypted data, the
+PBKDF2 verifier, the shared `computeCoverage` subtree walk, the in-memory-unlock
+invariant, and the two enforcement edges — `lockedListIds` → the link query's
+`lists.none`, `hiddenListIds` → sidebar-only pruning).
 
 ### apps
 

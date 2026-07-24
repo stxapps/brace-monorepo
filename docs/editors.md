@@ -183,7 +183,9 @@ editors pass and the move-to menus below must not. The rows themselves are
   than as intent, and the deliberate-duplicate case still has Settings → Lists.
 
 **Locked and hidden lists stay pickable — the pickers filter only `TRASH_ID`.**
-They deliberately do **not** prune the lock model's `hiddenListIds`. Hiding a
+They deliberately do **not** prune the lock model's `hiddenListIds` (the whole
+lock/hide model — coverage, the two enforcement edges — is
+[locks.md](./locks.md)). Hiding a
 list is a pure **sidebar** declutter (`_panes/sidebar.tsx`, `pruneHidden` over
 `useLocks().hiddenListIds`); it never blocks filing a link into a list you know
 exists. Two reasons the pickers must ignore it: (1) locks are **device-local**

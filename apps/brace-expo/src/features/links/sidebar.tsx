@@ -22,6 +22,7 @@ import {
   Inbox,
   Layers,
   Lock,
+  LockOpen,
   type LucideIcon,
   Settings2,
   Trash2,
@@ -110,6 +111,7 @@ function NavItem({
   onToggle,
   showSlot = false,
   badge,
+  action,
 }: {
   icon: LucideIcon;
   label: string;
@@ -128,8 +130,14 @@ function NavItem({
   // In a tree, childless rows still reserve the chevron's width so their icons
   // line up under the parents' labels; standalone rows (Show All) pass false.
   showSlot?: boolean;
-  // Trailing marker (the own-lock badge), after the label.
+  // Trailing marker INSIDE the row press target (the own-lock badge), after the
+  // label — non-interactive.
   badge?: ReactNode;
+  // Trailing INTERACTIVE control on the RIGHT, a SEPARATE sibling Pressable
+  // after the row (row press = select filter, action = its own onPress), like
+  // the left chevron. The list rows' "Lock now". No hover on native, so it's
+  // always shown when present.
+  action?: ReactNode;
 }) {
   const { selection: current, setSimpleQuery } = useLinksPage();
   const active = isActive(current, selection);
@@ -180,6 +188,7 @@ function NavItem({
         </Text>
         {badge && <View className="text-muted-foreground shrink-0">{badge}</View>}
       </Pressable>
+      {action}
     </View>
   );
 }
@@ -195,6 +204,7 @@ function NavTree<T extends TreeItem & { name: string }>({
   collapsed,
   onToggle,
   badgeFor,
+  actionFor,
 }: {
   nodes: TreeNode<T>[];
   iconFor: (id: string) => LucideIcon;
@@ -203,6 +213,7 @@ function NavTree<T extends TreeItem & { name: string }>({
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
   badgeFor?: (id: string) => ReactNode;
+  actionFor?: (id: string) => ReactNode;
 }) {
   return (
     <>
@@ -221,6 +232,7 @@ function NavTree<T extends TreeItem & { name: string }>({
               onToggle={hasChildren ? () => onToggle(node.item.id) : undefined}
               showSlot
               badge={badgeFor?.(node.item.id)}
+              action={actionFor?.(node.item.id)}
             />
             {hasChildren && !isCollapsed && (
               <NavTree
@@ -231,6 +243,7 @@ function NavTree<T extends TreeItem & { name: string }>({
                 collapsed={collapsed}
                 onToggle={onToggle}
                 badgeFor={badgeFor}
+                actionFor={actionFor}
               />
             )}
           </Fragment>
@@ -309,7 +322,7 @@ function FooterLink({
 export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   const lists = useLists();
   const tags = useTags();
-  const { hiddenListIds, listLocks } = useLocks();
+  const { hiddenListIds, listLocks, lockList } = useLocks();
   const { collapsed, toggle } = useCollapsedIds();
 
   // What the Lists section actually renders: the tree minus the hidden lists
@@ -323,6 +336,29 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
     listLocks.get(id)?.locked ? (
       <Icon as={Lock} className="text-muted-foreground size-3.5" aria-label="Locked" />
     ) : undefined;
+
+  // A one-tap "Lock now" for a row's OWN lock while it's currently UNLOCKED —
+  // re-engages it in-memory (no password; relocking is free). Only these rows
+  // get it: a locked row already shows the static badge above and its press-
+  // through is the unlock pane (Main), and a row with no lock has nothing to
+  // re-lock. A separate Pressable from the row, so tapping it re-locks without
+  // selecting the list or closing the drawer. Re-locking a `hideList` list also
+  // re-prunes it from this rail on the next coverage recompute, so it simply
+  // disappears. Web parity: sidebar.tsx's hover-revealed button (native has no
+  // hover, so it's always shown).
+  const listAction = (id: string) => {
+    const info = listLocks.get(id);
+    if (!info || info.locked) return undefined;
+    return (
+      <Pressable
+        aria-label="Lock list"
+        onPress={() => lockList(id)}
+        className="size-8 shrink-0 items-center justify-center rounded-md"
+      >
+        <Icon as={LockOpen} className="text-muted-foreground size-3.5" />
+      </Pressable>
+    );
+  };
 
   return (
     <StyledSafeAreaView className="bg-background flex-1">
@@ -340,6 +376,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
             collapsed={collapsed}
             onToggle={toggle}
             badgeFor={listBadge}
+            actionFor={listAction}
           />
         </Section>
 

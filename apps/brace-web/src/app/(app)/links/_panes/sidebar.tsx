@@ -36,6 +36,7 @@ import {
   Layers,
   ListFilter,
   Lock,
+  LockOpen,
   Settings2,
   Trash2,
 } from 'lucide-react';
@@ -172,6 +173,7 @@ function NavItem({
   label,
   selection,
   badge,
+  action,
   depth = 0,
   expanded,
   onToggle,
@@ -180,8 +182,13 @@ function NavItem({
   icon: React.ReactNode;
   label: string;
   selection: Selection;
-  // Trailing chrome after the label — the list rows' lock marker.
+  // Trailing chrome INSIDE the row button (non-interactive) — the list rows'
+  // lock marker.
   badge?: React.ReactNode;
+  // Trailing INTERACTIVE control, rendered as a SIBLING after the row button
+  // (never nested inside it — a button in a button is invalid and would fire the
+  // selection). The list rows' hover-revealed "Lock now".
+  action?: React.ReactNode;
   // Tree nesting level — indents the row one step per level (16px, matching
   // the list pickers' indent). Applied to the whole row so the chevron indents
   // with the label.
@@ -202,7 +209,7 @@ function NavItem({
 
   return (
     <div
-      className="flex w-full items-center gap-1"
+      className="group/navitem flex w-full items-center gap-1"
       style={depth > 0 ? { paddingLeft: `${depth * 16}px` } : undefined}
     >
       {onToggle ? (
@@ -236,6 +243,7 @@ function NavItem({
           </span>
         )}
       </button>
+      {action}
     </div>
   );
 }
@@ -249,6 +257,7 @@ function NavTree<T extends TreeItem & { name: string }>({
   iconFor,
   selectionFor,
   badgeFor,
+  actionFor,
   collapsed,
   onToggle,
 }: {
@@ -256,6 +265,7 @@ function NavTree<T extends TreeItem & { name: string }>({
   iconFor: (id: string) => React.ReactNode;
   selectionFor: (id: string) => Selection;
   badgeFor?: (id: string) => React.ReactNode;
+  actionFor?: (id: string) => React.ReactNode;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
 }) {
@@ -271,6 +281,7 @@ function NavTree<T extends TreeItem & { name: string }>({
               label={node.item.name}
               selection={selectionFor(node.item.id)}
               badge={badgeFor?.(node.item.id)}
+              action={actionFor?.(node.item.id)}
               depth={node.depth}
               expanded={hasChildren ? !isCollapsed : undefined}
               onToggle={hasChildren ? () => onToggle(node.item.id) : undefined}
@@ -282,6 +293,7 @@ function NavTree<T extends TreeItem & { name: string }>({
                 iconFor={iconFor}
                 selectionFor={selectionFor}
                 badgeFor={badgeFor}
+                actionFor={actionFor}
                 collapsed={collapsed}
                 onToggle={onToggle}
               />
@@ -351,7 +363,7 @@ export function Sidebar() {
   const lists = useLists();
   const tags = useTags();
   const { selection } = useLinksPage();
-  const { hiddenListIds, listLocks } = useLocks();
+  const { hiddenListIds, listLocks, lockList } = useLocks();
   const { collapsed, toggle, expand } = useCollapsedIds();
   const [filter, setFilter] = useState('');
 
@@ -364,6 +376,30 @@ export function Sidebar() {
   // merely covers stay unmarked — the locked ancestor is the visual cue).
   const listBadge = (id: string) =>
     listLocks.get(id)?.locked ? <Lock className="size-3.5" aria-label="Locked" /> : undefined;
+
+  // A one-click "Lock now" for a row's OWN lock while it's currently UNLOCKED —
+  // re-engages it in-memory (no password; relocking is free). Only these rows get
+  // it: a locked row already shows the static badge above and its click-through
+  // is the unlock pane, and a row with no lock has nothing to re-lock. Rendered
+  // as a sibling of the row button (NavItem's `action`) and hover/focus-revealed
+  // so it stays out of the way until wanted — but always in the tab order for
+  // keyboards. Re-locking a `hideList` list also re-prunes it from this rail on
+  // the next coverage recompute, so it simply disappears.
+  const listAction = (id: string) => {
+    const info = listLocks.get(id);
+    if (!info || info.locked) return undefined;
+    return (
+      <button
+        type="button"
+        aria-label="Lock list"
+        title="Lock list"
+        onClick={() => lockList(id)}
+        className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/navitem:opacity-100"
+      >
+        <LockOpen className="size-3.5" />
+      </button>
+    );
+  };
 
   // Flattened once for the count gate and the filter matches. When filtering we
   // show a flat list of matches (hierarchy and collapse ignored) — the usual
@@ -431,6 +467,7 @@ export function Sidebar() {
                   label={node.item.name}
                   selection={{ kind: 'list', id: node.item.id }}
                   badge={listBadge(node.item.id)}
+                  action={listAction(node.item.id)}
                 />
               ))
             ) : (
@@ -442,6 +479,7 @@ export function Sidebar() {
               iconFor={listIcon}
               selectionFor={(id) => ({ kind: 'list', id })}
               badgeFor={listBadge}
+              actionFor={listAction}
               collapsed={collapsed}
               onToggle={toggle}
             />

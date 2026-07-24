@@ -222,6 +222,10 @@ export const locks = sqliteTable('locks', {
   // List locks only: while locked, also hide the list (and its subtree) from the
   // sidebar and the list pickers — not just gate its links.
   hideList: integer('hide_list', { mode: 'boolean' }),
+  // Opt-in to unlock this lock with device biometry (Face ID / Touch ID). An
+  // expo-only flag (native has biometry, web doesn't); a pure boolean gate over
+  // the same in-memory unlock — no secret is stored behind it (docs/locks.md).
+  biometric: integer('biometric', { mode: 'boolean' }),
 });
 
 // The device-local, per-HOST favicon cache — web-react db.ts `FaviconRecord`
@@ -329,7 +333,8 @@ const DDL = `
     kind TEXT NOT NULL,
     salt TEXT NOT NULL,
     hash TEXT NOT NULL,
-    hide_list INTEGER
+    hide_list INTEGER,
+    biometric INTEGER
   );
   CREATE TABLE IF NOT EXISTS favicons (
     host TEXT PRIMARY KEY NOT NULL,

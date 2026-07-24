@@ -67,6 +67,14 @@ export interface Locks {
   // Verify against the app lock / the list's covering lock; true opens it.
   unlockApp: (password: string) => Promise<boolean>;
   unlockList: (listId: string, password: string) => Promise<boolean>;
+  // Re-engage an already-configured lock RIGHT NOW — drops this session's
+  // in-memory unlock so the gate closes without a reload. No password (relocking
+  // is free) and no Dexie write; a no-op if the lock doesn't exist or is already
+  // engaged. Powers the "Lock now" affordances (sidebar list rows, topbar's
+  // overflow "Lock app"). The inverse of unlockApp/unlockList — so it sits here
+  // beside them (session interaction), not in LockMutations (persisted writes).
+  lockApp: () => void;
+  lockList: (listId: string) => void;
 }
 
 export interface LockMutations {
@@ -241,6 +249,11 @@ export function LockProvider({ children }: { children: ReactNode }) {
     [markLocked],
   );
 
+  // Re-lock without a password: just drop the session unlock (markLocked no-ops
+  // when the id isn't currently unlocked, so these are safe to call any time).
+  const lockApp = useCallback(() => markLocked(APP_LOCK_ID), [markLocked]);
+  const lockList = useCallback((listId: string) => markLocked(listId), [markLocked]);
+
   const value = useMemo<Locks & LockMutations>(
     () => ({
       status: locks === undefined ? 'checking' : 'ready',
@@ -255,6 +268,8 @@ export function LockProvider({ children }: { children: ReactNode }) {
       removeAppLock,
       addListLock,
       removeListLock,
+      lockApp,
+      lockList,
     }),
     [
       locks,
@@ -269,6 +284,8 @@ export function LockProvider({ children }: { children: ReactNode }) {
       removeAppLock,
       addListLock,
       removeListLock,
+      lockApp,
+      lockList,
     ],
   );
 

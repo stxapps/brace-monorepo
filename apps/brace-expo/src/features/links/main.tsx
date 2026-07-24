@@ -91,7 +91,8 @@ const LAYOUTS: Record<string, LayoutConfig | undefined> = {
 
 export function Main() {
   const { selection } = useLinksPage();
-  const { isListLocked, unlockList } = useLocks();
+  const { isListLocked, unlockList, biometricForList, biometricLabel, unlockListWithBiometric } =
+    useLocks();
 
   // The main pane's body while the selected list is locked — a SWAP for the
   // list, not an overlay (web main.tsx's rationale): UnlockedMain (and its
@@ -106,6 +107,11 @@ export function Main() {
           title="This list is locked"
           description="Enter the list's password to view its links."
           onUnlock={(password) => unlockList(listId, password)}
+          biometric={
+            biometricForList(listId)
+              ? { label: biometricLabel, onUnlock: () => unlockListWithBiometric(listId) }
+              : undefined
+          }
         />
       </View>
     );

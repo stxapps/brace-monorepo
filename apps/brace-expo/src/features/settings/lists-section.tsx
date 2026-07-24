@@ -36,6 +36,7 @@ import {
   type LucideIcon,
   MoreHorizontal,
   Pencil,
+  ScanFace,
   Trash2,
 } from 'lucide-react-native';
 
@@ -117,6 +118,8 @@ function RenameField({
 function RowActions({
   row,
   lock,
+  biometricAvailable,
+  biometricLabel,
   onFocusName,
   onMoveUp,
   onMoveDown,
@@ -125,11 +128,15 @@ function RowActions({
   onAddLock,
   onUnlock,
   onRemoveLock,
+  onToggleBiometric,
   onDelete,
 }: {
   row: ListRow;
   // The row's OWN lock (lock-provider's listLocks), undefined when none exists.
   lock: ListLockInfo | undefined;
+  // Device biometry usable here, and its label — gate + copy for the toggle.
+  biometricAvailable: boolean;
+  biometricLabel: string;
   onFocusName: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -138,6 +145,7 @@ function RowActions({
   onAddLock: () => void;
   onUnlock: () => void;
   onRemoveLock: () => void;
+  onToggleBiometric: () => void;
   onDelete: () => void;
 }) {
   const isFirst = row.index === 0;
@@ -200,6 +208,17 @@ function RowActions({
                 <Text>Unlock…</Text>
               </DropdownMenuItem>
             )}
+            {/* Biometric opt-in for this lock — a free convenience toggle over
+                the existing password (docs/locks.md). Enabling runs one OS
+                confirm; the password stays the fallback. */}
+            {biometricAvailable && (
+              <DropdownMenuItem onPress={onToggleBiometric}>
+                <Icon as={ScanFace} className="size-4" />
+                <Text>
+                  {lock.biometric ? `Disable ${biometricLabel}` : `Enable ${biometricLabel}`}
+                </Text>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onPress={onRemoveLock}>
               <Icon as={KeyRound} className="size-4" />
               <Text>Remove lock…</Text>
@@ -226,6 +245,8 @@ function Row({
   row,
   collapsedIds,
   lock,
+  biometricAvailable,
+  biometricLabel,
   onToggle,
   onRename,
   onMoveUp,
@@ -235,11 +256,14 @@ function Row({
   onAddLock,
   onUnlock,
   onRemoveLock,
+  onToggleBiometric,
   onDelete,
 }: {
   row: ListRow;
   collapsedIds: ReadonlySet<string>;
   lock: ListLockInfo | undefined;
+  biometricAvailable: boolean;
+  biometricLabel: string;
   onToggle: () => void;
   onRename: (name: string) => void;
   onMoveUp: () => void;
@@ -249,6 +273,7 @@ function Row({
   onAddLock: () => void;
   onUnlock: () => void;
   onRemoveLock: () => void;
+  onToggleBiometric: () => void;
   onDelete: () => void;
 }) {
   // Focus the inline name field when Rename is picked from the kebab. The menu
@@ -311,6 +336,8 @@ function Row({
       <RowActions
         row={row}
         lock={lock}
+        biometricAvailable={biometricAvailable}
+        biometricLabel={biometricLabel}
         onFocusName={focusName}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
@@ -319,6 +346,7 @@ function Row({
         onAddLock={onAddLock}
         onUnlock={onUnlock}
         onRemoveLock={onRemoveLock}
+        onToggleBiometric={onToggleBiometric}
         onDelete={onDelete}
       />
     </View>
@@ -371,8 +399,8 @@ export function ListsSection() {
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
   const { create, rename, move, destroy, reorder } = useListMutations();
-  const { listLocks, unlockList } = useLocks();
-  const { addListLock, removeListLock } = useLockMutations();
+  const { listLocks, unlockList, biometricAvailable, biometricLabel } = useLocks();
+  const { addListLock, removeListLock, setListBiometric } = useLockMutations();
 
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
   const [error, setError] = useState<string | null>(null);
@@ -486,6 +514,8 @@ export function ListsSection() {
             row={row}
             collapsedIds={collapsedIds}
             lock={listLocks.get(row.item.id)}
+            biometricAvailable={biometricAvailable}
+            biometricLabel={biometricLabel}
             onToggle={() => toggle(row.item.id)}
             onRename={(name) => run(rename(row.item, name))}
             onMoveUp={() => run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))}
@@ -505,6 +535,11 @@ export function ListsSection() {
             }
             onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
             onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
+            onToggleBiometric={() =>
+              // A free convenience flag on an existing lock (creating the lock was
+              // the paywalled step), so no entitlement gate here.
+              run(setListBiometric(row.item.id, !(listLocks.get(row.item.id)?.biometric ?? false)))
+            }
             onDelete={() => run(destroy(row.item))}
           />
         ))}

@@ -15,6 +15,7 @@ import {
   CircleAlert,
   LifeBuoy,
   Loader2,
+  Lock,
   LogOut,
   MoreHorizontal,
   RefreshCw,
@@ -23,7 +24,7 @@ import {
 import Link from 'next/link';
 
 import { getSyncPhase } from '@stxapps/shared';
-import { useSignOut, useSync } from '@stxapps/web-react';
+import { useLocks, useSignOut, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -37,6 +38,7 @@ import { DEFAULT_SECTION_ID } from '../../settings/sections';
 
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, requestSync } = useSync();
+  const { appLock, lockApp } = useLocks();
   const signOut = useSignOut();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
@@ -99,6 +101,16 @@ export function MoreOptionsMenu() {
             Support
           </a>
         </DropdownMenuItem>
+        {/* Re-engage the device-local app lock without a reload. Only when one is
+            SET and currently open — the app-global peer of the sidebar rows'
+            per-list "Lock now" (the app lock isn't a list, so this menu, not the
+            rail, is its home). AppLockGate closes on the spot. */}
+        {appLock.exists && appLock.unlocked && (
+          <DropdownMenuItem onSelect={() => lockApp()}>
+            <Lock className="size-4" />
+            Lock app
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"

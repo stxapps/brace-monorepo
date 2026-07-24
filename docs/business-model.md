@@ -208,7 +208,9 @@ Why these cuts:
 - **Locks are the wedge lever, and not a privacy contradiction.** E2E encryption
   is free for everyone — that's the security substrate. The lock is only the
   convenience layer over it (biometric quick-lock, hide-a-list), so charging for
-  it isn't charging for privacy.
+  it isn't charging for privacy. The mechanism — a shoulder-surfing deterrent
+  over already-decrypted data, gated on this `locks` entitlement — is
+  [locks.md](./locks.md).
 - **No lock-in: full data export is free.** This is local-first + E2E — the data
   already lives on the user's device, so "export" is just serializing what they
   already hold. Charging to leave would betray exactly the privacy wedge you're

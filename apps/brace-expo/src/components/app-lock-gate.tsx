@@ -18,7 +18,8 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // and a locked one must never flash the app. Whether the lock is UNLOCKED is
 // in-memory only (lock-provider), so a relaunch always re-engages it.
 export function AppLockGate({ children }: { children: ReactNode }) {
-  const { status, appLock, unlockApp } = useLocks();
+  const { status, appLock, unlockApp, biometricAvailable, biometricLabel, unlockAppWithBiometric } =
+    useLocks();
 
   if (status === 'checking') return null;
 
@@ -30,6 +31,11 @@ export function AppLockGate({ children }: { children: ReactNode }) {
           title="Brace is locked"
           description="Enter your app lock password to continue."
           onUnlock={unlockApp}
+          biometric={
+            appLock.biometric && biometricAvailable
+              ? { label: biometricLabel, onUnlock: unlockAppWithBiometric }
+              : undefined
+          }
         />
       </StyledSafeAreaView>
     );

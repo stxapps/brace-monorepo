@@ -17,14 +17,19 @@ import { eq } from 'drizzle-orm';
 
 import { getDb, locks } from './db';
 
-// Mirrors web-react's LockRecord exactly (hideList optional, not null) so the
-// shared lock logic — e.g. @stxapps/shared's computeCoverage — sees one shape.
+// Mirrors web-react's LockRecord (hideList optional, not null) so the shared
+// lock logic — e.g. @stxapps/shared's computeCoverage — sees one shape. ONE
+// expo-only addition: `biometric`, the opt-in to unlock this lock with Face ID /
+// Touch ID (docs/locks.md). It's native-only (web has no equivalent), and the
+// shared CoverageLock slice reads only `id`/`hideList`, so the extra field
+// doesn't touch the cross-platform logic.
 export interface LockRecord {
   id: string;
   kind: 'app' | 'list';
   salt: string;
   hash: string;
   hideList?: boolean;
+  biometric?: boolean;
 }
 
 // The constant primary key of the single app-lock row. List locks are keyed by
@@ -34,11 +39,15 @@ export const APP_LOCK_ID = 'app' as const;
 
 export async function readLocks(): Promise<LockRecord[]> {
   const rows = await getDb().select().from(locks);
-  return rows.map((row) => ({ ...row, hideList: row.hideList ?? undefined }));
+  return rows.map((row) => ({
+    ...row,
+    hideList: row.hideList ?? undefined,
+    biometric: row.biometric ?? undefined,
+  }));
 }
 
 export async function putLock(record: LockRecord): Promise<void> {
-  const row = { ...record, hideList: record.hideList ?? null };
+  const row = { ...record, hideList: record.hideList ?? null, biometric: record.biometric ?? null };
   await getDb().insert(locks).values(row).onConflictDoUpdate({ target: locks.id, set: row });
 }
 

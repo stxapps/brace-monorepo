@@ -25,6 +25,7 @@ import { useRouter } from 'expo-router';
 import {
   CircleAlert,
   LifeBuoy,
+  Lock,
   LogOut,
   MoreHorizontal,
   RefreshCw,
@@ -32,7 +33,7 @@ import {
   SquareCheckBig,
 } from 'lucide-react-native';
 
-import { useSignOut, useSync } from '@stxapps/expo-react';
+import { useLocks, useSignOut, useSync } from '@stxapps/expo-react';
 import { getSyncPhase } from '@stxapps/shared';
 
 import {
@@ -51,6 +52,7 @@ if (!webUrl) throw new Error('EXPO_PUBLIC_WEB_URL is not set');
 
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, requestSync } = useSync();
+  const { appLock, lockApp } = useLocks();
   const { enterBulkEdit } = useLinksViewState();
   const signOut = useSignOut();
   const router = useRouter();
@@ -101,6 +103,17 @@ export function MoreOptionsMenu() {
           <Icon as={LifeBuoy} className="size-4" />
           <Text>Support</Text>
         </DropdownMenuItem>
+        {/* Re-engage the device-local app lock without a relaunch. Only when one
+            is SET and currently open — the app-global peer of the sidebar rows'
+            per-list "Lock now" (the app lock isn't a list, so this menu, not the
+            drawer, is its home). AppLockGate closes on the spot. Web parity:
+            MoreOptionsMenu's "Lock app". */}
+        {appLock.exists && appLock.unlocked && (
+          <DropdownMenuItem onPress={lockApp}>
+            <Icon as={Lock} className="size-4" />
+            <Text>Lock app</Text>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         {/* useSignOut: server revocation (best-effort), then the local wipe —
             never the bare endSession primitive, which only drops the session. */}

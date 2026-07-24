@@ -6,9 +6,9 @@
 // solvable by signing out (which wipes every lock) and signing back in with the
 // account password.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { Lock } from 'lucide-react-native';
+import { Lock, ScanFace } from 'lucide-react-native';
 
 import { useSignOut } from '@stxapps/expo-react';
 
@@ -23,6 +23,7 @@ export function LockPane({
   description,
   onUnlock,
   className,
+  biometric,
 }: {
   title: string;
   description: string;
@@ -31,6 +32,11 @@ export function LockPane({
   onUnlock: (password: string) => Promise<boolean>;
   // Sizing comes from the caller: flex-1 for the app gate, in-pane otherwise.
   className?: string;
+  // The biometric fast-path, present only when the gating lock has opted in AND
+  // the device supports it (the caller decides). `onUnlock` runs the OS prompt
+  // and resolves true when it opened the lock — the gate then unmounts. The
+  // password field below is always the fallback (docs/locks.md).
+  biometric?: { label: string; onUnlock: () => Promise<boolean> };
 }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +62,31 @@ export function LockPane({
     }
   };
 
+  // Biometric fast-path. On success the gate unmounts, so we leave `busy` set;
+  // on cancel/failure we release it and fall through to the password field —
+  // never an error, never a loop.
+  const tryBiometric = async () => {
+    if (busy || !biometric) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (!(await biometric.onUnlock())) setBusy(false);
+    } catch {
+      setBusy(false);
+    }
+  };
+
+  // Auto-prompt ONCE when biometric is offered (open the gate → prompt at once).
+  // The ref makes it strictly once-on-offer even though `biometric` is a fresh
+  // object each render, so a cancel doesn't immediately re-prompt.
+  const autoPrompted = useRef(false);
+  useEffect(() => {
+    if (!biometric || autoPrompted.current) return;
+    autoPrompted.current = true;
+    void tryBiometric();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [biometric]);
+
   return (
     <View className={cn('items-center justify-center gap-4 px-6 py-8', className)}>
       <View className="bg-muted size-12 items-center justify-center rounded-full">
@@ -69,9 +100,15 @@ export function LockPane({
       </View>
 
       <View className="w-full max-w-xs gap-3">
+        {biometric && (
+          <Button variant="outline" onPress={() => void tryBiometric()} disabled={busy}>
+            <Icon as={ScanFace} className="size-4" />
+            <Text>{`Unlock with ${biometric.label}`}</Text>
+          </Button>
+        )}
         <Input
           secureTextEntry
-          autoFocus
+          autoFocus={!biometric}
           autoCapitalize="none"
           autoCorrect={false}
           placeholder="Password"

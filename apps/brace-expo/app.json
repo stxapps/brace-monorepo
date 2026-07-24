@@ -43,6 +43,12 @@
       "expo-router",
       "expo-iap",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Brace uses Face ID to unlock the app and locked lists on this device."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Brace uses your photo library to let you pick a custom preview image for a saved link."

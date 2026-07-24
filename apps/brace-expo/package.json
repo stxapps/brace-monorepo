@@ -49,6 +49,7 @@
     "expo-image-manipulator": "*",
     "expo-image-picker": "*",
     "expo-linking": "*",
+    "expo-local-authentication": "*",
     "expo-router": "*",
     "expo-secure-store": "*",
     "expo-share-extension": "*",

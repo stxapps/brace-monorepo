@@ -9,7 +9,7 @@
 // `type="time"` input).
 
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Switch, View } from 'react-native';
 import {
   ArrowDown,
   ArrowUp,
@@ -247,8 +247,8 @@ export function MiscSection() {
     setSyncTheme,
     setLocalTheme,
   } = useSettingMutations();
-  const { appLock } = useLocks();
-  const { setAppLock, removeAppLock } = useLockMutations();
+  const { appLock, biometricAvailable, biometricLabel } = useLocks();
+  const { setAppLock, removeAppLock, setAppBiometric } = useLockMutations();
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
   const [lockDialog, setLockDialog] = useState<'set' | 'remove' | null>(null);
@@ -441,6 +441,24 @@ export function MiscSection() {
             </Button>
           )}
         </View>
+
+        {/* Biometric fast-path — only with an app lock set AND biometry enrolled
+            on this device. The password stays the root credential and the
+            fallback; this just opts the app lock into Face ID / Touch ID. The
+            Switch reflects the persisted flag, so a cancelled enable (the OS
+            confirm) leaves it off. */}
+        {appLock.exists && biometricAvailable && (
+          <View className="mt-4 flex-row items-center justify-between gap-4">
+            <View className="min-w-0 flex-1">
+              <Text className="font-medium">Unlock with {biometricLabel}</Text>
+              <Text className="text-muted-foreground mt-0.5 text-sm">
+                Use {biometricLabel} instead of typing the password. The password still works as a
+                fallback.
+              </Text>
+            </View>
+            <Switch value={appLock.biometric} onValueChange={(v) => run(setAppBiometric(v))} />
+          </View>
+        )}
       </View>
 
       {lockDialog === 'set' && (
