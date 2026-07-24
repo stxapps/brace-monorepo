@@ -3,12 +3,18 @@
 How the link views read from the local store fast, stay live, and paginate at a
 few-thousand-link scale. See [architecture.md](./architecture.md) for the package
 layering and [local-first-sync.md](./local-first-sync.md) for how those links got
-into IndexedDB in the first place (encrypted blob per file → decrypted local
-store). This doc is about the **read** edge: `packages/web-react/src/data/queries.ts`
-(the typed read layer), the indexes in `data/db.ts` that serve it, the
-`data/decode-cache.ts` memo, and the virtualized layouts under
-`app/(app)/links/_layouts/`. The URL⇄`LinkQuery` grammar and the write path that
-produce the queries this edge reads live in [search.md](./search.md).
+into the local store in the first place (encrypted blob per file → decrypted
+local store). This doc describes the read model **canonically**, with brace-web /
+`packages/web-react/src/data/queries.ts` (Dexie over IndexedDB) as the reference
+implementation; brace-expo's `packages/expo-react/src/data/queries.ts` is a
+drizzle-over-SQLite port holding the same semantics — see
+[the expo port](#the-expo-sqlitedrizzle-port) at the end for where it diverges.
+The pieces: the typed read layer (`queries.ts`), the indexes in each app's
+`data/db.ts` that serve it, the shared `@stxapps/shared` `sync/decode-cache.ts`
+memo, and the virtualized layouts (web: `app/(app)/links/_layouts/`; expo:
+FlashList under `features/links/`). The URL⇄`LinkQuery` grammar (now shared —
+`sync/link-query.ts`) and the write path that produce the queries this edge reads
+live in [search.md](./search.md).
 
 The decisive constraint is **scale on one device**: a user can save several
 thousand links, all resident in IndexedDB, and the UI reads from that store on
@@ -77,7 +83,8 @@ rebuilt on ingest (never synced, so no LWW), not a projected column on the link.
 
 ### liveQuery + virtual scrolling
 
-Two libraries carry the UI:
+Two libraries carry the UI (the expo equivalents — `useLiveRead` over
+expo-sqlite's change listener, and `FlashList` — are in [the expo port](#the-expo-sqlitedrizzle-port)):
 
 - **Dexie `useLiveQuery`** (`_hooks/use-links.ts`) subscribes the view to the
   query. It re-runs `readLinks(query, limit)` whenever `query`/`limit` change
@@ -116,7 +123,8 @@ array, exactly what the virtualizer indexes by position. So the forcing chain is
 growing-`limit`, not a cursor ⟹ a decode cache to keep that re-execution
 affordable.**
 
-The one optimization on top is the **decode cache** (`data/decode-cache.ts`).
+The one optimization on top is the **decode cache**
+(`@stxapps/shared` `sync/decode-cache.ts` — shared verbatim by both engines).
 Because `useLiveQuery` re-reads the whole loaded prefix on every write, and
 decoding a link (`parseBlob` → `JSON.parse` + zod) is the costliest step of a
 read, re-decoding that prefix on every tick is O(loaded) zod work per keystroke
@@ -299,3 +307,47 @@ and **uniform across all query kinds**. The alternatives optimize the browse
 fast path at the cost of complexity, scroll-time UX, or a second code path for
 search/tag/pinned queries — so they wait until profiling or a product requirement
 forces the issue.
+
+### the expo (SQLite/drizzle) port
+
+brace-expo runs the **same read model over a different substrate**:
+`@stxapps/expo-react`'s `data/queries.ts` is drizzle-over-`expo-sqlite` where
+web-react is Dexie-over-IndexedDB. Everything above — the projected columns, the
+per-query-kind driver choice, the pinned overlay, the growing-`limit` pagination,
+the shared decode cache, the totals-go-`undefined`-under-text-search policy —
+holds identically; the port's own file header is the line-by-line map. What
+changes is mechanical, and only the substrate forces it:
+
+- **Indexes → drizzle SQL.** The compound-index fast paths become
+  `WHERE … ORDER BY <sort column>, path` — the explicit `path` tiebreak
+  reproduces the primary-key order Dexie gives equal-timestamp rows for free —
+  and the sparse "rows without the sort column never appear" property becomes an
+  explicit `IS NOT NULL` on that column.
+- **multiEntry tag index → junction table.** Tag membership is the
+  `item_tag_ids` junction (db.ts): the tag driver selects candidate paths from
+  it, and the tag predicates read a junction-built `path → tagIds` map instead of
+  a `record.itemTagIds` array. Like web, the tag path materializes its subset and
+  finishes in JS rather than pushing an indexed join into SQL — the multi-tag
+  `all`/`none` predicates need each row's full tag set anyway, and keeping it in
+  JS holds the two engines' logic aligned. Fine at few-thousand-links scale.
+- **Lazy Dexie cursor → keyset chunk loop.** Dexie's lazy filtered
+  `.filter().limit(n+1)` cursor walk becomes a keyset-paginated chunk loop
+  (`SCAN_CHUNK` rows per step, resuming strictly after `(sortValue, path)`), so a
+  page read still touches a **bounded slice** instead of materializing the
+  library.
+- **liveQuery → `useLiveRead`, and no zone-echo.** Reactivity comes from
+  expo-sqlite's `addDatabaseChangeListener` via the `useLiveRead` hook (which
+  re-runs the whole read on any change to the tables it names, coarse-grained by
+  table), not from Dexie tracking which index ranges a querier touched. So the
+  **zone-echo constraint** the web `readLinks` carries — helper awaits reachable
+  from a querier must be `Promise.resolve`-wrapped or writes silently stop
+  re-firing the query — **does not exist here**; expo helpers await freely.
+  `react-virtual` likewise becomes `FlashList`.
+
+**Ported so far:** the namespace reads (lists/tags/pins/settings), the
+link-library query (`readLinks` and its whole driver tree), the by-id / by-url
+lookups, and the quota count. **Not yet ported:** the extraction tallies and the
+extract-all / displayed-scoped drain-page reads (§the extraction-queue reads) —
+they arrive verbatim with the brace-expo features that need them, and will keep
+the same cursor-vs-`bulkGet` split described there (unbounded-but-not-reactive
+carries a cursor; reactive-but-bounded uses `bulkGet`).
