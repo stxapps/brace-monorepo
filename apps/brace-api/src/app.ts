@@ -63,9 +63,7 @@ app.use(
 // costs an attacker a rate-limited no-op.
 const WEBHOOK_PATHS = new Set([PADDLE_WEBHOOK_PATH, APPSTORE_NOTIFY_PATH, PLAYSTORE_NOTIFY_PATH]);
 const standardRateLimit = rateLimit('standard');
-app.use('*', (c, next) =>
-  WEBHOOK_PATHS.has(c.req.path) ? next() : standardRateLimit(c, next),
-);
+app.use('*', (c, next) => (WEBHOOK_PATHS.has(c.req.path) ? next() : standardRateLimit(c, next)));
 
 app.get('/', (c) => {
   return c.json({ message: 'Welcome to brace-api' });

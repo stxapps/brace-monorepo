@@ -29,20 +29,20 @@ device that can sync can ask.
 
 ### the pieces
 
-| layer     | piece                                    | role                                                                                                                                       |
-| --------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| shared    | `iap/plans.ts`                           | `PLANS`, `entitlementsOf(plan)` — the tiers table as data, read by BOTH the client paywall and the server gate (the `LINK_TITLE_MAX` move) |
-| shared    | `iap/endpoints.ts`                       | contracts: `iap/status`, `iap/checkout`, `iap/portal`, `iap/verify` + `subscriptionStatusSchema`                                           |
-| brace-api | `purchases` table (DIRECTORY_DB)         | one row per provider subscription, `UNIQUE(source, external_id)`                                                                           |
-| brace-api | `services/iap.ts`                        | the purchases→status **fold** (grace windows, plan rank), webhook application, Paddle API calls                                            |
-| brace-api | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                      |
-| brace-api | `lib/quota.ts`                           | `checkPutQuota(entitlements, usage, paths)` at `files/sign`                                                                                |
-| react     | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                         |
-| shared    | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)         |
-| brace-api | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                 |
-| web-react | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                        |
-| brace-web | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal                                                                                           |
-| brace-expo| `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)      |
+| layer      | piece                                    | role                                                                                                                                       |
+| ---------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| shared     | `iap/plans.ts`                           | `PLANS`, `entitlementsOf(plan)` — the tiers table as data, read by BOTH the client paywall and the server gate (the `LINK_TITLE_MAX` move) |
+| shared     | `iap/endpoints.ts`                       | contracts: `iap/status`, `iap/checkout`, `iap/portal`, `iap/verify` + `subscriptionStatusSchema`                                           |
+| brace-api  | `purchases` table (DIRECTORY_DB)         | one row per provider subscription, `UNIQUE(source, external_id)`                                                                           |
+| brace-api  | `services/iap.ts`                        | the purchases→status **fold** (grace windows, plan rank), webhook application, Paddle API calls                                            |
+| brace-api  | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                      |
+| brace-api  | `lib/quota.ts`                           | `checkPutQuota(entitlements, usage, paths)` at `files/sign`                                                                                |
+| react      | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                         |
+| shared     | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)         |
+| brace-api  | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                 |
+| web-react  | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                        |
+| brace-web  | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal                                                                                           |
+| brace-expo | `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)      |
 
 `purchases` is **global** (DIRECTORY*DB, not an account shard) because webhook
 events after the first arrive keyed by the \_provider's* subscription id with no

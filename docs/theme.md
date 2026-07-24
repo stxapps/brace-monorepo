@@ -199,7 +199,7 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   - **Apply is `Uniwind.setTheme('light' | 'dark' | 'system')`, not the `.dark`
     class.** RN has no `<html>` to toggle; Uniwind's runtime theme is the
     equivalent, and `global.css` already declares the `@variant light`/`@variant
-    dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
+dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
   - **`system` is handed to Uniwind, not resolved-and-pinned like web.** This is
     the one real divergence in the resolver path. `setTheme('light'|'dark')` calls
     `Appearance.setColorScheme(...)` under the hood, which _shadows_ the OS signal

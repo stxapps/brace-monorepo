@@ -38,7 +38,13 @@ import {
   useRef,
 } from 'react';
 
-import { isFaviconStale, putFavicon, putFaviconNone, readFavicon, sniffImageMime } from '../data/favicon-store';
+import {
+  isFaviconStale,
+  putFavicon,
+  putFaviconNone,
+  readFavicon,
+  sniffImageMime,
+} from '../data/favicon-store';
 import { useSettings } from '../hooks/use-settings';
 import { useAuth } from './auth-provider';
 

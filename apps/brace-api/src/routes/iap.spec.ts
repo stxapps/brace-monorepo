@@ -354,7 +354,9 @@ describe('iap', () => {
     it('409s a subscription already bound to another account (first sight is for life)', async () => {
       const first = await authFor('iap-verify-bind-1');
       mockAppstoreStatuses({ originalTransactionId: 'otid-bind-1' });
-      expect((await postVerify(first.auth, { source: 'appstore', token: '3000000000000001' })).status).toBe(200);
+      expect(
+        (await postVerify(first.auth, { source: 'appstore', token: '3000000000000001' })).status,
+      ).toBe(200);
 
       // A second account replays the same token — Apple answers the same
       // subscription; the stored binding must win.

@@ -16,7 +16,12 @@
 import { useEffect } from 'react';
 
 import { useFavicon } from '../contexts/favicon-provider';
-import { faviconFileFor, type FaviconRecord, isFaviconStale, readFavicon } from '../data/favicon-store';
+import {
+  faviconFileFor,
+  type FaviconRecord,
+  isFaviconStale,
+  readFavicon,
+} from '../data/favicon-store';
 import { useLiveRead } from './use-live-read';
 
 // The mounted-and-settled gate before a request — rows are virtualized, so this

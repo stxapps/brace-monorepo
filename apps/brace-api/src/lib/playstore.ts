@@ -140,9 +140,7 @@ export async function fetchPlaystoreSubscription(
 
   const status = PLAY_STATE_MAP[parsed.data.subscriptionState] ?? null;
   if (status === null) {
-    console.error(
-      `fetchPlaystoreSubscription: unmapped state "${parsed.data.subscriptionState}"`,
-    );
+    console.error(`fetchPlaystoreSubscription: unmapped state "${parsed.data.subscriptionState}"`);
     return null;
   }
 
@@ -194,9 +192,7 @@ export function playNotificationPurchaseToken(pushBody: unknown): string | null 
   }
   const parsed = z
     .looseObject({
-      subscriptionNotification: z
-        .looseObject({ purchaseToken: z.string() })
-        .optional(),
+      subscriptionNotification: z.looseObject({ purchaseToken: z.string() }).optional(),
     })
     .safeParse(notification);
   if (!parsed.success) return null;

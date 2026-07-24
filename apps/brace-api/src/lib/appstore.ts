@@ -238,9 +238,7 @@ export async function fetchAppstoreSubscription(
       // 'trialing' is a display distinction only (the fold treats it as
       // active); Apple flags it on the transaction's offer type.
       const effectiveStatus: PurchaseStatus =
-        status === 'active' && info.data.offerDiscountType === 'FREE_TRIAL'
-          ? 'trialing'
-          : status;
+        status === 'active' && info.data.offerDiscountType === 'FREE_TRIAL' ? 'trialing' : status;
 
       return {
         externalId: info.data.originalTransactionId,

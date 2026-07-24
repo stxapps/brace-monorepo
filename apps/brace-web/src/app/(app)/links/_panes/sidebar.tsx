@@ -394,7 +394,7 @@ export function Sidebar() {
         aria-label="Lock list"
         title="Lock list"
         onClick={() => lockList(id)}
-        className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover/navitem:opacity-100"
+        className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition group-hover/navitem:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
       >
         <LockOpen className="size-3.5" />
       </button>

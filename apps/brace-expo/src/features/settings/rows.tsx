@@ -8,14 +8,7 @@
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  type LucideIcon,
-  Plus,
-  X,
-} from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, type LucideIcon, Plus, X } from 'lucide-react-native';
 
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';

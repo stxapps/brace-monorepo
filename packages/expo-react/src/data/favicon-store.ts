@@ -77,7 +77,11 @@ export async function putFavicon(host: string, bytes: Uint8Array): Promise<void>
   if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
   faviconFileFor(host).write(bytes);
   const row = { host, status: 'ok' as const, fetchedAt: Date.now() };
-  getDb().insert(favicons).values(row).onConflictDoUpdate({ target: favicons.host, set: row }).run();
+  getDb()
+    .insert(favicons)
+    .values(row)
+    .onConflictDoUpdate({ target: favicons.host, set: row })
+    .run();
 }
 
 // Record "this host has no reachable favicon" so a relaunch doesn't re-buy the
@@ -86,7 +90,11 @@ export async function putFaviconNone(host: string): Promise<void> {
   const file = faviconFileFor(host);
   if (file.exists) file.delete();
   const row = { host, status: 'none' as const, fetchedAt: Date.now() };
-  getDb().insert(favicons).values(row).onConflictDoUpdate({ target: favicons.host, set: row }).run();
+  getDb()
+    .insert(favicons)
+    .values(row)
+    .onConflictDoUpdate({ target: favicons.host, set: row })
+    .run();
 }
 
 // Remove every cached icon file — the file-system half of the `favicons` table
@@ -112,8 +120,14 @@ export function sniffImageMime(b: Uint8Array): string | undefined {
   if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'image/gif';
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
   if (
-    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
-    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50
+    b[0] === 0x52 &&
+    b[1] === 0x49 &&
+    b[2] === 0x46 &&
+    b[3] === 0x46 &&
+    b[8] === 0x57 &&
+    b[9] === 0x45 &&
+    b[10] === 0x42 &&
+    b[11] === 0x50
   ) {
     return 'image/webp';
   }
