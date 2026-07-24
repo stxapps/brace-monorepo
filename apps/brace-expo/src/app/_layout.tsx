@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useQueryManagers } from '@stxapps/expo-react';
 import { ApiClientProvider } from '@stxapps/react';
 
+import { ThemeProvider } from '../components/theme-provider';
 import { apiClient } from '../lib/api-client';
 
 import '../../global.css';
@@ -58,6 +59,13 @@ import '../../global.css';
 // content (the links topbar's dropdown menu) portals into it so it renders
 // above the screen tree. Last sibling of the Stack so portaled content draws
 // on top; inside the providers so it can still read their contexts.
+//
+// ThemeProvider is the read/apply half of the theme (docs/theme.md): it reads
+// the resolved ThemeState from useSettings and applies it via Uniwind. Mounted
+// here at the root so it covers every route group (auth + app) — settings read
+// from the sqlite singletons, so it needs no account. It also drives
+// `Appearance`, so the `<StatusBar style="auto">` above it follows the app
+// theme. `useTheme()` (the rendered light/dark) is available to anything below.
 const queryClient = new QueryClient();
 
 export default function RootLayout() {
@@ -69,9 +77,11 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <ApiClientProvider client={apiClient}>
             <AuthProvider>
-              <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false }} />
-              <PortalHost />
+              <ThemeProvider>
+                <StatusBar style="auto" />
+                <Stack screenOptions={{ headerShown: false }} />
+                <PortalHost />
+              </ThemeProvider>
             </AuthProvider>
           </ApiClientProvider>
         </QueryClientProvider>

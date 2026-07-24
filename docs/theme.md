@@ -181,12 +181,65 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   context sharing (popup ↔ options ↔ background) comes free from same-origin
   IndexedDB. The old `utils/theme-storage.ts` adapter is gone.
 
+- **brace-expo** — the model is identical (four modes, the sync/device split,
+  the same `useSettings`/`useSettingMutations` seam in `@stxapps/expo-react`),
+  and the picker is Settings → Misc (`features/settings/misc-section.tsx`), the
+  same tab shape as web. Only the **read/apply half** differs, because RN has no
+  DOM class and no pre-paint `<script>`. The `ThemeProvider`
+  (`apps/brace-expo/src/components/theme-provider.tsx`) is the port of web-ui's:
+  it consumes the already-resolved `useSettings().theme`, exposes
+  `useTheme().effectiveTheme`, and re-resolves on each mode's trigger. It mounts
+  once at the root `_layout.tsx`, wrapping `<Stack>` inside the data-layer
+  providers, so it covers **both** route groups (`(auth)` and `(app)`) — settings
+  read from the sqlite singletons, so it needs no account. There is deliberately
+  **no `expo-ui` package** while brace-expo is the only expo app, so it lives in
+  the app, not a package (the same reason the RN reusables components do). Three
+  substitutions from web:
+
+  - **Apply is `Uniwind.setTheme('light' | 'dark' | 'system')`, not the `.dark`
+    class.** RN has no `<html>` to toggle; Uniwind's runtime theme is the
+    equivalent, and `global.css` already declares the `@variant light`/`@variant
+    dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
+  - **`system` is handed to Uniwind, not resolved-and-pinned like web.** This is
+    the one real divergence in the resolver path. `setTheme('light'|'dark')` calls
+    `Appearance.setColorScheme(...)` under the hood, which _shadows_ the OS signal
+    (`Appearance.getColorScheme()` then returns the pinned value, not the OS one) —
+    so in `system` mode the provider must leave the override clear and let
+    Uniwind's own `Appearance` listener track the OS (`setTheme('system')` does
+    exactly that). `light`/`dark`/`custom` resolve to a concrete value via the
+    shared `resolveTheme` and pin; there the `Appearance.setColorScheme` side
+    effect is a _bonus_ — it makes `<StatusBar style="auto">` (already in
+    `_layout.tsx`) and native components follow the app theme with **no extra
+    StatusBar wiring**. The OS-change and `custom`-crossover triggers are the RN
+    analogues of web's: an `Appearance.addChangeListener` (for `matchMedia`) and
+    the same `msUntilNextThemeSwitch` + `setTimeout`.
+  - **No `localStorage` FOUC mirror and no `themeInitScript`.** The entire
+    pre-paint apparatus (the section below) exists _only_ because a browser paints
+    before React/IndexedDB. Native has no pre-paint script and no synchronous
+    store to read mid-mount, so there is nothing to mirror into. The native splash
+    screen (`expo-splash-screen`, already wired) covers startup, and Uniwind's own
+    startup default is `system` — which matches `DEFAULT_THEME`, so first paint is
+    consistent with the default exactly like web's cold-load fallback. If a
+    pinned-theme cold flash ever needs eliminating, the native lever is a real gate
+    (hold the splash until the settings live read first resolves), not a cache.
+
+  The **iOS/Android share sheet** (`features/share/share-root.tsx`) mounts outside
+  the router tree — a separate process on iOS — and deliberately carries **no
+  `ThemeProvider`**: it follows Uniwind's default (system) appearance, so it needs
+  zero theme code (the token sets come free from its own `global.css` import).
+  Wiring sqlite + settings decryption to honor a device-pinned theme for a
+  transient sheet isn't worth it.
+
 ### extending
 
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in
   `resolveTheme` (and `msUntilNextThemeSwitch` if it's time-based), mirror the
-  branch in `themeInitScript`'s ES5 IIFE, and add a radio in `misc-section.tsx`.
-  `coerceThemeState` accepts any value in `THEME_MODES` automatically.
+  branch in `themeInitScript`'s ES5 IIFE (web FOUC only), and add a radio in both
+  apps' `misc-section.tsx`. `coerceThemeState` accepts any value in `THEME_MODES`
+  automatically. brace-expo's `ThemeProvider` needs no change for a normal
+  resolve-and-pin mode (it goes through the shared `resolveTheme`); it only needs
+  a new branch if the mode requires a distinct apply path like `system`'s (leave
+  the `Appearance` override clear) or a non-`Appearance`/non-timer trigger.
 - **A new theme field** — put it beside `theme` in `settingsGeneralSchema` (a new
   sibling round-trips through the parent `looseObject`), not as a sub-key of
   `theme`. Add it to `ThemeState` + `coerceThemeState`, and to

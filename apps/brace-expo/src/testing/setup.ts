@@ -19,8 +19,12 @@ jest.mock('react-native-keyboard-controller', () =>
 );
 
 // Uniwind's className→style bridge runs in the Metro transform / native
-// runtime; under jest the HOC is an identity wrapper (className is ignored).
-jest.mock('uniwind', () => ({ withUniwind: (Component: unknown) => Component }));
+// runtime; under jest the HOC is an identity wrapper (className is ignored), and
+// the `Uniwind` runtime (ThemeProvider's `setTheme`) is a no-op stub.
+jest.mock('uniwind', () => ({
+  withUniwind: (Component: unknown) => Component,
+  Uniwind: { setTheme: jest.fn() },
+}));
 
 if (typeof global.structuredClone === 'undefined') {
   global.structuredClone = (object) => JSON.parse(JSON.stringify(object));
