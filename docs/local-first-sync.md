@@ -148,13 +148,14 @@ That vocabulary — the `StoreStatus` / `BgSyncStatus` / `SyncPhase` types,
 `getSyncPhase`, the default `SYNC_PHASE_LABELS`, and `formatSyncedAt` — lives in
 **`@stxapps/shared` (`sync/status.ts`)**, not in the platform-web layer. It's pure
 data + pure derivation with no React and no browser API, so a client that
-re-implements the engine on a non-IndexedDB store (the future native app) still
-speaks the same status language and collapses phases identically. The concrete
-providers are the platform layer's job: `web-react`'s `SyncProvider` drives the
-web engine and produces the two fields; `ExternalSyncProvider` takes them from an
-out-of-page context (the browser extension's background worker, via its
-`browser.storage` mirror); a native app would write its own producer. **Shared
-owns the vocabulary; each platform owns its producer.**
+re-implements the engine on a non-IndexedDB store (brace-expo, on expo-sqlite)
+still speaks the same status language and collapses phases identically. The
+concrete providers are the platform layer's job: `web-react`'s `SyncProvider`
+drives the web engine and produces the two fields; `ExternalSyncProvider` takes
+them from an out-of-page context (the browser extension's background worker, via
+its `browser.storage` mirror); `expo-react`'s own `SyncProvider`
+(`contexts/sync-provider.tsx`) drives the expo engine and produces the two fields
+the same way. **Shared owns the vocabulary; each platform owns its producer.**
 
 Labels split the same way. `SYNC_PHASE_LABELS` in shared is the _default_ wording;
 each surface layers its own presentation on top of the phase — icons, actions, and
@@ -283,7 +284,7 @@ tag/list names.
   inside `extractions/` are between two extraction writes only — idempotent,
   self-healing. The UI joins the two blobs to render a row (`customTitle ??
 extraction.title ?? host(url)`). Written by client extractors (the browser
-  extension, future Expo app, the web app orchestrating `brace-extractor` or an
+  extension, brace-expo, the web app orchestrating `brace-extractor` or an
   import), never by `brace-api`, which stays a blind sync broker. The work loop
   is a **query**, not
   a queue object: a link with no `done` `titleImage` facet (no `extractions/` file,
@@ -742,8 +743,8 @@ crypto packages (`@stxapps/web-crypto` / `@stxapps/expo-crypto`, next to the
 AES-256-GCM primitive it wraps; the sync engine is the caller). The constants
 (`BLOB_FORMAT_V1`, `AES_GCM_IV_BYTES`) live in `@stxapps/shared`
 (`crypto/params.ts`) because they are a **cross-platform contract** like the
-key-derivation parameters: a blob packed on web must unpack on the extension
-and the future Expo client, forever. Raw bytes, deliberately not a JSON
+key-derivation parameters: a blob packed on web must unpack on the browser
+extension and brace-expo, forever. Raw bytes, deliberately not a JSON
 envelope — base64 would inflate every blob ~33% (worst on the heavy content
 files that count against the quota), and any plaintext field beside the
 ciphertext (a content type, say) would leak to the server. What a blob
