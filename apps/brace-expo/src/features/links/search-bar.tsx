@@ -7,10 +7,11 @@
 // Divergences here:
 //
 //  - Web's box is persistent topbar chrome; on this narrow screen the bar is a
-//    full-width row summoned below the topbar by its search toggle
-//    (view-state-provider `searchOpen`, OR-ed with a committed-search check —
-//    see the visibility comment in `SearchBar`) — same slot the bulk-edit
-//    toolbar will share. Mounting auto-focuses the input.
+//    full-width row summoned below the topbar by its search toggle (rendered on
+//    view-state-provider's derived `searchVisible` — the search toggle OR-ed
+//    with a committed-search check, shared with the topbar so the two can't
+//    disagree) — same slot the bulk-edit toolbar will share. Mounting
+//    auto-focuses the input.
 //  - The advanced editor is a full-height page-sheet Modal, not a popover: five
 //    inputs plus two tri-state checklists don't fit a 320px anchored panel on a
 //    phone, and the keyboard would cover half of it.
@@ -507,8 +508,8 @@ function AdvancedSearch() {
 }
 
 export function SearchBar() {
-  const { searchOpen, bulkEditing } = useLinksViewState();
-  const { query, setQuery, selection } = useLinksPage();
+  const { searchVisible, bulkEditing } = useLinksViewState();
+  const { query, setQuery } = useLinksPage();
 
   // Basic box: a draft synced from the committed text. Navigation clears text →
   // the box empties; a basic/advanced search sets it → the box shows it.
@@ -516,14 +517,14 @@ export function SearchBar() {
   const [text, setText] = useState(committedText);
   useEffect(() => setText(committedText), [committedText]);
 
-  // Rendered visibility — the topbar's `searchVisible`, same expression (the
-  // rationale lives there): the explicit toggle OR a committed search with no
+  // Rendered visibility — the derived `searchVisible` from view-state-provider
+  // (rationale lives there): the explicit toggle OR a committed search with no
   // other surface ('none' selection), so e.g. a back gesture into a `?text=`
   // URL re-shows the bar without a toggle press. Bulk-edit mode suspends the
   // bar (its chrome is the mode's — exiting restores it); the committed query
   // keeps filtering the list underneath either way.
   if (bulkEditing) return null;
-  if (!searchOpen && selection.kind !== 'none') return null;
+  if (!searchVisible) return null;
 
   const submitBasic = () => {
     const w = words(text);

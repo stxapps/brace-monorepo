@@ -12,7 +12,9 @@ is the connective tissue between them.
 
 Code: `app/(app)/links/_contexts/page-provider.tsx` (the grammar + writers +
 projection), `app/(app)/links/_components/search-bar.tsx` (the UI), and
-`packages/web-react/src/data/queries.ts` (`LinkQuery`, the read engine).
+`packages/web-react/src/data/queries.ts` (`LinkQuery`, the read engine). The
+native port (brace-expo) is `features/links/page-provider.tsx` +
+`features/links/search-bar.tsx` — see _on native_ below.
 
 ### the query is the URL
 
@@ -180,6 +182,42 @@ ladder") and `packages/shared/src/iap/plans.ts` (`searchEditor`).
   (visible, not hidden) but opening it presents the upgrade path instead of the
   fields — so the query grammar and URL contract stay tier-agnostic (a Plus user's
   advanced deep link still _parses_ for a free user; they just can't _build_ one).
+
+### on native (brace-expo)
+
+The whole write/route layer above ports **verbatim** to
+`features/links/page-provider.tsx` and `features/links/search-bar.tsx`: the same
+`URL ⇄ LinkQuery` grammar, the same two writers, `selection` as the same lossy
+projection, and the identical `Draft` / tri-state / `apply` logic. Same URL
+params, so a link view **deep-links identically across web and native**. Only
+the platform seams differ, and each is documented in those files' header
+comments — not re-derived here:
+
+- **The "URL" is expo-router route params** (`useLocalSearchParams`), not
+  `URLSearchParams`. Repeated keys (`?tag=a&tag=b`) arrive as a `string[]`
+  value, so an `all()` helper stands in for `getAll`; the params object is fresh
+  each render, so the `query` memo keys on the serialized bag (`JSON.stringify`)
+  and parses it back inside for an honest dep list, where web gets object
+  identity from `useSearchParams`. Navigation is `router.push`; there is **no
+  Suspense boundary** (`useLocalSearchParams` has no prerender constraint).
+- **The basic box is a toggle-summoned full-width row**, not persistent topbar
+  chrome — a phone topbar has no room for it, so the Search action reveals a row
+  below the bar (view-state-provider `searchOpen`). Its rendered visibility is
+  the derived `searchVisible` (`searchOpen || selection.kind === 'none'`),
+  centralized in view-state-provider so the topbar toggle and the bar itself
+  can't disagree; the `none` disjunct force-shows the bar for a committed search
+  that has no other on-screen surface (a back-gesture into a `?text=` URL). It's
+  mutually exclusive with the bulk-edit toolbar (same slot).
+- **The advanced editor is a full-height page-sheet `Modal`**, not an anchored
+  popover — five inputs plus two checklists and a keyboard don't fit a 320px
+  panel on a phone. The tri-state box is **hand-rolled** (check/minus), because
+  the reusables `Checkbox` primitive is boolean-only where web leans on Radix's
+  `indeterminate`.
+- **The Plus gate closes the sheet under the paywall, then reopens on "Not
+  now"** (draft preserved in component state), rather than web's keep-the-popover-
+  open-behind: the paywall dialog portals to the root PortalHost, which Android
+  draws _behind_ the Modal's native window. Same peak-intent trigger (pressing
+  Search), same "let them build, then upgrade" shape.
 
 ### deferred, on purpose
 

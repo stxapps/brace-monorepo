@@ -54,17 +54,7 @@ export function Topbar() {
   const label = useSelectionLabel();
   const navigation = useNavigation();
   const { selection, setSimpleQuery } = useLinksPage();
-  const { searchOpen, setSearchOpen, preSearch, setPreSearch } = useLinksViewState();
-
-  // The bar's rendered visibility (same expression in search-bar.tsx): the
-  // explicit toggle, OR-ed with the one invariant the query can express — a
-  // committed search that resolves `selection` to 'none' has no other surface
-  // (no drawer highlight, generic title), so the bar force-shows even when
-  // `searchOpen` is false (the back gesture returning to a `?text=` URL after
-  // a dismiss). Only OR the two — the query alone can't decide visibility: a
-  // single-list/tag advanced search projects to a SIMPLE selection, and the
-  // bar must survive that commit.
-  const searchVisible = searchOpen || selection.kind === 'none';
+  const { searchVisible, setSearchOpen, preSearch, setPreSearch } = useLinksViewState();
 
   // Closing DISMISSES the search: with the bar gone, a committed search
   // ('none' selection) would keep filtering the list with no visible surface
@@ -100,9 +90,10 @@ export function Topbar() {
     if (!searchVisible) {
       // Snapshot where the user is, so dismissing a committed search returns
       // here. Always simple in this branch — a 'none' selection forces the bar
-      // visible, so opening can't happen under one (TS narrows `selection` to
-      // `SimpleSelection` through the `searchVisible` alias).
-      setPreSearch(selection);
+      // visible, so opening can't happen under one; the explicit guard is what
+      // proves that to TS now that `searchVisible` comes from context (it can no
+      // longer narrow `selection` through a local alias).
+      if (selection.kind !== 'none') setPreSearch(selection);
       setSearchOpen(true);
       return;
     }

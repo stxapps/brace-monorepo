@@ -65,11 +65,21 @@ interface LinksViewStateValue {
   // opened (true) or closed (false). Go through useEngagedOpen, not directly.
   setMenuOpen: (open: boolean) => void;
   // The user summoned the search bar row below the topbar (topbar's search
-  // toggle). Explicit chrome INTENT, not the rendered visibility — the bar
-  // renders when `searchOpen || selection.kind === 'none'`, computed at its
-  // consumers (topbar + search-bar).
+  // toggle). Explicit chrome INTENT, distinct from the rendered `searchVisible`
+  // below — a committed search shows the bar with `searchOpen` false.
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+  // The bar's rendered visibility — the single home for `searchOpen ||
+  // selection.kind === 'none'` that both the topbar toggle and the bar itself
+  // read, so they can't drift. The `none` disjunct is the one invariant the
+  // query can express: a committed search that resolves `selection` to 'none'
+  // has no other surface (no drawer highlight, generic title), so the bar
+  // force-shows even when `searchOpen` is false (a back gesture into a `?text=`
+  // URL). Only OR the two — the query alone can't decide it, since a
+  // single-list/tag advanced search projects to a SIMPLE selection and the bar
+  // must survive that commit. (Bulk-edit suppression is separate: the bar and
+  // that mode share a slot, so search-bar hides on `bulkEditing` on top of this.)
+  searchVisible: boolean;
   // Where the user was when the search bar was summoned — dismissing a
   // committed search returns here instead of home (topbar's toggle). Null when
   // the bar has never been opened, or was opened over a compound deep-link
@@ -150,8 +160,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
 
   // Navigating to another view (drawer press, back gesture, deep link) exits
   // bulk-edit mode — see the header comment. Keyed on the query's identity, the
-  // same stable reference useLinks depends on.
-  const { query } = useLinksPage();
+  // same stable reference useLinks depends on. `selection` (same projection the
+  // topbar/bar read) also feeds the derived `searchVisible` below.
+  const { query, selection } = useLinksPage();
+  const searchVisible = searchOpen || selection.kind === 'none';
   const prevQueryRef = useRef(query);
   useEffect(() => {
     if (prevQueryRef.current === query) return;
@@ -167,6 +179,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       setMenuOpen,
       searchOpen,
       setSearchOpen,
+      searchVisible,
       preSearch,
       setPreSearch,
       destroying,
@@ -188,6 +201,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       openMenus,
       setMenuOpen,
       searchOpen,
+      searchVisible,
       preSearch,
       destroying,
       requestDestroy,
