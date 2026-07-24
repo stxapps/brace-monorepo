@@ -44,6 +44,7 @@ import Link from 'next/link';
 
 import {
   ALL_LABEL,
+  ancestorIds,
   ARCHIVE_ID,
   flattenTree,
   MY_LIST_ID,
@@ -133,20 +134,6 @@ function pruneHidden<T extends TreeItem>(
         ? { ...node, children: pruneHidden(node.children, hiddenIds) }
         : node,
     );
-}
-
-// Ids on the path from the root down to (not including) `id` — the parents that
-// must be expanded for `id`'s row to be visible.
-function ancestorIds<T extends TreeItem>(nodes: TreeNode<T>[], id: string): string[] {
-  const walk = (ns: TreeNode<T>[], trail: string[]): string[] | null => {
-    for (const n of ns) {
-      if (n.item.id === id) return trail;
-      const found = walk(n.children, [...trail, n.item.id]);
-      if (found) return found;
-    }
-    return null;
-  };
-  return walk(nodes, []) ?? [];
 }
 
 // The icon for a list row: the system three keep their familiar marks, every

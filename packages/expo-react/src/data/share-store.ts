@@ -47,6 +47,7 @@ import {
   cleanTitle,
   compareRank,
   DEFAULT_LIST_ID,
+  flattenTree,
   LINKS_PREFIX,
   type List,
   LIST_NO_CHILDREN_IDS,
@@ -59,7 +60,6 @@ import {
   TAGS_PREFIX,
   tagSchema,
   TRASH_ID,
-  type TreeNode,
 } from '@stxapps/shared';
 
 import { runIncrementalSync } from '../sync/engine';
@@ -155,21 +155,18 @@ function mergeSystemLists(stored: List[]): List[] {
 // editor picker follows (docs/editors.md, "Locked and hidden lists stay
 // pickable"). Don't re-add a hiddenListIds filter here.
 export function buildShareLists(stored: List[]): ShareTaxonomyList[] {
-  const rows: ShareTaxonomyList[] = [];
-  const walk = (nodes: TreeNode<List>[]) => {
-    for (const node of nodes) {
-      if (node.item.id === TRASH_ID) continue;
-      rows.push({
-        id: node.item.id,
-        name: node.item.name,
-        depth: node.depth,
-        rank: node.item.rank,
-      });
-      walk(node.children);
-    }
-  };
-  walk(buildTree(mergeSystemLists(stored), { noChildrenIds: LIST_NO_CHILDREN_IDS }));
-  return rows;
+  // Trash is a no-children container (LIST_NO_CHILDREN_IDS), so buildTree never
+  // nests anything under it — filtering that one root node is equivalent to the
+  // old walk's `continue`, with nothing orphaned.
+  const tree = buildTree(mergeSystemLists(stored), { noChildrenIds: LIST_NO_CHILDREN_IDS });
+  return flattenTree(tree)
+    .filter((node) => node.item.id !== TRASH_ID)
+    .map((node) => ({
+      id: node.item.id,
+      name: node.item.name,
+      depth: node.depth,
+      rank: node.item.rank,
+    }));
 }
 
 // The tag-picker rows, in the user's rank order.

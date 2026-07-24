@@ -10,7 +10,7 @@
 // persists to localStorage; the device-local store can pick this up later —
 // it resets per launch, which is tolerable for a tree this small).
 
-import { Fragment, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -32,6 +32,7 @@ import { withUniwind } from 'uniwind';
 import { useLists, useLocks, useTags } from '@stxapps/expo-react';
 import {
   ALL_LABEL,
+  ancestorIds,
   ARCHIVE_ID,
   MY_LIST_ID,
   TRASH_ID,
@@ -64,7 +65,20 @@ function useCollapsedIds() {
     });
   }, []);
 
-  return { collapsed, toggle };
+  // Un-collapse a set of ids (a selected row's ancestors) so the active row is
+  // never hidden under a collapsed parent. Returns the same set unchanged when
+  // none were collapsed, so the selection effect below doesn't re-render for a
+  // no-op (the common case — most selections are already visible).
+  const expand = useCallback((ids: readonly string[]) => {
+    setCollapsed((prev) => {
+      if (!ids.some((id) => prev.has(id))) return prev;
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
+  }, []);
+
+  return { collapsed, toggle, expand };
 }
 
 // The icon for a list row: the system three keep their familiar marks, every
@@ -322,13 +336,23 @@ function FooterLink({
 export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   const lists = useLists();
   const tags = useTags();
+  const { selection } = useLinksPage();
   const { hiddenListIds, listLocks, lockList } = useLocks();
-  const { collapsed, toggle } = useCollapsedIds();
+  const { collapsed, toggle, expand } = useCollapsedIds();
 
   // What the Lists section actually renders: the tree minus the hidden lists
   // (locked + hideList). Their LINKS are excluded separately at the query
   // layer (use-links); this is the navigation half of hiding.
   const visibleLists = useMemo(() => pruneHidden(lists, hiddenListIds), [lists, hiddenListIds]);
+
+  // Keep the active row reachable: expand its collapsed ancestors whenever the
+  // selection (or the trees it lives in) changes — a selection can arrive from
+  // outside the visible tree (the default landing, a deep link), so its parents
+  // may be collapsed. Section collapse is left alone (web sidebar parity).
+  useEffect(() => {
+    if (selection.kind === 'list') expand(ancestorIds(lists, selection.id));
+    else if (selection.kind === 'tag') expand(ancestorIds(tags, selection.id));
+  }, [selection, lists, tags, expand]);
 
   // A lock marker on rows that carry their OWN engaged lock (children a lock
   // merely covers stay unmarked — the locked ancestor is the visual cue).

@@ -8,8 +8,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Pin, RefreshCw, StickyNote } from 'lucide-react-native';
 
-import { type LinkView, type TagItem, useTags } from '@stxapps/expo-react';
-import type { LinkSortOn, TreeNode } from '@stxapps/shared';
+import { type LinkView, useTags } from '@stxapps/expo-react';
+import { type LinkSortOn, treeNameMap } from '@stxapps/shared';
 
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
@@ -120,21 +120,11 @@ export function useEngagedOpen(): [boolean, (open: boolean) => void] {
   return [open, handleOpenChange];
 }
 
-// Flatten the live tag tree into an id → name map, hoisted ONCE and passed to
-// the items (web's useTagMap rationale: a per-item useTags would mount one live
-// read per item; tag renames must repaint immediately, never wait behind the
-// refresh pill).
+// Flatten the live tag tree into an id → name map (shared's `treeNameMap`),
+// hoisted ONCE and passed to the items (web's useTagMap rationale: a per-item
+// useTags would mount one live read per item; tag renames must repaint
+// immediately, never wait behind the refresh pill).
 export function useTagMap(): Map<string, string> {
   const tree = useTags();
-  return useMemo(() => {
-    const map = new Map<string, string>();
-    const walk = (nodes: TreeNode<TagItem>[]): void => {
-      for (const node of nodes) {
-        map.set(node.item.id, node.item.name);
-        walk(node.children);
-      }
-    };
-    walk(tree);
-    return map;
-  }, [tree]);
+  return useMemo(() => treeNameMap(tree), [tree]);
 }

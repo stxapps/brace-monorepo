@@ -26,7 +26,7 @@
 import { useMemo, useState } from 'react';
 import { PlusIcon } from 'lucide-react';
 
-import type { TreeNode } from '@stxapps/shared';
+import { flattenToPathRows, type TreePathRow } from '@stxapps/shared';
 import { type ListItem, useLists } from '@stxapps/web-react';
 import {
   Command,
@@ -48,29 +48,17 @@ const SEARCH_THRESHOLD = 10;
 const ROOT_VALUE = '__root__';
 const CREATE_VALUE = '__create__';
 
-export type ListRow = { item: ListItem; depth: number; ancestors: string[] };
+export type ListRow = TreePathRow<ListItem>;
 
-// The live list tree flattened depth-first like flattenTree, but carrying each
-// row's ancestor names — the path shown on filtered rows and on ListSelect's
-// trigger. `excludeIds` drops rows entirely (Trash in the editors — a leaf, so
-// no children get orphaned); hosts that need "visible but not selectable" use
-// ListCommand's `disabledIds` instead.
+// The live list tree flattened depth-first, each row carrying its ancestor names
+// — the path shown on filtered rows and on ListSelect's trigger. The walk is
+// shared's `flattenToPathRows`; this just binds it to the live `useLists` read.
+// `excludeIds` drops rows entirely (Trash in the editors — a leaf, so no children
+// get orphaned); hosts that need "visible but not selectable" use ListCommand's
+// `disabledIds` instead.
 export function useListRows(excludeIds?: readonly string[]): ListRow[] {
   const lists = useLists();
-
-  return useMemo(() => {
-    const out: ListRow[] = [];
-    const walk = (nodes: TreeNode<ListItem>[], ancestors: string[]): void => {
-      for (const node of nodes) {
-        if (!excludeIds?.includes(node.item.id)) {
-          out.push({ item: node.item, depth: node.depth, ancestors });
-        }
-        walk(node.children, [...ancestors, node.item.name]);
-      }
-    };
-    walk(lists, []);
-    return out;
-  }, [lists, excludeIds]);
+  return useMemo(() => flattenToPathRows(lists, excludeIds), [lists, excludeIds]);
 }
 
 export function ListCommand({

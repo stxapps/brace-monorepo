@@ -15,7 +15,7 @@
 import { type Ref, useId, useMemo, useState } from 'react';
 import { ChevronsUpDownIcon, X } from 'lucide-react';
 
-import { flattenTree } from '@stxapps/shared';
+import { treeNameMap } from '@stxapps/shared';
 import { useTagMutations, useTags } from '@stxapps/web-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -56,11 +56,7 @@ export function TagsField({
 
   // Chosen chips: map ids → names off the live tree. An id with no row yet (a
   // just-minted tag useTags hasn't surfaced) is skipped until it catches up.
-  const nameById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const n of flattenTree(tags)) m.set(n.item.id, n.item.name);
-    return m;
-  }, [tags]);
+  const nameById = useMemo(() => treeNameMap(tags), [tags]);
   const chosen = value
     .map((tid) => ({ id: tid, name: nameById.get(tid) }))
     .filter((t): t is { id: string; name: string } => t.name !== undefined);

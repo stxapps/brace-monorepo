@@ -6,8 +6,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { type TreeNode } from '@stxapps/shared';
-import { type LinkView, type TagItem, useExtraction, useTags } from '@stxapps/web-react';
+import { treeNameMap } from '@stxapps/shared';
+import { type LinkView, useExtraction, useTags } from '@stxapps/web-react';
 
 import { useLinksViewState } from '../../_contexts/view-state-provider';
 
@@ -46,24 +46,14 @@ export function useReportDisplayedLinkPaths(
   }, [links, startIndex, endIndex, reportDisplayedLinkPaths]);
 }
 
-// Flatten the live tag tree into an id → name map, hoisted ONCE per layout and
-// passed to the rows (a per-row useTags would mount one liveQuery per virtual
-// row). Live, so a rename repaints the chips immediately — tag names are
-// deliberately NOT part of useLinks' staged snapshot: a rename isn't a row
-// reorder, so it must never wait behind the refresh pill.
+// Flatten the live tag tree into an id → name map (shared's `treeNameMap`),
+// hoisted ONCE per layout and passed to the rows (a per-row useTags would mount
+// one liveQuery per virtual row). Live, so a rename repaints the chips
+// immediately — tag names are deliberately NOT part of useLinks' staged snapshot:
+// a rename isn't a row reorder, so it must never wait behind the refresh pill.
 export function useTagMap(): Map<string, string> {
   const tree = useTags();
-  return useMemo(() => {
-    const map = new Map<string, string>();
-    const walk = (nodes: TreeNode<TagItem>[]): void => {
-      for (const node of nodes) {
-        map.set(node.item.id, node.item.name);
-        walk(node.children);
-      }
-    };
-    walk(tree);
-    return map;
-  }, [tree]);
+  return useMemo(() => treeNameMap(tree), [tree]);
 }
 
 // Controlled open state for a row-anchored overlay (the row menu, the tag

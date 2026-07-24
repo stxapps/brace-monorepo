@@ -34,7 +34,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Check, Plus } from 'lucide-react-native';
 
 import { type ListItem, useLists } from '@stxapps/expo-react';
-import type { TreeNode } from '@stxapps/shared';
+import { flattenToPathRows, type TreePathRow } from '@stxapps/shared';
 
 import { cn } from '../../lib/utils';
 import { Icon } from '../ui/icon';
@@ -45,31 +45,18 @@ import { Text } from '../ui/text';
 // (unless the input is the create name field, above).
 const SEARCH_THRESHOLD = 10;
 
-export type ListRow = { item: ListItem; depth: number; ancestors: string[] };
+export type ListRow = TreePathRow<ListItem>;
 
-// The live list tree flattened depth-first, carrying each row's ancestor names
-// — web list-command's useListRows, verbatim: the path shown on filtered rows
-// and on ListSelect's trigger. `excludeIds` drops rows entirely (Trash in the
-// editors — a leaf, so no children get orphaned; the reparent dialog's
-// forbidden subtree — every descendant is in the set, so none get orphaned
-// either); hosts that need "visible but not selectable" use ListCommand's
-// `disabledIds` instead.
+// The live list tree flattened depth-first, each row carrying its ancestor names
+// — same as web list-command's useListRows: both bind shared's `flattenToPathRows`
+// to the live `useLists` read. The path shown on filtered rows and on ListSelect's
+// trigger. `excludeIds` drops rows entirely (Trash in the editors — a leaf, so no
+// children get orphaned; the reparent dialog's forbidden subtree — every
+// descendant is in the set, so none get orphaned either); hosts that need
+// "visible but not selectable" use ListCommand's `disabledIds` instead.
 export function useListRows(excludeIds?: readonly string[]): ListRow[] {
   const lists = useLists();
-
-  return useMemo(() => {
-    const out: ListRow[] = [];
-    const walk = (nodes: TreeNode<ListItem>[], ancestors: string[]): void => {
-      for (const node of nodes) {
-        if (!excludeIds?.includes(node.item.id)) {
-          out.push({ item: node.item, depth: node.depth, ancestors });
-        }
-        walk(node.children, [...ancestors, node.item.name]);
-      }
-    };
-    walk(lists, []);
-    return out;
-  }, [lists, excludeIds]);
+  return useMemo(() => flattenToPathRows(lists, excludeIds), [lists, excludeIds]);
 }
 
 export function ListCommand({
