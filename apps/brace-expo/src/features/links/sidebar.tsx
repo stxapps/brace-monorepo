@@ -1,14 +1,17 @@
 // The links drawer's content — the expo port of brace-web's
-// `(app)/links/_panes/sidebar.tsx` (canonical doc: the two collapsible
-// sections — Lists as the system three + the user's own, Tags — as selectable
-// filters; parent rows carry a separate chevron hit target; hidden-list
-// pruning and the own-lock badge; a final utility band with the Show All reset
-// and the Manage lists/tags links out to settings). On mobile the rail is a
-// Drawer ((app)/links/_layout.tsx), so selecting an entry also closes it.
-// Ported so far vs web: no filter box (worth its keep once accounts grow —
-// arrives with the count gate), and collapse state is in-memory only (web
-// persists to localStorage; the device-local store can pick this up later —
-// it resets per launch, which is tolerable for a tree this small).
+// `(app)/links/_panes/sidebar.tsx` (canonical doc: the brand mark, the
+// count-gated filter box, the two collapsible sections — Lists as the system
+// three + the user's own, Tags — as selectable filters; parent rows carry a
+// separate chevron hit target; hidden-list pruning and the own-lock badge; a
+// final utility band with the Show All reset and the Manage lists/tags links
+// out to settings). On mobile the rail is a Drawer ((app)/links/_layout.tsx),
+// so selecting an entry also closes it.
+//
+// Collapse state persists device-locally (the `sidebar_view` table via
+// sidebar-view-store — expo's home for what web keeps in localStorage), the
+// same as web: loaded once after mount, written on every toggle, never synced.
+// The one intentional divergence left is native affordances (no hover, so the
+// "Lock now" action is always shown; the row press also closes the drawer).
 
 import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -21,6 +24,7 @@ import {
   Hash,
   Inbox,
   Layers,
+  ListFilter,
   Lock,
   LockOpen,
   type LucideIcon,
@@ -29,51 +33,78 @@ import {
 } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
-import { useLists, useLocks, useTags } from '@stxapps/expo-react';
+import {
+  readSidebarCollapsedIds,
+  useLists,
+  useLocks,
+  useTags,
+  writeSidebarCollapsedIds,
+} from '@stxapps/expo-react';
 import {
   ALL_LABEL,
   ancestorIds,
   ARCHIVE_ID,
+  flattenTree,
   MY_LIST_ID,
   TRASH_ID,
   type TreeItem,
   type TreeNode,
 } from '@stxapps/shared';
 
+import { BraceIcon } from '../../components/brace-icon';
 import { Icon } from '../../components/ui/icon';
+import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { type Selection, useLinksPage } from './page-provider';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 
+// The filter box only earns its keep past a handful of entries — below this
+// combined count (lists + tags) the trees fit at a glance and a box would read
+// as noise (web sidebar's FILTER_MIN_ITEMS, verbatim).
+const FILTER_MIN_ITEMS = 12;
+
 // Reserved collapse ids for the two section headers — prefixed so they can't
 // collide with a real list/tag id in the shared collapsed set.
 const SECTION_LISTS = 'section:lists';
 const SECTION_TAGS = 'section:tags';
 
-// The in-memory collapsed set (see the header for why it isn't persisted yet).
+// The device-local collapsed set — persisted to the `sidebar_view` table
+// (sidebar-view-store), the expo home of what web keeps in localStorage. Starts
+// empty (everything expanded) and loads the stored set AFTER mount, exactly like
+// web: the ids aren't needed for first paint, so starting expanded and applying
+// the stored set is fine (and keeps the sqlite open/read off the render path).
+// Writes are the whole set each toggle — best-effort in the store, so a storage
+// hiccup just means this session stays in memory.
 function useCollapsedIds() {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  useEffect(() => {
+    const ids = readSidebarCollapsedIds();
+    if (ids.length > 0) setCollapsed(new Set(ids));
+  }, []);
 
   const toggle = useCallback((id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      writeSidebarCollapsedIds([...next]);
       return next;
     });
   }, []);
 
   // Un-collapse a set of ids (a selected row's ancestors) so the active row is
   // never hidden under a collapsed parent. Returns the same set unchanged when
-  // none were collapsed, so the selection effect below doesn't re-render for a
-  // no-op (the common case — most selections are already visible).
+  // none were collapsed, so the selection effect below doesn't re-render (and
+  // doesn't write) for a no-op — the common case, most selections are visible.
   const expand = useCallback((ids: readonly string[]) => {
     setCollapsed((prev) => {
       if (!ids.some((id) => prev.has(id))) return prev;
       const next = new Set(prev);
       for (const id of ids) next.delete(id);
+      writeSidebarCollapsedIds([...next]);
       return next;
     });
   }, []);
@@ -268,21 +299,24 @@ function NavTree<T extends TreeItem & { name: string }>({
 }
 
 // A collapsible section: a disclosure-button header (chevron + uppercase
-// label) over its rows.
+// label) over its rows. `forceOpen` overrides the stored collapse — used while
+// filtering so matches are never hidden behind a collapsed header (web parity).
 function Section({
   id,
   label,
   collapsed,
   onToggle,
+  forceOpen = false,
   children,
 }: {
   id: string;
   label: string;
   collapsed: ReadonlySet<string>;
   onToggle: (id: string) => void;
+  forceOpen?: boolean;
   children: React.ReactNode;
 }) {
-  const isCollapsed = collapsed.has(id);
+  const isCollapsed = !forceOpen && collapsed.has(id);
   return (
     <View className="flex-col gap-0.5">
       <Pressable
@@ -339,11 +373,29 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   const { selection } = useLinksPage();
   const { hiddenListIds, listLocks, lockList } = useLocks();
   const { collapsed, toggle, expand } = useCollapsedIds();
+  const [filter, setFilter] = useState('');
 
   // What the Lists section actually renders: the tree minus the hidden lists
   // (locked + hideList). Their LINKS are excluded separately at the query
   // layer (use-links); this is the navigation half of hiding.
   const visibleLists = useMemo(() => pruneHidden(lists, hiddenListIds), [lists, hiddenListIds]);
+
+  // Flattened once for the count gate and the filter matches (web parity). When
+  // filtering we show a FLAT list of matches — hierarchy and collapse ignored,
+  // the usual find-in-list behavior.
+  const listRows = useMemo(() => flattenTree(visibleLists), [visibleLists]);
+  const tagRows = useMemo(() => flattenTree(tags), [tags]);
+  const showFilter = listRows.length + tagRows.length >= FILTER_MIN_ITEMS;
+
+  const q = filter.trim().toLowerCase();
+  // Only actually filter while the box is shown: if the account shrinks below
+  // the gate with stale text in state, the (now hidden) box mustn't keep the
+  // trees filtered.
+  const filtering = showFilter && q !== '';
+  const listMatches = filtering
+    ? listRows.filter((n) => n.item.name.toLowerCase().includes(q))
+    : [];
+  const tagMatches = filtering ? tagRows.filter((n) => n.item.name.toLowerCase().includes(q)) : [];
 
   // Keep the active row reachable: expand its collapsed ancestors whenever the
   // selection (or the trees it lives in) changes — a selection can arrive from
@@ -386,28 +438,96 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
 
   return (
     <StyledSafeAreaView className="bg-background flex-1">
+      {/* Brand mark, pinned above the scrolling trees (web's h-14 header). */}
+      <View className="h-14 flex-row items-center gap-2 px-4">
+        <BraceIcon />
+      </View>
+
+      {/* Count-gated find-in-nav over both trees (funnel icon, not a magnifier):
+          it filters which list/tag ROWS show, distinct from the topbar's Search
+          over saved LINK content. Pinned above the trees; the funnel icon is an
+          absolute overlay the input's left padding clears (web parity). */}
+      {showFilter && (
+        <View className="relative px-3 pb-1">
+          <View className="absolute left-5 z-10" style={{ top: 13, pointerEvents: 'none' }}>
+            <Icon as={ListFilter} className="text-muted-foreground size-3.5" />
+          </View>
+          <Input
+            value={filter}
+            onChangeText={setFilter}
+            placeholder="Filter lists & tags"
+            aria-label="Filter lists and tags"
+            className="pl-9"
+          />
+        </View>
+      )}
+
       <ScrollView className="flex-1 px-2 pb-4">
         {/* Lists: the system three (My List / Archive / Trash) plus the user's
             own, merged in the read layer, ordered by `rank`, nested by
             `parentId` (see use-lists). My List is the default landing
             selection (page-provider). */}
-        <Section id={SECTION_LISTS} label="Lists" collapsed={collapsed} onToggle={toggle}>
-          <NavTree
-            nodes={visibleLists}
-            iconFor={listIcon}
-            selectionFor={(id) => ({ kind: 'list', id })}
-            onSelected={closeDrawer}
-            collapsed={collapsed}
-            onToggle={toggle}
-            badgeFor={listBadge}
-            actionFor={listAction}
-          />
+        <Section
+          id={SECTION_LISTS}
+          label="Lists"
+          collapsed={collapsed}
+          onToggle={toggle}
+          forceOpen={filtering}
+        >
+          {filtering ? (
+            listMatches.length > 0 ? (
+              listMatches.map((node) => (
+                <NavItem
+                  key={node.item.id}
+                  icon={listIcon(node.item.id)}
+                  label={node.item.name}
+                  selection={{ kind: 'list', id: node.item.id }}
+                  onSelected={closeDrawer}
+                  badge={listBadge(node.item.id)}
+                  action={listAction(node.item.id)}
+                />
+              ))
+            ) : (
+              <Text className="text-muted-foreground/60 px-2 py-1 text-xs">No matching lists</Text>
+            )
+          ) : (
+            <NavTree
+              nodes={visibleLists}
+              iconFor={listIcon}
+              selectionFor={(id) => ({ kind: 'list', id })}
+              onSelected={closeDrawer}
+              collapsed={collapsed}
+              onToggle={toggle}
+              badgeFor={listBadge}
+              actionFor={listAction}
+            />
+          )}
         </Section>
 
         {/* Tags are all user-created — no system tag — so this section is
             empty until the user makes one. */}
-        <Section id={SECTION_TAGS} label="Tags" collapsed={collapsed} onToggle={toggle}>
-          {tags.length === 0 ? (
+        <Section
+          id={SECTION_TAGS}
+          label="Tags"
+          collapsed={collapsed}
+          onToggle={toggle}
+          forceOpen={filtering}
+        >
+          {filtering ? (
+            tagMatches.length > 0 ? (
+              tagMatches.map((node) => (
+                <NavItem
+                  key={node.item.id}
+                  icon={Hash}
+                  label={node.item.name}
+                  selection={{ kind: 'tag', id: node.item.id }}
+                  onSelected={closeDrawer}
+                />
+              ))
+            ) : (
+              <Text className="text-muted-foreground/60 px-2 py-1 text-xs">No matching tags</Text>
+            )
+          ) : tags.length === 0 ? (
             <Text className="text-muted-foreground/60 px-2 py-1 text-xs">No tags yet</Text>
           ) : (
             <NavTree
@@ -422,7 +542,10 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
         </Section>
 
         {/* Utility band: the Show All reset, a separator, then the Manage
-            links out to settings (web's footer band). */}
+            links out to settings (web's footer band). Hidden while filtering —
+            none of these are list/tag entities, so a find-in-nav query never
+            matches them; clearing the box brings the band back. */}
+        {!filtering && (
         <View className="border-border mt-3 flex-col gap-0.5 border-t pt-2">
           <NavItem
             icon={Layers}
@@ -444,6 +567,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
             onSelected={closeDrawer}
           />
         </View>
+        )}
       </ScrollView>
     </StyledSafeAreaView>
   );

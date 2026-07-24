@@ -26,6 +26,7 @@ import {
   localSettings,
   locks,
   pendingOps,
+  sidebarView,
   subscriptionStatus,
   syncMeta,
 } from './db';
@@ -50,6 +51,11 @@ export async function clearData(): Promise<void> {
     // The favicon cache: no icon is a secret, but the SET of hosts is the
     // account's browsing shape (db.ts `favicons` — web's rule, verbatim).
     tx.delete(favicons).run();
+    // The links-drawer collapse state — its ids are this account's list/tag ids,
+    // so the next account must not inherit them (db.ts `sidebar_view`). A device
+    // store like localSettings, so it's wiped here on sign-out but NOT by
+    // delete-all-data (which keeps device/identity stores).
+    tx.delete(sidebarView).run();
   });
   // Decrypted `files/` blobs on disk — mirrors the items wipe (file-store.ts).
   clearDataFiles();

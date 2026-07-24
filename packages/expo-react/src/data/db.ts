@@ -243,6 +243,29 @@ export const favicons = sqliteTable('favicons', {
   fetchedAt: integer('fetched_at').notNull(),
 });
 
+// Device-local links-drawer VIEW state — which nav sections/rows are currently
+// collapsed. Kept OUT of `local_settings` ON PURPOSE, mirroring web: brace-web's
+// sidebar keeps this in localStorage, deliberately separate from its device
+// SETTINGS store (see that sidebar's header) — collapse is low-value,
+// page-scoped view state, not a cross-cutting device setting that surfaces in
+// the Settings "Device" tab. On web the migration-cost argument drives it; here
+// the JSON `value` column already makes new fields migration-free, so the reason
+// is purely the separation of concerns — hence its OWN single-row table, the
+// same shape choice as `subscription_status` (a distinct device-local cache in
+// its own bag, not crammed into settings). Never synced (each device collapses
+// independently), wiped on sign-out with the rest (clear-data) so the next
+// account doesn't inherit this one's list/tag ids.
+export interface SidebarViewValue {
+  // Collapse ids — list/tag ids plus the two reserved section ids
+  // (`section:lists` / `section:tags`). Present in the array == collapsed.
+  collapsedIds: string[];
+}
+export const sidebarView = sqliteTable('sidebar_view', {
+  // Single-row table — one view bag per device, keyed by a constant.
+  id: text('id', { enum: ['singleton'] }).primaryKey(),
+  value: text('value', { mode: 'json' }).$type<SidebarViewValue>().notNull(),
+});
+
 const schema = {
   syncMeta,
   items,
@@ -253,6 +276,7 @@ const schema = {
   subscriptionStatus,
   locks,
   favicons,
+  sidebarView,
 };
 
 // Exported for the read edge's change subscription (hooks/use-live-read.ts):
@@ -340,6 +364,10 @@ const DDL = `
     host TEXT PRIMARY KEY NOT NULL,
     status TEXT NOT NULL,
     fetched_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS sidebar_view (
+    id TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
   );
 `;
 
