@@ -18,14 +18,18 @@ jest.mock('react-native-keyboard-controller', () =>
   require('react-native-keyboard-controller/jest'),
 );
 
-// gesture-handler can't be imported for real here: its JS pulls React Native's
-// internal renderer (RNRenderer), which asserts that `react` and
-// `react-native-renderer` are the exact same version — the hoisted react is
-// ahead of the one RN 0.81 bundles, so merely importing it fails the suite. A
-// gesture needs a native runtime anyway, so the stub keeps only the shape the
-// settings tables' drag layer builds against (drag-sort.tsx): a chainable
-// builder, and a detector that renders its child. Rendering a draggable row is
-// then testable; the gesture itself is device-only.
+// A real gesture needs a native runtime (RNGestureHandlerModule), so the stub
+// keeps only the shape the settings tables' drag layer builds against
+// (drag-sort.tsx): a chainable builder, and a detector that renders its child.
+// Rendering a draggable row is then testable; the gesture itself is device-only.
+//
+// Note: gesture-handler also reaches React Native's legacy Paper renderer
+// (`RNRenderer` → `Renderer/shims/ReactNative`), which throws unless `react`
+// matches the version RN bundles its renderer for **exactly** (RN 0.81.5 →
+// 19.1.0; Fabric's renderer has no such assertion). That's why the root
+// `package.json` pins `react`/`react-dom`/`react-test-renderer` to an exact
+// `19.1.0` rather than a `^` range — a caret silently floats to 19.2.x and
+// breaks the drag surface on device, not just here.
 jest.mock('react-native-gesture-handler', () => {
   const gesture = new Proxy({}, { get: (_target, _prop) => () => gesture }) as Record<
     string,

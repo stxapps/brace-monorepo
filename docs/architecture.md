@@ -325,6 +325,23 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
 - **Root pins; the app declares `*`.** The app is private and never published, so
   a range in it can only ever disagree with root. (One deliberate exception:
   `tailwindcss@^4.x`, which root does _not_ pin — see setup.md, _uniwind_.)
+- **`react` is pinned _exactly_, not with a caret** — `react`, `react-dom`, and
+  `react-test-renderer` are all `19.1.0`, the version `expo/bundledNativeModules.json`
+  names for SDK 54. React Native ships its **own** copy of the renderer built for one
+  exact React version (RN 0.81.5 → 19.1.0), and the legacy Paper renderer
+  (`Libraries/Renderer/shims/ReactNative`) _throws_ on any mismatch:
+  `Incompatible React versions: … must have the exact same version`. Fabric's
+  renderer has no such assertion, so the app boots — the throw only surfaces when
+  something reaches Paper, which `react-native-gesture-handler` does eagerly
+  (`RNRenderer` ← `GestureDetector/utils.js`). A caret (`^19.1.0`) silently floats to
+  19.2.x the next time the tree is re-solved and breaks the drag surfaces on device
+  and the brace-expo suite. `react` is part of the version-locked constellation —
+  pin it like `react-native` itself. Note `scheduler` follows react down (0.26.0).
+  **Follow any react bump with `npm dedupe`:** every radix package peers on
+  `react`, so changing the pin re-solves all of them and npm strands ~185 nested
+  `@radix-ui/*` duplicates (measured: +137 KB in brace-web's bundle). `npm dedupe`
+  collapses them back to one copy each — verify with
+  `find node_modules -type d -path '*@radix-ui/react-primitive' | wc -l` (expect 1).
 - **A package's `dependencies` carry real ranges** (`@noble/*`, `drizzle-orm`,
   `zod`, …) — they're the package's genuine contract and none are singletons.
 - **A package's native/singleton `peerDependencies` are `*`** — the app owns them
