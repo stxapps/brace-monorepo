@@ -54,6 +54,79 @@ list's _name_ is as sensitive as its contents; the UI warns with the count),
 and a dangling `listId` files under My List, the read layer's reconciliation
 spirit.
 
+### the brace zip is platform-split — and mobile has ceilings web doesn't
+
+Both platforms read and write the same **layout** (`manifest.json` +
+`items.jsonl` + `files/{id}`), so a backup made on either imports on the other.
+The zip **container library** differs, and not by preference:
+
+- **web** — `@zip.js/zip.js`. Streams straight to disk through the File System
+  Access API (`showSaveFilePicker`, claimed before the long phases while the
+  click's user activation is alive), so an archive larger than memory never
+  materializes as one Blob, and zip64 engages automatically.
+- **expo** — `fflate`'s `zipSync`/`unzipSync`. zip.js is not portable to
+  Hermes: its codec pipeline is built on `CompressionStream`/
+  `DecompressionStream`, `TransformStream`/`ReadableStream`/`WritableStream`, a
+  WASM module, and Web Workers — **none of which exist on React Native**. This
+  isn't a polyfill away; it's the whole architecture of the library.
+
+fflate is the right pure-JS choice (jszip is strictly worse on size, speed, and
+peak memory, and no pure-JS zipper writes zip64). But it emits a **classic
+zip32 end-of-central-directory and no zip64**, which puts two hard ceilings on
+the mobile backup that web doesn't have — and fflate range-checks **neither**:
+
+> Feeding `zipSync` 70 000 entries writes `70000 & 0xffff` = **4 464** into the
+> 16-bit count field and returns an archive that reads back _clean_, with
+> 65 536 files silently missing. In the one format that's supposed to
+> round-trip.
+
+Both ceilings sit **inside what the paid plans sell** (`maxFiles` 200 000,
+`maxBytes` 5 GiB on Plus / 20 GiB on Pro — `@stxapps/shared` `iap/plans.ts`),
+so this is reachable rather than theoretical. `expo-react`
+`data/export-all-data.ts` therefore asserts them (`assertZipWritable`, before
+`zipSync` touches anything) and fails with a user-facing `ExportTooLargeError`
+pointing at the web app. **Refusing to write a backup is always better than
+writing one that quietly drops half the library.**
+
+|              | web (zip.js) | expo (fflate)            |
+| ------------ | ------------ | ------------------------ |
+| peak memory  | ~one blob    | whole archive, ×2        |
+| zip64        | automatic    | **no** — zip32 only      |
+| max archive  | 20 GiB+      | **4 GiB** (guarded)      |
+| max entries  | unbounded    | **65 535** (guarded)     |
+| write target | disk stream  | cache file → share sheet |
+
+The **read** direction is healthier than it looks: fflate _does_ parse zip64
+(the extra-field sizes and the zip64 EOCD locator), so a web-made oversized
+backup isn't rejected on format. The wall there is memory — the whole archive
+becomes one `Uint8Array`, then `unzipSync` expands it — and that fails loudly,
+so it needs no guard of its own.
+
+**Upgrade path — a native zipper, not fflate streaming.** fflate's push-based
+`Zip`/`Unzip` API paired with `expo-file-system`'s `FileHandle.writeBytes()`
+would fix peak memory and _nothing else_: the zip32 ceilings are a property of
+what fflate emits, not of how it's fed. The move that actually reaches parity is
+native — `react-native-zip-archive` (a TurboModule wrapper over minizip on iOS
+and zip4j on Android; `zip(paths, target)` / `unzip` / progress `subscribe`), or
+a `BraceZip` module in the `BraceCrypto` pod. That also fits this platform
+better than web's: brace-expo already stores blob content **decrypted on disk**,
+and `BraceFileCrypto` already exists precisely so file bytes never enter the JS
+heap — a native zipper is that same path-to-path move one layer up, where
+pushing every byte back through Hermes would undo it. Three things to settle
+before committing:
+
+- Entry names come from **basenames**, so the export needs a staging directory
+  mirroring the zip layout (disk ×2 — cheap next to RAM ×2).
+- Import extracts to a directory, but landing the bytes still pulls them through
+  JS unless `bulkWriteEntities` grows a **path-based** content variant.
+- zip64 follows from the underlying native libraries but isn't documented by the
+  wrapper — **verify empirically** before relying on it.
+
+Worth weighing against a product answer: a 20 GiB Pro backup lands in the cache
+dir (subject to iOS eviction) and is then _copied_ by the share sheet, so the
+top end may simply be **desktop-first backup, interop formats on mobile** —
+a decision to make before either port.
+
 ### import — detect the format, land through the write edge
 
 `web-react` `data/import-all-data.ts` (behind `useImportAllData`), the write-side

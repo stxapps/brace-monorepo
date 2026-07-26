@@ -11,9 +11,12 @@
 //    platform content lives decrypted on disk, not in the row), materialized
 //    for the backup by the engine's loadEntityContents.
 //  - Zip assembly is fflate's zipSync (pure JS, no Web Streams — zip.js needs
-//    a ReadableStream Hermes doesn't have). In-memory by construction: fine
-//    for phone-sized libraries; a streaming native zip can replace it if
-//    multi-GB mobile backups ever materialize.
+//    a ReadableStream Hermes doesn't have). In-memory by construction, and
+//    fflate writes classic zip32 ONLY, so this path carries two hard ceilings
+//    web's zip.js doesn't have — 65,535 entries and 4 GiB. Neither is checked
+//    by fflate, so both are enforced in assertZipWritable below rather than
+//    left to corrupt the output. See docs/data-lifecycle.md (_the brace zip is
+//    platform-split_) for why, and the native-zipper upgrade path.
 //  - There is no save dialog and no ExportCancelledError: the output is
 //    written to a cache file and returned in the outcome (`file`), and the UI
 //    presents the platform share sheet from it — the save happens AFTER the
@@ -108,6 +111,55 @@ export interface ExportOutcome {
 // since a backup made on either platform imports on both).
 export const BRACE_BACKUP_FORMAT = 'brace-backup';
 export const BRACE_BACKUP_VERSION = 1;
+
+// --- the zip32 ceilings ---------------------------------------------------------
+
+// fflate emits a classic end-of-central-directory record and no zip64: the
+// entry count is 16 bits, the sizes/offsets 32. NEITHER is range-checked on the
+// write path — `zipSync` takes 70 000 entries, writes `70000 & 0xffff` = 4 464
+// into the count field, and hands back an archive that reads back CLEAN with
+// 65 536 files missing. Silent data loss, in the one format that's supposed to
+// round-trip, so the ceilings are asserted here instead.
+//
+// These are reachable, not theoretical: the paid plans sell `maxFiles` 200 000
+// and `maxBytes` up to 20 GiB (@stxapps/shared iap/plans.ts), both past the
+// zip32 wall. Web's zip.js writes zip64 and has neither ceiling — which is why
+// the message points there.
+const ZIP32_MAX_ENTRIES = 65_535;
+const ZIP32_MAX_BYTES = 0xffff_ffff;
+
+// The library is too large for the zip this platform can write — thrown BEFORE
+// zipSync, so nothing is saved. The message is user-facing (the export view
+// renders it verbatim, like ImportQuotaError's).
+export class ExportTooLargeError extends Error {
+  readonly reason: 'entries' | 'bytes';
+  constructor(reason: 'entries' | 'bytes', count: number) {
+    super(
+      reason === 'entries'
+        ? `This backup would hold ${count.toLocaleString()} files, past the ` +
+            `${ZIP32_MAX_ENTRIES.toLocaleString()}-entry limit of the zip format this app writes. ` +
+            'Export the backup from the Brace web app instead.'
+        : `This backup would be about ${Math.round(count / (1024 * 1024 * 1024))} GB, past the ` +
+            '4 GB limit of the zip format this app writes. ' +
+            'Export the backup from the Brace web app instead.',
+    );
+    this.name = 'ExportTooLargeError';
+    this.reason = reason;
+  }
+}
+
+// Refuse an archive zip32 can't represent. `archiveBytes` mirrors fflate's own
+// running total (per entry: 76 + 2×name + payload, plus the 22-byte EOCD) —
+// using each payload's UNCOMPRESSED length, so the estimate is an upper bound
+// for the deflated entries and exact for the stored (`level: 0`) ones.
+function assertZipWritable(entries: [string, Uint8Array][]): void {
+  if (entries.length > ZIP32_MAX_ENTRIES) {
+    throw new ExportTooLargeError('entries', entries.length);
+  }
+  let archiveBytes = 22;
+  for (const [name, bytes] of entries) archiveBytes += 76 + 2 * name.length + bytes.length;
+  if (archiveBytes > ZIP32_MAX_BYTES) throw new ExportTooLargeError('bytes', archiveBytes);
+}
 
 // --- gather -------------------------------------------------------------------
 
@@ -250,7 +302,8 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
 // bytes come off disk (dataFileFor — materialized by the files phase, or
 // already local); a path that stayed unmaterialized is skipped here (already
 // counted for the outcome). Stored, not deflated (`level: 0`), for the media
-// entries — they're already-compressed formats.
+// entries — they're already-compressed formats. Throws ExportTooLargeError if
+// the result wouldn't fit zip32 — before zipSync, so nothing lands on disk.
 async function assembleBraceZip(
   outFile: File,
   links: GatheredLink[],
@@ -298,9 +351,20 @@ async function assembleBraceZip(
     },
   };
 
+  const manifestBytes = utf8(JSON.stringify(manifest, null, 2));
+  const itemsBytes = utf8(lines.join('\n') + (lines.length ? '\n' : ''));
+
+  // Every entry the archive will hold — checked before anything is deflated,
+  // since fflate would silently truncate rather than fail (see the ceilings).
+  assertZipWritable([
+    ['manifest.json', manifestBytes],
+    ['items.jsonl', itemsBytes],
+    ...fileEntries,
+  ]);
+
   const zipped = zipSync({
-    'manifest.json': utf8(JSON.stringify(manifest, null, 2)),
-    'items.jsonl': utf8(lines.join('\n') + (lines.length ? '\n' : '')),
+    'manifest.json': manifestBytes,
+    'items.jsonl': itemsBytes,
     ...Object.fromEntries(
       fileEntries.map(([name, bytes]) => [name, [bytes, { level: 0 }] as const]),
     ),
