@@ -20,11 +20,7 @@ const SIDEBAR_VIEW_ID = 'singleton' as const;
 // a crash — a bad id would just fail to match any section/row and stay inert.
 export function readSidebarCollapsedIds(): string[] {
   try {
-    const row = getDb()
-      .select()
-      .from(sidebarView)
-      .where(eq(sidebarView.id, SIDEBAR_VIEW_ID))
-      .get();
+    const row = getDb().select().from(sidebarView).where(eq(sidebarView.id, SIDEBAR_VIEW_ID)).get();
     const ids = row?.value?.collapsedIds;
     return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
   } catch {

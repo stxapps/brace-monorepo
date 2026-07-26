@@ -546,27 +546,27 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
             none of these are list/tag entities, so a find-in-nav query never
             matches them; clearing the box brings the band back. */}
         {!filtering && (
-        <View className="border-border mt-3 flex-col gap-0.5 border-t pt-2">
-          <NavItem
-            icon={Layers}
-            label={ALL_LABEL}
-            selection={{ kind: 'all' }}
-            onSelected={closeDrawer}
-          />
-          <View className="border-border my-1 border-t" />
-          <FooterLink
-            icon={Settings2}
-            label="Manage lists"
-            href="/settings/lists"
-            onSelected={closeDrawer}
-          />
-          <FooterLink
-            icon={Settings2}
-            label="Manage tags"
-            href="/settings/tags"
-            onSelected={closeDrawer}
-          />
-        </View>
+          <View className="border-border mt-3 flex-col gap-0.5 border-t pt-2">
+            <NavItem
+              icon={Layers}
+              label={ALL_LABEL}
+              selection={{ kind: 'all' }}
+              onSelected={closeDrawer}
+            />
+            <View className="border-border my-1 border-t" />
+            <FooterLink
+              icon={Settings2}
+              label="Manage lists"
+              href="/settings/lists"
+              onSelected={closeDrawer}
+            />
+            <FooterLink
+              icon={Settings2}
+              label="Manage tags"
+              href="/settings/tags"
+              onSelected={closeDrawer}
+            />
+          </View>
         )}
       </ScrollView>
     </StyledSafeAreaView>
