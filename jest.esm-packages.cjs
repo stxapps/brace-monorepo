@@ -8,4 +8,6 @@
 //   - apps/brace-web/jest.config.cts → next/jest (overrides preset, patched there)
 //
 // vitest-based projects (brace-api) don't need this — esbuild handles ESM.
-module.exports = ['fractional-indexing', '@noble/ed25519'];
+// `lucide-react-native` is brace-expo's icon set (the RN sibling of the web
+// apps' `lucide-react`), pulled in by any spec that renders a real screen.
+module.exports = ['fractional-indexing', '@noble/ed25519', 'lucide-react-native'];

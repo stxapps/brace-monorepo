@@ -79,6 +79,20 @@ draft; each keystroke commits or reverts in place):
 - `apps/brace-web/.../settings/[section]/_tags/tags-section.tsx` — the tag
   counterpart **minus nesting**: create / rename / **reorder** (drag or up/down) /
   delete, over one flat ranked group.
+- `apps/brace-expo/src/features/settings/{lists,tags}-section.tsx` — the same two
+  tables on native, drag included. **The projection math is literally the same
+  code**: `excludeActiveDescendants` / `getProjection` / `getMovePlan` live in
+  `@stxapps/shared` (`sync/tree-dnd.ts`), and each platform keeps only a px
+  calibration beside its section (`dnd-helpers.ts` — web 20px per indent at a
+  half-indent threshold, expo 16px at three quarters, because a finger dragging
+  vertically jitters horizontally and would reparent rows by accident at web's
+  rounding). What differs is the _surface_, not the rules: dnd-kit's pointer
+  sensor vs. a long-press on a grip handle driving gesture-handler + reanimated
+  (`drag-sort.tsx`, with `scroll-host.tsx` handling the fact that native rows
+  drag _inside_ a page ScrollView — scroll-delta compensation, edge auto-scroll,
+  scroll locking). Both platforms keep the up/down + "Move to" buttons as the
+  complete non-drag fallback, and both route a nesting drop through the
+  `nestedLists` paywall rather than clamping the projection.
 
   **Lists nest, tags are deliberately flat — and that's a UI decision, not a
   schema one.** Tags carry the _same_ `parentId`/`rank` fields as lists

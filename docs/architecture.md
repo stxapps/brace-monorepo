@@ -205,7 +205,11 @@ _vs._ brace-extension.
     the `useLists`/`useTags`/`useSettings` hooks over it; the shared query
     GRAMMAR — `LinkQuery`, `emptyQuery`, `excludeLists` — was hoisted to
     `@stxapps/shared` `sync/link-query.ts` when this second engine arrived, the
-    same move as `WithPath`/`LinkItem` → `sync/items.ts`), the remaining editor
+    same move as `WithPath`/`LinkItem` → `sync/items.ts` and, when brace-expo's
+    settings tables grew a drag surface, the settings tree's drag projection →
+    `sync/tree-dnd.ts` beside the `sync/tree.ts` helpers it builds on — each
+    platform keeping only its px calibration and its own gesture layer
+    (docs/editors.md)), the remaining editor
     hooks — plus: the session store
     (`data/session-store.ts`, web-react's sibling — expo-secure-store-backed
     since the key is raw bytes; `AFTER_FIRST_UNLOCK` for background sync, plus a

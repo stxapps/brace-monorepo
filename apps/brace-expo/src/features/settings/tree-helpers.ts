@@ -2,9 +2,10 @@
 // brace-web's `_lists/tree-helpers.ts` is. The forest-shape logic is generic and
 // identical on both platforms, so it lives in `@stxapps/shared` (`sync/tree.ts`,
 // next to buildTree/flattenTree); this module just specializes it to `ListItem`
-// and names the row `ListRow` for the table's call sites. (Web's dnd-helpers
-// sibling is NOT ported — reorder here is buttons-only; a drag surface can bring
-// it later.)
+// and names the row `ListRow` for the table's call sites. Its drag-and-drop
+// sibling, dnd-helpers.ts, has the same shape for the same reason: the
+// projection math is shared (`sync/tree-dnd.ts`), only the px calibration is
+// local. The drag surface itself (gesture + animation) is drag-sort.tsx.
 //
 // - `flattenToRows` — forest → flat, depth-tagged rows (skipping collapsed
 //   subtrees), each carrying its sibling group + index so the reorder controls

@@ -21,7 +21,11 @@ module.exports = {
     '[.]css$': '<rootDir>/src/testing/css-mock.js',
   },
   transform: {
-    '[.][jt]sx?$': [
+    // `[cm]?` so `.mjs` is transformed too: an allowlisted ESM-only dep is no
+    // use if its entry file's extension never matches the transform (
+    // lucide-react-native resolves to dist/esm/*.mjs under the `react-native`
+    // export condition).
+    '[.][cm]?[jt]sx?$': [
       'babel-jest',
       {
         configFile: __dirname + '/.babelrc.js',

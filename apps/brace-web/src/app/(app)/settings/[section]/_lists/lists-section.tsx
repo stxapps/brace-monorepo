@@ -86,6 +86,7 @@ import {
   getProjection,
   INDENT_WIDTH,
   type Projection,
+  PROJECTION_OPTIONS,
 } from './dnd-helpers';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
@@ -551,7 +552,7 @@ export function ListsSection() {
   const projection: Projection | null = useMemo(
     () =>
       activeId && overId
-        ? getProjection(displayRows, activeId, overId, offsetLeft, INDENT_WIDTH)
+        ? getProjection(displayRows, activeId, overId, offsetLeft, PROJECTION_OPTIONS)
         : null,
     [activeId, overId, offsetLeft, displayRows],
   );
@@ -576,7 +577,14 @@ export function ListsSection() {
     resetDnd();
     if (!over) return;
 
-    const plan = getMovePlan(lists, displayRows, String(active.id), String(over.id), offsetLeft);
+    const plan = getMovePlan(
+      lists,
+      displayRows,
+      String(active.id),
+      String(over.id),
+      offsetLeft,
+      PROJECTION_OPTIONS,
+    );
     if (!plan) return;
 
     const current = rows.find((r) => r.item.id === plan.item.id);

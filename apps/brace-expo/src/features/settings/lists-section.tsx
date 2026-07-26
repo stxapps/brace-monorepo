@@ -4,10 +4,14 @@
 // reorder among siblings, reparent, delete, per-row locks — every edit through
 // useListMutations' one-file-per-op writes). Divergences here:
 //
-//  - Reorder/reparent is BUTTONS-ONLY (up/down + "Move to"): web documents the
-//    buttons as the complete keyboard/mouse fallback to its dnd-kit drag layer,
-//    and dnd-kit is web-only — a native drag surface can join later without
-//    touching the mutations.
+//  - Reorder/reparent works the same two ways web's does — drag (a grip handle
+//    with live depth projection) and buttons (up/down + "Move to") — but over
+//    the platform's own drag layer: long-press + gesture-handler/reanimated
+//    (drag-sort.tsx) instead of dnd-kit, inside the page ScrollView
+//    (scroll-host.tsx) instead of a document. The MATH is literally web's: the
+//    projection and the drop plan are `@stxapps/shared`'s (sync/tree-dnd.ts),
+//    calibrated for touch by dnd-helpers.ts. The buttons remain the complete
+//    fallback, as on web.
 //  - "Move to" opens a hoisted picker DIALOG instead of web's ListCommand
 //    submenu — a scrollable tree inside a nested dropdown doesn't fit a phone;
 //    the dialog embeds the shared ListCommand body (components/links/
@@ -65,6 +69,15 @@ import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
+import { cn } from '../../lib/utils';
+import {
+  excludeActiveDescendants,
+  getMovePlan,
+  getProjection,
+  INDENT_WIDTH,
+  PROJECTION_OPTIONS,
+} from './dnd-helpers';
+import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
 import { CreateRow } from './rows';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
@@ -239,10 +252,14 @@ function RowActions({
   );
 }
 
-// One row. Indented by depth; the up/down + kebab controls carry every edit
-// (see the header — buttons are the whole reorder surface here).
+// One row. Indented by depth. Reorder/reparent by dragging the grip (the row
+// slides between indents as the projection changes) or by the kebab's up/down +
+// "Move to…".
 function Row({
   row,
+  dragIndex,
+  drag,
+  lifted,
   collapsedIds,
   lock,
   biometricAvailable,
@@ -260,6 +277,12 @@ function Row({
   onDelete,
 }: {
   row: ListRow;
+  // The row's position in the flat, currently-rendered list — what the drag
+  // layer counts in (NOT `row.index`, which is the position among siblings).
+  dragIndex: number;
+  drag: DragSort;
+  // This row is the one being dragged — opaque + raised while it travels.
+  lifted: boolean;
   collapsedIds: ReadonlySet<string>;
   lock: ListLockInfo | undefined;
   biometricAvailable: boolean;
@@ -283,11 +306,23 @@ function Row({
     setTimeout(() => nameRef.current?.focus(), 50);
   };
 
+  const { pan, style, onLayout } = drag.useRow(dragIndex);
+
   return (
-    <View
-      className="border-border/60 flex-row items-center gap-1 border-b px-1 py-1"
-      style={row.depth > 0 ? { paddingLeft: 4 + row.depth * 16 } : undefined}
+    <DragRow
+      onLayout={onLayout}
+      className={cn(
+        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
+        lifted && 'bg-background rounded-md border-transparent',
+      )}
+      // The indent in px (not a class) so it matches the px the drag projection
+      // works in — render and projection can't drift. The animated style rides on
+      // top: while this row is the lifted one it slides horizontally by whole
+      // indents as the projected depth changes.
+      style={[row.depth > 0 ? { paddingLeft: 4 + row.depth * INDENT_WIDTH } : null, style]}
     >
+      <DragHandle pan={pan} />
+
       {row.hasChildren ? (
         <Pressable
           aria-label={collapsedIds.has(row.item.id) ? 'Expand' : 'Collapse'}
@@ -349,7 +384,7 @@ function Row({
         onToggleBiometric={onToggleBiometric}
         onDelete={onDelete}
       />
-    </View>
+    </DragRow>
   );
 }
 
@@ -412,8 +447,15 @@ export function ListsSection() {
   } | null>(null);
   // The pending "Move to" intent — drives the hoisted MoveToDialog.
   const [movingId, setMovingId] = useState<string | null>(null);
+  // The row currently being dragged, by id. Only the exclusion below and the
+  // lifted row's styling read it — the drag's own animation never re-renders.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const rows = useMemo(() => flattenToRows(lists, collapsedIds), [lists, collapsedIds]);
+  // While dragging, the lifted row's subtree travels with it, so drop it out of
+  // the flat list the drag layer and the projection see (and that we render) —
+  // a row can't be dropped inside its own children. Web does exactly this.
+  const displayRows = useMemo(() => excludeActiveDescendants(rows, draggingId), [rows, draggingId]);
   // The moving row must be findable regardless of collapse state (its own
   // ancestors may be collapsed); the picker's rows are ListCommand's own read.
   const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
@@ -453,6 +495,65 @@ export function ListsSection() {
     const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
     run(move(row.item, parentId, dest, dest.length));
   };
+
+  // The drag surface. Everything smooth about it runs on the UI thread inside
+  // drag-sort.tsx; what lands here is only the discrete half — "which slot, and
+  // how far right?" — answered by the SAME shared projection web's dnd-kit layer
+  // calls, so nesting behaves identically on both platforms.
+  const drag = useDragSort({
+    count: displayRows.length,
+    indentWidth: INDENT_WIDTH,
+    onPickUp: (index) => setDraggingId(displayRows[index]?.item.id ?? null),
+    onRelease: () => setDraggingId(null),
+    // Mid-drag: how far the lifted row should slide horizontally, i.e. the
+    // difference between the depth it would land at and its own. Fires only when
+    // the slot or the horizontal bucket changes, not per frame.
+    projectOffsetX: (to, offsetX) => {
+      const over = displayRows[to];
+      const active = displayRows.find((r) => r.item.id === draggingId);
+      // The first call can arrive before `draggingId`'s render lands; the offset
+      // is 0 at that point anyway.
+      if (!over || !active) return 0;
+      const { depth } = getProjection(
+        displayRows,
+        active.item.id,
+        over.item.id,
+        offsetX,
+        PROJECTION_OPTIONS,
+      );
+      return (depth - active.depth) * INDENT_WIDTH;
+    },
+    onDrop: (from, to, offsetX) => {
+      const active = displayRows[from];
+      const over = displayRows[to];
+      if (!active || !over) return;
+
+      const plan = getMovePlan(
+        lists,
+        displayRows,
+        active.item.id,
+        over.item.id,
+        offsetX,
+        PROJECTION_OPTIONS,
+      );
+      if (!plan) return;
+
+      const current = rows.find((r) => r.item.id === plan.item.id);
+      // Skip a true no-op: dropped back where it started (same parent, same slot).
+      if (current && current.parentId === plan.parentId && current.index === plan.index) return;
+
+      // Nesting (landing under a parent) is the `nestedLists` Plus lever — sibling
+      // reorder at any level and flattening to the top level stay free. A free
+      // user can drag to a nested slot (the projection isn't clamped), but the
+      // drop routes to the paywall and the row snaps back rather than nesting.
+      if (plan.parentId !== null && !entitlements.nestedLists) {
+        paywall.show('nestedLists');
+        return;
+      }
+
+      run(move(plan.item, plan.parentId, plan.siblings, plan.index));
+    },
+  });
 
   return (
     <View className="px-4 py-8">
@@ -508,10 +609,13 @@ export function ListsSection() {
           }}
         />
 
-        {rows.map((row) => (
+        {displayRows.map((row, index) => (
           <Row
             key={row.item.id}
             row={row}
+            dragIndex={index}
+            drag={drag}
+            lifted={row.item.id === draggingId}
             collapsedIds={collapsedIds}
             lock={listLocks.get(row.item.id)}
             biometricAvailable={biometricAvailable}

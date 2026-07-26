@@ -24,7 +24,6 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
@@ -47,6 +46,7 @@ import {
   X,
 } from 'lucide-react';
 
+import { arrayMove } from '@stxapps/shared';
 import { type TagItem, useTagMutations, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
