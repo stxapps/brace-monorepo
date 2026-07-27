@@ -11,8 +11,9 @@
 //    clients-do-the-work (docs/link-extraction.md — _favicons_, the brace-expo
 //    row).
 //  - Validity is a BYTE SNIFF, not the proxy's content-type allowlist: only
-//    bytes native Image can render count, so an HTML error page or an SVG served
-//    at the guessed path is a miss.
+//    bytes the render path can decode count, so an HTML error page served at the
+//    guessed path is a miss. An SVG is NOT — icons render through expo-image,
+//    which decodes it (see `isRenderableIconBytes`).
 //
 // Deliberately NOT in lib/device-extraction.ts, whose header draws the line this
 // module sits on the other side of: that worker captures a `<link rel=icon>` as a
@@ -23,7 +24,7 @@
 // different licences, two different modules; what they legitimately share is the
 // verdict below and the User-Agent, both of which live lower down.
 
-import { sniffImageMime } from './image';
+import { isSvgBytes, sniffImageMime } from './image';
 import { USER_AGENT } from './user-agent';
 
 // A favicon is ~1–2 KB; anything past this is not an icon (a misconfigured server
@@ -42,11 +43,16 @@ const FETCH_TIMEOUT_MS = 10_000;
 // one part of the two paths that genuinely is the same question. Their fetches
 // aren't (different URL, timeout, and failure policy), which is why only this
 // moved.
+//
+// WIDER than the stored-preview path's verdict, and deliberately: an icon is
+// only ever RENDERED (never probed, resized or re-encoded), so the bar is
+// whatever expo-image decodes — which includes SVG. That's the whole gap
+// between the two sniffs; image.ts's headers own the reasoning.
 export function isRenderableIconBytes(bytes: Uint8Array): boolean {
   // A zero-byte 200 is a "sure, whatever" response, not an icon (web's rule); the
-  // cap rejects non-icons and the sniff rejects non-images.
+  // cap rejects non-icons and the sniffs reject non-images.
   if (bytes.byteLength === 0 || bytes.byteLength > MAX_FAVICON_BYTES) return false;
-  return sniffImageMime(bytes) !== undefined;
+  return sniffImageMime(bytes) !== undefined || isSvgBytes(bytes);
 }
 
 // Bytes if the host serves a renderable icon at the guessed path, undefined

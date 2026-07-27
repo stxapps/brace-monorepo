@@ -307,8 +307,11 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
     }
 
     const bytes = new Uint8Array(await res.arrayBuffer());
-    // The sniff is the real content check: an og:image pointing
-    // at an HTML error page or an SVG has to become `none`, not a file the UI can't render.
+    // The sniff is the real content check: an og:image pointing at an HTML error page has
+    // to become `none`, not a file the UI can't render. It stays the RASTER sniff even
+    // though the icon path's is now wider — a stored preview is measured, capped and
+    // re-encoded on its way in (probeImageSize → resizeImage, both raster-only), so an SVG
+    // accepted here would skip the cap and land whole in the user's quota.
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return { kind: 'none' };
     if (sniffImageMime(bytes) === undefined) return { kind: 'none' };
 

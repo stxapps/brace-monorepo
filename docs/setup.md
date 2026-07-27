@@ -85,10 +85,48 @@ real version in the root `package.json`, per the normal convention).
 `expo-image-manipulator` is also a peerDependency `*` of `@stxapps/expo-react`
 (its `lib/image.ts` — the NetInfo/expo-sqlite pattern). `app.json`
 carries the `expo-image-picker` config plugin with a `photosPermission`
-string. Both are native modules — `npx expo prebuild` required. There is
-deliberately no `expo-image`: the only image surface so far is the edit
-screen's preview, which core RN `Image` renders fine from a plaintext
-`file://` uri; add expo-image when list/card previews land with extraction.
+string. Both are native modules — `npx expo prebuild` required. This section's
+own image surface — the edit screen's preview — deliberately stays on **core RN
+`Image`**, and so does `lib/image.ts`'s `probeImageSize`; `expo-image` (below)
+arrived for the link LIST's slots only, and neither reason it was added reaches
+here.
+
+#### expo-image (brace-expo)
+
+The renderer behind the link list's media slots — favicons and preview images
+(`src/features/links/link-media.tsx`, whose header is canonical). Added per the
+normal convention: `*` in the app, the real pin in the root `package.json`
+(`~3.0.11` — the version `expo/bundledNativeModules.json` names for SDK 54).
+Native module — `npx expo prebuild` required. Two things bought it, and NEITHER
+is the usual reason to reach for it:
+
+- **`recyclingKey`.** The list is a FlashList, which RECYCLES item views. Core RN
+  `Image` keeps painting the previous source until the new one decodes, so a fast
+  scroll flashes the wrong thumbnail on the row it's recycling into;
+  `recyclingKey` blanks the view when the key changes. This is the FlashList
+  docs' own recommendation for images in recycled cells.
+- **SVG decoding** — `SDWebImageSVGCoder` on iOS, `androidsvg` on Android, both
+  content-sniffed rather than extension-driven (the favicon cache writes
+  extension-less files, so that matters). This is what lets the icon sniff accept
+  `<link rel="icon" type="image/svg+xml">` at all; see
+  [link-extraction.md](./link-extraction.md) — _favicons_.
+
+What did **not** buy it: remote fetching, disk caching, placeholders,
+transitions. Every source here is a local plaintext `file://` path this app
+already wrote, which constrains one prop — **no slot may use `cachePolicy:
+'disk' | 'memory-disk'`**, since that duplicates the user's image library into a
+second on-device copy. Preview images use `'memory'` (a file id is immutable, so
+a uri-keyed cache can't go stale, and it pays for the re-decode as rows recycle
+back into view); favicons use `'none'` (the per-host path is stable while its
+bytes are **replaceable** — the declared-icon capture landing over the guessed
+`/favicon.ico` — so any uri-keyed cache would go on serving the superseded icon).
+
+Two wiring notes: expo-image's `Image` is a composite, not a core RN host, so it
+needs `withUniwind()` to accept `className` (the `SafeAreaView` treatment —
+_uniwind_ above), and `resizeMode` is spelled `contentFit`. No jest mock is
+wired, because no spec renders these slots today; add one in
+`src/testing/setup.ts` (the uniwind/NetInfo pattern) if that changes. The SVG
+path can only be exercised on a device build.
 
 #### expo-iap (brace-expo)
 

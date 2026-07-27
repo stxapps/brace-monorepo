@@ -28,7 +28,11 @@
 //    (saveCustomImage → writeFile, path-to-path copy). The preview renders
 //    the local plaintext uri (readFileUri) with core RN Image; a blob this
 //    device hasn't materialized shows the empty hint, exactly like web's
-//    local-bytes-only rule.
+//    local-bytes-only rule. Core RN Image DELIBERATELY, though link-media.tsx
+//    is expo-image now: neither reason that bought it there applies to a single
+//    mounted preview — nothing recycles this view, and a stored image is raster
+//    by construction (the store path's sniff rejects SVG — expo-react
+//    lib/image.ts).
 
 import { useEffect, useRef, useState } from 'react';
 import { Image, type LayoutChangeEvent, Pressable, type ScrollView, View } from 'react-native';

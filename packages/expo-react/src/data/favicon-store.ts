@@ -20,9 +20,9 @@
 // constantly, and a derived `file://` uri costs nothing per mount — where row
 // bytes would cost a BLOB read + a base64 data uri re-encoded and shipped to
 // native (and cached under that multi-KB string as its key) every time. The
-// fetch still passes bytes through JS once per host — the renderability sniff
-// (lib/image.ts's `sniffImageMime`) needs them before anything is cached —
-// which is the cheap side of that trade.
+// fetch still passes bytes through JS once per host — the renderability verdict
+// (lib/favicon-fetch.ts's `isRenderableIconBytes`) needs them before anything is
+// cached — which is the cheap side of that trade.
 //
 // Crash consistency, the loadEntityContent ordering transposed: putFavicon
 // writes the FILE first, the row last, and readFavicon treats an `ok` row

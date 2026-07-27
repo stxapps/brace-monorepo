@@ -11,10 +11,15 @@
 //    every byte stream a host may serve (the provider's sniff pre-filters),
 //    so the render keeps an onError backstop: a favicon that fails to DECODE
 //    falls back to the monogram instead of a blank tile.
-//  - Images are core RN Image over local plaintext uris (useImageFileUri —
-//    content lives decrypted on disk, file-store.ts), the same idiom as the
-//    edit screen's preview (setup.md: expo-image arrives when it earns its
-//    keep).
+//  - Images are local plaintext uris (useImageFileUri — content lives decrypted
+//    on disk, file-store.ts), rendered by EXPO-IMAGE rather than core RN Image.
+//    Two reasons, both spelled out at the call sites below: `recyclingKey`,
+//    without which a FlashList-recycled view keeps painting the previous link's
+//    picture until this one decodes; and SVG decoding, which is what lets the
+//    icon sniff accept `<link rel=icon type="image/svg+xml">` at all (expo-react
+//    lib/image.ts — `isSvgBytes`). Note the sources are ALREADY on local disk,
+//    so no `cachePolicy` here may be 'disk'/'memory-disk': that would duplicate
+//    the library into a second copy on the same device.
 //  - Monogram is a View tile, not SVG: its consumers are the small fixed icon
 //    slots, so the letter size is fixed too (10/16 of the size-4 tile, web's
 //    viewBox ratio) instead of scaling with the box.
@@ -22,12 +27,19 @@
 //    form isn't universally parsed), hence the style props.
 
 import { useState } from 'react';
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { withUniwind } from 'uniwind';
 
 import { type LinkView, useFaviconUri, useImageFileUri } from '@stxapps/expo-react';
 import { hostFromText, hueFromHost, initialFromHost } from '@stxapps/shared';
 
 import { Text } from '../../components/ui/text';
+
+// expo-image's `Image` is a composite, not a core RN host, so Uniwind needs the
+// wrapper to reach its `style` — the SafeAreaView treatment. Every slot here is
+// sized by `className`, so this is load-bearing, not cosmetic.
+const Image = withUniwind(ExpoImage);
 
 // A deterministic monogram for a host — web's Monogram: an icon-less site still
 // gets a consistent mark to recognize rows by (and the tile never changes under
@@ -73,11 +85,20 @@ export function Favicon({ host, className }: { host: string; className: string }
   if (!uri || isBroken(uri)) return <Monogram host={host} className={className} />;
   // contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo filled into a box).
+  //
+  // cachePolicy 'none' — the file IS the cache. A second copy buys nothing here
+  // (1–2 KB, already local) and costs correctness: the per-host path is STABLE
+  // while its bytes are REPLACEABLE (device-extraction's declared-icon capture
+  // landing over the guessed /favicon.ico — see useBrokenUri's note above), so
+  // anything keyed on the uri would go on serving the superseded icon. Re-reading
+  // it per mount is the cheaper side of that trade.
   return (
     <Image
       source={{ uri }}
       accessibilityIgnoresInvertColors
-      resizeMode="contain"
+      contentFit="contain"
+      cachePolicy="none"
+      recyclingKey={uri}
       className={className}
       onError={() => markBroken(uri)}
     />
@@ -100,10 +121,13 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
     >
       {uri && !isBroken(uri) ? (
         <View className="rounded-md bg-white/95 p-1.5 shadow-sm">
+          {/* Same slot as Favicon, same reasoning — see its cachePolicy note. */}
           <Image
             source={{ uri }}
             accessibilityIgnoresInvertColors
-            resizeMode="contain"
+            contentFit="contain"
+            cachePolicy="none"
+            recyclingKey={uri}
             className="size-9"
             onError={() => markBroken(uri)}
           />
@@ -141,11 +165,24 @@ export function LinkPreviewImage({
   const uri = useImageFileUri(link.imageId);
 
   if (uri) {
+    // recyclingKey is the whole reason this slot is expo-image: FlashList
+    // RECYCLES this view down the list, and on a plain Image the previous link's
+    // photo stays painted until this file decodes — a wrong-thumbnail flash on
+    // any fast scroll. Changing the key blanks the view first. (The fallbacks
+    // below are steady states, not that gap — they render when there is no uri
+    // at all.)
+    //
+    // cachePolicy 'memory': a file id is IMMUTABLE (content written once under a
+    // minted id — file-store.ts), so unlike the favicon above nothing can go
+    // stale under this uri, and the cache pays for re-decoding a 1024px JPEG as
+    // rows recycle back into view. 'disk' would duplicate the file it just read.
     return (
       <Image
         source={{ uri }}
         accessibilityIgnoresInvertColors
-        resizeMode="cover"
+        contentFit="cover"
+        cachePolicy="memory"
+        recyclingKey={uri}
         className={className}
       />
     );
