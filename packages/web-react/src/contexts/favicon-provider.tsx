@@ -22,6 +22,17 @@
 // proxy verbatim: no new endpoint, and POST /v1/extract is untouched, so the
 // metadata path does no extra work.
 //
+// WHAT THE PROXY DOESN'T DECIDE: whether the bytes are an ICON. Its `image/*`
+// allowlist is a passthrough of the UPSTREAM's declared content-type (an HTML 404
+// served as `image/x-icon` sails through it), and its `MAX_IMAGE_BYTES` ceiling is
+// 10 MB — the og:image abuse floor it shares with the preview path, sized for a
+// hero image and no statement about icons. Both would land here as an `ok` row
+// that NEVER expires (favicon-store.ts), charged to the origin's storage quota.
+// So the verdict is applied on THIS side, to bytes in hand, by the same
+// `isRenderableIconBytes` expo's fillers use (@stxapps/shared extract/favicon.ts)
+// — one definition of "is this an icon" across both platforms. The proxy ceiling
+// stays the outer bound; we just don't mistake it for the inner one.
+//
 // We guess `/favicon.ico` rather than reading `<link rel="icon">` from the page,
 // which resolves on most sites and costs no contract change. Hosts that declare an
 // icon elsewhere record `none` and show the monogram; teaching the extractor's
@@ -45,6 +56,7 @@ import {
 } from 'react';
 
 import { useExtractClient } from '@stxapps/react';
+import { isRenderableIconBytes } from '@stxapps/shared';
 
 import { isFaviconStale, putFavicon, putFaviconNone, readFavicon } from '../data/favicon-store';
 import { useSettings } from '../hooks/use-settings';
@@ -122,9 +134,10 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
           if (!isFaviconStale(existing)) return;
 
           const bytes = await client.fetchImage(`https://${host}/favicon.ico`);
-          // A zero-byte 200 is a "sure, whatever" response, not an icon; treat it
-          // as absent so the row doesn't cache an unrenderable blob.
-          if (bytes.byteLength === 0) await putFaviconNone(host);
+          // The proxy got us bytes; whether they're an ICON is our call — see the
+          // header. Anything else records `none`, so the row doesn't cache an
+          // unrenderable (or oversized) blob under an `ok` that never expires.
+          if (!isRenderableIconBytes(bytes)) await putFaviconNone(host);
           else await putFavicon(host, bytes);
         } catch {
           // Every failure mode lands here alike — 404 (no such icon),

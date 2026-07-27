@@ -522,26 +522,38 @@ _the stance_. Per-client notes:
   a `none` that stands for `FAVICON_RETRY_MS`, and a guess-miss that lands first
   would (if the capture deferred to staleness rather than to `ok`) block the more
   accurate source for the same week.
-- **what counts as an icon is WIDER than what counts as a preview (expo only).**
-  A fetched icon is accepted on a **byte sniff**, not the server's content-type —
-  and that sniff deliberately takes raster formats **plus SVG**, because
-  `<link rel="icon" type="image/svg+xml">` is common enough that refusing it left
-  those hosts on the monogram permanently, and because an icon is only ever
-  RENDERED — never measured, capped or re-encoded. The stored-preview sniff keeps
-  refusing SVG for exactly that reason: `probeImageSize`/`resizeImage` are
-  raster-only, so an SVG accepted there would sail past the 1024px cap and land
-  whole in the user's quota. Both sniffs live in expo-react `lib/image.ts`
-  (`sniffImageMime` + `isSvgBytes`); the icon verdict that combines them is
-  favicon-fetch's `isRenderableIconBytes`, shared by both fillers. Sniffing text
-  needs an anchor a magic-byte check doesn't: the root tag must be the document's
-  FIRST tag, or the HTML error page a misconfigured host serves at
-  `/favicon.ico` would pass on an inline `<svg>` somewhere in its body. The
-  renderer has to hold up its end, which is why brace-expo's link media is
-  **expo-image** (setup.md — _expo-image_).
-  **Web is not covered by this** and may not reach as far: its icons render from
-  a **typeless** object-URL blob, which browsers decode as a raster image but not
-  reliably as SVG. Unverified — if it ever matters, carry the proxied response's
-  content-type onto the `Blob` in `use-favicon-url.ts`.
+- **what counts as an icon is WIDER than what counts as a preview — and it's the
+  CLIENT's call on every platform.** A fetched icon is accepted on a **byte
+  sniff**, not on anyone's content-type, and that sniff deliberately takes raster
+  formats **plus SVG**, because `<link rel="icon" type="image/svg+xml">` is common
+  enough that refusing it left those hosts on the monogram permanently, and
+  because an icon is only ever RENDERED — never measured, capped or re-encoded.
+  The stored-preview sniff keeps refusing SVG for exactly that reason:
+  `probeImageSize`/`resizeImage` are raster-only, so an SVG accepted there would
+  sail past the 1024px cap and land whole in the user's quota. Sniffing text needs
+  an anchor a magic-byte check doesn't: the root tag must be the document's FIRST
+  tag, or the HTML error page a misconfigured host serves at `/favicon.ico` would
+  pass on an inline `<svg>` somewhere in its body. The renderer has to hold up its
+  end, which is why brace-expo's link media is **expo-image** (setup.md —
+  _expo-image_).
+
+  Both sniffs are `@stxapps/shared` `image/sniff.ts` (`sniffImageMime` +
+  `isSvgBytes` — pure byte shapes, no decoder behind them) and the icon verdict
+  combining them with the **512 KB cap** is `extract/favicon.ts`
+  (`isRenderableIconBytes` / `sniffIconMime`). ONE definition for all three
+  fillers — expo's guess, expo's declared-icon capture, and web's proxied guess —
+  so no platform can drift on what an icon is. **Web needs it most**, which is why
+  it isn't expo's to own: nothing upstream of web's write bounds an icon. The
+  proxy's `image/*` check is a passthrough of the site's own declared type (an
+  HTML 404 served as `image/x-icon` sails through), and its `MAX_IMAGE_BYTES` is
+  the **10 MB og:image** ceiling shared with the preview path — not a statement
+  about icons. Either would otherwise land as an `ok` row that never expires
+  (`FAVICON_RETRY_MS` ages only `none`), charged to the origin's storage quota.
+  Web's render path also has to declare what it decodes: an `<img>` content-sniffs
+  raster bytes from a typeless object-URL blob but will NOT sniff SVG, so
+  `use-favicon-url.ts` stamps `sniffIconMime`'s result onto the `Blob` — derived
+  from the bytes at render time rather than stored on the row.
+
 - **extension** — fetching would be pointless: with no synced store the result
   could feed only its own UI, and the browser already has better sources. The
   save popup renders the current tab's `favIconUrl` (an icon the page the user

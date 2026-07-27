@@ -255,9 +255,11 @@ export interface FaviconRecord {
   // ages out via FAVICON_RETRY_MS (favicon-store.ts) so a site that later adds one
   // is picked up.
   status: 'ok' | 'none';
-  // Raw icon bytes, present iff `status === 'ok'`. Rendered by sniffing (an <img>
-  // object URL detects ico/png/svg from the bytes), so no content-type is stored —
-  // same reasoning as the extract contract's `imageBase64`.
+  // Raw icon bytes, present iff `status === 'ok'` — and always an icon the render
+  // path can decode, since the fetch gates on `isRenderableIconBytes` before
+  // writing (favicon-provider.tsx). No content-type is stored: useFaviconUrl
+  // re-sniffs it off these bytes when it mints the Blob (see its header for why a
+  // mime is needed there at all, and why deriving beats storing).
   bytes?: Uint8Array;
   // When this row was last resolved — the age the `none` retry is measured from.
   fetchedAt: number;

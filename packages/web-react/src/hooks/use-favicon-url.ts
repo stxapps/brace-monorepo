@@ -14,9 +14,20 @@
 //
 // The URL is revoked when the bytes change and on unmount; a remounted row re-reads
 // Dexie and mints a fresh one (cheap — a single-key get, no network once resident).
+//
+// THE BLOB CARRIES ITS MIME, re-sniffed here rather than stored on the row. An
+// object URL is served with the Blob's `type`, and a typeless one gets none: an
+// <img> content-sniffs RASTER bytes regardless, but it will NOT sniff SVG —
+// without a declared `image/svg+xml` an SVG favicon silently fails to paint. So
+// the row stays bytes-only (FaviconRecord in db.ts) and the mime is derived at
+// render time by the same `sniffIconMime` the fetch gated on: it's a magic-byte
+// read memoized on the bytes, it can't disagree with what was cached, and it
+// needs nothing of rows written before SVG rendered at all.
 
 import { useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+
+import { sniffIconMime } from '@stxapps/shared';
 
 import { useFavicon } from '../contexts/favicon-provider';
 import { type FaviconRecord } from '../data/db';
@@ -55,10 +66,14 @@ export function useFaviconUrl(host: string | undefined): string | undefined {
 
   const bytes = settled?.status === 'ok' ? settled.bytes : undefined;
 
-  const url = useMemo(
-    () => (bytes !== undefined ? URL.createObjectURL(new Blob([bytes as BlobPart])) : undefined),
-    [bytes],
-  );
+  const url = useMemo(() => {
+    if (bytes === undefined) return undefined;
+    const type = sniffIconMime(bytes);
+    // `type` is undefined only for a row written before this verdict existed (or
+    // by a future filler that widened it); an untyped Blob is what such a row
+    // already rendered as, so it degrades to exactly the old behaviour.
+    return URL.createObjectURL(new Blob([bytes as BlobPart], type ? { type } : undefined));
+  }, [bytes]);
   useEffect(
     () => () => {
       if (url) URL.revokeObjectURL(url);

@@ -6,11 +6,13 @@ import {
   EXTRACTION_BACKOFF_MAX_MS,
   hostFromUrl,
   idFromPath,
+  isRenderableIconBytes,
   LINKS_PREFIX,
   mapLimit,
   newFacet,
   selectFaviconUrl,
   selectTitleImage,
+  sniffImageMime,
 } from '@stxapps/shared';
 
 import { putFavicon, readFavicon } from '../data/favicon-store';
@@ -21,8 +23,7 @@ import {
   writeFile,
 } from '../data/mutations';
 import { type LinkItem, readExtraction } from '../data/queries';
-import { isRenderableIconBytes } from './favicon-fetch';
-import { probeImageSize, resizeImage, sniffImageMime } from './image';
+import { probeImageSize, resizeImage } from './image';
 import { decodeHtmlBytes, parseHtmlHead } from './parse-html-head';
 import { USER_AGENT } from './user-agent';
 
@@ -102,9 +103,9 @@ const IMAGE_TIMEOUT_MS = 20_000;
 // still bounds what we DECODE, PARSE and STORE, which is the part that costs.
 const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-// A declared favicon's own cap (and the sniff that goes with it) is favicon-fetch's
-// `isRenderableIconBytes` — one verdict for both fillers, so the two can't drift apart on
-// what counts as an icon.
+// A declared favicon's own cap (and the sniff that goes with it) is `@stxapps/shared`'s
+// `isRenderableIconBytes` — one verdict for every filler on both platforms, so they can't
+// drift apart on what counts as an icon.
 
 // Extract one page of links' `titleImage` facet on-device. Returns the number of links
 // processed (for the caller's auto-budget). Throws only in the offline case described in

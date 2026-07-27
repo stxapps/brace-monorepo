@@ -1,5 +1,4 @@
-// The favicon GUESS — `https://{host}/favicon.ico` by direct native fetch — plus
-// the "are these bytes an icon?" verdict BOTH favicon fillers take.
+// The favicon GUESS — `https://{host}/favicon.ico` by direct native fetch.
 //
 // Transport only: no queue, no gate, no store write. The policy around this
 // fetch (the fan-out bound, the stagger, the `deviceExtractionMode` gate, and
@@ -10,10 +9,13 @@
 //    read cross-origin image bytes; native HTTP has no CORS, and the design is
 //    clients-do-the-work (docs/link-extraction.md — _favicons_, the brace-expo
 //    row).
-//  - Validity is a BYTE SNIFF, not the proxy's content-type allowlist: only
-//    bytes the render path can decode count, so an HTML error page served at the
-//    guessed path is a miss. An SVG is NOT — icons render through expo-image,
-//    which decodes it (see `isRenderableIconBytes`).
+//  - Validity is a BYTE SNIFF, not a content-type: only bytes the render path
+//    can decode count, so an HTML error page served at the guessed path is a
+//    miss. An SVG is NOT — icons render through expo-image, which decodes it.
+//    That verdict is `@stxapps/shared`'s `isRenderableIconBytes`, shared with
+//    web's filler (which needs it MORE, since the extractor proxy's
+//    `MAX_IMAGE_BYTES` is a 10 MB og:image ceiling, not a statement about
+//    icons) — see extract/favicon.ts.
 //
 // Deliberately NOT in lib/device-extraction.ts, whose header draws the line this
 // module sits on the other side of: that worker captures a `<link rel=icon>` as a
@@ -22,38 +24,16 @@
 // as a standalone fetch. THIS is the standalone fetch: nothing on this device has
 // contacted the host, which is why its caller keeps it behind the opt-in. Two
 // different licences, two different modules; what they legitimately share is the
-// verdict below and the User-Agent, both of which live lower down.
+// icon verdict (now in `@stxapps/shared`, since web's filler shares it too) and
+// the User-Agent, neither of which lives here.
 
-import { isSvgBytes, sniffImageMime } from './image';
+import { isRenderableIconBytes } from '@stxapps/shared';
+
 import { USER_AGENT } from './user-agent';
-
-// A favicon is ~1–2 KB; anything past this is not an icon (a misconfigured server
-// streaming a page or media at the guessed path, or a `<link rel=icon>` pointing
-// at a hero image). Checked AFTER the body lands — RN's fetch has no streaming
-// reader, so this can't abort mid-transfer — so it only bounds what gets CACHED,
-// which is the part that persists.
-export const MAX_FAVICON_BYTES = 512 * 1024;
 
 // One site not answering must not pin a queue slot — decoration, so a short leash;
 // the caller records `none` like every other miss.
 const FETCH_TIMEOUT_MS = 10_000;
-
-// Are these bytes something we can actually put on a row? Shared by both fillers —
-// the guess below and device-extraction's declared-icon capture — because it's the
-// one part of the two paths that genuinely is the same question. Their fetches
-// aren't (different URL, timeout, and failure policy), which is why only this
-// moved.
-//
-// WIDER than the stored-preview path's verdict, and deliberately: an icon is
-// only ever RENDERED (never probed, resized or re-encoded), so the bar is
-// whatever expo-image decodes — which includes SVG. That's the whole gap
-// between the two sniffs; image.ts's headers own the reasoning.
-export function isRenderableIconBytes(bytes: Uint8Array): boolean {
-  // A zero-byte 200 is a "sure, whatever" response, not an icon (web's rule); the
-  // cap rejects non-icons and the sniffs reject non-images.
-  if (bytes.byteLength === 0 || bytes.byteLength > MAX_FAVICON_BYTES) return false;
-  return sniffImageMime(bytes) !== undefined || isSvgBytes(bytes);
-}
 
 // Bytes if the host serves a renderable icon at the guessed path, undefined
 // otherwise. Throws only on transport errors — the caller records `none` for

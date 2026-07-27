@@ -1,21 +1,15 @@
-// The two byte sniffs — the only part of lib/image.ts that isn't a thin wrapper
-// over a native decoder, and so the only part jest can actually exercise.
+// The two byte sniffs. What's worth pinning is the LINE BETWEEN THEM
+// (sniff.ts's headers): the icon path takes SVG because both platforms' icon
+// renderers decode it, the store path must keep refusing it because expo's
+// probeImageSize/resizeImage can't measure or cap it. Plus the one hazard a text
+// sniff has that a magic-byte sniff doesn't — an HTML error page carrying an
+// inline `<svg>`, which is exactly the response a misconfigured host serves at
+// the guessed /favicon.ico path.
 //
-// What's worth pinning is the LINE BETWEEN THEM (image.ts's headers): the icon
-// path takes SVG because expo-image decodes it, the store path must keep
-// refusing it because probeImageSize/resizeImage can't measure or cap it. Plus
-// the one hazard a text sniff has that a magic-byte sniff doesn't — an HTML
-// error page carrying an inline `<svg>`, which is exactly the response a
-// misconfigured host serves at the guessed /favicon.ico path.
+// Moved here with the code from @stxapps/expo-react's lib/image.spec.ts; the
+// wider icon verdict built on these is extract/favicon.spec.ts.
 
-import { isRenderableIconBytes } from './favicon-fetch';
-import { isSvgBytes, sniffImageMime } from './image';
-
-// The manipulator is a native module that lib/image.ts imports at load; nothing
-// under test touches it. Below the imports because import/order puts it there —
-// babel-jest hoists `jest.mock` above them regardless, which is the only reason
-// that's safe.
-jest.mock('expo-image-manipulator', () => ({ ImageManipulator: {}, SaveFormat: { JPEG: 'jpeg' } }));
+import { isSvgBytes, sniffImageMime } from './sniff';
 
 const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
@@ -74,21 +68,5 @@ describe('sniffImageMime', () => {
 
   it('keeps refusing SVG — the store path measures and caps what it accepts', () => {
     expect(sniffImageMime(utf8('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBeUndefined();
-  });
-});
-
-describe('isRenderableIconBytes', () => {
-  it('is the wider verdict: raster OR svg', () => {
-    expect(isRenderableIconBytes(PNG)).toBe(true);
-    expect(isRenderableIconBytes(utf8('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBe(
-      true,
-    );
-  });
-
-  it('still refuses a page and an empty body', () => {
-    expect(isRenderableIconBytes(utf8('<!DOCTYPE html><html><body>Not found</body></html>'))).toBe(
-      false,
-    );
-    expect(isRenderableIconBytes(new Uint8Array(0))).toBe(false);
   });
 });
