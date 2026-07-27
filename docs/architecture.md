@@ -368,7 +368,7 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
   bringing real devDeps back.
 
 **Never declare expo's internal, exactly-pinned transitives — `expo-modules-core`
-above all.** `expo` depends on it at an _exact_ version (`expo@54.0.35` →
+above all.** `expo` depends on it at an _exact_ version (`expo@54.0.36` →
 `expo-modules-core@3.0.30`), so any second declaration is a competing opinion that
 can only agree by luck. It also moves on expo **patch** releases (`expo@54.0.30` →
 `3.0.29`), so a well-meant `~3.0.30` (i.e. `>=3.0.30 <3.1.0`) silently nests a
@@ -382,7 +382,57 @@ counts the peer as a declaration, so `lint --fix` won't repopulate a pin; the ap
 gets the same outcome via `ignoredDependencies: ['expo-modules-core']` in the root
 `eslint.config.mjs`.
 
+**`*` is safe in a package peer, NOT in the root manifest.** The intersection
+argument above holds only where some _other_ edge is exact. A package's
+`peerDependencies` always has one (expo's), so `*` there resolves to expo's
+version. The **root** manifest is resolved on its own, so a root `*` resolves to
+`latest` — measured 2026-07-27: root `@expo/cli: "*"` + `@expo/metro-config: "*"`
+installed **57.x** at `node_modules/@expo/*` and pushed expo's 54.x copies down
+into `node_modules/expo/node_modules/`, which is strictly worse than the range it
+replaced (anything resolving by bare specifier would load the SDK 57 copy).
+`npm dedupe` does **not** repair that — only restoring a real range at root
+re-hoisted them. So when root defers a version, defer with a real range that
+admits the intended one (`~54.0.9`), never with `*`.
+
+**The hoisting exception — `@expo/cli` and `@expo/metro-config` stay declared at
+root.** These two _are_ expo internals pinned exactly (`expo@54.0.36` →
+`@expo/cli@54.0.26`, `@expo/metro-config@54.0.17`), so the rule above would say
+delete them. Don't: two third parties resolve them by **bare specifier** from
+their own directory, and Node's upward traversal from `node_modules/<pkg>/` can't
+see a copy nested under `node_modules/expo/`:
+
+- `uniwind/dist/metro/transformer.cjs` does `require('@expo/metro-config')` — that
+  is the Metro transform worker, i.e. all styling.
+- `@nx/expo`'s `start`/`prebuild` executors do
+  `require.resolve('@expo/cli/build/bin/cli')` — i.e. `nx start`, `nx prebuild`.
+
+Their root declarations exist to keep both **hoisted**, not to pick a version:
+the tilde ranges (`~54.0.16`, `~54.0.9`) sit below expo's exact pins and simply
+admit them. This is also why `apps/brace-expo/metro.config.js` keeps the bare
+`require('@expo/metro-config')` and ignores expo-doctor's advice to switch to the
+`expo/metro-config` sub-export — the sub-export works, but the root declaration
+would still be required, so the change buys nothing. A comment at that call site
+records it. If you ever bump the SDK far enough that expo's pins leave those
+tilde windows, widen the ranges rather than deleting the lines.
+
 So an Expo SDK bump edits **one** file: the root `package.json`.
+
+**Checking alignment.** The authority for "what does this SDK want" is
+`node_modules/expo/bundledNativeModules.json`, and `npx expo-doctor` (run from
+`apps/brace-expo`) diffs the installed tree against it. Three of its checks fail
+here **by design** — the Metro config `projectRoot`/`watchFolders` mismatch (Nx
+monorepo), `@expo/metro-config` installed directly (the hoisting exception
+above), and the React Native Directory check (no metadata for the local native
+modules `@stxapps/expo-crypto` / `brace-share`, plus "untested on New
+Architecture" for `expo-share-extension`). A failure in _Check that packages
+match versions required by installed Expo SDK_ is the real signal. Do **not** read versions off npm's
+`latest` tag: Expo adopted unified versioning at SDK 55, so every `expo-*`
+package renumbered to track the SDK major and `latest` is always the newest
+SDK's — `expo-font` is `14.0.12` on SDK 54 while npm `latest` is `57.x`, and
+`expo-modules-core` is `3.0.30` against a `latest` of `57.x`. Use the `sdk-54`
+dist-tag (`npm view expo-font dist-tags`) or `npx expo install --check`; note the
+latter writes into `apps/brace-expo/package.json`, so move any version it
+proposes up to root and leave the app at `*`.
 
 #### the web side is different — don't propagate this
 

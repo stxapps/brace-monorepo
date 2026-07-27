@@ -1,4 +1,10 @@
 const { withNxMetro } = require('@nx/expo');
+// expo-doctor advises the `expo/metro-config` sub-export over this bare
+// specifier; ignore it here. The root manifest must declare @expo/metro-config
+// anyway so npm HOISTS it: uniwind's metro transformer does a bare
+// require('@expo/metro-config') from node_modules/uniwind, which can't see a
+// copy nested under node_modules/expo. Same for @expo/cli, which @nx/expo's
+// start/prebuild executors require.resolve() — hence its root devDependency.
 const { getDefaultConfig } = require('@expo/metro-config');
 const { mergeConfig } = require('metro-config');
 const { withShareExtension } = require('expo-share-extension/metro');
