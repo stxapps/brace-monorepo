@@ -88,7 +88,7 @@ import {
 } from '@stxapps/shared';
 import { chunk } from '@stxapps/shared';
 
-import { getDb, itemFacetStatuses, items, itemTagIds } from './db';
+import { getDb, itemFacetStatuses, items, itemTagIds, prefixEnd } from './db';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, type ItemRow } from './item-store';
 import { parseBlob } from './projection';
@@ -229,11 +229,10 @@ async function readNamespace<T extends z.ZodTypeAny>(
   prefix: string,
   schema: T,
 ): Promise<WithPath<z.infer<T>>[]> {
-  // '￿' sorts after every character a path can contain, closing the range.
   const rows = getDb()
     .select()
     .from(items)
-    .where(and(gte(items.path, prefix), lt(items.path, `${prefix}￿`)))
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
     .all();
   return rows
     .map((row) => decode(row, schema))
@@ -292,14 +291,18 @@ export async function countLinksInList(listId: string): Promise<number> {
 // record, INCLUDING trashed ones (Trash is a listId, not a deletion — the blob
 // still exists, so the server counts it). The quota gate's count (see
 // use-link-quota, whose header carries the wedged-queue rationale); same rule
-// as readExistingLinks in import-all-data.ts. A primary-key range COUNT — no
-// blob decode (readNamespace's bounds pair, aggregated).
+// as readExistingLinks in import-all-data.ts. An indexed COUNT — no blob
+// decode.
+//
+// Counted off `item_type` rather than a `links/` path range: projection.ts
+// stamps the column from the path prefix BEFORE its early returns, so every
+// `links/` row carries it — including the blob-less and unparseable ones a
+// path range would catch — making the two sets identical. This one is the
+// same predicate the all-links browse view drives on (readRest), rides the
+// partial `idx_items_type_item_created_at` (`= 'link'` implies its
+// `IS NOT NULL`), and can't drift from the prefix constants.
 export async function countLinks(): Promise<number> {
-  const row = getDb()
-    .select({ n: count() })
-    .from(items)
-    .where(and(gte(items.path, LINKS_PREFIX), lt(items.path, `${LINKS_PREFIX}￿`)))
-    .get();
+  const row = getDb().select({ n: count() }).from(items).where(eq(items.itemType, 'link')).get();
   return row?.n ?? 0;
 }
 

@@ -285,6 +285,22 @@ const schema = {
   sidebarView,
 };
 
+// The exclusive upper bound of a namespace prefix scan — the sqlite spelling
+// of Dexie's `where('path').startsWith(prefix)`, as the half-open primary-key
+// range `[prefix, prefixEnd(prefix))`. Every prefix ends in '/' (0x2F), so the
+// bound is 'links/' → 'links0'.
+//
+// NOT `prefix + '\uFFFF'` (the idiom web can use): sqlite's BINARY collation
+// compares UTF-8 BYTES, and any astral character encodes to F0..F4 — above
+// U+FFFF's EF BF BF — so a path carrying one would sort outside that range.
+// Dexie's UTF-16 code-unit order has no such hole (surrogates sort below
+// U+FFFF), which is why the same trick is safe there and quietly wrong here.
+// Today's paths are ASCII, so this is a latent divergence, not a live bug —
+// the successor bound closes it for any suffix at all.
+export function prefixEnd(prefix: string): string {
+  return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
+}
+
 // Exported for the read edge's change subscription (hooks/use-live-read.ts):
 // expo-sqlite's addDatabaseChangeListener reports changes across every open
 // database, so subscribers filter events to this one by name.

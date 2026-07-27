@@ -64,7 +64,7 @@ import {
 
 import { runIncrementalSync } from '../sync/engine';
 import { appGroupDir } from './app-group';
-import { getDb, items } from './db';
+import { getDb, items, prefixEnd } from './db';
 import { getItem } from './item-store';
 import { writeExtraction, writeLink, writeList, writeTag } from './mutations';
 import { parseBlob } from './projection';
@@ -204,13 +204,12 @@ export function parseShareTaxonomy(raw: string): ShareTaxonomy | null {
 // edge lands. The prefix range-scans the primary key; lists/tags are small by
 // design, so decoding the whole namespace is cheap.
 function readNamespace<T extends z.ZodTypeAny>(prefix: string, schema: T): z.infer<T>[] {
-  // Half-open key range [prefix, prefix + ￿) — the sqlite spelling of
-  // Dexie's `where('path').startsWith(prefix)` (namespace ids are ASCII, so
-  // nothing sorts at or above ￿).
+  // Half-open key range [prefix, prefixEnd(prefix)) — the sqlite spelling of
+  // Dexie's `where('path').startsWith(prefix)` (db.ts).
   const rows = getDb()
     .select()
     .from(items)
-    .where(and(gte(items.path, prefix), lt(items.path, `${prefix}￿`)))
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
     .all();
   const decoded: z.infer<T>[] = [];
   for (const row of rows) {

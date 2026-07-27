@@ -157,7 +157,10 @@ jest.mock('./session-store', () => ({
 // territory; these exist so a VALID draft can reach the end of the loop and have
 // its file deleted, which is the half of the quarantine invariant that says
 // "still delete what you did apply".
+// `prefixEnd` comes from the real module — it's a pure string function, and a
+// restated copy here could drift from the bound the queries actually use.
 jest.mock('./db', () => ({
+  prefixEnd: jest.requireActual('./db').prefixEnd,
   getDb: () => ({ select: () => ({ from: () => ({ where: () => ({ all: () => [] }) }) }) }),
   items: { path: 'path' },
 }));
