@@ -28,6 +28,13 @@ module.exports = {
     '[.][cm]?[jt]sx?$': [
       'babel-jest',
       {
+        // Restate jest-expo's babel `caller` — overriding its transform entry
+        // drops it, and babel-preset-expo keys the `process.env.EXPO_OS` inline
+        // off `caller.platform`. Without it every occurrence is replaced by a
+        // literal `undefined` (not left alone), so expo-modules-core's
+        // Platform.ts warns "The global process.env.EXPO_OS is not defined."
+        // on any suite that pulls in expo (e.g. via expo-router).
+        caller: { name: 'metro', bundler: 'metro', platform: 'ios' },
         configFile: __dirname + '/.babelrc.js',
       },
     ],
