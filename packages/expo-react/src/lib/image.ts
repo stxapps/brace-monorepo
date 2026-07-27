@@ -18,8 +18,8 @@
 //
 // Callers: the edit screen's custom-image pick and `saveCustomImage`
 // (hooks/use-link-mutations.ts), the on-device extraction worker
-// (lib/device-extraction.ts), and the favicon queue
-// (contexts/favicon-provider.tsx — `sniffImageMime` only).
+// (lib/device-extraction.ts), and the favicon fillers, through
+// lib/favicon-fetch.ts's `isRenderableIconBytes` (`sniffImageMime` only).
 
 import { Image } from 'react-native';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';

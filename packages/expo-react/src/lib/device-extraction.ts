@@ -21,8 +21,10 @@ import {
   writeFile,
 } from '../data/mutations';
 import { type LinkItem, readExtraction } from '../data/queries';
+import { isRenderableIconBytes } from './favicon-fetch';
 import { probeImageSize, resizeImage, sniffImageMime } from './image';
 import { decodeHtmlBytes, parseHtmlHead } from './parse-html-head';
+import { USER_AGENT } from './user-agent';
 
 // The ON-DEVICE extraction worker: fill a page of links' `titleImage` facet by fetching
 // each page HERE, on the phone, then write back — the (resized) image into `files/`, the
@@ -100,13 +102,9 @@ const IMAGE_TIMEOUT_MS = 20_000;
 // still bounds what we DECODE, PARSE and STORE, which is the part that costs.
 const MAX_PAGE_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-// A declared favicon is ~1–2 KB; favicon-provider's cap, restated for the same reason.
-const MAX_FAVICON_BYTES = 512 * 1024;
-
-// An honest, attributable UA. Not a browser impersonation: a site that wants to refuse
-// this should be able to, and a site that wants to ask about the traffic has somewhere to
-// look. The cost is the occasional bot-wall, which the `403` ladder below handles.
-const USER_AGENT = 'Brace/1 (+https://brace.to)';
+// A declared favicon's own cap (and the sniff that goes with it) is favicon-fetch's
+// `isRenderableIconBytes` — one verdict for both fillers, so the two can't drift apart on
+// what counts as an icon.
 
 // Extract one page of links' `titleImage` facet on-device. Returns the number of links
 // processed (for the caller's auto-budget). Throws only in the offline case described in
@@ -379,8 +377,7 @@ async function captureDeclaredFavicon(
       });
       if (!res.ok) return;
       const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.byteLength === 0 || bytes.byteLength > MAX_FAVICON_BYTES) return;
-      if (sniffImageMime(bytes) === undefined) return;
+      if (!isRenderableIconBytes(bytes)) return;
       await putFavicon(host, bytes);
     } finally {
       clearTimeout(timer);

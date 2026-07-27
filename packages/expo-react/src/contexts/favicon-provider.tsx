@@ -12,10 +12,10 @@
 //    cross-origin image bytes; native HTTP has no CORS, and the design is
 //    clients-do-the-work (docs/link-extraction.md — _favicons_, the brace-expo
 //    row: direct native fetch; the `<link rel="icon">` upgrade rides page
-//    extraction when that lands here).
-//  - Validity is a byte sniff, not the proxy's content-type allowlist: only
-//    bytes native Image can render get cached as `ok` (lib/image.ts's
-//    sniffImageMime), so an HTML error page or an SVG records `none`.
+//    extraction when that lands here). The fetch itself — and the byte-sniff
+//    verdict that decides whether what came back is an icon at all — is
+//    lib/favicon-fetch.ts; what stays HERE is the policy around it: the queue,
+//    the fan-out bound, the gate, and the rule that every miss records `none`.
 //  - An `ok` icon lands as a plaintext file on disk, not bytes in the row
 //    (favicon-store's split-storage header) — the UI renders its derived
 //    `file://` uri, so this fetch is the ONE time the bytes cross the JS heap.
@@ -58,7 +58,7 @@ import {
 
 import { isFaviconStale, putFavicon, putFaviconNone, readFavicon } from '../data/favicon-store';
 import { useSettings } from '../hooks/use-settings';
-import { sniffImageMime } from '../lib/image';
+import { fetchFaviconBytes } from '../lib/favicon-fetch';
 import { useAuth } from './auth-provider';
 
 // Favicons have no batch endpoint (one fetch per host), so the queue exists
@@ -70,16 +70,6 @@ const MAX_IN_FLIGHT = 4;
 // A favicon is decoration: it must never compete with the link's own preview
 // image (or a sync round trip) for the connection pool.
 const STAGGER_MS = 60;
-
-// One site not answering must not pin a queue slot — decoration again, so a
-// short leash and the failure records `none` like every other miss.
-const FETCH_TIMEOUT_MS = 10_000;
-
-// A favicon is ~1–2 KB; anything past this is not an icon (a misconfigured
-// server streaming a page/media at the guessed path). Checked after the body
-// lands — RN fetch can't cheaply stream-abort — so this only bounds what gets
-// CACHED, which is the part that persists.
-const MAX_FAVICON_BYTES = 512 * 1024;
 
 interface FaviconContextValue {
   // Ask for `host`'s favicon to be fetched and cached. Fire-and-forget: observe
@@ -96,26 +86,6 @@ interface FaviconContextValue {
 }
 
 const FaviconContext = createContext<FaviconContextValue | null>(null);
-
-// The direct fetch: bytes if the host serves a renderable icon at the guessed
-// path, undefined otherwise. Throws only on transport errors — the caller
-// records `none` for those too, so the split is cosmetic.
-async function fetchFaviconBytes(host: string): Promise<Uint8Array | undefined> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(`https://${host}/favicon.ico`, { signal: controller.signal });
-    if (!res.ok) return undefined;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    // A zero-byte 200 is a "sure, whatever" response, not an icon (web's rule);
-    // the sniff also rejects non-image bytes and the cap rejects non-icons.
-    if (bytes.byteLength === 0 || bytes.byteLength > MAX_FAVICON_BYTES) return undefined;
-    if (sniffImageMime(bytes) === undefined) return undefined;
-    return bytes;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 export function FaviconProvider({ children }: { children: ReactNode }) {
   const { username } = useAuth();
