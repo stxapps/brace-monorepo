@@ -18,7 +18,12 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 // `src/app/(app)`. A plain Stack for now; this is where a Tabs/Drawer navigator
 // would go if the mobile app wants bottom tabs for links/settings.
 //
-// Gate stack, mirroring brace-web's `(app)/layout.tsx`, in order:
+// Gate stack, in the SAME order as brace-web's `(app)/layout.tsx`, whose header
+// carries the matching list — keep the two in step. Nesting depth tracks
+// dependency strength: session-only providers sit shallow, ready-store ones
+// deeper, gates last. The only deliberate differences from web are the
+// platform-specific render-null triggers: ShareBridge here,
+// DanglingExtractionSweep there.
 //   AuthGuard    — "do you have a session?" It redirects to `/sign-in` (or `/`
 //                  on a deliberate sign-out) when there's no session —
 //                  client-side, since the local-first session lives on-device
@@ -35,8 +40,9 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 //                  its rows are device-local.
 //   ExtractionProvider — the on-device extraction drain (title + preview image
 //                  per link). Needs the session AND a ready store, so it sits
-//                  inside SyncProvider; nothing below it needs to be inside it,
-//                  but the links screen consumes it (viewable-row reporting)
+//                  inside SyncProvider; nothing binds it to FileContent/Favicon
+//                  above — that pair is shallower only because it depends on
+//                  less. The links screen consumes it (viewable-row reporting)
 //                  and so does the settings section. Locked lists get NO
 //                  special-casing here: locks are a display deterrent over
 //                  already-decrypted data (docs/locks.md), and fetching a page
