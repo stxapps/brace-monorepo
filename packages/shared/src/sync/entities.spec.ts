@@ -32,8 +32,12 @@ describe('settingsGeneralSchema', () => {
     it.each([
       ['linksLayout', { linksLayout: 5 }],
       ['serverExtraction', { serverExtraction: 'yes' }],
+      ['deviceExtraction', { deviceExtraction: 'yes' }],
       ['theme (not an object)', { theme: 'lol' }],
-      ['every field at once', { linksLayout: [], serverExtraction: 1, theme: 3 }],
+      [
+        'every field at once',
+        { linksLayout: [], serverExtraction: 1, deviceExtraction: 1, theme: 3 },
+      ],
     ])('degrades a corrupt %s to absent instead of failing', (_name, bad) => {
       const parsed = settingsGeneralSchema.parse({ ...FRAME, ...bad });
       expect(parsed).toEqual(FRAME);

@@ -53,9 +53,21 @@ ciphertext (see [local-first-sync.md](./local-first-sync.md) — _the server onl
 ever sees ciphertext_). Extraction is the one feature that wants to break that,
 so the posture is deliberately conservative:
 
-- **Extraction is OFF by default.** A fresh install enriches nothing until the
-  user opts in. "We leak as little as possible" is the default, not a setting you
-  have to find.
+- **Everything un-gestured is OFF by default.** The axis is **gestured vs.
+  un-gestured**, not client vs. server. Fetching the page the user _just saved on
+  this device, in this gesture_ is covered by the save itself — the same reason
+  the extension's active-tab capture has never carried a toggle — so an `expo:fg`
+  save-time extraction needs no opt-in. What is off by default is every fetch the
+  user did **not** just ask for: back-filling links that arrived by sync from
+  another device, draining a bulk import, and the per-host favicon cache that
+  rides along. Each of those is a **new** disclosure of this device's IP to a site
+  the user never pointed it at, so each waits behind expo's `deviceExtraction`
+  opt-in (see _expo drains in the foreground_). A save on the **web** app is gated
+  regardless of the gesture — not because it's un-gestured, but because the only
+  way it can extract at all is through a **server**, which is the separate,
+  stricter `serverExtraction` opt-in below. So "we leak as little as possible"
+  stays the default, and no setting has to be found to get a title for the link
+  you just saved on the device in your hand.
 - **The clients do the work, never the sync server.** `brace-api` stays a blind
   sync broker — it never fetches a user's URLs, so it never learns them. All
   extraction runs in clients the user already installed and trusts: the
@@ -199,7 +211,9 @@ bulk-import drain still belongs to
 `brace-extractor` (don't promise mobile-background throughput). One-line contrast:
 **the extension's background is dropped for a permission cost mobile doesn't pay;
 mobile's background stays, capped at best-effort for a reliability limit the
-extension's design never turned on.**
+extension's design never turned on.** The shape of expo's drain — foreground
+first, `expo:bg` after, and why it never calls `brace-extractor` at all — is _expo
+drains in the foreground_.
 
 ### who extracts: the client that did the save
 
@@ -231,6 +245,13 @@ as a provisional `extraction.title`, leaves the `titleImage` facet **pending**, 
 lets the foreground/background queue do the real extraction later (the same
 provisional-seed pattern as a bulk import — see _imported links_, _capability
 tiers_).
+
+Note what the mobile/foreground row does **not** carry: an opt-in. The fetch is
+local, to a host the user just handed the app, in the gesture that asked for the
+link to be saved — so the save _is_ the consent, exactly as it is for the
+extension's active-tab capture (the gestured/un-gestured split in _the stance_).
+Expo's `deviceExtraction` opt-in gates only the un-gestured residual — links that
+arrived by sync or import, and their favicons — never this row.
 
 **Preference order on a web-app save.** `brace-extractor` is the _fallback_, not
 the first choice. When a capable extension is present in the **same browser**, the
@@ -444,11 +465,11 @@ decisions, each deliberate:
 **Who fetches, per client — riding each client's existing extraction opt-in,
 never a favicon-specific setting:**
 
-| client              | source                                                                                                                     | gate                            |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| **brace-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in   |
-| **brace-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | expo's client-extraction opt-in |
-| **brace-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network      |
+| client              | source                                                                                                                     | gate                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **brace-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in |
+| **brace-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | the `deviceExtraction` opt-in |
+| **brace-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network    |
 
 The gates are the same trust decisions the user already made, so "off by
 default" falls out for free — a fresh install fetches no favicons anywhere, per
@@ -461,13 +482,18 @@ _the stance_. Per-client notes:
   the favicon cache pays **per device** (each device re-asks the extractor per
   host). Host-only, behind the same opt-in — fixing it means the synced
   namespace above, which a cosmetic payoff doesn't justify.
-- **expo** — the gate is load-bearing, not ceremony: for a link saved on
-  another device, a favicon fetch is a **new** disclosure of the user's IP to
-  that site (expo never fetched that page), so it must not happen before the
-  user opts into expo doing network enrichment at all. When expo extracts a
-  page itself it already holds the HTML, so capturing the declared icon in the
-  same breath costs zero additional disclosure and beats the `/favicon.ico`
-  guess on accuracy.
+- **expo** — the gate is `deviceExtraction` (see _expo drains in the
+  foreground_), and it's load-bearing, not ceremony: for a link saved on
+  another device, a **standalone** favicon fetch is a **new** disclosure of the
+  user's IP to that site (expo never fetched that page), so it must not happen
+  before the user opts into expo doing network enrichment at all. The one
+  carve-out is the icon expo learns while extracting the page **itself**: it
+  already holds the HTML, and the icon URL it declares is on a host this device
+  contacted seconds ago in the same gesture — so capturing `<link rel="icon">`
+  there costs no disclosure the extraction didn't already pay, and beats the
+  `/favicon.ico` guess on accuracy. That capture is therefore allowed exactly
+  where its extraction was (a gestured save, or an opted-in drain); it is never
+  a licence for the host-keyed cache to go fetch on its own.
 - **extension** — fetching would be pointless: with no synced store the result
   could feed only its own UI, and the browser already has better sources. The
   save popup renders the current tab's `favIconUrl` (an icon the page the user
@@ -882,6 +908,80 @@ with its own _mechanism_. The scheduled re-wake is load-bearing for _enrich all_
 failed batch writes no facets, so nothing else re-wakes the loop — the retry timer
 is the only thing that resumes it after a `429`.
 
+#### expo drains in the foreground — and never calls `brace-extractor`
+
+`brace-expo` runs the same loop as the web drain above, with the platform swapped
+in three places and one hard exclusion.
+
+**It never calls `brace-extractor`.** Not "not yet" — permanently. The extractor
+exists to buy back a capability its caller lacks, and expo lacks nothing here:
+native HTTP has no CORS, so the app fetches the page's HTML and the og:image bytes
+itself. Routing through the server would be a strict **downgrade on every axis** —
+the result would land at `extractedBy: 'server'` (the floor of `tierOf`) written by
+a client that can produce `expo:fg` (the ceiling); it would spend a paid,
+rate-limited request on work the phone does for free; it would disclose the URL to
+a party that would otherwise never see it; and it sits behind the
+`entitlements.serverExtraction` plan gate, so free mobile users would get nothing
+where on-device extraction serves everyone. So `serverExtraction` is **not an expo
+setting**: expo round-trips it (`looseObject`) for the web clients that honor it
+and never reads it, and never renders it — a toggle whose effect is invisible on
+the device holding it is worse than no toggle. The one thing expo forgoes is
+**bulk-import throughput** (a Worker fans out; a phone does not) — a speed
+difference on a back-fill nothing waits on, not a missing capability.
+
+**The gate is `deviceExtraction`, expo's own opt-in.** A synced account preference
+beside `serverExtraction` in `settingsGeneralSchema`, off by default, gating
+exactly the **un-gestured** work: the residual drain over links that arrived by
+sync or import, and the per-host favicon cache. A save made **on this device**
+extracts without it (_the stance_ — gestured vs. un-gestured). It is **synced**,
+not device-local, because it's the same account-level trust decision
+`serverExtraction` is ("my devices may fetch the pages I save"), and a second phone
+should inherit it rather than re-ask; if a metered-connection qualifier is ever
+wanted, that's a device-local companion (the theme / links-layout sync-vs-device
+precedent), never a second copy of this preference. Being off by default is not
+the same as being buried: the app should offer it at the first moment it means
+something — the links screen showing un-previewed links — so the honest default
+costs one tap rather than a settings expedition.
+
+**`expo:fg` is the tier that's built; `expo:bg` is the extra.** The foreground
+drain is the direct analogue of the web provider — expo-react's
+`contexts/extraction-provider.tsx` over `lib/device-extraction.ts`, with
+`AppState === 'active'` in place of the visibility gate, FlashList's viewable rows
+in place of the virtualizer window feeding `reportDisplayedLinkPaths`, and the same
+explicit "Generate all" / `pause()` pair. It covers save-time extraction,
+cross-device back-fill of what the user is actually looking at, and the
+whole-library job. Two honest platform notes on it. First, the gestured save gets
+its own entry point, `extractNow(linkPaths)` — outside the queue, the budget and
+the opt-in (the gestured/un-gestured split in _the stance_); the add screen calls
+it after a create, and ShareBridge after the outbox drain, since a
+share-extension save reaches the app only there. Second, web's "extract-all keeps
+running while the tab is hidden" is **not literally available** on iOS: a
+backgrounded app is suspended, so the drain isn't cancelled on background (a quick
+app switch resumes from the in-memory cursor) but progress can't be promised. The
+`expo:bg` sweep (`BGAppRefreshTask` / WorkManager) is a genuinely separate, weaker
+thing — native task wiring, opportunistic windows, metadata-only — and is worth
+building **after** the foreground drain, not instead of it.
+
+**The gates stay; what they bound changes.** On web the three cost layers exist to
+bound a **bill** — every pending link is a paid extractor request. Here every fetch
+is free, so the same layers survive for different reasons: battery and cellular
+data, politeness to the hosts being fetched (pace per-host; don't trip bot
+protection), and not doing invisible work for an app the user backgrounded. Two
+calibration consequences: "Generate all" needs **no cost confirmation** (nothing is
+billed — it gets a button, a progress readout, and Pause, and says it uses the
+connection), and the per-session auto backstop can sit looser than web's, since
+overshooting spends the user's battery rather than the project's money. The
+_settings section_ shape follows from the same swap: expo gets the section
+brace-web's `_extraction/extraction-section.tsx` header anticipates being dropped —
+same "Link previews" surface, but no plan gate and no upsell branch (on-device
+extraction is free on every plan), no two-step confirm, and its toggle is
+`deviceExtraction`. Off-by-default is also **offered** rather than buried: the
+links screen shows a one-time, dismissible banner when the opt-in is off and links
+are actually waiting for a preview (the raw pending count, not the gated exact
+tally — the banner exists to ask the question the gate would otherwise silence).
+The dismissal is device-local while the setting it offers is synced, so a second
+phone still gets its one offer.
+
 ### imported links: the bulk path
 
 Bulk import (a `bookmarks.html` export, Pocket/Raindrop/Pinboard, …) is the one
@@ -1030,7 +1130,11 @@ background bg-fetch — see _the extension is active-context only_), `brace-extr
 became the **only** bulk-enrichment path for `brace-web`/desktop users and the
 realistic one for large imports, so it's a committed app to build, not a someday.
 "Necessary to build" is **not** "on by default", though — server extraction stays
-the second opt-in below. It is a **separate app**, not a route in `brace-api`:
+the second opt-in below. Its clients are the **web/desktop** ones: `brace-expo`
+never calls it — that would be a strict downgrade from a client that fetches
+natively (see _expo drains in the foreground_) — so everything here is about the
+browser that can't fetch for itself. It is a **separate app**, not a route in
+`brace-api`:
 
 - **A new nx app, `brace-extractor` (`type:app`, `platform:worker`), on its own
   origin `extractor.brace.to`** — distinct from the blind sync broker on
@@ -1157,6 +1261,13 @@ that opt-in.
   page is the weak spot (offscreen/hidden-tab rendering is heavy and flaky). For
   now the page copy is active-context-only; a headless background capturer is
   deferred.
+- **expo beyond `titleImage`/foreground.** Two separate follow-ons to the
+  foreground drain (_expo drains in the foreground_), neither blocking it: the
+  **`expo:bg` sweep** (`BGAppRefreshTask` / WorkManager — best-effort, metadata
+  only, and the one place per-host pacing really matters), and the app's
+  **active-page facets** — read-mode, screenshot, and page copy off a controllable
+  WebView, which is what makes `expo:fg` a true peer of the extension's active tab
+  rather than just a better-placed bg-fetch.
 - **Manual capture.** A user-facing "fetch metadata / capture now" action for
   links that auto-extraction missed (a `failed` link, or a web-only user who
   installs the extension later) — the loop already supports re-running; this just

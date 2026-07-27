@@ -270,6 +270,7 @@ export async function writeSettingsGeneral(
   patch: {
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
+    deviceExtraction?: boolean;
     theme?: ThemeState;
     sortOn?: LinkSortOn;
     sortOrder?: LinkSortOrder;

@@ -35,6 +35,7 @@ import { withUniwind } from 'uniwind';
 import {
   type LinkItem,
   readLinkByUrlKey,
+  useExtraction,
   useLinkMutations,
   useLinkQuota,
 } from '@stxapps/expo-react';
@@ -72,6 +73,7 @@ export function LinkAddScreen() {
   const router = useRouter();
   const { listId: paramListId } = useLocalSearchParams<{ listId?: string }>();
   const { create, update } = useLinkMutations();
+  const { extractNow } = useExtraction();
   const { count, max, atLimit } = useLinkQuota();
 
   // The FAB passes the viewing list; anything else (missing on a cold deep
@@ -159,7 +161,19 @@ export function LinkAddScreen() {
         }
       }
 
-      await create({ url: normalized ?? trimmed, listId, tagIds, note: note.trim() || undefined });
+      const created = await create({
+        url: normalized ?? trimmed,
+        listId,
+        tagIds,
+        note: note.trim() || undefined,
+      });
+      // The GESTURED extraction (docs/link-extraction.md — _the stance_): fetch
+      // the page the user just handed us, right now, without waiting for the
+      // drain and without the `deviceExtraction` opt-in — the save IS the
+      // consent, exactly as the browser extension's active-tab capture is.
+      // Fire-and-forget: the title/image land in `extractions/` and the row
+      // repaints itself, so nothing here waits on the network.
+      if (created) extractNow([created.path]);
       close();
     } finally {
       setSaving(false);

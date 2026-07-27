@@ -22,9 +22,17 @@ export interface SettingMutations {
   // Set THIS device's links layout (the Device tab) — device-local, never synced.
   setLocalLinksLayout: (layout: LinksLayout) => Promise<void>;
   // Toggle the SYNCED server-extraction opt-in; writes settings/general.enc +
-  // syncs, so every device honors the same choice. (No expo UI for it — the
-  // extraction section is web-only — but the write edge stays symmetric.)
+  // syncs, so every device honors the same choice. Expo ROUND-TRIPS this setting
+  // for the web clients and never reads it — it never calls brace-extractor
+  // (docs/link-extraction.md — _expo drains in the foreground_) — so it renders
+  // no toggle for it either; the write edge just stays symmetric.
   setServerExtraction: (enabled: boolean) => Promise<void>;
+  // Toggle the SYNCED on-device extraction opt-in — expo's own gate, and the one
+  // the Link previews section renders. Covers only UN-GESTURED work (the residual
+  // drain over synced/imported links, plus the per-host favicon cache); a save made
+  // on this device extracts regardless. Synced, so a second phone inherits the
+  // account-level trust decision rather than re-asking.
+  setDeviceExtraction: (enabled: boolean) => Promise<void>;
   // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
   // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
   setSortOn: (sortOn: LinkSortOn) => Promise<void>;
@@ -35,6 +43,9 @@ export interface SettingMutations {
   setSyncTheme: (theme: ThemeState) => Promise<void>;
   // Set THIS device's theme (the theme "Device" tab) — device-local, never synced.
   setLocalTheme: (theme: ThemeState) => Promise<void>;
+  // Put away the first-run link-previews offer on THIS device — device-local, so
+  // the offer isn't spent for a second phone that never saw it.
+  dismissPreviewsPrompt: () => Promise<void>;
 }
 
 export function useSettingMutations(): SettingMutations {
@@ -64,6 +75,15 @@ export function useSettingMutations(): SettingMutations {
     async (enabled: boolean) => {
       if (!username) throw new Error('useSettingMutations: no active account');
       await writeSettingsGeneral(username, { serverExtraction: enabled });
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const setDeviceExtraction = useCallback(
+    async (enabled: boolean) => {
+      if (!username) throw new Error('useSettingMutations: no active account');
+      await writeSettingsGeneral(username, { deviceExtraction: enabled });
       requestSync();
     },
     [username, requestSync],
@@ -103,28 +123,37 @@ export function useSettingMutations(): SettingMutations {
 
   const setLocalTheme = useCallback((theme: ThemeState) => setLocalSettings({ theme }), []);
 
+  const dismissPreviewsPrompt = useCallback(
+    () => setLocalSettings({ previewsPromptDismissed: true }),
+    [],
+  );
+
   return useMemo<SettingMutations>(
     () => ({
       setLinksLayoutSource,
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setDeviceExtraction,
       setSortOn,
       setSortOrder,
       setThemeSource,
       setSyncTheme,
       setLocalTheme,
+      dismissPreviewsPrompt,
     }),
     [
       setLinksLayoutSource,
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
+      setDeviceExtraction,
       setSortOn,
       setSortOrder,
       setThemeSource,
       setSyncTheme,
       setLocalTheme,
+      dismissPreviewsPrompt,
     ],
   );
 }

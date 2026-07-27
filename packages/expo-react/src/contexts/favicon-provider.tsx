@@ -19,14 +19,20 @@
 //  - An `ok` icon lands as a plaintext file on disk, not bytes in the row
 //    (favicon-store's split-storage header) — the UI renders its derived
 //    `file://` uri, so this fetch is the ONE time the bytes cross the JS heap.
-//  - STILL GATED ON THE ACCOUNT'S EXTRACTION OPT-IN (`serverExtraction`), and
-//    the gate is load-bearing, not ceremony (the doc's expo note): for a link
-//    saved on another device, a favicon fetch is a NEW disclosure of this
-//    device's IP to that site, so it must not happen before the user opts into
-//    network enrichment at all. `serverExtraction` is today's one modeled
-//    extraction opt-in (the synced, off-by-default account preference); if a
-//    distinct client-extraction opt-in ever lands for expo, the gate moves to
-//    it — never to a favicon-specific setting.
+//  - GATED ON `deviceExtraction`, expo's own extraction opt-in (the synced,
+//    off-by-default account preference — docs/link-extraction.md, _expo drains
+//    in the foreground_), and the gate is load-bearing, not ceremony (the doc's
+//    expo note): every fetch here is STANDALONE — nothing else on this device
+//    contacted that host — so for a link saved on another device it's a NEW
+//    disclosure of this device's IP to that site, and it must not happen before
+//    the user opts into un-gestured network enrichment at all. The gate is NOT
+//    `serverExtraction`: that one admits a third party (brace-extractor), which
+//    expo never calls, and honoring it here would tie this device's fetching to
+//    a decision about a server it doesn't use.
+//    The carve-out lives elsewhere: an icon learned WHILE EXTRACTING a page
+//    (lib/device-extraction.ts) is written straight to the store by that worker,
+//    because it costs no disclosure the page fetch didn't already pay. This
+//    queue is the guessing path, and stays behind the opt-in.
 
 import {
   createContext,
@@ -99,10 +105,10 @@ async function fetchFaviconBytes(host: string): Promise<Uint8Array | undefined> 
 
 export function FaviconProvider({ children }: { children: ReactNode }) {
   const { username } = useAuth();
-  const { serverExtraction } = useSettings();
+  const { deviceExtraction } = useSettings();
 
   // No request leaves the device until the opt-in is on — see the header.
-  const enabled = Boolean(username) && serverExtraction;
+  const enabled = Boolean(username) && deviceExtraction;
 
   // Latest identity for the async drain, so a fetch started before a render
   // never runs after the opt-in was switched off.

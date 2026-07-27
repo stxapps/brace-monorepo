@@ -23,9 +23,10 @@
 // library query (`readLinks`), the by-id lookups (`readLinkById`,
 // `readExtraction` — the write edge's re-read-before-merge and destroy's
 // satellite sweep), and the by-url lookups + quota count behind the add editor
-// (`readLinkByUrl`/`readLinkByUrlKey`, `countLinks`). The remaining siblings
-// (the extraction tallies and drain pages) arrive verbatim with the features
-// that need them.
+// (`readLinkByUrl`/`readLinkByUrlKey`, `countLinks`), and the extraction
+// tallies + pending-drain pages behind on-device extraction — the one section
+// that deliberately IMPROVES on web's shape instead of mirroring it (SQLite can
+// express the pending anti-join Dexie can't; see that section's header).
 
 import {
   and,
@@ -66,6 +67,7 @@ import {
   FILES_PREFIX,
   getCachedExtraction,
   getCachedLink,
+  isFacetEligible,
   LINKS_PREFIX,
   linkSchema,
   LISTS_PREFIX,
@@ -82,10 +84,11 @@ import {
   SYSTEM_LIST_IDS,
   TAGS_PREFIX,
   tagSchema,
+  TRASH_ID,
 } from '@stxapps/shared';
 import { chunk } from '@stxapps/shared';
 
-import { getDb, items, itemTagIds } from './db';
+import { getDb, itemFacetStatuses, items, itemTagIds } from './db';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, type ItemRow } from './item-store';
 import { parseBlob } from './projection';
@@ -356,6 +359,270 @@ export async function readFileUri(fileId: string): Promise<string | undefined> {
   if (!row?.hasDataFile) return undefined;
   const file = dataFileFor(path);
   return file.exists ? file.uri : undefined;
+}
+
+// --- extraction: tallies + the pending drain queue ---------------------------
+//
+// The reads behind brace-expo's on-device extraction (docs/link-extraction.md —
+// _expo drains in the foreground_): the drain's wake signal, the Settings tally, and
+// the two pending-work queries (whole-library for "Generate all", displayed-scoped for
+// the automatic drain). Ports of web-react's, with ONE deliberate divergence: web
+// scans links in chunks and tests each one's facet in JS because Dexie can't express
+// the anti-join, while SQLite can — so "pending" is a `NOT EXISTS` against the co-keyed
+// extraction's settled tokens (`item_facet_statuses`, projection.ts), and a blob is
+// decoded ONLY for the `failed` rows whose backoff has to be read. Absence-is-pending
+// (the writer-split, entities.ts) is what makes that expressible: a link with no
+// extraction row simply has no token to find.
+
+// The `extractions/{id}.enc` path co-keyed to an `items` row's `links/{id}.enc` path,
+// in SQL — `extractionPathForLink` above, expressed so the correlation can happen in
+// the database. The prefix lengths come from the constants (never a literal `7`), so a
+// namespace rename can't silently desync this from `rekey`.
+const extractionPathSql = sql`${EXTRACTIONS_PREFIX} || substr(${items.path}, ${LINKS_PREFIX.length + 1})`;
+
+// The settled `titleImage` outcomes — a facet in one of these states is never
+// re-extracted by the normal loop (`done`/`permanent` are terminal; `failed` is settled
+// only until its backoff cools, which is the one case that needs the blob).
+const DONE_TOKEN = 'done:titleImage';
+const FAILED_TOKEN = 'failed:titleImage';
+const PERMANENT_TOKEN = 'permanent:titleImage';
+
+// "This link's extraction carries one of `tokens` for titleImage" — the correlated
+// subquery both the tally join and the pending scan build on.
+function hasTitleImageToken(tokens: string[]): SQL {
+  return sql`EXISTS (
+    SELECT 1 FROM ${itemFacetStatuses}
+    WHERE ${and(
+      eq(itemFacetStatuses.path, extractionPathSql),
+      inArray(itemFacetStatuses.token, tokens),
+    )}
+  )`;
+}
+
+function countToken(token: string): number {
+  const row = getDb()
+    .select({ n: count() })
+    .from(itemFacetStatuses)
+    .where(eq(itemFacetStatuses.token, token))
+    .get();
+  return row?.n ?? 0;
+}
+
+// The RAW pending-titleImage count: links minus recorded outcomes — four index counts,
+// no decode, no join. "Raw" because Trash is NOT folded out, which is sound for its one
+// consumer, the drain's WAKE SIGNAL: a trashed link's outcome token cancels against its
+// own entry in the link total, so the result is exactly livePending + trashedPending —
+// a strict OVER-count, never an under-count. 0 therefore always means "nothing to do"
+// (safe to stay asleep); a rare trashed-pending false positive just walks the library
+// once, finds nothing eligible (the walk skips Trash inline) and ends the job. The
+// exact, trash-corrected tally for DISPLAY is readExtractionFacetCounts.
+export async function readRawPendingTitleImageCount(): Promise<number> {
+  const total = await countLinks();
+  const settled = countToken(DONE_TOKEN) + countToken(FAILED_TOKEN) + countToken(PERMANENT_TOKEN);
+  return Math.max(0, total - settled);
+}
+
+// The Settings section's tally, headlined on `titleImage` (the "fill in title + image"
+// job). `failed` folds in `permanent` — both are "not extracted, won't auto-retry
+// without help". Field semantics: web-react queries.ts `ExtractionFacetCounts`.
+export interface ExtractionFacetCounts {
+  done: number;
+  pending: number;
+  failed: number;
+}
+
+// The trash correction, as ONE aggregate instead of web's O(trash) read-and-decode
+// join: trashed links are excluded from all three buckets to match the drains (which
+// skip Trash), or the section would show a Pending stat that never drops and a
+// "Generate all" button that drains nothing. Web pays a per-trashed-link blob decode
+// here because its two terms live in different Dexie stores; the same correlation is a
+// LEFT JOIN on the token junction here, so nothing is decoded at all.
+function readTrashedTitleImageCounts(): { total: number; done: number; failed: number } {
+  // The join is restricted to the three titleImage tokens, so at most ONE junction row
+  // can match a link (a facet has exactly one status) and `COUNT(*)` stays the trashed
+  // LINK count — an unrestricted join would multiply each link by its other facets'
+  // tokens (`done:screenshot`, …) and inflate every term.
+  const row = getDb()
+    .select({
+      total: count(),
+      done: sql<number>`SUM(CASE WHEN ${itemFacetStatuses.token} = ${DONE_TOKEN} THEN 1 ELSE 0 END)`,
+      failed: sql<number>`SUM(CASE WHEN ${itemFacetStatuses.token} IN (${FAILED_TOKEN}, ${PERMANENT_TOKEN}) THEN 1 ELSE 0 END)`,
+    })
+    .from(items)
+    .leftJoin(
+      itemFacetStatuses,
+      and(
+        eq(itemFacetStatuses.path, extractionPathSql),
+        inArray(itemFacetStatuses.token, [DONE_TOKEN, FAILED_TOKEN, PERMANENT_TOKEN]),
+      ),
+    )
+    .where(eq(items.itemListId, TRASH_ID))
+    .get();
+  // SUM over zero rows is NULL — normalize (COUNT is already 0).
+  return { total: row?.total ?? 0, done: row?.done ?? 0, failed: row?.failed ?? 0 };
+}
+
+export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
+  const trashed = readTrashedTitleImageCounts();
+  const totalLinks = await countLinks();
+  // Each term drops its trashed share, so the three still sum to the live link total —
+  // the section renders `done + pending + failed` as the total.
+  const liveLinks = totalLinks - trashed.total;
+  const liveDone = countToken(DONE_TOKEN) - trashed.done;
+  const liveFailed = countToken(FAILED_TOKEN) + countToken(PERMANENT_TOKEN) - trashed.failed;
+  return {
+    done: liveDone,
+    failed: liveFailed,
+    pending: Math.max(0, liveLinks - liveDone - liveFailed),
+  };
+}
+
+// A position in the newest-first `links/` walk — web queries.ts `LinkScanCursor`,
+// verbatim, including WHY `path` is part of it: equal `createdAt` rows are ordered by
+// path, and a bulk import stamps many links the same millisecond, so `createdAt` alone
+// couldn't pin a resume point.
+export interface LinkScanCursor {
+  createdAt: number;
+  path: string;
+}
+
+// One page of the "Generate all" walk: up to `limit` pending+eligible links
+// (newest-first) plus the cursor to resume from. `cursor === null` means the library is
+// exhausted; a non-null cursor always pairs with a FULL page, so the caller keeps
+// paging while it's non-null.
+export interface PendingTitleImagePage {
+  links: LinkItem[];
+  cursor: LinkScanCursor | null;
+}
+
+// One chunk of link rows that are NOT settled for `titleImage`, newest-first, resuming
+// strictly past `after`. The `NOT EXISTS` is the whole point: `done`/`permanent` links
+// never leave SQLite, so the JS pass below only ever sees genuine candidates. The
+// `failed` token rides along in the projection so the caller knows which rows still
+// need a blob read for their backoff.
+function scanUnsettledLinks(
+  after: LinkScanCursor | undefined,
+  limit: number,
+): { path: string; createdAt: number; failed: boolean }[] {
+  const rows = getDb()
+    .select({
+      path: items.path,
+      createdAt: items.itemCreatedAt,
+      failed: hasTitleImageToken([FAILED_TOKEN]).mapWith(Number),
+    })
+    .from(items)
+    .where(
+      and(
+        eq(items.itemType, 'link'),
+        // Trash gets no extraction work (see the header); `IS NULL` keeps a link whose
+        // list column somehow never projected rather than silently dropping it.
+        sql`(${items.itemListId} IS NULL OR ${items.itemListId} <> ${TRASH_ID})`,
+        sql`NOT ${hasTitleImageToken([DONE_TOKEN, PERMANENT_TOKEN])}`,
+        after
+          ? sql`(${items.itemCreatedAt} < ${after.createdAt} OR (${items.itemCreatedAt} = ${after.createdAt} AND ${items.path} < ${after.path}))`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(items.itemCreatedAt), desc(items.path))
+    .limit(limit)
+    .all();
+
+  return rows.map((row) => ({
+    path: row.path,
+    createdAt: row.createdAt ?? 0,
+    failed: row.failed === 1,
+  }));
+}
+
+// The residual extraction queue for the WHOLE-LIBRARY job (extraction-provider's
+// `extractAll`), as a QUERY — there's no queue object (docs/link-extraction.md — _the
+// queue is a query_) — PAGINATED by a forward cursor so a full drain is O(library),
+// not O(library²): each batch resumes where the last stopped, and a just-extracted link
+// sits behind the cursor.
+//
+// Trashed links are skipped (they're excluded from every browse view, so extracting one
+// fills in a title the user can only see by restoring the link first). Eligibility is
+// tested FRESH per row, so a link another device settled mid-drain drops out here.
+export async function readLinksPendingTitleImagePage(
+  now: number,
+  limit: number,
+  cursor?: LinkScanCursor,
+): Promise<PendingTitleImagePage> {
+  if (limit <= 0) return { links: [], cursor: cursor ?? null };
+
+  const pending: string[] = [];
+  let scannedFrom = cursor;
+  let scannedTo: LinkScanCursor | null = cursor ?? null;
+
+  for (;;) {
+    const chunkRows = scanUnsettledLinks(scannedFrom, SCAN_CHUNK);
+    if (chunkRows.length === 0) return { links: await loadLinks(pending), cursor: null };
+
+    // Only the `failed` rows need their blob: everything else in this chunk is pending
+    // by ABSENCE, which the SQL already proved.
+    const cooling = new Set<string>();
+    const failedPaths = chunkRows.filter((r) => r.failed).map((r) => extractionPathForLink(r.path));
+    if (failedPaths.length > 0) {
+      const exRows = await bulkGetItems(failedPaths);
+      exRows.forEach((exRow, i) => {
+        const facet = exRow ? decodeCachedExtraction(exRow)?.facets.titleImage : undefined;
+        if (!isFacetEligible(facet, now)) cooling.add(failedPaths[i]);
+      });
+    }
+
+    for (const row of chunkRows) {
+      scannedTo = { createdAt: row.createdAt, path: row.path };
+      if (cooling.has(extractionPathForLink(row.path))) continue;
+      pending.push(row.path);
+      if (pending.length >= limit) return { links: await loadLinks(pending), cursor: scannedTo };
+    }
+
+    // A short chunk means the oldest link was reached — library exhausted.
+    if (chunkRows.length < SCAN_CHUNK) return { links: await loadLinks(pending), cursor: null };
+    scannedFrom = scannedTo ?? undefined;
+  }
+}
+
+// Decode a set of link paths, in the given order, dropping anything unreadable.
+async function loadLinks(paths: string[]): Promise<LinkItem[]> {
+  if (paths.length === 0) return [];
+  const rows = await bulkGetItems(paths);
+  return decodeLinks(rows.filter((row): row is ItemRow => row !== undefined));
+}
+
+// The pending-titleImage subset of a SPECIFIC set of link paths, in the given order —
+// the read behind the AUTOMATIC (displayed-scoped) drain. Where the page read above
+// walks the whole library for the conscious "Generate all" job, this scopes automatic
+// work to what the user is actually looking at, so a 30k-link import left open never
+// extracts past what was scrolled into view.
+//
+// Cost: O(displayed), NOT O(library) — load-bearing, because this backs the always-on
+// wake read (extraction-provider), which re-runs on every `items` change. Two batch
+// gets (the links + their co-keyed extractions), then an inline eligibility test.
+// Missing / non-link / trashed / settled / still-cooling paths drop out — Trash is
+// filtered HERE rather than asked of each caller, so browsing Trash can't become the
+// one way to spend extraction work on links the user removed.
+export async function readLinksPendingTitleImageForLinkPaths(
+  linkPaths: string[],
+  now: number,
+): Promise<LinkItem[]> {
+  if (linkPaths.length === 0) return [];
+
+  const [rows, exRows] = await Promise.all([
+    bulkGetItems(linkPaths),
+    bulkGetItems(linkPaths.map(extractionPathForLink)),
+  ]);
+
+  const pending: ItemRow[] = [];
+  for (let i = 0; i < linkPaths.length; i++) {
+    const row = rows[i];
+    if (!row || row.itemType !== 'link' || row.itemListId === TRASH_ID) continue;
+
+    const exRow = exRows[i];
+    const facet = exRow ? decodeCachedExtraction(exRow)?.facets.titleImage : undefined;
+    if (isFacetEligible(facet, now)) pending.push(row);
+  }
+  return decodeLinks(pending);
 }
 
 // --- link query --------------------------------------------------------------

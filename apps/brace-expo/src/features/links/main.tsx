@@ -28,11 +28,11 @@
 //    to the toolbar. Pull-to-refresh is suspended while the mode is on (its
 //    applyPending would repaint items under the selection).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, useWindowDimensions, View } from 'react-native';
-import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
 
-import { type LinkView, useLocks, useSettings, useSync } from '@stxapps/expo-react';
+import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@stxapps/expo-react';
 
 import { LockPane } from '../../components/lock-pane';
 import { BulkEditBar } from './bulk-edit-bar';
@@ -46,6 +46,14 @@ import { useLinksViewState } from './view-state-provider';
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
 const SCROLL_TOP_THRESHOLD = 8;
+
+// Which rows count as "displayed" for the extraction drain (web's virtualizer
+// window, in FlashList terms): ANY sliver on screen counts (threshold 0 — a
+// half-visible row is one the user is about to read), but only after it has
+// stayed there briefly, so a fast fling past 400 rows doesn't queue every one of
+// them. The drain re-scans this set each step, so a row scrolled away mid-step
+// simply stops being picked.
+const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0, minimumViewTime: 250 };
 
 // The smallest a card may get before the card grid drops a column — web's
 // MIN_CARD_WIDTH rationale at mobile scale: web's 300 would pin every phone to
@@ -131,6 +139,35 @@ function UnlockedMain() {
   const tagsById = useTagMap();
   const listRef = useRef<FlashListRef<LinkView>>(null);
 
+  // Feed the extraction drain the rows actually on screen, so automatic preview
+  // work tracks ATTENTION — a 30k-link import never extracts past what was
+  // scrolled into view (extraction-provider, cost layer 2).
+  //
+  // TRAP: FlashList captures `onViewableItemsChanged` once (changing its
+  // identity mid-list throws "Changing onViewableItemsChanged on the fly is not
+  // supported"), so the callback must be stable for the list's whole lifetime.
+  // Hence a `[]`-dep useCallback reading the latest reporter through a ref,
+  // rather than closing over it directly.
+  const { reportDisplayedLinkPaths } = useExtraction();
+  const reportRef = useRef(reportDisplayedLinkPaths);
+  reportRef.current = reportDisplayedLinkPaths;
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken<LinkView>[] }) => {
+      // `item` is typed non-null but FlashList can hand back a recycled token
+      // mid-update, so the path is filtered rather than asserted.
+      reportRef.current(
+        viewableItems
+          .map((token) => token.item?.path)
+          .filter((path): path is string => typeof path === 'string'),
+      );
+    },
+    [],
+  );
+  // The pane owns this report while it's mounted; clear it on unmount so a
+  // navigation away (or the lock swap) doesn't leave the drain working a page
+  // nobody is looking at.
+  useEffect(() => () => reportRef.current([]), []);
+
   const { name, Item, columns, contentPadding } = LAYOUTS[linksLayout] ?? LIST_LAYOUT;
   // Window width, not a measured container: the pane fills the screen, and the
   // window value is available synchronously — no DEFAULT_COLUMNS flash to paper
@@ -203,6 +240,8 @@ function UnlockedMain() {
               />
             )}
             onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={VIEWABILITY_CONFIG}
             // Infinite scroll: grow the page as the end nears. `showMore` grows the
             // read's `limit`; re-arming is implicit — FlashList only re-fires after
             // the content grows.

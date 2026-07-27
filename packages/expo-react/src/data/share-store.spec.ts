@@ -317,7 +317,8 @@ describe('drainShareOutbox', () => {
   it('applies a valid draft and deletes its file', async () => {
     mockFiles.set(`${OUTBOX}/link-1.json`, JSON.stringify(draft));
 
-    await expect(drainShareOutbox()).resolves.toBe(1);
+    // The landed link's path comes back, so the caller can sync + extract it.
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
     // Applied means gone — and NOT quarantined.
     expect([...mockFiles.keys()]).toEqual([]);
   });
@@ -325,7 +326,7 @@ describe('drainShareOutbox', () => {
   it('quarantines an unparseable file instead of deleting it', async () => {
     mockFiles.set(`${OUTBOX}/broken.json`, 'not json');
 
-    await expect(drainShareOutbox()).resolves.toBe(0);
+    await expect(drainShareOutbox()).resolves.toEqual([]);
     // Out of the drain's path, so it can't be retried forever...
     expect(mockFiles.has(`${OUTBOX}/broken.json`)).toBe(false);
     // ...but not destroyed: an outbox draft can be the only copy of a share.
@@ -340,7 +341,7 @@ describe('drainShareOutbox', () => {
     const parked = JSON.stringify({ ...draft, newTags: [rankFree] });
     mockFiles.set(`${OUTBOX}/old-build.json`, parked);
 
-    await expect(drainShareOutbox()).resolves.toBe(0);
+    await expect(drainShareOutbox()).resolves.toEqual([]);
     expect(mockFiles.get(`${FAILED}/old-build.json`)).toBe(parked);
   });
 
@@ -348,7 +349,7 @@ describe('drainShareOutbox', () => {
     mockFiles.set(`${OUTBOX}/bad.json`, 'not json');
     mockFiles.set(`${OUTBOX}/good.json`, JSON.stringify(draft));
 
-    await expect(drainShareOutbox()).resolves.toBe(1);
+    await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
     expect(mockFiles.get(`${FAILED}/bad.json`)).toBe('not json');
     expect(mockFiles.has(`${OUTBOX}/good.json`)).toBe(false);
   });

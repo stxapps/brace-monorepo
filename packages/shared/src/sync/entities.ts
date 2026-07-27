@@ -390,9 +390,25 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // absent or `false` means no URL ever leaves the browser. `looseObject` round-trips
 // it for clients that don't model it (e.g. the extension, which is active-context
 // only and never calls the extractor).
+//
+// `deviceExtraction` is its ON-DEVICE sibling — the opt-in for a client that fetches
+// the page ITSELF (brace-expo: no CORS, so no server is involved and no new party
+// learns the URL). Same shape and same default-off, but a DIFFERENT thing is being
+// consented to, so they are deliberately two fields, not one:
+// `serverExtraction` admits a new party; this one admits un-gestured NETWORK ACTIVITY
+// FROM THIS DEVICE. Per the doc's gestured/un-gestured split it gates only the
+// residual — back-filling links that arrived by sync or import, plus the per-host
+// favicon cache that rides along — never the extraction of a link the user just saved
+// on the device (that gesture is its own consent, exactly as the extension's
+// active-tab capture is). SYNCED rather than device-local because it's an
+// account-level trust decision ("my devices may fetch the pages I save") that a second
+// phone should inherit; a metered-connection qualifier, if ever wanted, is a
+// device-local companion, not a second copy of this. Round-tripped by `looseObject`
+// on clients that don't model it (brace-web/the extension never read it).
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),
+  deviceExtraction: z.boolean().optional().catch(undefined),
   // The SYNCED links sort — the two orthogonal axes (see LINK_SORT_ONS /
   // LINK_SORT_ORDERS above): `sortOn` the field (date modified vs. added),
   // `sortOrder` the direction. Global-only (no device split, unlike `linksLayout`):

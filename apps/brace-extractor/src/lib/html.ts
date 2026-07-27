@@ -1,4 +1,9 @@
-import { cleanTitle, LINK_TITLE_MAX } from '@stxapps/shared';
+import {
+  type CollectedMeta,
+  LINK_TITLE_MAX,
+  selectTitleImage,
+  type TitleImage,
+} from '@stxapps/shared';
 
 // Title + preview-image extraction from a page's HTML, using the Workers-native
 // `HTMLRewriter` (a streaming SAX-style parser — no DOM, no JS execution, cheap).
@@ -6,50 +11,20 @@ import { cleanTitle, LINK_TITLE_MAX } from '@stxapps/shared';
 // (docs "server tier is raw-HTML only"); a JS-shell SPA with no server-side og tags
 // degrades to the host fallback at the route, not here.
 //
-// Preference order matches what real pages mean:
-//   title → og:title, else <title>
-//   image → og:image(:url|:secure_url), else twitter:image, else <link rel=image_src>
-// The image is resolved to an absolute http(s) URL against the FINAL (post-redirect)
-// page URL and dropped if it isn't http(s), so the contract's `httpUrlSchema` on the
-// response can't reject the whole batch over one bad og:image.
+// This file only COLLECTS candidates; WHICH of them becomes the title/image is
+// `selectTitleImage` in `@stxapps/shared` (extract/select.ts), shared with every other
+// extracting client — brace-expo parses the same head with a regex scanner on Hermes,
+// and the two tiers must mean the same thing by "the page's title" or a tier upgrade
+// would read as a change. Preference order + the http(s)-only URL resolution live
+// there.
 
-interface Collected {
-  ogTitle?: string;
-  docTitle: string;
-  ogImage?: string;
-  ogImageUrl?: string;
-  ogImageSecure?: string;
-  twitterImage?: string;
-  imageSrc?: string;
-}
-
-export interface TitleImage {
-  title?: string;
-  imageUrl?: string;
-}
-
-// Resolve a (possibly relative) image URL against the page URL and keep it only if
-// it's http(s). Returns undefined for unparseable / non-web URLs (e.g. a `data:` URI
-// — we don't proxy those).
-function resolveImage(raw: string | undefined, base: URL): string | undefined {
-  if (!raw) return undefined;
-
-  let abs: URL;
-  try {
-    abs = new URL(raw, base);
-  } catch {
-    return undefined;
-  }
-
-  if (abs.protocol !== 'http:' && abs.protocol !== 'https:') return undefined;
-  return abs.toString();
-}
+export type { TitleImage };
 
 export async function extractTitleImage(
   html: Uint8Array<ArrayBuffer>,
   finalUrl: URL,
 ): Promise<TitleImage> {
-  const collected: Collected = { docTitle: '' };
+  const collected: CollectedMeta = {};
 
   // Accumulate <title> text across its (possibly chunked) text nodes.
   let titleBuffer = '';
@@ -112,17 +87,5 @@ export async function extractTitleImage(
   await transformed.arrayBuffer();
   collected.docTitle = titleBuffer;
 
-  // Select first, clean once — the same shape as the extension (capture.ts selects
-  // `og:title || document.title` in-page, then the consumer runs cleanTitle). `ogTitle`
-  // is undefined unless a non-blank og:title was seen (setMeta drops empties), so this
-  // picks og:title when present and falls back to <title> otherwise, identically.
-  const title = cleanTitle(collected.ogTitle ?? collected.docTitle);
-  const rawImage =
-    collected.ogImage ??
-    collected.ogImageUrl ??
-    collected.ogImageSecure ??
-    collected.twitterImage ??
-    collected.imageSrc;
-
-  return { title, imageUrl: resolveImage(rawImage, finalUrl) };
+  return selectTitleImage(collected, finalUrl);
 }

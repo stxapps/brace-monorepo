@@ -1,6 +1,7 @@
 import { Stack } from 'expo-router';
 
 import {
+  ExtractionProvider,
   FaviconProvider,
   FileContentProvider,
   LockProvider,
@@ -32,6 +33,14 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 //   FaviconProvider — the per-host icon cache, beside it for the same reason
 //                  (web's placement); it needs only the extraction opt-in and
 //                  its rows are device-local.
+//   ExtractionProvider — the on-device extraction drain (title + preview image
+//                  per link). Needs the session AND a ready store, so it sits
+//                  inside SyncProvider; nothing below it needs to be inside it,
+//                  but the links screen consumes it (viewable-row reporting)
+//                  and so does the settings section. Locked lists get NO
+//                  special-casing here: locks are a display deterrent over
+//                  already-decrypted data (docs/locks.md), and fetching a page
+//                  shows a shoulder-surfer nothing.
 //   LockProvider — the device-local app/list locks state. Needs SyncProvider
 //                  (its orphan sweep waits for a ready store) and serves both
 //                  AppLockGate here and the links/settings lock surfaces.
@@ -48,37 +57,42 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 // ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
 // drains the iOS extension's outbox through the write edge on launch/foreground
 // and keeps the App Group taxonomy snapshot fresh after syncs and local edits.
-// It reads useSync, so it sits inside SyncProvider. (The Android share
-// activity's inline sync kick lives in saveSharedDraft itself, not here.)
+// It reads useSync AND useExtraction (a drained share is a gestured save, so it
+// gets the same immediate page fetch the add screen's does), so it sits inside
+// both — hence its place under ExtractionProvider rather than directly under
+// SyncProvider. (The Android share activity's inline sync kick lives in
+// saveSharedDraft itself, not here.)
 export default function AppLayout() {
   return (
     <AuthGuard>
       <SyncProvider>
-        <ShareBridge />
         <FileContentProvider>
           <FaviconProvider>
-            <LockProvider>
-              <AppLockGate>
-                <InitialSyncGate>
-                  <PaywallProvider>
-                    <Stack screenOptions={{ headerShown: false }}>
-                      {/* The link editors present modally (iOS pageSheet; Android
+            <ExtractionProvider>
+              <ShareBridge />
+              <LockProvider>
+                <AppLockGate>
+                  <InitialSyncGate>
+                    <PaywallProvider>
+                      <Stack screenOptions={{ headerShown: false }}>
+                        {/* The link editors present modally (iOS pageSheet; Android
                           slides up) — router screens, not RN Modals, so keyboard-
                           controller and portals work inside them (see
                           features/links/link-add-screen.tsx). */}
-                      <Stack.Screen
-                        name="add-link"
-                        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                      />
-                      <Stack.Screen
-                        name="edit-link"
-                        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                      />
-                    </Stack>
-                  </PaywallProvider>
-                </InitialSyncGate>
-              </AppLockGate>
-            </LockProvider>
+                        <Stack.Screen
+                          name="add-link"
+                          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                        />
+                        <Stack.Screen
+                          name="edit-link"
+                          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                        />
+                      </Stack>
+                    </PaywallProvider>
+                  </InitialSyncGate>
+                </AppLockGate>
+              </LockProvider>
+            </ExtractionProvider>
           </FaviconProvider>
         </FileContentProvider>
       </SyncProvider>

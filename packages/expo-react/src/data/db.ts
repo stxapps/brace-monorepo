@@ -167,6 +167,12 @@ export interface LocalSettingsValue {
   linksLayout: LinksLayout;
   themeSource: 'sync' | 'local';
   theme: ThemeState;
+  // Has the first-run "turn on link previews?" banner been dismissed on this
+  // device? DEVICE-LOCAL on purpose while the setting it offers is synced: the
+  // banner is a piece of onboarding chrome, and a second phone that has never
+  // shown it should still get its one offer (docs/link-extraction.md — off by
+  // default must cost one tap, not a settings expedition).
+  previewsPromptDismissed: boolean;
 }
 
 // Device-local settings that DELIBERATELY never sync — the single-row settings

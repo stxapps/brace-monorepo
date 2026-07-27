@@ -34,12 +34,15 @@ export interface Settings {
   syncLinksLayout: string;
   localLinksLayout: string;
   serverExtraction: boolean;
+  deviceExtraction: boolean;
   sortOn: string;
   sortOrder: string;
   theme: ThemeState;
   themeSource: ThemeSource;
   syncTheme: ThemeState;
   localTheme: ThemeState;
+  // Device-local: has the first-run link-previews offer been dismissed here?
+  previewsPromptDismissed: boolean;
 }
 
 export function useSettings(): Settings {
@@ -52,8 +55,13 @@ export function useSettings(): Settings {
   const linksLayoutSource = local?.linksLayoutSource ?? 'sync';
   const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
   const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
-  // Off by default: absent (older client / never toggled) reads as opted-out.
+  // Both extraction opt-ins are off by default: absent (older client / never toggled)
+  // reads as opted-out. `serverExtraction` is round-tripped for the web clients and never
+  // acted on here (expo never calls brace-extractor); `deviceExtraction` is expo's own —
+  // it gates the UN-GESTURED on-device work (the drain + the favicon cache), never a save
+  // made on this device. See docs/link-extraction.md — _expo drains in the foreground_.
   const serverExtraction = general?.serverExtraction ?? false;
+  const deviceExtraction = general?.deviceExtraction ?? false;
 
   // Global-only: the synced value is the applied one. The defaults
   // ('updatedAt'/'desc') match `emptyQuery`; use-links coerces before ordering.
@@ -76,11 +84,13 @@ export function useSettings(): Settings {
     syncLinksLayout,
     localLinksLayout,
     serverExtraction,
+    deviceExtraction,
     sortOn,
     sortOrder,
     theme,
     themeSource,
     syncTheme,
     localTheme,
+    previewsPromptDismissed: local?.previewsPromptDismissed ?? false,
   };
 }

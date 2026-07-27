@@ -20,6 +20,7 @@ export * from './export/text';
 export * from './extract/client';
 export * from './extract/endpoints';
 export * from './extract/retry';
+export * from './extract/select';
 export * from './iap/endpoints';
 export * from './iap/plans';
 export * from './iap/store-products';

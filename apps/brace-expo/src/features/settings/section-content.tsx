@@ -3,13 +3,14 @@
 // section is its own component, so they can grow independently. The section
 // comes from the route param (see `(app)/settings/[section].tsx`), so this is
 // a plain prop-driven component. `about` stays a labelled placeholder, exactly
-// like web's; there is no `extraction` entry (see sections.ts).
+// like web's.
 
 import { View } from 'react-native';
 
 import { Text } from '../../components/ui/text';
 import { AccountSection } from './account-section';
 import { DataSection } from './data-section';
+import { ExtractionSection } from './extraction-section';
 import { ListsSection } from './lists-section';
 import { MiscSection } from './misc-section';
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './sections';
@@ -32,6 +33,7 @@ const SECTIONS: Record<SettingsSectionId, () => React.ReactNode> = {
   account: () => <AccountSection />,
   subscription: () => <SubscriptionSection />,
   data: () => <DataSection />,
+  extraction: () => <ExtractionSection />,
   lists: () => <ListsSection />,
   tags: () => <TagsSection />,
   misc: () => <MiscSection />,

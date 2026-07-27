@@ -2,17 +2,24 @@
 // as the drawer's nav rail), the topbar (names the active one), and the
 // [section] route (renders + validates). The expo port of brace-web's
 // `(app)/settings/sections.tsx` — one source of truth keeps the menu, the
-// labels, and the content switch from drifting apart. Divergences: icons are
-// `LucideIcon` components (rendered through the ui `Icon` wrapper), not JSX,
-// so this stays a .ts file; and there is NO `extraction` section — brace-expo
-// does its own on-device extraction, exactly the omission the web section's
-// header plans for ("a platform that does its own extraction can drop it").
+// labels, and the content switch from drifting apart. One divergence: icons are
+// `LucideIcon` components (rendered through the ui `Icon` wrapper), not JSX, so
+// this stays a .ts file.
+//
+// `extraction` IS here, and means something different than it does on web: web's
+// section governs SERVER extraction (a paid Plus path through brace-extractor),
+// while this one governs ON-DEVICE extraction — the app fetching pages itself,
+// free on every plan, with the toggle gating only the un-gestured residual
+// (links that arrived by sync or import). See docs/link-extraction.md — _expo
+// drains in the foreground_ — and extraction-section.tsx for what that changes
+// in the surface.
 
 import {
   CreditCard,
   Database,
   Folders,
   Info,
+  Link,
   type LucideIcon,
   SlidersHorizontal,
   Tags,
@@ -20,7 +27,7 @@ import {
 } from 'lucide-react-native';
 
 export type SettingsSectionId =
-  'account' | 'subscription' | 'data' | 'lists' | 'tags' | 'misc' | 'about';
+  'account' | 'subscription' | 'data' | 'extraction' | 'lists' | 'tags' | 'misc' | 'about';
 
 export interface SettingsSection {
   id: SettingsSectionId;
@@ -32,6 +39,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'account', label: 'Account', icon: User },
   { id: 'subscription', label: 'Subscription', icon: CreditCard },
   { id: 'data', label: 'Data', icon: Database },
+  { id: 'extraction', label: 'Link previews', icon: Link },
   { id: 'lists', label: 'Lists', icon: Folders },
   { id: 'tags', label: 'Tags', icon: Tags },
   { id: 'misc', label: 'Misc.', icon: SlidersHorizontal },

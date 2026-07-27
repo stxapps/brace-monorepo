@@ -433,8 +433,11 @@ function quarantine(group: Directory, entry: File): void {
 }
 
 // Drain the iOS outbox into the local store — called by the main app on launch
-// and foreground (and by the background-task pass). Returns how many drafts
-// landed. Each file is deleted only AFTER its local write commits.
+// and foreground (and by the background-task pass). Returns the `links/` PATH of
+// every draft that landed (the caller kicks a sync off `length`, and hands the
+// paths to the gestured extraction — a share IS the save gesture, it just
+// reaches the app here instead of through the add screen). Each file is deleted
+// only AFTER its local write commits.
 //
 // A file the drain CAN'T READ is moved to `share/failed/`, never deleted. It
 // can't stay in the outbox (it would be retried forever), but destroying it is
@@ -448,15 +451,15 @@ function quarantine(group: Directory, entry: File): void {
 // (clearShareData).
 //
 // No-op when signed out (the drafts wait) or on Android (no outbox exists).
-export async function drainShareOutbox(): Promise<number> {
-  if (Platform.OS !== 'ios') return 0;
+export async function drainShareOutbox(): Promise<string[]> {
+  if (Platform.OS !== 'ios') return [];
   const session = getSession();
-  if (!session) return 0;
+  if (!session) return [];
   const group = appGroupDir();
-  if (!group) return 0;
+  if (!group) return [];
   const dir = outboxDir(group);
-  if (!dir.exists) return 0;
-  let applied = 0;
+  if (!dir.exists) return [];
+  const applied: string[] = [];
   for (const entry of dir.list()) {
     if (!(entry instanceof File)) continue;
     const draft = readDraft(entry);
@@ -465,7 +468,7 @@ export async function drainShareOutbox(): Promise<number> {
       continue;
     }
     await applyShareDraft(session.username, draft);
-    applied += 1;
+    applied.push(pathFromId(draft.id, LINKS_PREFIX));
     entry.delete();
   }
   return applied;

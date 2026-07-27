@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { drainShareOutbox, refreshShareTaxonomy } from '../data/share-store';
+import { useExtraction } from './extraction-provider';
 import { useSync } from './sync-provider';
 
 // The MAIN APP's half of the share sheet (docs/share-sheet.md), as a renderless
@@ -12,7 +13,13 @@ import { useSync } from './sync-provider';
 //    the write edge on mount and on every return to foreground — the moments
 //    the user comes back after sharing. A drain that landed drafts calls
 //    requestSync(), so the pending ops push now and the read edge shows the
-//    user their own share immediately (localWriteNonce semantics).
+//    user their own share immediately (localWriteNonce semantics). It also
+//    hands the landed paths to `extractNow`: a share IS a save gesture made on
+//    this device, so its page fetch needs no opt-in (docs/link-extraction.md —
+//    _the stance_); the outbox is simply the only door it can arrive through,
+//    since the separate-process extension can't fetch or write the store
+//    itself. This is why the component now sits inside <ExtractionProvider>
+//    as well as <SyncProvider>.
 //  - OUTBOUND (store → snapshot): rewrite the taxonomy snapshot after every
 //    drain (a draft can mint new lists/tags), after every completed sync cycle
 //    (lastSyncAt — a pull may have changed lists/tags), and on every local
@@ -26,13 +33,17 @@ import { useSync } from './sync-provider';
 // artifact — a missed pass self-heals on the next signal.
 export function ShareBridge() {
   const { lastSyncAt, localWriteNonce, requestSync } = useSync();
+  const { extractNow } = useExtraction();
 
   useEffect(() => {
     const pass = () => {
       void (async () => {
         const applied = await drainShareOutbox();
         await refreshShareTaxonomy();
-        if (applied > 0) requestSync();
+        if (applied.length > 0) {
+          requestSync();
+          extractNow(applied);
+        }
       })().catch(() => undefined);
     };
     pass();
@@ -40,9 +51,10 @@ export function ShareBridge() {
       if (state === 'active') pass();
     });
     return () => sub.remove();
-    // requestSync is identity-stable (sync-provider) — this effect runs once
-    // per mount, not per render.
-  }, [requestSync]);
+    // requestSync is identity-stable (sync-provider); extractNow changes only
+    // when the session/store readiness does, and a re-run is harmless — the
+    // drain is idempotent and an empty outbox is a no-op.
+  }, [requestSync, extractNow]);
 
   useEffect(() => {
     // Skip the initial render (nothing synced/edited yet — the mount pass above

@@ -45,6 +45,7 @@ export async function setLocalSettings(patch: Partial<LocalSettingsValue>): Prom
       linksLayout: existing?.linksLayout ?? 'list',
       themeSource: existing?.themeSource ?? 'sync',
       theme: existing?.theme ?? DEFAULT_THEME,
+      previewsPromptDismissed: existing?.previewsPromptDismissed ?? false,
       ...patch,
     };
     tx.insert(localSettings)

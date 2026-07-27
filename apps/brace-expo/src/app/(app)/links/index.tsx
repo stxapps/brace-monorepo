@@ -6,6 +6,7 @@ import { AddLinkFab } from '../../../features/links/add-link-fab';
 import { BulkTagsDialog } from '../../../features/links/bulk-tags-dialog';
 import { LinkDestroyConfirm } from '../../../features/links/link-destroy-confirm';
 import { Main } from '../../../features/links/main';
+import { PreviewsPrompt } from '../../../features/links/previews-prompt';
 import { SearchBar } from '../../../features/links/search-bar';
 import { Topbar } from '../../../features/links/topbar';
 import { LinksViewStateProvider } from '../../../features/links/view-state-provider';
@@ -32,6 +33,10 @@ export default function LinksScreen() {
         <View className="min-h-0 flex-1">
           <Topbar />
           <SearchBar />
+          {/* The first-run link-previews offer — renders null unless the opt-in
+              is off, undismissed, AND links are actually waiting (see the
+              component). Above Main so it reads as chrome, not a list item. */}
+          <PreviewsPrompt />
           <Main />
           {/* Screen-level, not in Main: the add affordance survives Main's
               LockPane/EmptyState swaps (web's topbar Add is always there). */}
