@@ -39,6 +39,10 @@
 //  - THE STEP IS A SMALL LINK POOL, not `MAX_EXTRACT_URLS`. There's no batch endpoint to
 //    fill: a step is STEP links fetched at CONCURRENCY (device-extraction.ts), so the
 //    number is about the radio and the target hosts, not a server's fan-out.
+//
+//  - TWO PATHS REACH THE SAME WORKER, so they share an in-flight set (`inFlightPathsRef`).
+//    Web has one path and needs none of this; here `extractNow` runs OUTSIDE the drain by
+//    design, and at mode `all` both can pick the same link. See the ref's comment.
 
 import {
   createContext,
@@ -60,6 +64,7 @@ import {
 } from '@stxapps/shared';
 
 import {
+  type LinkItem,
   type LinkScanCursor,
   readLinksPendingTitleImageForLinkPaths,
   readLinksPendingTitleImagePage,
@@ -196,6 +201,46 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryDelayRef = useRef(RETRY_BASE_MS);
 
+  // The links a fetch is running for RIGHT NOW, in EITHER path. `runningRef` single-flights
+  // the drain against itself; this is what keeps the drain and `extractNow` off the same
+  // link, which they otherwise reach together at mode `all`: the save wakes the drain (a new
+  // `items` row, displayed and still pending) while `extractNow`'s page fetch — up to 15s —
+  // is in flight, and a link stays pending until its TERMINAL facet write lands in pass 2.
+  // What losing that race costs is more than a wasted fetch: both runs reach extractOne's
+  // pass 2, each writes a `files/` image blob, the second `extractions/` write wins, and the
+  // loser's blob ends up referenced by nothing — synced, charged against the byte quota, and
+  // never reclaimed (the delete paths only ever reach REFERENCED blobs, and
+  // sweepDanglingExtractions is about extractions without links, not files without
+  // referrers).
+  //
+  // Deliberately in-memory and released in a `finally`, never a persisted mark: a mark that
+  // outlived the fetch (an offline `extractNow`, a killed app) would strand the link where
+  // no path looks at it again. And deliberately in-PROCESS only — cross-DEVICE duplication
+  // stays unguarded on purpose (docs/link-extraction.md — _the extraction entity_,
+  // cross-device dedup: self-healing, and a lease would cost a write-then-sync on the
+  // critical path). The asymmetry is the price: there coordination costs a synced lease,
+  // here it costs a Set.
+  const inFlightPathsRef = useRef(new Set<string>());
+
+  // Take up to `limit` of these links that no other path is already fetching, marking them
+  // in flight. The caller MUST hand the result to `releaseInFlight` in a `finally`.
+  // Claiming (rather than filtering then slicing) is what keeps `limit` honest: a link
+  // skipped here must not spend a slot the caller was going to pay for.
+  const claimInFlight = useCallback((links: LinkItem[], limit = Infinity): LinkItem[] => {
+    const claimed: LinkItem[] = [];
+    for (const link of links) {
+      if (claimed.length >= limit) break;
+      if (inFlightPathsRef.current.has(link.path)) continue;
+      inFlightPathsRef.current.add(link.path);
+      claimed.push(link);
+    }
+    return claimed;
+  }, []);
+
+  const releaseInFlight = useCallback((links: LinkItem[]) => {
+    for (const link of links) inFlightPathsRef.current.delete(link.path);
+  }, []);
+
   // Cheap wake signal for the AUTO drain: is anything on the displayed page pending AND
   // eligible right now (backoff respected)? O(displayed), re-run on the two wake tables.
   // Inert in extract-all mode, where the raw count below is the signal instead.
@@ -241,9 +286,11 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // The gestured path (see the context type). Deliberately NOT part of the drain: no
-  // queue, no budget, no cursor, no opt-in — one pass over exactly these links, fire and
-  // forget, with the same per-link outcome recording as the drain so a failure backs off
-  // instead of spinning. It runs at `expo:fg` like everything else here.
+  // queue, no budget, no cursor, no opt-in — one pass over these links, fire and forget,
+  // with the same per-link outcome recording as the drain so a failure backs off instead
+  // of spinning. It runs at `expo:fg` like everything else here. The ONE thing it shares
+  // with the drain is the in-flight set, which is not a gate on the gesture — it only
+  // stops the two paths fetching the same link twice (see inFlightPathsRef).
   const extractNow = useCallback(
     (linkPaths: string[]) => {
       if (!username || storeStatus !== 'ready' || linkPaths.length === 0) return;
@@ -252,16 +299,22 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       // it's the exact thing being declined. `saves` and `all` both proceed.
       if (deviceExtractionMode === 'off') return;
       void (async () => {
+        let links: LinkItem[] = [];
         try {
-          const links = await readLinksPendingTitleImageForLinkPaths(linkPaths, Date.now());
+          // Anything the drain already has in flight is dropped, not waited on — it's the
+          // same fetch at the same tier, so the gesture is already being served (see
+          // inFlightPathsRef). Only reachable at mode `all`; at `saves` the drain can't run,
+          // so nothing is ever dropped here.
+          links = claimInFlight(await readLinksPendingTitleImageForLinkPaths(linkPaths, Date.now()));
           if (links.length === 0) return;
           // The icon rides the same gesture as the page (favicon-provider's two entry
           // points): fired FIRST so a ~1 KB `/favicon.ico` isn't queued behind a page
           // fetch that can take 15s. Both fillers may now race for these hosts — the
           // capture below and this guess — which is safe by favicon-store's rule that
           // `ok` never gets downgraded, and mostly moot since each re-checks the row.
-          // Hosts come from the PENDING links, so a re-save of an already-extracted
-          // link doesn't re-ask; that link's icon was captured when it was extracted.
+          // Hosts come from the CLAIMED links, so a re-save of an already-extracted link
+          // doesn't re-ask (its icon was captured when it was extracted), and a link the
+          // drain is mid-fetch on gets its icon from that run's capture instead.
           requestFaviconNow([...new Set(links.map((link) => hostFromText(link.url)))]);
           await runDeviceTitleImageBatch(username, links, 'expo:fg', {
             optedIn: deviceExtractionMode === 'all',
@@ -271,10 +324,20 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           // Offline, or a store hiccup: nothing was recorded (device-extraction's header),
           // so the link stays pending and the normal drain picks it up on the next wake —
           // no reason to surface anything at the save site.
+        } finally {
+          releaseInFlight(links);
         }
       })();
     },
-    [username, storeStatus, requestSync, requestFaviconNow, deviceExtractionMode],
+    [
+      username,
+      storeStatus,
+      requestSync,
+      requestFaviconNow,
+      deviceExtractionMode,
+      claimInFlight,
+      releaseInFlight,
+    ],
   );
 
   useEffect(() => {
@@ -315,10 +378,18 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
               STEP,
               extractAllCursorRef.current,
             );
-            if (page.links.length > 0) {
-              await runDeviceTitleImageBatch(username, page.links, 'expo:fg', { optedIn: true });
-              retryDelayRef.current = RETRY_BASE_MS; // a clean step clears accrued backoff
-              requestSync(); // push this step's `files/` + `extractions/` writes
+            // A link `extractNow` is mid-fetch on is skipped for this walk, not deferred:
+            // the cursor moves past it either way, and its outcome is being written by the
+            // run that holds it (see inFlightPathsRef).
+            const claimed = claimInFlight(page.links);
+            try {
+              if (claimed.length > 0) {
+                await runDeviceTitleImageBatch(username, claimed, 'expo:fg', { optedIn: true });
+                retryDelayRef.current = RETRY_BASE_MS; // a clean step clears accrued backoff
+                requestSync(); // push this step's `files/` + `extractions/` writes
+              }
+            } finally {
+              releaseInFlight(claimed);
             }
             if (page.cursor === null) {
               // End of library: the job is FINITE, so end it rather than staying armed to
@@ -339,19 +410,29 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
             break;
           }
           const take = Math.min(STEP, budgetRef.current);
-          const links = (
-            await readLinksPendingTitleImageForLinkPaths(displayedLinkPathsRef.current, Date.now())
-          ).slice(0, take);
+          // The claim doubles as the step's slice — a link `extractNow` holds is skipped
+          // without spending a slot of `take` (see claimInFlight). Breaking when the whole
+          // displayed page is claimed is safe: the run holding it writes an outcome to
+          // `item_facet_statuses`, which is a wake table, so the drain re-fires with the
+          // real remainder rather than sitting on a lost wakeup.
+          const links = claimInFlight(
+            await readLinksPendingTitleImageForLinkPaths(displayedLinkPathsRef.current, Date.now()),
+            take,
+          );
           if (links.length === 0) break;
 
-          // `optedIn: true` is not an assumption — `enabled` gates this whole effect on
-          // mode `all`, so the drain cannot run at a lower position.
-          const processed = await runDeviceTitleImageBatch(username, links, 'expo:fg', {
-            optedIn: true,
-          });
-          retryDelayRef.current = RETRY_BASE_MS;
-          budgetRef.current -= processed;
-          requestSync();
+          try {
+            // `optedIn: true` is not an assumption — `enabled` gates this whole effect on
+            // mode `all`, so the drain cannot run at a lower position.
+            const processed = await runDeviceTitleImageBatch(username, links, 'expo:fg', {
+              optedIn: true,
+            });
+            retryDelayRef.current = RETRY_BASE_MS;
+            budgetRef.current -= processed;
+            requestSync();
+          } finally {
+            releaseInFlight(links);
+          }
         }
       } catch (err) {
         // The only wholesale failure this platform has: the whole step failed at the
@@ -384,7 +465,16 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         retryTimerRef.current = null;
       }
     };
-  }, [enabled, username, hasWork, active, isExtractingAll, requestSync]);
+  }, [
+    enabled,
+    username,
+    hasWork,
+    active,
+    isExtractingAll,
+    requestSync,
+    claimInFlight,
+    releaseInFlight,
+  ]);
 
   const value = useMemo<ExtractionContextValue>(
     () => ({

@@ -40,10 +40,12 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 //                  its rows are device-local.
 //   ExtractionProvider — the on-device extraction drain (title + preview image
 //                  per link). Needs the session AND a ready store, so it sits
-//                  inside SyncProvider; nothing binds it to FileContent/Favicon
-//                  above — that pair is shallower only because it depends on
-//                  less. The links screen consumes it (viewable-row reporting)
-//                  and so does the settings section. Locked lists get NO
+//                  inside SyncProvider — and it must sit inside FaviconProvider
+//                  too: `extractNow` fires the gestured favicon guess through
+//                  `useFavicon`, which THROWS outside its provider. (FileContent
+//                  above is not a dependency; it's shallower only because it
+//                  depends on less.) The links screen consumes it (viewable-row
+//                  reporting) and so does the settings section. Locked lists get NO
 //                  special-casing here: locks are a display deterrent over
 //                  already-decrypted data (docs/locks.md), and fetching a page
 //                  shows a shoulder-surfer nothing.
