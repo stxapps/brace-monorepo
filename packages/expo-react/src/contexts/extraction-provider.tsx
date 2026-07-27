@@ -305,7 +305,9 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           // same fetch at the same tier, so the gesture is already being served (see
           // inFlightPathsRef). Only reachable at mode `all`; at `saves` the drain can't run,
           // so nothing is ever dropped here.
-          links = claimInFlight(await readLinksPendingTitleImageForLinkPaths(linkPaths, Date.now()));
+          links = claimInFlight(
+            await readLinksPendingTitleImageForLinkPaths(linkPaths, Date.now()),
+          );
           if (links.length === 0) return;
           // The icon rides the same gesture as the page (favicon-provider's two entry
           // points): fired FIRST so a ~1 KB `/favicon.ico` isn't queued behind a page
