@@ -52,7 +52,7 @@ function AlertDialogOverlay({
           exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
           as="Pressable"
         >
-          <>{children}</>
+          {children}
         </NativeOnlyAnimatedView>
       </AlertDialogPrimitive.Overlay>
     </FullWindowOverlay>

@@ -62,7 +62,7 @@ function DropdownMenuSubTrigger({
         )}
         {...props}
       >
-        <>{children}</>
+        {children}
         <Icon as={icon} className={cn('text-foreground size-4 shrink-0', iconClassName)} />
       </DropdownMenuPrimitive.SubTrigger>
     </TextClassContext.Provider>
@@ -213,7 +213,7 @@ function DropdownMenuCheckboxItem({
             />
           </DropdownMenuPrimitive.ItemIndicator>
         </View>
-        <>{children}</>
+        {children}
       </DropdownMenuPrimitive.CheckboxItem>
     </TextClassContext.Provider>
   );
@@ -244,7 +244,7 @@ function DropdownMenuRadioItem({
             <View className="bg-foreground h-2 w-2 rounded-full" />
           </DropdownMenuPrimitive.ItemIndicator>
         </View>
-        <>{children}</>
+        {children}
       </DropdownMenuPrimitive.RadioItem>
     </TextClassContext.Provider>
   );

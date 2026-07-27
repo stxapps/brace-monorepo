@@ -48,7 +48,7 @@ function DialogOverlay({
         className={cn(
           'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/50 p-2',
           Platform.select({
-            web: 'animate-in fade-in-0 fixed cursor-default [&>*]:cursor-auto',
+            web: 'animate-in fade-in-0 fixed cursor-default *:cursor-auto',
           }),
           className,
         )}
@@ -65,7 +65,7 @@ function DialogOverlay({
             entering={FadeIn.delay(50).reduceMotion(ReduceMotion.System)}
             exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
           >
-            <>{children}</>
+            {children}
           </NativeOnlyAnimatedView>
         </NativeOnlyAnimatedView>
       </DialogPrimitive.Overlay>
@@ -93,7 +93,7 @@ function DialogContent({
           )}
           {...props}
         >
-          <>{children}</>
+          {children}
           <DialogPrimitive.Close
             className={cn(
               'absolute top-4 right-4 rounded opacity-70 active:opacity-100',
