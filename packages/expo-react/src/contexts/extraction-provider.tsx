@@ -5,10 +5,13 @@
 // drain with a queued rerun; the backed-off self-resume). What follows is only what
 // DIFFERS on this platform, and why.
 //
-//  - THE GATE IS `deviceExtraction`, not `serverExtraction`, and there is no extractor
+//  - THE GATE IS `deviceExtractionMode`, not `serverExtraction`, and there is no extractor
 //    client to check (docs/link-extraction.md — _expo drains in the foreground_). Expo
 //    never calls `brace-extractor`: native HTTP has no CORS, so the server buys back
 //    nothing and would only downgrade the tier, cost a paid request, and disclose the URL.
+//    It's a LADDER, not a boolean (entities.ts DEVICE_EXTRACTION_MODES), and the two ends
+//    land in different places here: `all` is what arms the drain below (`enabled`), while
+//    `off` is checked inside `extractNow` — the only gate that can stop a gestured save.
 //
 //  - `extractNow` IS NEW — the gestured path (see below). Web has no equivalent because
 //    on web every extraction goes through a server and is therefore gated regardless.
@@ -49,7 +52,12 @@ import {
 } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import { isRetryableTransportError, jitteredDelayMs, retryAfterMsOf } from '@stxapps/shared';
+import {
+  hostFromText,
+  isRetryableTransportError,
+  jitteredDelayMs,
+  retryAfterMsOf,
+} from '@stxapps/shared';
 
 import {
   type LinkScanCursor,
@@ -61,6 +69,7 @@ import { useLiveRead } from '../hooks/use-live-read';
 import { useSettings } from '../hooks/use-settings';
 import { runDeviceTitleImageBatch } from '../lib/device-extraction';
 import { useAuth } from './auth-provider';
+import { useFavicon } from './favicon-provider';
 import { useSync } from './sync-provider';
 
 // The tables whose changes wake the drain: a link arriving (`items`) or an outcome being
@@ -91,8 +100,9 @@ const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 60_000;
 
 interface ExtractionContextValue {
-  // Is un-gestured on-device extraction live at all (opted in, store ready)? When false,
-  // the automatic drain and `extractAll` are no-ops — but `extractNow` still works.
+  // Is un-gestured on-device extraction live at all (mode `all`, store ready)? When false,
+  // the automatic drain and `extractAll` are no-ops — but `extractNow` still works, unless
+  // the mode is `off`, which stops that too.
   enabled: boolean;
   // NO progress counts here — the exact numbers carry a trash-correction join, so they
   // live in the on-demand useExtractionCounts hook (web's split, verbatim).
@@ -107,8 +117,9 @@ interface ExtractionContextValue {
   // Report the link paths currently DISPLAYED (FlashList's viewable rows). The automatic
   // drain extracts the pending subset of these and only these.
   reportDisplayedLinkPaths: (linkPaths: string[]) => void;
-  // THE GESTURED PATH — extract these links ONCE, right now, outside the queue, the
-  // budget and the `deviceExtraction` opt-in (it still needs a signed-in, ready store).
+  // THE GESTURED PATH — extract these links ONCE, right now, outside the queue and the
+  // budget, and above the `saves`/`all` line (it still needs a signed-in, ready store,
+  // and it still honors `off`).
   //
   // This is the save the user just made ON THIS DEVICE: the app fetches a page the user
   // literally just handed it, so the save IS the consent — the same reason the browser
@@ -120,6 +131,11 @@ interface ExtractionContextValue {
   // The rule that keeps this honest: ONE save is automatic, N-at-once is a prompt. An
   // import is a gesture too, but it's a thousand hosts — so it gets the explicit
   // "Generate previews for N links?" moment (i.e. `extractAll`) instead of auto-draining.
+  //
+  // It also fires the FAVICON guess for these links' hosts (favicon-provider's
+  // `requestFaviconNow`), on the same licence: without it, a link saved here with the
+  // opt-in off would get its title and preview image but a monogram where its icon goes,
+  // which is not what the settings section and the previews prompt tell the user.
   extractNow: (linkPaths: string[]) => void;
 }
 
@@ -128,11 +144,14 @@ const ExtractionContext = createContext<ExtractionContextValue | null>(null);
 export function ExtractionProvider({ children }: { children: ReactNode }) {
   const { username } = useAuth();
   const { storeStatus, requestSync } = useSync();
-  const { deviceExtraction } = useSettings();
+  const { deviceExtractionMode } = useSettings();
+  // The gestured favicon entry point, for `extractNow` — see its comment. Requires
+  // <FaviconProvider> ABOVE this provider, which the (app) layout does.
+  const { requestFaviconNow } = useFavicon();
 
-  // Every condition the un-gestured loop needs, in one gate. The opt-in is the
-  // privacy-load-bearing one: no un-gestured request leaves the device until it's on.
-  const enabled = Boolean(username) && storeStatus === 'ready' && Boolean(deviceExtraction);
+  // Every condition the un-gestured loop needs, in one gate. The mode is the
+  // privacy-load-bearing one: no un-gestured request leaves the device below `all`.
+  const enabled = Boolean(username) && storeStatus === 'ready' && deviceExtractionMode === 'all';
 
   // Foreground state, AppState's answer to `visibilitychange`. `active` (state) re-runs the
   // effect to resume; `activeRef` lets a running loop notice mid-drain and stop at the next
@@ -228,11 +247,25 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   const extractNow = useCallback(
     (linkPaths: string[]) => {
       if (!username || storeStatus !== 'ready' || linkPaths.length === 0) return;
+      // `off` is the one position that reaches in here: it means "this device never
+      // contacts a site you save", and a save gesture is not an exception to it —
+      // it's the exact thing being declined. `saves` and `all` both proceed.
+      if (deviceExtractionMode === 'off') return;
       void (async () => {
         try {
           const links = await readLinksPendingTitleImageForLinkPaths(linkPaths, Date.now());
           if (links.length === 0) return;
-          await runDeviceTitleImageBatch(username, links, 'expo:fg');
+          // The icon rides the same gesture as the page (favicon-provider's two entry
+          // points): fired FIRST so a ~1 KB `/favicon.ico` isn't queued behind a page
+          // fetch that can take 15s. Both fillers may now race for these hosts — the
+          // capture below and this guess — which is safe by favicon-store's rule that
+          // `ok` never gets downgraded, and mostly moot since each re-checks the row.
+          // Hosts come from the PENDING links, so a re-save of an already-extracted
+          // link doesn't re-ask; that link's icon was captured when it was extracted.
+          requestFaviconNow([...new Set(links.map((link) => hostFromText(link.url)))]);
+          await runDeviceTitleImageBatch(username, links, 'expo:fg', {
+            optedIn: deviceExtractionMode === 'all',
+          });
           requestSync();
         } catch {
           // Offline, or a store hiccup: nothing was recorded (device-extraction's header),
@@ -241,7 +274,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         }
       })();
     },
-    [username, storeStatus, requestSync],
+    [username, storeStatus, requestSync, requestFaviconNow, deviceExtractionMode],
   );
 
   useEffect(() => {
@@ -283,7 +316,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
               extractAllCursorRef.current,
             );
             if (page.links.length > 0) {
-              await runDeviceTitleImageBatch(username, page.links, 'expo:fg');
+              await runDeviceTitleImageBatch(username, page.links, 'expo:fg', { optedIn: true });
               retryDelayRef.current = RETRY_BASE_MS; // a clean step clears accrued backoff
               requestSync(); // push this step's `files/` + `extractions/` writes
             }
@@ -311,7 +344,11 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           ).slice(0, take);
           if (links.length === 0) break;
 
-          const processed = await runDeviceTitleImageBatch(username, links, 'expo:fg');
+          // `optedIn: true` is not an assumption — `enabled` gates this whole effect on
+          // mode `all`, so the drain cannot run at a lower position.
+          const processed = await runDeviceTitleImageBatch(username, links, 'expo:fg', {
+            optedIn: true,
+          });
           retryDelayRef.current = RETRY_BASE_MS;
           budgetRef.current -= processed;
           requestSync();

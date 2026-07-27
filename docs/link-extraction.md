@@ -61,13 +61,23 @@ so the posture is deliberately conservative:
   user did **not** just ask for: back-filling links that arrived by sync from
   another device, draining a bulk import, and the per-host favicon cache that
   rides along. Each of those is a **new** disclosure of this device's IP to a site
-  the user never pointed it at, so each waits behind expo's `deviceExtraction`
-  opt-in (see _expo drains in the foreground_). A save on the **web** app is gated
+  the user never pointed it at, so each waits for expo's `deviceExtractionMode` to
+  reach `all` (see _expo drains in the foreground_). A save on the **web** app is gated
   regardless of the gesture — not because it's un-gestured, but because the only
   way it can extract at all is through a **server**, which is the separate,
   stricter `serverExtraction` opt-in below. So "we leak as little as possible"
   stays the default, and no setting has to be found to get a title for the link
   you just saved on the device in your hand.
+- **…but "needs no opt-in" is not "cannot be declined."** The gestured path has
+  its own off position — `deviceExtractionMode: 'off'`, the bottom of the ladder
+  (_expo drains in the foreground_). It exists because everything else here is
+  built for the user who chose an end-to-end-encrypted bookmark app precisely so
+  that nobody sees their library, and "this app always fetches the pages you save,
+  from your IP, and you can't stop it" would be the one hole in that. It is not
+  the default (a fresh install that previewed nothing would look broken, and would
+  push people toward the _broader_ setting), and it is not offered by the first-run
+  banner — but it is always one tap away in Settings, and every fetching path
+  honors it: the page, the preview image, and both favicon paths.
 - **The clients do the work, never the sync server.** `brace-api` stays a blind
   sync broker — it never fetches a user's URLs, so it never learns them. All
   extraction runs in clients the user already installed and trusts: the
@@ -250,8 +260,9 @@ Note what the mobile/foreground row does **not** carry: an opt-in. The fetch is
 local, to a host the user just handed the app, in the gesture that asked for the
 link to be saved — so the save _is_ the consent, exactly as it is for the
 extension's active-tab capture (the gestured/un-gestured split in _the stance_).
-Expo's `deviceExtraction` opt-in gates only the un-gestured residual — links that
-arrived by sync or import, and their favicons — never this row.
+Expo's `deviceExtractionMode` gates the un-gestured residual — links that arrived
+by sync or import, and their favicons — at `all`; this row rides the default
+`saves`. Only the bottom position, `off`, stops it.
 
 **Preference order on a web-app save.** `brace-extractor` is the _fallback_, not
 the first choice. When a capable extension is present in the **same browser**, the
@@ -465,11 +476,11 @@ decisions, each deliberate:
 **Who fetches, per client — riding each client's existing extraction opt-in,
 never a favicon-specific setting:**
 
-| client              | source                                                                                                                     | gate                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| **brace-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in |
-| **brace-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | the `deviceExtraction` opt-in |
-| **brace-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network    |
+| client              | source                                                                                                                     | gate                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **brace-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in                                                 |
+| **brace-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | `deviceExtractionMode` (`all` to guess; `saves` captures declared icons only) |
+| **brace-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network                                                    |
 
 The gates are the same trust decisions the user already made, so "off by
 default" falls out for free — a fresh install fetches no favicons anywhere, per
@@ -482,18 +493,35 @@ _the stance_. Per-client notes:
   the favicon cache pays **per device** (each device re-asks the extractor per
   host). Host-only, behind the same opt-in — fixing it means the synced
   namespace above, which a cosmetic payoff doesn't justify.
-- **expo** — the gate is `deviceExtraction` (see _expo drains in the
+- **expo** — the gate is `deviceExtractionMode` (see _expo drains in the
   foreground_), and it's load-bearing, not ceremony: for a link saved on
   another device, a **standalone** favicon fetch is a **new** disclosure of the
-  user's IP to that site (expo never fetched that page), so it must not happen
-  before the user opts into expo doing network enrichment at all. The one
+  user's IP to that site (expo never fetched that page), so the host-keyed
+  **guess** (`https://{host}/favicon.ico`) needs `all`. The one
   carve-out is the icon expo learns while extracting the page **itself**: it
   already holds the HTML, and the icon URL it declares is on a host this device
   contacted seconds ago in the same gesture — so capturing `<link rel="icon">`
   there costs no disclosure the extraction didn't already pay, and beats the
   `/favicon.ico` guess on accuracy. That capture is therefore allowed exactly
-  where its extraction was (a gestured save, or an opted-in drain); it is never
-  a licence for the host-keyed cache to go fetch on its own.
+  where its extraction was (a gestured save, or an `all` drain); it is never
+  a licence for the host-keyed cache to go fetch on its own. Two limits keep the
+  carve-out honest at `saves`, where the licence is one save rather than a
+  standing opt-in: a **cross-origin** icon href (a CDN the gesture never implied)
+  is skipped, and the guess is fired for the saved link's **own** host only —
+  `extractNow` hands those hosts to the queue directly, so the same save that
+  buys the page buys its icon, and a link saved here isn't left with a title, a
+  picture, and a monogram.
+- **two fillers, one cache (expo only).** The guess and the capture write the same
+  per-host rows without coordinating, and neither is a superset: only the guess
+  serves a host expo never extracts a page for (synced/imported links, links
+  settled `permanent`, a settled library being scrolled), and only the capture
+  serves a host that ships no `/favicon.ico` at all. So both stay, ordered by one
+  rule — **`ok` is never downgraded; `none` is only ever the floor** — which makes
+  either interleaving converge on the bytes. Without it the two lose the icon in
+  _both_ orders: a late-landing guess-miss would delete a captured icon and stamp
+  a `none` that stands for `FAVICON_RETRY_MS`, and a guess-miss that lands first
+  would (if the capture deferred to staleness rather than to `ok`) block the more
+  accurate source for the same week.
 - **extension** — fetching would be pointless: with no synced store the result
   could feed only its own UI, and the browser already has better sources. The
   save popup renders the current tab's `favIconUrl` (an icon the page the user
@@ -929,19 +957,35 @@ the device holding it is worse than no toggle. The one thing expo forgoes is
 **bulk-import throughput** (a Worker fans out; a phone does not) — a speed
 difference on a back-fill nothing waits on, not a missing capability.
 
-**The gate is `deviceExtraction`, expo's own opt-in.** A synced account preference
-beside `serverExtraction` in `settingsGeneralSchema`, off by default, gating
-exactly the **un-gestured** work: the residual drain over links that arrived by
-sync or import, and the per-host favicon cache. A save made **on this device**
-extracts without it (_the stance_ — gestured vs. un-gestured). It is **synced**,
-not device-local, because it's the same account-level trust decision
-`serverExtraction` is ("my devices may fetch the pages I save"), and a second phone
-should inherit it rather than re-ask; if a metered-connection qualifier is ever
-wanted, that's a device-local companion (the theme / links-layout sync-vs-device
-precedent), never a second copy of this preference. Being off by default is not
-the same as being buried: the app should offer it at the first moment it means
-something — the links screen showing un-previewed links — so the honest default
-costs one tap rather than a settings expedition.
+**The gate is `deviceExtractionMode`, expo's own setting.** A synced account
+preference beside `serverExtraction` in `settingsGeneralSchema` — and a **ladder**,
+not a boolean, because the gestured/un-gestured split it encodes has three
+positions worth naming rather than two:
+
+| mode    | what this device fetches                                             |
+| ------- | -------------------------------------------------------------------- |
+| `off`   | nothing, ever — not even for a link saved right here                 |
+| `saves` | **the default** — links saved on this device, and their favicons     |
+| `all`   | also the residual: synced/imported links, and the host favicon guess |
+
+`saves` is exactly where the old boolean's `false` sat and `all` where its `true`
+did, so the only new behavior is `off` (_the stance_ — "needs no opt-in" is not
+"cannot be declined"). It is **synced**, not device-local, because it's the same
+account-level trust decision `serverExtraction` is ("my devices may fetch the pages
+I save"), and a second phone should inherit it rather than re-ask; if a
+metered-connection qualifier is ever wanted, that's a device-local companion (the
+theme / links-layout sync-vs-device precedent), never a second copy of this
+preference. Defaulting to `saves` is not the same as burying `all`: the app should
+offer it at the first moment it means something — the links screen showing
+un-previewed links — so the honest default costs one tap rather than a settings
+expedition.
+
+The persisted value is a free `z.string()` narrowed by `coerceDeviceExtractionMode`
+at the read edge, like `linksLayout`/`sortOn` — so a mode a newer client invents
+round-trips here instead of dropping the whole settings blob. The difference is
+that this fallback has a **direction**: unknown coerces to `saves`, never up to
+`all`, so a blob from the future can't become network activity nobody agreed to.
+A stricter mode added later must therefore be one old clients coerce _down_ to.
 
 **`expo:fg` is the tier that's built; `expo:bg` is the extra.** The foreground
 drain is the direct analogue of the web provider — expo-react's
@@ -974,13 +1018,16 @@ overshooting spends the user's battery rather than the project's money. The
 _settings section_ shape follows from the same swap: expo gets the section
 brace-web's `_extraction/extraction-section.tsx` header anticipates being dropped —
 same "Link previews" surface, but no plan gate and no upsell branch (on-device
-extraction is free on every plan), no two-step confirm, and its toggle is
-`deviceExtraction`. Off-by-default is also **offered** rather than buried: the
-links screen shows a one-time, dismissible banner when the opt-in is off and links
-are actually waiting for a preview (the raw pending count, not the gated exact
-tally — the banner exists to ask the question the gate would otherwise silence).
-The dismissal is device-local while the setting it offers is synced, so a second
-phone still gets its one offer.
+extraction is free on every plan), no two-step confirm, and in place of a toggle it
+renders `deviceExtractionMode` as three radios. The default is also **offered**
+rather than buried: the links screen shows a one-time, dismissible banner when the
+mode is still `saves` and links are actually waiting for a preview (the raw pending
+count, not the gated exact tally — the banner exists to ask the question the gate
+would otherwise silence). It arms on `saves` **specifically**, not on "anything
+below `all`": `saves` is the default nobody chose, which is what an offer is for,
+whereas `off` is a decision, and re-asking someone who picked "never contact these
+sites" is nagging. The dismissal is device-local while the setting it offers is
+synced, so a second phone still gets its one offer.
 
 ### imported links: the bulk path
 

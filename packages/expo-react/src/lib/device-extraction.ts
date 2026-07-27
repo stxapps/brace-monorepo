@@ -14,7 +14,7 @@ import {
   selectTitleImage,
 } from '@stxapps/shared';
 
-import { isFaviconStale, putFavicon, readFavicon, sniffImageMime } from '../data/favicon-store';
+import { putFavicon, readFavicon, sniffImageMime } from '../data/favicon-store';
 import {
   type ExtractionFields,
   type ExtractionPatch,
@@ -49,7 +49,9 @@ import { resizeImage } from './resize-image';
 //  - The page's DECLARED FAVICON is captured in the same breath (the doc's carve-out):
 //    we already hold the HTML of a host this device just contacted, so `<link rel=icon>`
 //    costs no disclosure the page fetch didn't already pay, and beats favicon-provider's
-//    `/favicon.ico` guess on accuracy. It happens ONLY here, never as a standalone fetch.
+//    `/favicon.ico` guess on accuracy. It happens ONLY here, never as a standalone fetch —
+//    and with the un-gestured opt-in OFF it's restricted to the page's OWN host, since the
+//    "already paid for" argument doesn't reach the third-party CDN an icon href may name.
 //
 // WHEN THIS THROWS. Web propagates a wholesale transport failure because one failed
 // request tells it nothing about any link, and recording `failed` on all of them would
@@ -69,6 +71,18 @@ import { resizeImage } from './resize-image';
 // deferred `BGAppRefreshTask`/WorkManager sweep will pass `expo:bg`, which ranks below it
 // so a later foreground sighting can UPGRADE what a background sweep wrote.
 export type DeviceExtractionTier = 'expo:fg' | 'expo:bg';
+
+export interface DeviceExtractionOptions {
+  // Is the extraction mode `all` — i.e. is UN-GESTURED work permitted? The drain only ever
+  // runs when it is; `extractNow` also runs at `saves`, because the save IS the gesture
+  // (neither runs at `off`, which the provider checks). It licenses exactly
+  // one extra thing in here: fetching a declared favicon from a host OTHER than the page's
+  // own. The carve-out that lets us capture an icon at all is "this costs no disclosure the
+  // page fetch didn't already pay" — true for the page's own host, false for the third-party
+  // CDN a `<link rel=icon>` may point at, which the save gesture never implied. So with the
+  // opt-in off, a cross-origin icon is skipped rather than fetched.
+  optedIn: boolean;
+}
 
 // How many links are fetched at once. Sized for the RADIO and the target hosts, not a
 // server's fan-out: wide enough that a screenful fills quickly, narrow enough that a
@@ -102,6 +116,7 @@ export async function runDeviceTitleImageBatch(
   username: string,
   links: LinkItem[],
   tier: DeviceExtractionTier,
+  opts: DeviceExtractionOptions,
 ): Promise<number> {
   if (links.length === 0) return 0;
 
@@ -122,7 +137,7 @@ export async function runDeviceTitleImageBatch(
 
   await mapLimit([...linksByUrl.entries()], CONCURRENCY, async ([url, targets]) => {
     try {
-      const reached = await extractOne(username, url, targets, tier);
+      const reached = await extractOne(username, url, targets, tier, opts);
       if (reached) reachedSomething = true;
       else {
         unreached.push(targets);
@@ -160,6 +175,7 @@ async function extractOne(
   url: string,
   targets: LinkItem[],
   tier: DeviceExtractionTier,
+  opts: DeviceExtractionOptions,
 ): Promise<boolean> {
   const page = await fetchPage(url);
   if (page.kind === 'unreached') return false;
@@ -197,7 +213,7 @@ async function extractOne(
   });
 
   // The carve-out (header): capture the icon this page DECLARED, since we're already here.
-  await captureDeclaredFavicon(collected, page.finalUrl);
+  await captureDeclaredFavicon(collected, page.finalUrl, opts);
   return true;
 }
 
@@ -329,9 +345,17 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
 // the page (docs/link-extraction.md — _favicons_, the expo carve-out). Never records
 // `none` on failure: "this page's declared icon didn't load" is not "this host has no
 // icon", and writing `none` would poison the guess path that might still succeed.
+//
+// Keyed by the FINAL (post-redirect) host, which is the host that actually declared the
+// icon. A cross-host redirect (`t.co/x` → `example.com`) therefore fills `example.com`'s
+// row while the UI, keyed on the SAVED url's host, still asks for `t.co` — a miss, not a
+// wrong answer, and the guess path fetches `t.co/favicon.ico`, which is the correct icon
+// for a row labelled `t.co`. Re-keying this to the saved host would paint the first
+// destination's icon on every other link saved through the same shortener.
 async function captureDeclaredFavicon(
   collected: ReturnType<typeof parseHtmlHead>,
   finalUrl: URL,
+  { optedIn }: DeviceExtractionOptions,
 ): Promise<void> {
   try {
     const iconUrl = selectFaviconUrl(collected, finalUrl);
@@ -339,9 +363,15 @@ async function captureDeclaredFavicon(
 
     const host = hostFromUrl(finalUrl);
     if (host === '') return;
-    // Only when the host has no (fresh) answer yet — the row is the durable one, and this
-    // must never re-fetch an icon the cache already holds.
-    if (!isFaviconStale(await readFavicon(host))) return;
+    // Un-gestured opt-in off ⇒ we're here on a save gesture, which pays for this page's own
+    // host and nothing else. See DeviceExtractionOptions.
+    if (!optedIn && hostFromUrl(new URL(iconUrl)) !== host) return;
+    // Only when the host has no bytes yet. NOT `isFaviconStale`: a fresh `none` row is not
+    // stale, and deferring to it would let the guess path's miss block the more accurate
+    // source for FAVICON_RETRY_MS — the exact inversion the two-filler rule (favicon-store's
+    // `putFaviconNone` header) exists to prevent. `readFavicon` folds the file check, so an
+    // `ok` here means real bytes on disk, which is the one thing worth skipping for.
+    if ((await readFavicon(host))?.status === 'ok') return;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), IMAGE_TIMEOUT_MS);

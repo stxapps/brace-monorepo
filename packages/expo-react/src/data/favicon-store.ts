@@ -1,8 +1,16 @@
 // The favicon cache's read/write helpers — the expo sibling of web-react's
 // data/favicon-store.ts (that header is canonical: the per-HOST store, the
 // `none` retry TTL rationale, why `ok` rows never expire). Single-responsibility
-// like the other stores; the fetch that FILLS it lives in favicon-provider.tsx,
-// and the read half the UI observes is use-favicon-uri.ts.
+// like the other stores; the read half the UI observes is use-favicon-uri.ts.
+//
+// TWO FILLERS, not web's one — the divergence the write helpers below are built
+// around. favicon-provider.tsx GUESSES `https://{host}/favicon.ico`, and
+// lib/device-extraction.ts CAPTURES the `<link rel=icon>` a page it was already
+// fetching declared. Neither is a superset: only the guess can serve a host this
+// device never extracts a page for (synced/imported links, links settled
+// `permanent`, a settled library being scrolled), and only the capture can serve
+// a host that ships no `/favicon.ico` at all. They don't coordinate, so the
+// ordering rule lives here, in `putFaviconNone` — see its header.
 //
 // SPLIT STORAGE, unlike web's bytes-in-the-row: the sqlite row keeps only the
 // VERDICT (`ok`/`none` + fetchedAt — the `none` half can't be a file, and
@@ -86,8 +94,23 @@ export async function putFavicon(host: string, bytes: Uint8Array): Promise<void>
 
 // Record "this host has no reachable favicon" so a relaunch doesn't re-buy the
 // fetch. Drops any previous icon file so the pair can't disagree.
+//
+// NEVER DOWNGRADES AN `ok` ROW. This store has TWO fillers on expo (unlike web,
+// where the provider is the only writer): the provider's `/favicon.ico` guess
+// and device-extraction's declared-icon capture. Both are check-then-act with an
+// await gap, so a guess that started before a capture can finish after it — and
+// without this guard it would delete the captured bytes and stamp `none`, which
+// `isFaviconStale` then honors for FAVICON_RETRY_MS. The rule that makes two
+// unsynchronized fillers safe is: `ok` wins, `none` is only ever the floor, so
+// whichever path first lands real bytes keeps them. The read + verdict + write
+// below run with NO `await` between them, so no other filler can interleave.
 export async function putFaviconNone(host: string): Promise<void> {
   const file = faviconFileFor(host);
+  const existing = getDb().select().from(favicons).where(eq(favicons.host, host)).get();
+  // `readFavicon`'s file check, inlined to keep the sequence synchronous: an `ok`
+  // row with bytes behind it outranks this miss.
+  if (existing?.status === 'ok' && file.exists) return;
+
   if (file.exists) file.delete();
   const row = { host, status: 'none' as const, fetchedAt: Date.now() };
   getDb()

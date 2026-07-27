@@ -316,6 +316,45 @@ export function coerceLinkSortOrder(value: string | undefined): LinkSortOrder {
   return LINK_SORT_ORDERS.includes(value as LinkSortOrder) ? (value as LinkSortOrder) : 'desc';
 }
 
+// How much ON-DEVICE link extraction the account permits — the `deviceExtractionMode`
+// field below, as ONE AXIS OF INCREASING DISCLOSURE rather than a boolean:
+//
+//   off   — this device never contacts a site you save. Nothing is fetched: no page,
+//           no preview image, no favicon, not even for a link saved right here. The
+//           position that exists because the rest of the product is built for the user
+//           who chose an E2E app precisely so no one sees their library; "we always
+//           fetch the pages you save, and you can't stop us" is the one place that
+//           promise would have had a hole. Links still save, sync, and read fine —
+//           they just show `host(url)` and a monogram (both steady states by design).
+//   saves — THE DEFAULT, and exactly the old boolean's `false`: a link saved ON THIS
+//           DEVICE is extracted (the save is the gesture — docs/link-extraction.md,
+//           _the stance_), a link that arrived by sync or import is not.
+//   all   — the old boolean's `true`: also back-fill the residual, un-gestured.
+//
+// It replaces the `deviceExtraction` boolean outright (greenfield — no migration, and
+// `looseObject` round-trips the dead field harmlessly on any device that still holds
+// one). The two positions the boolean could express keep their exact meanings, so the
+// only NEW behavior is `off`.
+//
+// Like `linksLayout`/`sortOn`, this is the WRITER's enumeration: the persisted value
+// parses as a free `z.string()` so a mode added later round-trips on an older client
+// instead of dropping the settings blob, and the read edge narrows it with
+// `coerceDeviceExtractionMode`. Unlike those, the fallback here is load-bearing rather
+// than cosmetic — an unrecognized value must land on a position that is no more
+// permissive than the user chose, and `saves` is the floor every client already
+// implements. A future stricter mode would therefore need care: it must be added as a
+// value old clients coerce DOWN to, or gated some other way.
+export const DEVICE_EXTRACTION_MODES = ['off', 'saves', 'all'] as const;
+export type DeviceExtractionMode = (typeof DEVICE_EXTRACTION_MODES)[number];
+
+export const DEFAULT_DEVICE_EXTRACTION_MODE: DeviceExtractionMode = 'saves';
+
+export function coerceDeviceExtractionMode(value: string | undefined): DeviceExtractionMode {
+  return DEVICE_EXTRACTION_MODES.includes(value as DeviceExtractionMode)
+    ? (value as DeviceExtractionMode)
+    : DEFAULT_DEVICE_EXTRACTION_MODE;
+}
+
 // The synced theme preference — the same three fields as `@stxapps/shared`'s
 // `ThemeState` (`mode` + the two `custom`-mode crossover times), stored inside
 // `settings/general.enc` (the "Sync" tab). The device-local alternative ("Device"
@@ -391,24 +430,26 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // it for clients that don't model it (e.g. the extension, which is active-context
 // only and never calls the extractor).
 //
-// `deviceExtraction` is its ON-DEVICE sibling — the opt-in for a client that fetches
-// the page ITSELF (brace-expo: no CORS, so no server is involved and no new party
-// learns the URL). Same shape and same default-off, but a DIFFERENT thing is being
-// consented to, so they are deliberately two fields, not one:
-// `serverExtraction` admits a new party; this one admits un-gestured NETWORK ACTIVITY
-// FROM THIS DEVICE. Per the doc's gestured/un-gestured split it gates only the
-// residual — back-filling links that arrived by sync or import, plus the per-host
-// favicon cache that rides along — never the extraction of a link the user just saved
-// on the device (that gesture is its own consent, exactly as the extension's
-// active-tab capture is). SYNCED rather than device-local because it's an
-// account-level trust decision ("my devices may fetch the pages I save") that a second
-// phone should inherit; a metered-connection qualifier, if ever wanted, is a
-// device-local companion, not a second copy of this. Round-tripped by `looseObject`
-// on clients that don't model it (brace-web/the extension never read it).
+// `deviceExtractionMode` is its ON-DEVICE sibling — what a client that fetches the page
+// ITSELF may do (brace-expo: no CORS, so no server is involved and no new party learns
+// the URL). A DIFFERENT thing is being consented to, so they are deliberately two
+// fields, not one: `serverExtraction` admits a new party; this one governs NETWORK
+// ACTIVITY FROM THIS DEVICE. It is a three-position ladder rather than a boolean
+// (DEVICE_EXTRACTION_MODES above has the positions and why `off` earns its place):
+// `saves` — the default — draws the line at the doc's gestured/un-gestured split, so a
+// link the user just saved here is extracted while the residual is not, and `all` adds
+// the residual (synced/imported links, plus the per-host favicon cache that rides
+// along). SYNCED rather than device-local because it's an account-level trust decision
+// ("my devices may fetch the pages I save") that a second phone should inherit; a
+// metered-connection qualifier, if ever wanted, is a device-local companion, not a
+// second copy of this. Round-tripped by `looseObject` on clients that don't model it
+// (brace-web/the extension never read it).
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),
-  deviceExtraction: z.boolean().optional().catch(undefined),
+  // A free `z.string()`, narrowed by `coerceDeviceExtractionMode` at the read edge —
+  // see DEVICE_EXTRACTION_MODES for why the tolerant parse matters here.
+  deviceExtractionMode: z.string().optional().catch(undefined),
   // The SYNCED links sort — the two orthogonal axes (see LINK_SORT_ONS /
   // LINK_SORT_ORDERS above): `sortOn` the field (date modified vs. added),
   // `sortOrder` the direction. Global-only (no device split, unlike `linksLayout`):

@@ -169,8 +169,10 @@ export function LinkAddScreen() {
       });
       // The GESTURED extraction (docs/link-extraction.md — _the stance_): fetch
       // the page the user just handed us, right now, without waiting for the
-      // drain and without the `deviceExtraction` opt-in — the save IS the
-      // consent, exactly as the browser extension's active-tab capture is.
+      // drain and without needing the extraction mode to reach `all` — the save
+      // IS the consent, exactly as the browser extension's active-tab capture
+      // is. Mode `off` still stops it (extractNow checks); that position exists
+      // precisely to decline this.
       // Fire-and-forget: the title/image land in `extractions/` and the row
       // repaints itself, so nothing here waits on the network.
       if (created) extractNow([created.path]);

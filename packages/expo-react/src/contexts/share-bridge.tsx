@@ -52,8 +52,9 @@ export function ShareBridge() {
     });
     return () => sub.remove();
     // requestSync is identity-stable (sync-provider); extractNow changes only
-    // when the session/store readiness does, and a re-run is harmless — the
-    // drain is idempotent and an empty outbox is a no-op.
+    // when the session/store readiness or the extraction opt-in does, and a
+    // re-run is harmless — the drain is idempotent and an empty outbox is a
+    // no-op.
   }, [requestSync, extractNow]);
 
   useEffect(() => {

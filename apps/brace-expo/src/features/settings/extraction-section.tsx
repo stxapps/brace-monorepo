@@ -17,14 +17,20 @@
 //    whose effect is invisible on the device holding it would be worse than no
 //    switch; the setting is round-tripped for the web clients and never read
 //    here (use-setting-mutations).
-//  - The toggle it DOES render is `deviceExtraction`, and its copy has to carry
-//    the gestured/un-gestured split honestly: links saved on this device are
-//    previewed either way, so what the switch buys is the RESIDUAL — links that
-//    arrived by sync from another device or by import.
+//  - The control it DOES render is `deviceExtractionMode`, as THREE RADIOS rather
+//    than a switch (entities.ts DEVICE_EXTRACTION_MODES). A boolean forced the
+//    gestured/un-gestured split into prose — "links saved here are previewed
+//    either way, so what this buys is the residual" — which is a lot to ask of a
+//    toggle's hint, and left the gestured fetch with no off position at all. One
+//    axis of increasing disclosure says the same thing structurally, and gives the
+//    user who wants it a real "never contact these sites" (docs/link-extraction.md
+//    — _the stance_). Everything below the radios stays bound to `all`: the counts
+//    and Generate all describe the full-library drain, which only that position
+//    arms.
 
 import { useState } from 'react';
-import { Switch, View } from 'react-native';
-import { Pause, Sparkles } from 'lucide-react-native';
+import { Pressable, View } from 'react-native';
+import { Globe, Pause, ShieldOff, Smartphone, Sparkles } from 'lucide-react-native';
 
 import {
   useExtraction,
@@ -32,10 +38,78 @@ import {
   useSettingMutations,
   useSettings,
 } from '@stxapps/expo-react';
+import { DEVICE_EXTRACTION_MODES, type DeviceExtractionMode } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
+import { cn } from '../../lib/utils';
+
+// The ladder, as copy. Ordered by DEVICE_EXTRACTION_MODES (increasing disclosure),
+// which the radio list maps over — so a mode added to that tuple shows up here as a
+// missing key rather than a silently absent row.
+const MODE_OPTIONS: Record<
+  DeviceExtractionMode,
+  { label: string; hint: string; icon: typeof Globe }
+> = {
+  off: {
+    label: 'Off',
+    hint: 'Never contact the sites you save. Links still save and sync — they just show their address and a coloured tile instead of a title and picture.',
+    icon: ShieldOff,
+  },
+  saves: {
+    label: 'Links you save on this device',
+    hint: 'When you save a link here, the app fetches that one page itself to fill in its title and picture. No server of ours ever sees it.',
+    icon: Smartphone,
+  },
+  all: {
+    label: 'All links, including synced and imported',
+    hint: 'Also fill in links that arrived from your other devices or an import — pages this device hasn’t opened. Each of those sites sees a request from this device.',
+    icon: Globe,
+  },
+};
+
+// A tappable radio row — misc-section's OptionRow, same shape and same rationale
+// (the whole row is the target; the primitive Item renders the mark). Duplicated
+// rather than hoisted: it's ~20 lines of layout, and the two sections' rows have
+// already drifted once (this one has no fixed-width label column). Worth a shared
+// component only when a third caller wants exactly this.
+function OptionRow({
+  value,
+  selected,
+  onSelect,
+  label,
+  hint,
+  icon,
+}: {
+  value: string;
+  selected: boolean;
+  onSelect: () => void;
+  label: string;
+  hint: string;
+  icon: typeof Globe;
+}) {
+  return (
+    <Pressable
+      onPress={onSelect}
+      aria-checked={selected}
+      className={cn(
+        'border-border flex-row items-start gap-3 rounded-lg border p-3',
+        selected && 'border-primary bg-muted/40',
+      )}
+    >
+      <RadioGroupItem value={value} className="mt-0.5" />
+      <View className="min-w-0 flex-1 gap-0.5">
+        <View className="flex-row items-center gap-2">
+          <Icon as={icon} className="text-foreground size-4" />
+          <Text className="font-medium">{label}</Text>
+        </View>
+        <Text className="text-muted-foreground text-sm">{hint}</Text>
+      </View>
+    </Pressable>
+  );
+}
 
 // One labelled count in a bordered tile — web's Stat, in RN boxes.
 function Stat({ label, value }: { label: string; value: number }) {
@@ -52,18 +126,18 @@ export function ExtractionSection() {
     useExtraction();
   const { done: doneCount, pending: pendingCount, failed: failedCount } = useExtractionCounts();
 
-  // The opt-in itself. `enabled` above is the composite gate (signed in + store
-  // ready + this), so the switch binds to the raw setting — flipping it on while
-  // the store is still opening still persists the preference.
-  const { deviceExtraction } = useSettings();
-  const { setDeviceExtraction } = useSettingMutations();
+  // The mode itself. `enabled` above is the composite gate (signed in + store ready
+  // + mode `all`), so the radios bind to the raw setting — picking one while the
+  // store is still opening still persists the preference.
+  const { deviceExtractionMode } = useSettings();
+  const { setDeviceExtractionMode } = useSettingMutations();
 
   // Surface a failed write (e.g. no active account) rather than swallowing it;
   // the control stays live for a retry. MiscSection's `run`, verbatim.
   const [error, setError] = useState<string | null>(null);
-  const setOptIn = (next: boolean) => {
+  const setMode = (next: DeviceExtractionMode) => {
     setError(null);
-    void setDeviceExtraction(next).catch((e: unknown) =>
+    void setDeviceExtractionMode(next).catch((e: unknown) =>
       setError(e instanceof Error ? e.message : String(e)),
     );
   };
@@ -77,21 +151,30 @@ export function ExtractionSection() {
       </Text>
       <Text className="text-muted-foreground mt-1 mb-6 text-sm">
         Brace fills in each saved link&apos;s title and preview image automatically — you don&apos;t
-        need to do it by hand. Links you save on this device are previewed right here, on the phone:
-        the page is fetched by the app itself, so no server of ours ever sees it.
+        need to do it by hand. The work happens on this phone: the app fetches the page itself, so
+        no server of ours ever sees it. Choose how far that should go.
       </Text>
 
-      <View className="border-border flex-row items-start justify-between gap-4 rounded-lg border p-4">
-        <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="font-medium">Preview links from your other devices</Text>
-          <Text className="text-muted-foreground text-sm">
-            Also fetch previews for links that arrived by sync or by import — pages this device
-            hasn&apos;t opened. It uses your connection, and each site you saved sees a request from
-            this device.
-          </Text>
-        </View>
-        <Switch value={deviceExtraction} onValueChange={setOptIn} />
-      </View>
+      <RadioGroup
+        value={deviceExtractionMode}
+        onValueChange={(v) => setMode(v as DeviceExtractionMode)}
+        className="gap-3"
+      >
+        {DEVICE_EXTRACTION_MODES.map((mode) => {
+          const { label, hint, icon } = MODE_OPTIONS[mode];
+          return (
+            <OptionRow
+              key={mode}
+              value={mode}
+              selected={deviceExtractionMode === mode}
+              onSelect={() => setMode(mode)}
+              label={label}
+              hint={hint}
+              icon={icon}
+            />
+          );
+        })}
+      </RadioGroup>
 
       {error && (
         <View className="bg-destructive/10 mt-4 rounded-md px-3 py-2">
@@ -99,7 +182,7 @@ export function ExtractionSection() {
         </View>
       )}
 
-      {deviceExtraction && !enabled ? (
+      {deviceExtractionMode === 'all' && !enabled ? (
         <View className="bg-muted/50 mt-6 rounded-md px-3 py-2">
           <Text className="text-muted-foreground text-sm">
             Previews are on but paused — they resume once you&apos;re signed in and your links have

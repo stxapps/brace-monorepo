@@ -10,7 +10,12 @@
 // still must, or `classifyBundleLine` (import-all-data.ts) would accept any JSON
 // object as a settings blob.
 
-import { settingsGeneralSchema } from './entities';
+import {
+  coerceDeviceExtractionMode,
+  DEFAULT_DEVICE_EXTRACTION_MODE,
+  DEVICE_EXTRACTION_MODES,
+  settingsGeneralSchema,
+} from './entities';
 
 const FRAME = { createdAt: 1, updatedAt: 2 };
 
@@ -32,15 +37,25 @@ describe('settingsGeneralSchema', () => {
     it.each([
       ['linksLayout', { linksLayout: 5 }],
       ['serverExtraction', { serverExtraction: 'yes' }],
-      ['deviceExtraction', { deviceExtraction: 'yes' }],
+      ['deviceExtractionMode', { deviceExtractionMode: 5 }],
       ['theme (not an object)', { theme: 'lol' }],
       [
         'every field at once',
-        { linksLayout: [], serverExtraction: 1, deviceExtraction: 1, theme: 3 },
+        { linksLayout: [], serverExtraction: 1, deviceExtractionMode: [], theme: 3 },
       ],
     ])('degrades a corrupt %s to absent instead of failing', (_name, bad) => {
       const parsed = settingsGeneralSchema.parse({ ...FRAME, ...bad });
       expect(parsed).toEqual(FRAME);
+    });
+
+    // The same growth path `linksLayout` has, and the one that matters most: an
+    // extraction mode a newer client added must survive untouched here, so this
+    // device can't silently rewrite the user's choice to something more permissive
+    // on its next settings write. `coerceDeviceExtractionMode` is what keeps the
+    // RENDER honest meanwhile (it falls back to `saves`, never up to `all`).
+    it('round-trips an extraction mode this build does not know', () => {
+      const parsed = settingsGeneralSchema.parse({ ...FRAME, deviceExtractionMode: 'wifi-only' });
+      expect(parsed.deviceExtractionMode).toBe('wifi-only');
     });
 
     // Per-FIELD tolerance inside the theme, not just per-object: a half-written theme
@@ -70,5 +85,27 @@ describe('settingsGeneralSchema', () => {
     ])('rejects %s', (_name, bad) => {
       expect(settingsGeneralSchema.safeParse(bad).success).toBe(false);
     });
+  });
+});
+
+// The read-edge half of the tolerant parse above. Unlike the other coercers this one
+// is a PRIVACY gate, so its fallback has a direction: an absent, unknown, or corrupt
+// value must land no higher than `saves`. Falling to `all` would turn a settings blob
+// written by a newer client — or a half-written one — into un-gestured network
+// activity the user never agreed to.
+describe('coerceDeviceExtractionMode', () => {
+  it.each(DEVICE_EXTRACTION_MODES)('passes through the known mode %s', (mode) => {
+    expect(coerceDeviceExtractionMode(mode)).toBe(mode);
+  });
+
+  it.each([undefined, '', 'wifi-only', 'ALL', 'true'])(
+    'falls back to the default for %p — never up to `all`',
+    (value) => {
+      expect(coerceDeviceExtractionMode(value)).toBe('saves');
+    },
+  );
+
+  it('defaults to `saves`, the position that matches the old boolean-off behavior', () => {
+    expect(DEFAULT_DEVICE_EXTRACTION_MODE).toBe('saves');
   });
 });

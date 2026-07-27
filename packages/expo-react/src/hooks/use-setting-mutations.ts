@@ -6,7 +6,13 @@
 
 import { useCallback, useMemo } from 'react';
 
-import type { LinksLayout, LinkSortOn, LinkSortOrder, ThemeState } from '@stxapps/shared';
+import type {
+  DeviceExtractionMode,
+  LinksLayout,
+  LinkSortOn,
+  LinkSortOrder,
+  ThemeState,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -27,12 +33,12 @@ export interface SettingMutations {
   // (docs/link-extraction.md — _expo drains in the foreground_) — so it renders
   // no toggle for it either; the write edge just stays symmetric.
   setServerExtraction: (enabled: boolean) => Promise<void>;
-  // Toggle the SYNCED on-device extraction opt-in — expo's own gate, and the one
-  // the Link previews section renders. Covers only UN-GESTURED work (the residual
-  // drain over synced/imported links, plus the per-host favicon cache); a save made
-  // on this device extracts regardless. Synced, so a second phone inherits the
-  // account-level trust decision rather than re-asking.
-  setDeviceExtraction: (enabled: boolean) => Promise<void>;
+  // Set the SYNCED on-device extraction MODE — expo's own gate, and the one the Link
+  // previews section renders as three radios. Not a toggle: `off` fetches nothing at
+  // all, `saves` (the default) extracts only links saved on this device, `all` adds the
+  // un-gestured residual plus the per-host favicon cache. Synced, so a second phone
+  // inherits the account-level trust decision rather than re-asking.
+  setDeviceExtractionMode: (mode: DeviceExtractionMode) => Promise<void>;
   // Set the SYNCED links sort field / direction; writes settings/general.enc + syncs.
   // Global-only (no device variant), so no "Sync"/"Local" split like layout/theme.
   setSortOn: (sortOn: LinkSortOn) => Promise<void>;
@@ -80,10 +86,10 @@ export function useSettingMutations(): SettingMutations {
     [username, requestSync],
   );
 
-  const setDeviceExtraction = useCallback(
-    async (enabled: boolean) => {
+  const setDeviceExtractionMode = useCallback(
+    async (mode: DeviceExtractionMode) => {
       if (!username) throw new Error('useSettingMutations: no active account');
-      await writeSettingsGeneral(username, { deviceExtraction: enabled });
+      await writeSettingsGeneral(username, { deviceExtractionMode: mode });
       requestSync();
     },
     [username, requestSync],
@@ -134,7 +140,7 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
-      setDeviceExtraction,
+      setDeviceExtractionMode,
       setSortOn,
       setSortOrder,
       setThemeSource,
@@ -147,7 +153,7 @@ export function useSettingMutations(): SettingMutations {
       setSyncLinksLayout,
       setLocalLinksLayout,
       setServerExtraction,
-      setDeviceExtraction,
+      setDeviceExtractionMode,
       setSortOn,
       setSortOrder,
       setThemeSource,

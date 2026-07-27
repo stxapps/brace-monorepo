@@ -4,10 +4,17 @@
 // it MEANS something, so the honest default costs one tap instead of a settings
 // expedition).
 //
-// It shows on the links screen when all three hold: the opt-in is off, this
-// device hasn't dismissed the offer, and there are actually links waiting for a
-// preview. That last condition is the point — a fresh account with nothing saved
-// gets no banner, and neither does a library that's already fully previewed.
+// It shows on the links screen when all three hold: the extraction mode is still
+// the default `saves`, this device hasn't dismissed the offer, and there are
+// actually links waiting for a preview. That last condition is the point — a fresh
+// account with nothing saved gets no banner, and neither does a library that's
+// already fully previewed.
+//
+// It arms on `saves` SPECIFICALLY, not on "anything below `all`" (entities.ts
+// DEVICE_EXTRACTION_MODES): `saves` is the default nobody chose, which is exactly
+// what an offer is for, while `off` is a decision the user made — and re-asking
+// someone who picked "never contact these sites" is nagging, not onboarding. The
+// settings section stays the way back up from `off`.
 //
 // The count comes from `readRawPendingTitleImageCount` (four index counts, no
 // decode, no trash-correction join), not `useExtractionCounts`: the exact tally
@@ -31,11 +38,11 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 
 export function PreviewsPrompt() {
-  const { deviceExtraction, previewsPromptDismissed } = useSettings();
-  const { setDeviceExtraction, dismissPreviewsPrompt } = useSettingMutations();
+  const { deviceExtractionMode, previewsPromptDismissed } = useSettings();
+  const { setDeviceExtractionMode, dismissPreviewsPrompt } = useSettingMutations();
 
   // Inert unless the offer could actually be shown — see the header.
-  const armed = !deviceExtraction && !previewsPromptDismissed;
+  const armed = deviceExtractionMode === 'saves' && !previewsPromptDismissed;
   const pending =
     useLiveRead(
       () => (armed ? readRawPendingTitleImageCount() : Promise.resolve(0)),
@@ -49,7 +56,7 @@ export function PreviewsPrompt() {
   // condition false, and so does dismissing. A failed write just leaves the
   // banner up — the settings section is the durable surface for retrying.
   const turnOn = () => {
-    void setDeviceExtraction(true).catch(() => undefined);
+    void setDeviceExtractionMode('all').catch(() => undefined);
     void dismissPreviewsPrompt().catch(() => undefined);
   };
 

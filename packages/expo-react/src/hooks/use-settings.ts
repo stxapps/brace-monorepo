@@ -9,8 +9,10 @@
 import { useMemo } from 'react';
 
 import {
+  coerceDeviceExtractionMode,
   coerceThemeState,
   DEFAULT_THEME,
+  type DeviceExtractionMode,
   type LinksLayout,
   type ThemeState,
 } from '@stxapps/shared';
@@ -34,7 +36,9 @@ export interface Settings {
   syncLinksLayout: string;
   localLinksLayout: string;
   serverExtraction: boolean;
-  deviceExtraction: boolean;
+  // Already NARROWED, unlike the persisted `string` fields above: every consumer of
+  // this one is a gate, and a gate that has to coerce is a gate that can forget to.
+  deviceExtractionMode: DeviceExtractionMode;
   sortOn: string;
   sortOrder: string;
   theme: ThemeState;
@@ -55,13 +59,13 @@ export function useSettings(): Settings {
   const linksLayoutSource = local?.linksLayoutSource ?? 'sync';
   const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
   const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
-  // Both extraction opt-ins are off by default: absent (older client / never toggled)
-  // reads as opted-out. `serverExtraction` is round-tripped for the web clients and never
-  // acted on here (expo never calls brace-extractor); `deviceExtraction` is expo's own —
-  // it gates the UN-GESTURED on-device work (the drain + the favicon cache), never a save
-  // made on this device. See docs/link-extraction.md — _expo drains in the foreground_.
+  // `serverExtraction` is off by default and round-tripped for the web clients — never
+  // acted on here (expo never calls brace-extractor). `deviceExtractionMode` is expo's
+  // own, and a three-position ladder rather than an opt-in boolean: absent (never
+  // touched) coerces to `saves`, which extracts links saved ON THIS DEVICE and nothing
+  // else. See docs/link-extraction.md — _expo drains in the foreground_.
   const serverExtraction = general?.serverExtraction ?? false;
-  const deviceExtraction = general?.deviceExtraction ?? false;
+  const deviceExtractionMode = coerceDeviceExtractionMode(general?.deviceExtractionMode);
 
   // Global-only: the synced value is the applied one. The defaults
   // ('updatedAt'/'desc') match `emptyQuery`; use-links coerces before ordering.
@@ -84,7 +88,7 @@ export function useSettings(): Settings {
     syncLinksLayout,
     localLinksLayout,
     serverExtraction,
-    deviceExtraction,
+    deviceExtractionMode,
     sortOn,
     sortOrder,
     theme,

@@ -226,7 +226,7 @@ _vs._ brace-extension.
     `@stxapps/shared` `extract/select.ts`, which every extracting client shares so
     a tier upgrade is an improvement rather than a change — driven by
     `contexts/extraction-provider.tsx`, the `platform:expo` sibling of web's; it
-    never calls `brace-extractor` and rides its own `deviceExtraction` opt-in, see
+    never calls `brace-extractor` and rides its own `deviceExtractionMode` ladder, see
     docs/link-extraction.md), and
     `useQueryManagers` (rewires TanStack Query's browser-only
     online/focus managers to NetInfo and AppState). Native modules it builds on

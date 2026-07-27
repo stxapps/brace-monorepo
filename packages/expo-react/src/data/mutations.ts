@@ -31,6 +31,7 @@ import { eq } from 'drizzle-orm';
 import type { File } from 'expo-file-system';
 
 import {
+  type DeviceExtractionMode,
   type Extraction,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -270,7 +271,7 @@ export async function writeSettingsGeneral(
   patch: {
     linksLayout?: LinksLayout;
     serverExtraction?: boolean;
-    deviceExtraction?: boolean;
+    deviceExtractionMode?: DeviceExtractionMode;
     theme?: ThemeState;
     sortOn?: LinkSortOn;
     sortOrder?: LinkSortOrder;
