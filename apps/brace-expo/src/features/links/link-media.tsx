@@ -45,8 +45,17 @@ function Monogram({ host, className }: { host: string; className: string }) {
 }
 
 // The decode-failure memory behind the onError backstop (see the header): the
-// uri that failed, so the component falls back to the monogram for it — and
-// resets automatically when the cache serves a different uri.
+// uri that failed, so the component falls back to the monogram for it. Keyed by
+// uri rather than a bare boolean because FlashList RECYCLES these instances
+// instead of remounting them — the same component renders a different host (and
+// so a different cached-file uri) as rows scroll by, and one undecodable icon
+// must not poison the fallback for every host that follows. It is NOT a
+// loading-state guard: useFaviconUri only yields a uri once the bytes are on
+// disk, so onError means a real decode failure, never "not fetched yet". The
+// per-host file path is stable, so bytes REPLACED under a still-mounted host
+// (device-extraction's declared-icon capture landing over a guessed
+// /favicon.ico) keep the stale verdict until the instance is recycled — self-
+// healing and cosmetic; key on the row's fetchedAt if that ever matters.
 function useBrokenUri(): [(uri: string) => boolean, (uri: string) => void] {
   const [brokenUri, setBrokenUri] = useState<string>();
   return [(uri) => uri === brokenUri, setBrokenUri];
