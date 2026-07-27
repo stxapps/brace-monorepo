@@ -438,8 +438,10 @@ export interface ExtractionFacetCounts {
 // join: trashed links are excluded from all three buckets to match the drains (which
 // skip Trash), or the section would show a Pending stat that never drops and a
 // "Generate all" button that drains nothing. Web pays a per-trashed-link blob decode
-// here because its two terms live in different Dexie stores; the same correlation is a
-// LEFT JOIN on the token junction here, so nothing is decoded at all.
+// because its two terms live on DIFFERENT RECORDS of its single `items` store —
+// `itemListId` on the link, the status tokens on the co-keyed extraction — and IndexedDB
+// can't join; the same correlation is a LEFT JOIN on the token junction here, so nothing
+// is decoded at all.
 function readTrashedTitleImageCounts(): { total: number; done: number; failed: number } {
   // The join is restricted to the three titleImage tokens, so at most ONE junction row
   // can match a link (a facet has exactly one status) and `COUNT(*)` stays the trashed
