@@ -29,7 +29,7 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 export default function LinksScreen() {
   return (
     <LinksViewStateProvider>
-      <StyledSafeAreaView className="bg-background flex-1">
+      <StyledSafeAreaView className="flex-1 bg-background">
         <View className="min-h-0 flex-1">
           <Topbar />
           <SearchBar />

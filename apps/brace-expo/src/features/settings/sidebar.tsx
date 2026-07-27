@@ -66,7 +66,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   const router = useRouter();
 
   return (
-    <StyledSafeAreaView className="bg-background flex-1">
+    <StyledSafeAreaView className="flex-1 bg-background">
       <View className="h-14 flex-row items-center px-2">
         <Pressable
           onPress={() => router.push('/links')}

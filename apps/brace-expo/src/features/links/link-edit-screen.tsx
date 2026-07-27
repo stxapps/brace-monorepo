@@ -125,7 +125,7 @@ export function LinkEditScreen() {
   }, [link, router]);
 
   return (
-    <StyledSafeAreaView className="bg-background flex-1">
+    <StyledSafeAreaView className="flex-1 bg-background">
       {link ? (
         <LinkEditForm key={link.path} link={link} focus={focus} />
       ) : (

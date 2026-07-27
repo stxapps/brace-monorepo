@@ -74,7 +74,7 @@ export function ListSelect({
         accessibilityRole="combobox"
         aria-expanded={open}
         aria-label="List"
-        className="border-input bg-background dark:bg-input/30 h-10 flex-row items-center justify-between gap-2 rounded-md border px-3 shadow-sm shadow-black/5"
+        className="border-input dark:bg-input/30 h-10 flex-row items-center justify-between gap-2 rounded-md border bg-background px-3 shadow-sm shadow-black/5"
       >
         {selected ? (
           <Text numberOfLines={1} className="min-w-0 flex-1">

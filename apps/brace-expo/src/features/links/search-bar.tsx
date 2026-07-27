@@ -386,7 +386,7 @@ function AdvancedSearch() {
         presentationStyle="pageSheet"
         onRequestClose={() => setOpen(false)}
       >
-        <StyledSafeAreaView className="bg-background flex-1">
+        <StyledSafeAreaView className="flex-1 bg-background">
           {/* Plain KeyboardAvoidingView, not keyboard-controller: the Modal is
               its own native window, outside the root KeyboardProvider's view
               tree (the same reason the share screen avoids it). */}

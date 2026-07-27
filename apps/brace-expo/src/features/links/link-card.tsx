@@ -70,7 +70,7 @@ export function LinkCard({
         {/* Floats over the banner (web's corner slot: the row menu, swapped for
             the selection checkbox while bulk editing), so give it a readable
             backdrop. */}
-        <View className="bg-background/60 absolute top-1 right-1 rounded-md">
+        <View className="absolute top-1 right-1 rounded-md bg-background/60">
           {selectMode ? (
             <View className="p-1">
               <Checkbox

@@ -168,7 +168,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   const disabled = count === 0 || busy !== null;
 
   return (
-    <View className="border-border bg-background shrink-0 border-t px-3 pt-2 pb-1">
+    <View className="border-border shrink-0 border-t bg-background px-3 pt-2 pb-1">
       <View className="h-10 flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
           <Pressable

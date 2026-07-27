@@ -68,7 +68,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   // bgSyncStatus and never set the gate's 'error'.
   if (storeStatus === 'error') {
     return (
-      <StyledSafeAreaView className="bg-background flex-1">
+      <StyledSafeAreaView className="flex-1 bg-background">
         <View className="flex-1 items-center justify-center gap-4 px-6">
           <Text>Couldn’t sync your links.</Text>
           <Button variant="link" onPress={retryInitialSync}>
@@ -95,7 +95,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
 
 function DecryptingScreen() {
   return (
-    <StyledSafeAreaView className="bg-background flex-1">
+    <StyledSafeAreaView className="flex-1 bg-background">
       <View className="flex-1 items-center justify-center gap-4 px-6">
         <ActivityIndicator size="small" />
         <Text>Decrypting your links…</Text>

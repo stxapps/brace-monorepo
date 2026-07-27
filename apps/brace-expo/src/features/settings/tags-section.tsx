@@ -168,7 +168,7 @@ function Row({
       onLayout={onLayout}
       className={cn(
         'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
-        lifted && 'bg-background rounded-md border-transparent',
+        lifted && 'rounded-md border-transparent bg-background',
       )}
     >
       <DragHandle pan={pan} />

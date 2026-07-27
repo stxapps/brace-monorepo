@@ -42,7 +42,7 @@ export function AuthScreen({
   children: ReactNode;
 }) {
   return (
-    <StyledSafeAreaView className="bg-secondary dark:bg-background flex-1">
+    <StyledSafeAreaView className="bg-secondary flex-1 dark:bg-background">
       <StyledKeyboardAwareScrollView
         contentContainerClassName="grow justify-center px-4 py-12"
         keyboardShouldPersistTaps="handled"

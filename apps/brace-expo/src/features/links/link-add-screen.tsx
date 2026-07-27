@@ -200,7 +200,7 @@ export function LinkAddScreen() {
   };
 
   return (
-    <StyledSafeAreaView className="bg-background flex-1">
+    <StyledSafeAreaView className="flex-1 bg-background">
       <View className="border-border h-14 shrink-0 flex-row items-center justify-between border-b pr-2 pl-4">
         <Text className="text-lg font-semibold">Add a link</Text>
         <Pressable

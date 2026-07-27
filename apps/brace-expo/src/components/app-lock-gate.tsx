@@ -25,7 +25,7 @@ export function AppLockGate({ children }: { children: ReactNode }) {
 
   if (appLock.exists && !appLock.unlocked) {
     return (
-      <StyledSafeAreaView className="bg-background flex-1">
+      <StyledSafeAreaView className="flex-1 bg-background">
         <LockPane
           className="flex-1"
           title="Brace is locked"

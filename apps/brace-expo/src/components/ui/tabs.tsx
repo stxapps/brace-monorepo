@@ -44,7 +44,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
             web: 'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring inline-flex cursor-default whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none web:h-[calc(100%-1px)] [&_svg]:pointer-events-none [&_svg]:shrink-0',
           }),
           props.disabled && 'opacity-50',
-          props.value === value && 'bg-background dark:border-foreground/10 dark:bg-input/30',
+          props.value === value && 'dark:border-foreground/10 dark:bg-input/30 bg-background',
           className,
         )}
         {...props}

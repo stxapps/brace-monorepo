@@ -437,7 +437,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   };
 
   return (
-    <StyledSafeAreaView className="bg-background flex-1">
+    <StyledSafeAreaView className="flex-1 bg-background">
       {/* Brand mark, pinned above the scrolling trees (web's h-14 header). */}
       <View className="h-14 flex-row items-center gap-2 px-4">
         <BraceIcon />

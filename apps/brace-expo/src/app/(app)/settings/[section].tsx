@@ -26,7 +26,7 @@ export default function SettingsSectionScreen() {
   }
 
   return (
-    <StyledSafeAreaView className="bg-background flex-1">
+    <StyledSafeAreaView className="flex-1 bg-background">
       <Topbar section={section} />
       {/* The scrolling frame lives in the feature (scroll-host.tsx): the Lists
           and Tags tables drag rows INSIDE it, so the scroll view is part of that
