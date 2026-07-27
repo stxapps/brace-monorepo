@@ -318,7 +318,7 @@ resurrecting stale fields.
   dimensions via `resizeImage` before the blob lands in `files/{id}.enc` — web's
   is bytes-in/bytes-out (`packages/web-react/src/lib/resize-image.ts`,
   `createImageBitmap` + `OffscreenCanvas`), expo's is uri-in/uri-out
-  (`packages/expo-react/src/lib/resize-image.ts`, expo-image-manipulator — file
+  (`packages/expo-react/src/lib/image.ts`, expo-image-manipulator — file
   bytes never enter the JS heap), both to the same spec: longest side ≤ 1024,
   re-encoded JPEG. `resizeImage` never throws — an
   undecodable input (SVG, corrupt bytes) falls back to the original, so a resize

@@ -83,7 +83,7 @@ docs/editors.md, invariant 2). Added like expo-router below:
 (run inside `apps/brace-expo`; then move each to `*` in the app and pin the
 real version in the root `package.json`, per the normal convention).
 `expo-image-manipulator` is also a peerDependency `*` of `@stxapps/expo-react`
-(its `lib/resize-image.ts` — the NetInfo/expo-sqlite pattern). `app.json`
+(its `lib/image.ts` — the NetInfo/expo-sqlite pattern). `app.json`
 carries the `expo-image-picker` config plugin with a `photosPermission`
 string. Both are native modules — `npx expo prebuild` required. There is
 deliberately no `expo-image`: the only image surface so far is the edit

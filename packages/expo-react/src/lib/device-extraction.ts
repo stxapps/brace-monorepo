@@ -1,4 +1,3 @@
-import { Image } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
@@ -14,7 +13,7 @@ import {
   selectTitleImage,
 } from '@stxapps/shared';
 
-import { putFavicon, readFavicon, sniffImageMime } from '../data/favicon-store';
+import { putFavicon, readFavicon } from '../data/favicon-store';
 import {
   type ExtractionFields,
   type ExtractionPatch,
@@ -22,8 +21,8 @@ import {
   writeFile,
 } from '../data/mutations';
 import { type LinkItem, readExtraction } from '../data/queries';
+import { probeImageSize, resizeImage, sniffImageMime } from './image';
 import { decodeHtmlBytes, parseHtmlHead } from './parse-html-head';
-import { resizeImage } from './resize-image';
 
 // The ON-DEVICE extraction worker: fill a page of links' `titleImage` facet by fetching
 // each page HERE, on the phone, then write back — the (resized) image into `files/`, the
@@ -290,10 +289,8 @@ type ImageOutcome =
   | { kind: 'transient' };
 
 // Fetch the selected preview image and prepare it for `files/`: bytes → temp file → probe
-// dimensions → resize. The PROBE is required, not incidental: `resizeImage` takes the
-// source dimensions from its caller (the picker supplies them upstream) and passes the
-// image through untouched when they're absent, so a downloaded image would skip the cap
-// entirely and a 4000px hero would land whole in the user's byte quota.
+// dimensions → resize. All three primitives are image.ts's; the PROBE is required, not
+// incidental — see its header for why a downloaded image can't skip it.
 async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
   if (!imageUrl) return { kind: 'none' };
 
@@ -312,7 +309,7 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
     }
 
     const bytes = new Uint8Array(await res.arrayBuffer());
-    // The sniff (favicon-store's, reused) is the real content check: an og:image pointing
+    // The sniff is the real content check: an og:image pointing
     // at an HTML error page or an SVG has to become `none`, not a file the UI can't render.
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return { kind: 'none' };
     if (sniffImageMime(bytes) === undefined) return { kind: 'none' };
@@ -467,16 +464,4 @@ function deleteQuietly(file: File): void {
   } catch {
     // A leftover in the cache dir is the OS's problem, not a reason to fail an extraction.
   }
-}
-
-// The downloaded image's intrinsic dimensions, or undefined if the native decoder can't
-// read it. Promisified `Image.getSize` — RN's only decode-free probe.
-function probeImageSize(uri: string): Promise<{ width: number; height: number } | undefined> {
-  return new Promise((resolve) => {
-    Image.getSize(
-      uri,
-      (width, height) => resolve(width > 0 && height > 0 ? { width, height } : undefined),
-      () => resolve(undefined),
-    );
-  });
 }

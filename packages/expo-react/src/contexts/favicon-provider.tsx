@@ -14,7 +14,7 @@
 //    row: direct native fetch; the `<link rel="icon">` upgrade rides page
 //    extraction when that lands here).
 //  - Validity is a byte sniff, not the proxy's content-type allowlist: only
-//    bytes native Image can render get cached as `ok` (favicon-store's
+//    bytes native Image can render get cached as `ok` (lib/image.ts's
 //    sniffImageMime), so an HTML error page or an SVG records `none`.
 //  - An `ok` icon lands as a plaintext file on disk, not bytes in the row
 //    (favicon-store's split-storage header) — the UI renders its derived
@@ -56,14 +56,9 @@ import {
   useRef,
 } from 'react';
 
-import {
-  isFaviconStale,
-  putFavicon,
-  putFaviconNone,
-  readFavicon,
-  sniffImageMime,
-} from '../data/favicon-store';
+import { isFaviconStale, putFavicon, putFaviconNone, readFavicon } from '../data/favicon-store';
 import { useSettings } from '../hooks/use-settings';
+import { sniffImageMime } from '../lib/image';
 import { useAuth } from './auth-provider';
 
 // Favicons have no batch endpoint (one fetch per host), so the queue exists

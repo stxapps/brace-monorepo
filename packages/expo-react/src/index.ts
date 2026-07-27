@@ -55,7 +55,7 @@ export * from './hooks/use-tag-mutations';
 export * from './hooks/use-tags';
 export * from './lib/auth-api-client';
 export * from './lib/device-extraction';
+export * from './lib/image';
 export * from './lib/query-managers';
-export * from './lib/resize-image';
 export * from './sync/engine';
 export * from './sync/r2';

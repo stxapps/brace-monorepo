@@ -69,7 +69,7 @@ type EditFocus = 'tags' | 'note';
 // alone, replace it with a picked file, or clear the override back to the
 // extracted one — web's ImageDraft with a uri+dims where web holds
 // bytes+objectURL (the dims let saveCustomImage's backstop resize retry a
-// pick-time fallback, or pass a capped result through — see resize-image.ts).
+// pick-time fallback, or pass a capped result through — see image.ts).
 type ImageDraft =
   | { kind: 'keep' }
   | { kind: 'pick'; uri: string; width: number; height: number }
@@ -176,7 +176,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
     if (result.canceled) return;
     const asset = result.assets[0];
     // Cap dimensions at pick time (the client-thumbnailing step — see
-    // resize-image.ts / docs/editors.md) so the preview shows exactly what will
+    // image.ts / docs/editors.md) so the preview shows exactly what will
     // be stored. resizeImage passes a within-cap image through and never
     // throws, so a pick can't be rejected. saveCustomImage resizes again on
     // Save — a no-op on this already-capped uri, kept as the backstop.

@@ -20,8 +20,9 @@
 // constantly, and a derived `file://` uri costs nothing per mount — where row
 // bytes would cost a BLOB read + a base64 data uri re-encoded and shipped to
 // native (and cached under that multi-KB string as its key) every time. The
-// fetch still passes bytes through JS once per host — the sniff below needs
-// them before anything is cached — which is the cheap side of that trade.
+// fetch still passes bytes through JS once per host — the renderability sniff
+// (lib/image.ts's `sniffImageMime`) needs them before anything is cached —
+// which is the cheap side of that trade.
 //
 // Crash consistency, the loadEntityContent ordering transposed: putFavicon
 // writes the FILE first, the row last, and readFavicon treats an `ok` row
@@ -127,33 +128,4 @@ export async function putFaviconNone(host: string): Promise<void> {
 export function clearFaviconFiles(): void {
   const dir = faviconFilesDir();
   if (dir.exists) dir.delete();
-}
-
-// The formats RN's native decoders render (iOS ImageIO / Android Fresco both
-// cover ICO), identified by magic bytes — the provider's "is this a renderable
-// icon?" verdict before anything is cached, so an HTML error page or an SVG
-// (text, no magic, and native Image can't render it) records `none` instead of
-// an unrenderable file. The RENDER path never needs the mime: native sniffs
-// the file bytes itself; returning it (vs. a boolean) just keeps the check
-// self-documenting.
-export function sniffImageMime(b: Uint8Array): string | undefined {
-  if (b.length < 12) return undefined;
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
-  if (b[0] === 0x00 && b[1] === 0x00 && b[2] === 0x01 && b[3] === 0x00) return 'image/x-icon';
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'image/gif';
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
-  if (
-    b[0] === 0x52 &&
-    b[1] === 0x49 &&
-    b[2] === 0x46 &&
-    b[3] === 0x46 &&
-    b[8] === 0x57 &&
-    b[9] === 0x45 &&
-    b[10] === 0x42 &&
-    b[11] === 0x50
-  ) {
-    return 'image/webp';
-  }
-  if (b[0] === 0x42 && b[1] === 0x4d) return 'image/bmp';
-  return undefined;
 }

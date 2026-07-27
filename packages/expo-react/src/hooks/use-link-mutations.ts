@@ -5,7 +5,7 @@
 // content-before-metadata ordering). The full set is ported; one platform
 // divergence: `saveCustomImage` takes a picked file's uri+dimensions rather
 // than bytes — content stays out of the JS heap here (file-store.ts), so the
-// resize (lib/resize-image.ts) and the store write (mutations.ts writeFile)
+// resize (lib/image.ts) and the store write (mutations.ts writeFile)
 // are both uri/path-to-path.
 
 import { useCallback, useMemo } from 'react';
@@ -26,7 +26,7 @@ import {
   writeLink,
 } from '../data/mutations';
 import { linkIdOf, type LinkItem, readExtraction, readLinkById } from '../data/queries';
-import { resizeImage, type ResizeImageSource } from '../lib/resize-image';
+import { resizeImage, type ResizeImageSource } from '../lib/image';
 
 // What the add form collects — web-react's LinkDraft, verbatim. `title` is
 // intentionally absent: a link is saved from just a URL, and its title is

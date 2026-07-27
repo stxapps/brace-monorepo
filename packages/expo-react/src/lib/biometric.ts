@@ -1,7 +1,7 @@
 // A thin wrapper over expo-local-authentication for the lock provider — the
 // device-biometric (Face ID / Touch ID / Android BiometricPrompt) fast-path for
 // the device-local app/list locks (docs/locks.md). Kept as its own peer-dep-
-// backed lib (the resize-image.ts pattern) so the provider stays clean and jest
+// backed lib (the image.ts pattern) so the provider stays clean and jest
 // mocks ONE module.
 //
 // The model is deliberately a BOOLEAN GATE, not a released secret (docs/locks.md
