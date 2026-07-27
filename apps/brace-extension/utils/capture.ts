@@ -11,7 +11,7 @@
 // a dependency) injected as a bundled content-script file and run over the live DOM;
 // kept inline here so the scaffold needs no extra entrypoint.
 
-const encoder = new TextEncoder();
+import { utf8 } from '@stxapps/shared';
 
 // A `data:`/blob URL → raw bytes. The service worker can fetch `data:` URLs, so this
 // is the simplest decode for the base64 the in-page funcs hand back.
@@ -110,7 +110,7 @@ export async function captureReadMode(tabId: number): Promise<Uint8Array> {
     },
   });
   const html = (injection?.result as string | undefined) ?? '';
-  return encoder.encode(html);
+  return utf8(html);
 }
 
 // --- screenshot --------------------------------------------------------------
@@ -134,5 +134,5 @@ export async function capturePageCopy(tabId: number): Promise<Uint8Array> {
     func: () => new XMLSerializer().serializeToString(document),
   });
   const html = (injection?.result as string | undefined) ?? '';
-  return encoder.encode(html);
+  return utf8(html);
 }

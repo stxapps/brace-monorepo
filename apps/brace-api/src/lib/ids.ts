@@ -1,7 +1,7 @@
 // ID and token helpers. Uses the Web Crypto API (`crypto.*`), which is a global
 // in the Workers runtime — no Node imports, no `nodejs_compat` flag needed.
 
-import { bytesToHex } from '@stxapps/shared';
+import { bytesToHex, utf8 } from '@stxapps/shared';
 
 // A random, collision-resistant id for rows (users, sessions). UUID v4
 // is plenty for primary keys here; we don't need sortable/k-ordered ids.
@@ -22,8 +22,7 @@ export function newSessionToken(): string {
 // (same reason passwords are hashed). The auth guard hashes the incoming bearer
 // token and looks it up by hash.
 export async function hashToken(token: string): Promise<string> {
-  const data = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest('SHA-256', data);
+  const digest = await crypto.subtle.digest('SHA-256', utf8(token));
   return bytesToHex(new Uint8Array(digest));
 }
 

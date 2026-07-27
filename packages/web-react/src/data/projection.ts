@@ -18,6 +18,7 @@
 import { z } from 'zod';
 
 import {
+  bytesToUtf8,
   canonicalUrlKey,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -31,8 +32,6 @@ import {
 } from '@stxapps/shared';
 
 import type { ItemRecord, ItemType } from './db';
-
-const decoder = new TextDecoder();
 
 // Every synced entity carries an `updatedAt` (entities.ts) — and that's all the
 // projector needs from a non-link record to make it orderable. Decoding against
@@ -56,7 +55,7 @@ export function parseBlob<T extends z.ZodTypeAny>(
 ): z.infer<T> | undefined {
   if (!data) return undefined;
   try {
-    const parsed = schema.safeParse(JSON.parse(decoder.decode(data)));
+    const parsed = schema.safeParse(JSON.parse(bytesToUtf8(data)));
     return parsed.success ? (parsed.data as z.infer<T>) : undefined;
   } catch {
     return undefined;

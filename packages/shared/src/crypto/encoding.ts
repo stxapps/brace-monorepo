@@ -66,8 +66,20 @@ let encoder: InstanceType<typeof TextEncoder> | undefined;
 
 // Returns an ArrayBuffer-backed view (not SharedArrayBuffer) so the result is
 // accepted directly as a Web Crypto `BufferSource`.
+//
+// The cast is an ASSERTION, not a conversion — deliberately NOT the obvious
+// `new Uint8Array(encode(s))`, which is a full byte COPY (that constructor
+// copies a TypedArray source, it doesn't view it) on every call, including the
+// multi-MB page-copy blobs the extension encodes. `TextEncoder.encode` is
+// specified to allocate a fresh `Uint8Array`, so its buffer can never be a
+// `SharedArrayBuffer` and the assertion is always true. It's needed only
+// because this package type-checks under its OWN tsconfig (`lib: es2022` +
+// `types: ["node"]`, NOT an app's `lib.dom`), and `@types/node@20` declares a
+// bare `encode(): Uint8Array` — i.e. `Uint8Array<ArrayBufferLike>`, too
+// imprecise to satisfy the return type above. Drop the cast once `@types/node`
+// is new enough to declare `NodeJS.NonSharedUint8Array` (= `Uint8Array<ArrayBuffer>`).
 export const utf8 = (s: string): Uint8Array<ArrayBuffer> =>
-  new Uint8Array((encoder ??= new TextEncoder()).encode(s));
+  (encoder ??= new TextEncoder()).encode(s) as Uint8Array<ArrayBuffer>;
 
 // The decode direction (entity payload bytes → JSON text), same lazy-singleton
 // rationale as `utf8` above. Like `atob`, Hermes doesn't ship the global itself —

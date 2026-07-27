@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 
-import { hexToBytes } from '@stxapps/shared';
+import { hexToBytes, utf8 } from '@stxapps/shared';
 
 import { HttpError } from './errors';
 
@@ -30,12 +30,7 @@ export async function verifyEd25519(
     false,
     ['verify'],
   );
-  return crypto.subtle.verify(
-    'Ed25519',
-    key,
-    hexToBytes(signatureHex),
-    new TextEncoder().encode(message),
-  );
+  return crypto.subtle.verify('Ed25519', key, hexToBytes(signatureHex), utf8(message));
 }
 
 // Validate + authenticate a signed auth payload. Returns the typed payload, or

@@ -37,14 +37,13 @@ import {
   type Tag,
   tagSchema,
   type ThemeState,
+  utf8,
 } from '@stxapps/shared';
 
 import { db, type ItemRecord, type PendingOpRecord } from './db';
 import { enqueueDelete } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import type { WithPath } from './queries';
-
-const encoder = new TextEncoder();
 
 // Persist one path's bytes locally and queue the upload, producing the bytes INSIDE
 // the transaction from the path's current record — the base primitive the JSON-entity
@@ -99,9 +98,7 @@ async function writeEntityWith<T extends object>(
   path: string,
   produce: (existing: ItemRecord | undefined) => T,
 ): Promise<void> {
-  await writeBytesWith(username, path, (existing) =>
-    encoder.encode(JSON.stringify(produce(existing))),
-  );
+  await writeBytesWith(username, path, (existing) => utf8(JSON.stringify(produce(existing))));
 }
 
 // Persist one entity locally and queue it for upload — the JSON-entity path layered
@@ -145,7 +142,7 @@ export async function bulkWriteEntities(
     for (let i = 0; i < entries.length; i++) {
       const { path, data } = entries[i];
       const baseUpdatedAt = existing[i]?.updatedAt ?? 0;
-      const bytes = data instanceof Uint8Array ? data : encoder.encode(JSON.stringify(data));
+      const bytes = data instanceof Uint8Array ? data : utf8(JSON.stringify(data));
       records.push(toItemRecord(path, baseUpdatedAt, bytes));
       ops.push({ username, path, op: 'put', baseUpdatedAt });
     }
