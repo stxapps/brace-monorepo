@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
+import { useRootFontScale } from '@stxapps/web-ui/hooks/use-root-font-scale';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -30,6 +31,24 @@ import {
 // Fixed row budget: 64×38 preview image left, then title (20) + host (16) +
 // one chip line (~20, LinkTagChips' default maxLines — measured, overflow
 // behind "+N") stacked in the text column, centered vertically.
+//
+// The budget is in px but EVERY part of the row it measures is rem: Tailwind v4
+// sizes text from `--text-sm`/`--text-xs` (0.875/0.75rem) AND spacing from
+// `--spacing: 0.25rem`, so `h-10`, `gap-3`, `pl-4` are rem as well. Nothing here
+// is px except the 1px `border-b`. Since this app pins no root `font-size`, a
+// reader who raises the browser's default font-size preference grows the whole
+// row — while this number would not, and the rows are ABSOLUTELY POSITIONED
+// with no `overflow-hidden`, so the overflow lands on top of the next row
+// rather than clipping.
+//
+// Hence a UNIFORM scale by the root font size (useRootFontScale) rather than a
+// fixed/text split: on the web there is no meaningfully unscaled part. (The
+// native card in brace-expo does split, and correctly — RN has no rem, Uniwind
+// resolves spacing to fixed dp, and the OS font scale multiplies fontSize
+// ALONE. Same-looking budget, genuinely different arithmetic.) The 1px border
+// rides along in the scale; erring 0.5px generous beats the pedantry.
+//
+// Note this is NOT browser zoom, which scales px and rem alike.
 const ROW_HEIGHT = 70;
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
@@ -80,6 +99,8 @@ export function ListLayout({
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
   const tagsById = useTagMap();
+  // Ceil so rounding can only ever give the content MORE room, never less.
+  const rowHeight = Math.ceil(ROW_HEIGHT * useRootFontScale());
 
   // This layout owns the scroll position; reset the shared flag on mount (fresh
   // at top) and unmount (so a layout switch doesn't leave it stuck true).
@@ -96,9 +117,16 @@ export function ListLayout({
   const virtualizer = useVirtualizer({
     count: links.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 8,
   });
+
+  // A changed `estimateSize` doesn't invalidate the cached measurements on its
+  // own, so re-measure when the root font size moves (rare — a browser
+  // preference change, plus the once-per-mount 1 → real correction).
+  useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, rowHeight]);
 
   // Report only the displayed rows (index maps 1:1 to `links`) so extraction tracks the window.
   const rows = virtualizer.getVirtualItems();
@@ -158,7 +186,7 @@ export function ListLayout({
                 className={`absolute inset-x-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
                   selected ? 'bg-muted' : 'hover:bg-muted/50'
                 }`}
-                style={{ height: ROW_HEIGHT, transform: `translateY(${row.start}px)` }}
+                style={{ height: rowHeight, transform: `translateY(${row.start}px)` }}
               >
                 {/* Bulk-edit selection sits at the row's LEADING edge (a scannable
                     checkbox column), pushing the image/text right; the row menu is
@@ -201,7 +229,7 @@ export function ListLayout({
                       </span>
                     </span>
                     {/* size-3.5 so the icon sits inside the host line's 16px
-                        budget — the row is fixed-height (ROW_HEIGHT). */}
+                        budget — the row is fixed-height (`rowHeight`). */}
                     <span className="flex items-center gap-1.5">
                       <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0" />
                       <span className="truncate text-xs text-muted-foreground">

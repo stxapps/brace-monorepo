@@ -11,6 +11,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
+import { useRootFontScale } from '@stxapps/web-ui/hooks/use-root-font-scale';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -49,6 +50,16 @@ const DEFAULT_COLUMNS = 3;
 // so an inline note would cost its line on EVERY card — and most links have none.
 // Both layouts therefore badge it (NoteBadge) and leave the text to hover and the
 // row menu's "View note".
+//
+// Scaled by the root font size (useRootFontScale) for the same reason as
+// list-layout's row, and see that file's note for the full argument: every part
+// of this budget is rem — Tailwind v4 sizes text from `--text-sm`/`--text-xs`
+// AND spacing from `--spacing: 0.25rem`, so `h-28`, `p-3`, `gap-4` scale too —
+// while the number itself would not, and the card's `overflow-hidden` swallows
+// the difference. So the whole budget scales UNIFORMLY; there is no
+// meaningfully unscaled part to hold back (unlike the native card in
+// brace-expo, which does split — RN has no rem and its font scale moves
+// fontSize alone).
 const ROW_HEIGHT = 280;
 const SCROLL_TOP_THRESHOLD = 8;
 
@@ -79,6 +90,8 @@ export function CardLayout({
       ? Math.max(1, Math.floor((contentWidth + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP)))
       : DEFAULT_COLUMNS;
   const rowCount = Math.ceil(links.length / columns);
+  // Ceil so rounding can only ever give the content MORE room, never less.
+  const rowHeight = Math.ceil(ROW_HEIGHT * useRootFontScale());
 
   useEffect(() => {
     setScrolled(false);
@@ -93,9 +106,16 @@ export function CardLayout({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollEl,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: () => rowHeight,
     overscan: 4,
   });
+
+  // A changed `estimateSize` doesn't invalidate the cached measurements on its
+  // own, so re-measure when the root font size moves (rare — a browser
+  // preference change, plus the once-per-mount 1 → real correction).
+  useEffect(() => {
+    virtualizer.measure();
+  }, [virtualizer, rowHeight]);
 
   // Virtual items are ROWS of `columns` cards, so the displayed LINK range is the first row's
   // first card through the last row's last card (the hook clamps the tail to `links.length`).
@@ -141,7 +161,7 @@ export function CardLayout({
                 key={virtualRow.key}
                 className="absolute inset-x-0 grid gap-4 pb-4"
                 style={{
-                  height: ROW_HEIGHT,
+                  height: rowHeight,
                   gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
