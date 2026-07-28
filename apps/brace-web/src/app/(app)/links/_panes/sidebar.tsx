@@ -15,11 +15,13 @@
 // settings section; childless rows get a same-width spacer so their icons stay
 // aligned. Section headers collapse the whole group the same way. All collapse
 // state — tree ids and the two reserved section ids — is device-local view
-// state, so it persists in localStorage (not the synced settings, and not the
-// Dexie local-settings row, which is for cross-cutting device settings like
-// theme/layout; a migration per UI tweak isn't worth it). Selecting a list/tag
-// from elsewhere (the editors' ListSelect, a link) auto-expands its ancestors so
-// the active row is never hidden under a collapsed parent.
+// state, persisted through web-react's sidebar-view-store (localStorage; see
+// there for why not the synced settings and not the Dexie local-settings row).
+// The store owns the key and the read-write so this stays shape-only, and so the
+// sign-out teardown (clear-data.ts) can wipe it — the ids are this account's.
+// Selecting a list/tag from elsewhere (the editors' ListSelect, a link)
+// auto-expands its ancestors so the active row is never hidden under a collapsed
+// parent.
 //
 // The filter box is a plain find-in-nav over both trees (funnel icon, not a
 // magnifier): it filters which list/tag ROWS show, distinct from the topbar's
@@ -52,14 +54,18 @@ import {
   type TreeItem,
   type TreeNode,
 } from '@stxapps/shared';
-import { useLists, useLocks, useTags } from '@stxapps/web-react';
+import {
+  readSidebarCollapsedIds,
+  useLists,
+  useLocks,
+  useTags,
+  writeSidebarCollapsedIds,
+} from '@stxapps/web-react';
 import { BraceIcon } from '@stxapps/web-ui/components/icons/brace-icon';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { type Selection, useLinksPage } from '../_contexts/page-provider';
-
-const COLLAPSED_STORAGE_KEY = 'brace:sidebar-collapsed';
 
 // Reserved collapse ids for the two section headers. Prefixed so they can't
 // collide with a real list/tag id in the shared collapsed set.
@@ -72,46 +78,39 @@ const SECTION_TAGS = 'section:tags';
 // there's nothing to filter.
 const FILTER_MIN_ITEMS = 12;
 
-// The device-local collapsed set. Starts empty (everything expanded) and loads
-// from localStorage AFTER mount — reading it during render would make the
-// hydration pass disagree with the server HTML. Writes are best-effort; blocked
-// or corrupted storage just means starting expanded.
+// The device-local collapsed set (sidebar-view-store). Starts empty (everything
+// expanded) and loads the stored set AFTER mount — reading storage during render
+// would make the hydration pass disagree with the server HTML. Writes are the
+// whole set each toggle, best-effort in the store, so a storage hiccup just
+// means this session stays in memory (and a bad read starts expanded).
 function useCollapsedIds() {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(COLLAPSED_STORAGE_KEY);
-      if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]));
-    } catch {
-      // Unreadable — keep the expanded default.
-    }
+    const ids = readSidebarCollapsedIds();
+    if (ids.length > 0) setCollapsed(new Set(ids));
   }, []);
-
-  const persist = (next: ReadonlySet<string>) => {
-    try {
-      window.localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...next]));
-    } catch {
-      // Best-effort; the in-memory state still works for this page load.
-    }
-  };
 
   const toggle = useCallback((id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      persist(next);
+      writeSidebarCollapsedIds([...next]);
       return next;
     });
   }, []);
 
+  // Un-collapse a set of ids (a selected row's ancestors) so the active row is
+  // never hidden under a collapsed parent. Returns the same set unchanged when
+  // none were collapsed, so the selection effect below doesn't re-render (and
+  // doesn't write) for a no-op — the common case, most selections are visible.
   const expand = useCallback((ids: readonly string[]) => {
     setCollapsed((prev) => {
       if (!ids.some((id) => prev.has(id))) return prev;
       const next = new Set(prev);
       for (const id of ids) next.delete(id);
-      persist(next);
+      writeSidebarCollapsedIds([...next]);
       return next;
     });
   }, []);

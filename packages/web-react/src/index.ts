@@ -23,6 +23,7 @@ export * from './data/pending-store';
 export * from './data/projection';
 export * from './data/queries';
 export * from './data/session-store';
+export * from './data/sidebar-view-store';
 export * from './data/subscription-store';
 export * from './data/sweep-dangling-extractions';
 export * from './data/sync-store';
