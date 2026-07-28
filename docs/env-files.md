@@ -35,7 +35,7 @@ Cloudflare accounts, the two AWS CloudFront distributions, custom domains), see
 So: frontends → build-time `.env` files; backend → runtime host config. The rest
 of this doc is just the per-app spelling of that.
 
-### brace-web — Next.js, static export (implemented)
+### brace-web — Next.js, static export
 
 Next.js auto-loads `.env.<mode>` from the app dir based on `NODE_ENV`. Public
 vars need the **`NEXT_PUBLIC_`** prefix and are baked into the static bundle.
@@ -59,7 +59,7 @@ Current var: `NEXT_PUBLIC_API_URL` → the matching brace-api URL. Adding a new
 var = add the line to all three files (the symmetry is deliberate: there is no
 config hiding in `package.json`).
 
-### brace-extension — wxt / Vite (implemented)
+### brace-extension — wxt / Vite
 
 wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need the
 **`WXT_PUBLIC_`** prefix and are read via `import.meta.env.WXT_PUBLIC_*` — baked
@@ -99,7 +99,7 @@ Both throw if the var is unset, mirroring brace-web's missing-`NEXT_PUBLIC_API_U
 guard. The `staging` build is a plain `--mode staging` npm script + Nx target
 (`build:staging`, `build:firefox:staging`) — no Nx `envFile` needed.
 
-### brace-expo — Expo / Metro (implemented)
+### brace-expo — Expo / Metro
 
 Expo builds through Metro, which loads `.env` / `.env.<mode>` via `@expo/env`.
 Public vars need the **`EXPO_PUBLIC_`** prefix and are read via
