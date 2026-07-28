@@ -2,7 +2,21 @@
 // params.ts / salt.ts / doors.ts and docs/account.md). Every platform
 // implementation — @stxapps/web-crypto (web/extension) and @stxapps/expo-crypto
 // (Expo/native) — asserts these same values in its specs, so "web and native
-// derive identical keys" is CI-proven, not a review promise.
+// derive identical keys" is a test, not a review promise.
+//
+// TWO LIMITS on how far that goes — don't read these vectors as more than they
+// are:
+//   - NOTHING RUNS THEM AUTOMATICALLY. The workspace has no CI yet
+//     (docs/deployment.md — "pick CI provider"), so today they gate only what
+//     someone runs locally: `npx nx run-many -t test -p @stxapps/web-crypto
+//     @stxapps/expo-crypto`. Wire them into the first CI job.
+//   - THE EXPO SUITE DOESN'T EXERCISE THE NATIVE PRIMITIVES. Under jest,
+//     react-native-quick-crypto is shimmed onto Node/hash-wasm (expo-crypto
+//     src/testing/quick-crypto-node-shim.ts), so what's proven there is OUR
+//     param mapping, derivation order and wire framing — not that quick-crypto's
+//     C++ Argon2id/HKDF/AES-GCM emits these bytes on device. The Swift/Kotlin
+//     BraceFileCrypto framer (see `blob` below) has no test at all. Both gaps
+//     need a device/simulator harness.
 //
 // TEST FIXTURE ONLY — nothing here is a secret and nothing here is used at
 // runtime. The values were produced by the real web-crypto pipeline
@@ -74,6 +88,8 @@ export const CRYPTO_CONTRACT_VECTOR = {
   // A packed v1 sync blob `[BLOB_FORMAT_V1 || iv || ciphertext+tag]` of
   // blobPlaintext (utf-8) under encryptionKeyHex, no AAD — exactly what a
   // client uploads to R2 and what the native file module must produce/consume.
+  // Both JS framers (web-crypto/expo-crypto blob.ts) assert this; the native
+  // Swift/Kotlin one does NOT yet — see the second limit in the header.
   blob: {
     ivHex: 'b0b1b2b3b4b5b6b7b8b9babb',
     plaintext: 'Hello, brace! contract vector v1',

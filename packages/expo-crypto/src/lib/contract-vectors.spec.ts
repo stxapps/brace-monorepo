@@ -1,13 +1,20 @@
 // Frozen-contract spec: asserts this platform's implementation against the
 // golden vectors in @stxapps/shared (crypto/contract-vectors.ts) — the same vectors
-// web-crypto asserts — so "web and native derive identical keys" is CI-proven.
-// quick-crypto is shimmed onto Node primitives (see ../testing), so what's
-// under test is OUR mapping/wire-format code, not the native library.
+// web-crypto asserts — so "web and native derive identical keys" is a test rather
+// than a review claim. quick-crypto is shimmed onto Node primitives (see
+// ../testing), so what's under test is OUR mapping/wire-format code, not the
+// native library; nothing runs these vectors on a device, and nothing runs them
+// in CI either. The vector file's header states both limits.
+import * as ed25519 from '@noble/ed25519';
+
 import {
   BLOB_FORMAT_V1,
   bytesToHex,
   CRYPTO_CONTRACT_VECTOR as V,
+  dekWrapAad,
   deriveUserSalt,
+  DOOR_PASSWORD,
+  DOOR_RECOVERY,
   hexToBytes,
   utf8,
 } from '@stxapps/shared';
@@ -81,6 +88,39 @@ describe('frozen-contract vectors', () => {
     await expect(
       unlockAccountWithRecovery('00000000000000000000000000000000', recoveryDoor),
     ).rejects.toBeInstanceOf(WrongRecoveryCodeError);
+  });
+
+  it('pins the documented intermediates (DEK, auth seed, recovery KEK)', async () => {
+    // dekHex, authSeedHex and recovery.kekHex are INTERMEDIATES the pipeline
+    // deliberately never exposes (they don't leave derive.ts), so nothing above
+    // can contradict them — a drifting value would sit in the vector file as
+    // wrong documentation. Assert them from the outside instead, without
+    // widening the module's surface just for a test.
+
+    // The password door really wraps THIS DEK under THIS KEK.
+    const dek = await decrypt(
+      hexToBytes(V.kekHex),
+      { iv: door.iv, ciphertext: door.wrappedDek },
+      dekWrapAad(DOOR_PASSWORD),
+    );
+    expect(bytesToHex(dek)).toBe(V.dekHex);
+
+    // GCM authenticates, so a key that opens the recovery door IS the recovery
+    // KEK; the unlock test above separately proves deriveRecoveryKek(code) opens
+    // that same door. Together they pin deriveRecoveryKek(code) === kekHex.
+    const dekViaRecovery = await decrypt(
+      hexToBytes(V.recovery.kekHex),
+      { iv: recoveryDoor.iv, ciphertext: recoveryDoor.wrappedDek },
+      dekWrapAad(DOOR_RECOVERY),
+    );
+    expect(bytesToHex(dekViaRecovery)).toBe(V.dekHex);
+
+    // Same argument from the public side of the keypair: authSeedHex is the
+    // Ed25519 seed behind the publicKey/signature the unlock test asserts.
+    // (derive.ts wires @noble/ed25519's sha512 at import — see there.)
+    const authSeed = hexToBytes(V.authSeedHex);
+    expect(bytesToHex(ed25519.getPublicKey(authSeed))).toBe(V.publicKeyHex);
+    expect(bytesToHex(ed25519.sign(utf8(V.signPayload), authSeed))).toBe(V.signatureHex);
   });
 
   it('decrypts the packed v1 contract blob', async () => {

@@ -11,7 +11,13 @@
 //
 // The specs therefore exercise OUR code — param mapping, tag placement, wire
 // format, derivation order — against the frozen contract vectors; they don't
-// re-test quick-crypto's internals (upstream's job, and covered on-device).
+// re-test quick-crypto's internals (upstream's job).
+//
+// Be clear about what that leaves UNPROVEN: nothing in this repo runs the
+// contract vectors against the real JSI module, so "quick-crypto's C++ Argon2id/
+// HKDF/AES-GCM produces the same bytes as web" rests on both implementing the
+// same specs, not on a test. Closing it needs a device/simulator harness (which
+// would also cover the Swift/Kotlin BraceFileCrypto framer, likewise untested).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, randomUUID } from 'node:crypto';
 
 import { argon2id } from 'hash-wasm';

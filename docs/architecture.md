@@ -174,7 +174,11 @@ _vs._ brace-extension.
   for `files/` content, JS for KB-sized entity JSON). The frozen parameters stay
   in `shared`; the golden vectors (`shared` `crypto/contract-vectors.ts`) are asserted by
   both this package's and `web-crypto`'s specs, so "web and native derive
-  identical keys/blobs" is CI-proven. One deliberate divergence: the account's
+  identical keys/blobs" is a test rather than a review claim — within two limits
+  that file's header states: no CI runs them yet (deployment.md still has to pick
+  a provider), and the expo suite shims quick-crypto onto Node, so the on-device
+  primitives and the Swift/Kotlin `BraceFileCrypto` framer are unproven until
+  there's a device/simulator harness. One deliberate divergence: the account's
   `encryptionKey` is raw bytes, not a non-extractable `CryptoKey` (native has
   no such handle) — at-rest protection is `expo-secure-store`'s job.
 
