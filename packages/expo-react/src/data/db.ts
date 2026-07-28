@@ -297,6 +297,9 @@ const schema = {
 // U+FFFF), which is why the same trick is safe there and quietly wrong here.
 // Today's paths are ASCII, so this is a latent divergence, not a live bug —
 // the successor bound closes it for any suffix at all.
+// The scan that APPLIES this bound is item-store.ts's `namespaceRows`, with the
+// other raw-row reads; what lives here is the key encoding itself, next to the
+// DDL that declares the primary key it describes.
 export function prefixEnd(prefix: string): string {
   return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
 }

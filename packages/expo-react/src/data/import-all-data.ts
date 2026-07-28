@@ -52,8 +52,8 @@ import {
 } from '@stxapps/shared';
 
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
-import { BRACE_BACKUP_FORMAT, BRACE_BACKUP_VERSION, namespaceRows } from './export-all-data';
-import { bulkGetItems } from './item-store';
+import { BRACE_BACKUP_FORMAT, BRACE_BACKUP_VERSION } from './export-all-data';
+import { bulkGetItems, namespaceRows } from './item-store';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
 import { readLists, readTags } from './queries';
 

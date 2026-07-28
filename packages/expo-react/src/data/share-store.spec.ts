@@ -156,13 +156,12 @@ jest.mock('./session-store', () => ({
 // applyShareDraft's store edge. The drain's sqlite writes are on-device
 // territory; these exist so a VALID draft can reach the end of the loop and have
 // its file deleted, which is the half of the quarantine invariant that says
-// "still delete what you did apply".
-// `prefixEnd` comes from the real module — it's a pure string function, and a
-// restated copy here could drift from the bound the queries actually use.
-jest.mock('./db', () => ({
-  prefixEnd: jest.requireActual('./db').prefixEnd,
-  getDb: () => ({ select: () => ({ from: () => ({ where: () => ({ all: () => [] }) }) }) }),
-  items: { path: 'path' },
+// "still delete what you did apply". The taxonomy now comes off the read edge
+// (queries.ts), so that — not a hand-rolled drizzle stub — is what's stubbed;
+// readLists' own system-default merge is spec'd in queries.spec.ts.
+jest.mock('./queries', () => ({
+  readLists: jest.fn(async () => []),
+  readTags: jest.fn(async () => []),
 }));
 jest.mock('./item-store', () => ({ getItem: jest.fn(async () => null) }));
 jest.mock('./mutations', () => ({
@@ -187,17 +186,21 @@ function makeTag(id: string, name: string, rank: string): Tag {
 }
 
 describe('buildShareLists', () => {
-  it('overlays system defaults, orders the tree, and annotates depth + rank', () => {
+  it('orders the tree and annotates depth + rank', () => {
     const rankA = rankBetween(trashRank, null);
     const rankB = rankBetween(null, null);
-    const stored = [
-      // A renamed My List — the override must win over the default name.
+    // The ALREADY-MERGED logical set, as readLists() hands it over — a renamed
+    // My List (the stored override, not the default name), the untouched system
+    // defaults, then the user's lists. The merge itself is queries.spec.ts's.
+    const lists = [
       makeList(MY_LIST_ID, 'Inbox', null, SYSTEM_LIST_DEFAULTS[0].rank),
+      makeList(ARCHIVE_ID, archiveDefault.name, null, archiveDefault.rank),
+      makeList(TRASH_ID, trashDefault.name, null, trashRank),
       makeList('list-a', 'Reading', null, rankA),
       makeList('list-b', 'Papers', 'list-a', rankB),
     ];
 
-    const rows = buildShareLists(stored);
+    const rows = buildShareLists(lists);
 
     // Ranks ride along so the sheet can mint neighbour ranks for its creates.
     expect(rows).toEqual([

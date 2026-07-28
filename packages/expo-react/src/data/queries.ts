@@ -34,10 +34,8 @@ import {
   count,
   desc,
   eq,
-  gte,
   inArray,
   isNotNull,
-  lt,
   notInArray,
   type SQL,
   sql,
@@ -88,9 +86,9 @@ import {
 } from '@stxapps/shared';
 import { chunk } from '@stxapps/shared';
 
-import { getDb, itemFacetStatuses, items, itemTagIds, prefixEnd } from './db';
+import { getDb, itemFacetStatuses, items, itemTagIds } from './db';
 import { dataFileFor } from './file-store';
-import { bulkGetItems, getItem, type ItemRow } from './item-store';
+import { bulkGetItems, getItem, type ItemRow, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
 
 // The read-layer facade re-exports (web queries.ts does the same): the typed
@@ -222,19 +220,13 @@ async function joinExtractions(links: LinkItem[]): Promise<LinkView[]> {
 
 // --- namespace reads (small collections) -------------------------------------
 
-// All rows under one namespace prefix, decoded and parse-filtered. The bounds
-// pair on the primary key is an index range scan (the explicit form of Dexie's
-// `startsWith`; a LIKE prefix only uses the index under extra pragmas).
+// All rows under one namespace prefix, decoded and parse-filtered (the range
+// scan itself is item-store.ts's `namespaceRows`).
 async function readNamespace<T extends z.ZodTypeAny>(
   prefix: string,
   schema: T,
 ): Promise<WithPath<z.infer<T>>[]> {
-  const rows = getDb()
-    .select()
-    .from(items)
-    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
-    .all();
-  return rows
+  return namespaceRows(prefix)
     .map((row) => decode(row, schema))
     .filter((entity): entity is WithPath<z.infer<T>> => entity !== undefined);
 }

@@ -37,7 +37,6 @@
 // of the sign-out teardown (clear-data.ts) so none of it outlives the session.
 
 import { Platform } from 'react-native';
-import { and, gte, lt } from 'drizzle-orm';
 import { Directory, File } from 'expo-file-system';
 import { z } from 'zod';
 
@@ -52,22 +51,17 @@ import {
   type List,
   LIST_NO_CHILDREN_IDS,
   LISTS_PREFIX,
-  listSchema,
   pathFromId,
-  SYSTEM_LIST_DEFAULTS,
-  SYSTEM_LIST_IDS,
   type Tag,
   TAGS_PREFIX,
-  tagSchema,
   TRASH_ID,
 } from '@stxapps/shared';
 
 import { runIncrementalSync } from '../sync/engine';
 import { appGroupDir } from './app-group';
-import { getDb, items, prefixEnd } from './db';
 import { getItem } from './item-store';
 import { writeExtraction, writeLink, writeList, writeTag } from './mutations';
-import { parseBlob } from './projection';
+import { readLists, readTags } from './queries';
 import { getSession, loadSession, loadSharedSession } from './session-store';
 import { uploadShareDraft } from './share-upload';
 
@@ -136,29 +130,20 @@ const EMPTY_TAXONOMY: ShareTaxonomy = { sessionPresent: false, lists: [], tags: 
 
 // --- pure builders (spec'd in share-store.spec.ts) ------------------------------
 
-// System defaults overlaid by stored overrides — web's mergeSystemLists, shared
-// by the picker-row builder and the drain's rank/validity reads.
-function mergeSystemLists(stored: List[]): List[] {
-  const storedById = new Map(stored.map((list) => [list.id, list]));
-  const merged: List[] = SYSTEM_LIST_DEFAULTS.map((def) => storedById.get(def.id) ?? def);
-  for (const list of stored) {
-    if (!SYSTEM_LIST_IDS.has(list.id)) merged.push(list);
-  }
-  return merged;
-}
-
-// The share sheet's list-picker rows: merged system+user lists, tree-ordered
-// and depth-annotated by the shared buildTree, minus Trash ONLY (saving into
-// the deletion staging area is incoherent). Deliberately NOT filtered by the
-// lock model: hide is a pure sidebar declutter and a lock gates a list's
-// CONTENTS, never its use as a destination — the same only-Trash rule every
-// editor picker follows (docs/editors.md, "Locked and hidden lists stay
+// The share sheet's list-picker rows, tree-ordered and depth-annotated by the
+// shared buildTree, minus Trash ONLY (saving into the deletion staging area is
+// incoherent). Takes the ALREADY-MERGED logical list set — the read edge's
+// readLists() folds the system defaults in, so this stays a pure formatter and
+// there is no second mergeSystemLists on this platform. Deliberately NOT
+// filtered by the lock model: hide is a pure sidebar declutter and a lock gates
+// a list's CONTENTS, never its use as a destination — the same only-Trash rule
+// every editor picker follows (docs/editors.md, "Locked and hidden lists stay
 // pickable"). Don't re-add a hiddenListIds filter here.
-export function buildShareLists(stored: List[]): ShareTaxonomyList[] {
+export function buildShareLists(lists: List[]): ShareTaxonomyList[] {
   // Trash is a no-children container (LIST_NO_CHILDREN_IDS), so buildTree never
   // nests anything under it — filtering that one root node is equivalent to the
   // old walk's `continue`, with nothing orphaned.
-  const tree = buildTree(mergeSystemLists(stored), { noChildrenIds: LIST_NO_CHILDREN_IDS });
+  const tree = buildTree(lists, { noChildrenIds: LIST_NO_CHILDREN_IDS });
   return flattenTree(tree)
     .filter((node) => node.item.id !== TRASH_ID)
     .map((node) => ({
@@ -199,31 +184,17 @@ export function parseShareTaxonomy(raw: string): ShareTaxonomy | null {
 
 // --- db reads (Android live path + the iOS snapshot builder) -------------------
 
-// Decode every entity under a namespace prefix — the minimal ancestor of web's
-// readNamespace, scoped to what the share surface needs until the expo read
-// edge lands. The prefix range-scans the primary key; lists/tags are small by
-// design, so decoding the whole namespace is cheap.
-function readNamespace<T extends z.ZodTypeAny>(prefix: string, schema: T): z.infer<T>[] {
-  // Half-open key range [prefix, prefixEnd(prefix)) — the sqlite spelling of
-  // Dexie's `where('path').startsWith(prefix)` (db.ts).
-  const rows = getDb()
-    .select()
-    .from(items)
-    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
-    .all();
-  const decoded: z.infer<T>[] = [];
-  for (const row of rows) {
-    const entity = parseBlob(row.data ?? undefined, schema);
-    if (entity !== undefined) decoded.push(entity);
-  }
-  return decoded;
-}
-
-function readTaxonomyFromDb(): ShareTaxonomy {
+// Straight off the read edge (queries.ts) — lists come back with the system
+// defaults already merged, tags as stored, both small by design. This used to
+// be a local readNamespace scan "until the expo read edge lands"; it has, so
+// the share surface reads through it like every other consumer. Safe in the
+// iOS extension bundle too: getDb() is lazy (db.ts), so importing the read edge
+// still touches no native sqlite on the snapshot path.
+async function readTaxonomyFromDb(): Promise<ShareTaxonomy> {
   return {
     sessionPresent: true,
-    lists: buildShareLists(readNamespace(LISTS_PREFIX, listSchema)),
-    tags: buildShareTags(readNamespace(TAGS_PREFIX, tagSchema)),
+    lists: buildShareLists(await readLists()),
+    tags: buildShareTags(await readTags()),
   };
 }
 
@@ -266,7 +237,7 @@ export async function loadShareTaxonomy(): Promise<ShareTaxonomy> {
   }
   await loadSession();
   if (!getSession()) return EMPTY_TAXONOMY;
-  return readTaxonomyFromDb();
+  return await readTaxonomyFromDb();
 }
 
 export type ShareSaveResult =
@@ -342,7 +313,9 @@ async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<voi
 // existing between share and apply (list deleted on another device) falls back
 // to the default inbox rather than dangling.
 async function applyShareDraft(username: string, draft: ShareDraft): Promise<void> {
-  const storedLists = readNamespace(LISTS_PREFIX, listSchema);
+  // readLists() already folds in the system defaults, so the validity set below
+  // needs no separate SYSTEM_LIST_IDS spread.
+  const existingLists = await readLists();
 
   for (const newList of draft.newLists) {
     if (await getItem(pathFromId(newList.id, LISTS_PREFIX))) continue;
@@ -379,8 +352,7 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
   }
 
   const listIds = new Set<string>([
-    ...SYSTEM_LIST_IDS,
-    ...storedLists.map((list) => list.id),
+    ...existingLists.map((list) => list.id),
     ...draft.newLists.map((list) => list.id),
   ]);
   const listId =
@@ -482,7 +454,7 @@ export async function refreshShareTaxonomy(): Promise<void> {
   if (!getSession()) return;
   const group = appGroupDir();
   if (!group) return;
-  const taxonomy = readTaxonomyFromDb();
+  const taxonomy = await readTaxonomyFromDb();
   const file = taxonomyFile(group);
   if (!file.exists) file.create({ intermediates: true, overwrite: true });
   file.write(JSON.stringify(taxonomy));

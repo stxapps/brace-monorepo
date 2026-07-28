@@ -12,11 +12,11 @@
 // fields (`updatedAt`, `data`, `hasDataFile`), so reads don't join the junction
 // tables back in — the read layer queries those directly.
 
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 
 import { chunk } from '@stxapps/shared';
 
-import { type DbTx, getDb, itemFacetStatuses, items, itemTagIds } from './db';
+import { type DbTx, getDb, itemFacetStatuses, items, itemTagIds, prefixEnd } from './db';
 import type { ItemRecord } from './projection';
 
 export type ItemRow = typeof items.$inferSelect;
@@ -59,6 +59,26 @@ export async function bulkGetItems(paths: string[]): Promise<(ItemRow | undefine
     for (const row of rows) byPath.set(row.path, row);
   }
   return paths.map((p) => byPath.get(p));
+}
+
+// The third key shape, after one path and many: every row under one namespace
+// PREFIX, as the half-open primary-key range `[prefix, prefixEnd(prefix))` — an
+// index range scan (the explicit form of Dexie's `startsWith`; a LIKE prefix
+// only uses the index under extra pragmas). The bound itself is db.ts's, beside
+// the DDL that declares the key. Sync, unlike its siblings above: all three
+// callers scan inside sync builders, and the expo driver is sync anyway.
+//
+// Rows come back RAW because the callers differ only in how they decode them —
+// the read edge merges the path in (queries.ts `readNamespace` → `WithPath`),
+// the backup keeps path and entity separate (export-all-data.ts
+// `readRawNamespace`), and the import side reads the projected columns with no
+// blob decode at all. Decoding belongs to each caller; the range belongs here.
+export function namespaceRows(prefix: string): ItemRow[] {
+  return getDb()
+    .select()
+    .from(items)
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
+    .all();
 }
 
 // The tx-taking body of putItems — for callers that must compose the row +

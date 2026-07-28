@@ -22,7 +22,6 @@
 //    presents the platform share sheet from it — the save happens AFTER the
 //    work, not before, so there's nothing to cancel mid-run.
 
-import { and, gte, lt } from 'drizzle-orm';
 import { File, Paths } from 'expo-file-system';
 import type { z } from 'zod';
 
@@ -66,9 +65,8 @@ import {
 } from '@stxapps/shared';
 
 import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/engine';
-import { getDb, items, prefixEnd } from './db';
 import { dataFileFor } from './file-store';
-import { bulkGetItems, getItem } from './item-store';
+import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
 import { readLists, readSettingsGeneral } from './queries';
 
@@ -172,18 +170,6 @@ interface GatheredLink {
 }
 
 const GATHER_CHUNK = 500;
-
-// The raw rows of one namespace — the queries.ts range idiom (the half-open
-// primary-key range `[prefix, prefixEnd(prefix))`, db.ts). Exported for the
-// import side's readExistingLinks (the same raw scan, off the projected
-// columns).
-export function namespaceRows(prefix: string) {
-  return getDb()
-    .select()
-    .from(items)
-    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
-    .all();
-}
 
 // Decode every record under an id-keyed namespace prefix into (path, entity)
 // pairs, dropping unparseable blobs like the read layer does. Keeps the entity
