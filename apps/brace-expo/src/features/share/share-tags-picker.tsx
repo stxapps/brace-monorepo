@@ -7,9 +7,12 @@
 // serve the snapshot-fed sheet and any future live-fed editor.
 
 import { useCallback, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import type { ShareNewEntity, ShareTaxonomyTag } from '@stxapps/expo-react';
+
+import { Input } from '../../components/ui/input';
+import { Text } from '../../components/ui/text';
 
 export function ShareTagsPicker({
   tags,
@@ -49,14 +52,12 @@ export function ShareTagsPicker({
               className={
                 selected
                   ? 'bg-primary rounded-full px-3 py-1'
-                  : 'rounded-full bg-gray-100 px-3 py-1 dark:bg-gray-800'
+                  : 'bg-secondary rounded-full px-3 py-1'
               }
             >
               <Text
                 className={
-                  selected
-                    ? 'font-sans text-sm text-white'
-                    : 'font-sans text-sm text-gray-700 dark:text-gray-200'
+                  selected ? 'text-primary-foreground text-sm' : 'text-secondary-foreground text-sm'
                 }
               >
                 {tag.name}
@@ -71,11 +72,11 @@ export function ShareTagsPicker({
             onPress={() => onRemoveNew(tag.id)}
             className="bg-primary rounded-full px-3 py-1"
           >
-            <Text className="font-sans text-sm text-white">{tag.name} ×</Text>
+            <Text className="text-primary-foreground text-sm">{tag.name} ×</Text>
           </Pressable>
         ))}
       </View>
-      <TextInput
+      <Input
         testID="share-tag-input"
         value={input}
         onChangeText={setInput}
@@ -84,7 +85,7 @@ export function ShareTagsPicker({
         autoCapitalize="none"
         autoCorrect={false}
         submitBehavior="submit"
-        className="mt-2 rounded-lg bg-gray-100 px-3 py-2 font-sans text-base text-gray-900 dark:bg-gray-800 dark:text-gray-50"
+        className="mt-2"
       />
     </View>
   );

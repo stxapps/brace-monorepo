@@ -26,7 +26,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   View,
 } from 'react-native';
 
@@ -40,6 +39,7 @@ import {
 } from '@stxapps/expo-react';
 import { DEFAULT_LIST_ID, rankBetween } from '@stxapps/shared';
 
+import { Text } from '../../components/ui/text';
 import { apiClient } from '../../lib/api-client';
 import { closeShareSheet } from './share-host';
 import { ShareListPicker } from './share-list-picker';
@@ -76,7 +76,7 @@ const SAVED_DISMISS_MS = 900;
 function Sheet({ children }: { children: React.ReactNode }) {
   if (Platform.OS === 'ios') {
     return (
-      <KeyboardAvoidingView behavior="padding" className="flex-1 bg-white dark:bg-gray-900">
+      <KeyboardAvoidingView behavior="padding" className="flex-1 bg-background">
         <ScrollView contentContainerClassName="p-4" keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>
@@ -90,7 +90,7 @@ function Sheet({ children }: { children: React.ReactNode }) {
         onPress={closeShareSheet}
         className="absolute top-0 right-0 bottom-0 left-0 bg-black/40"
       />
-      <View className="max-h-[85%] rounded-t-2xl bg-white dark:bg-gray-900">
+      <View className="max-h-[85%] rounded-t-2xl bg-background">
         <ScrollView contentContainerClassName="p-4" keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>
@@ -103,19 +103,11 @@ function Sheet({ children }: { children: React.ReactNode }) {
 function Notice({ testID, message }: { testID: string; message: string }) {
   return (
     <Sheet>
-      <Text
-        testID={testID}
-        className="py-6 text-center font-sans text-base text-gray-700 dark:text-gray-200"
-      >
+      <Text testID={testID} className="py-6 text-center">
         {message}
       </Text>
-      <Pressable
-        onPress={closeShareSheet}
-        className="items-center rounded-lg bg-gray-100 py-3 dark:bg-gray-800"
-      >
-        <Text className="font-sans text-base font-medium text-gray-900 dark:text-gray-50">
-          Close
-        </Text>
+      <Pressable onPress={closeShareSheet} className="bg-secondary items-center rounded-lg py-3">
+        <Text className="text-secondary-foreground font-medium">Close</Text>
       </Pressable>
     </Sheet>
   );
@@ -282,10 +274,7 @@ export function ShareScreen({ url, title }: SharePayload) {
   if (phase === 'saved') {
     return (
       <Sheet>
-        <Text
-          testID="share-saved"
-          className="py-10 text-center font-sans text-lg font-semibold text-gray-900 dark:text-gray-50"
-        >
+        <Text testID="share-saved" className="py-10 text-center text-lg font-semibold">
           ✓ Saved to Brace
         </Text>
       </Sheet>
@@ -294,24 +283,14 @@ export function ShareScreen({ url, title }: SharePayload) {
 
   return (
     <Sheet>
-      <Text
-        testID="share-title"
-        numberOfLines={1}
-        className="font-sans text-base font-semibold text-gray-900 dark:text-gray-50"
-      >
+      <Text testID="share-title" numberOfLines={1} className="font-semibold">
         {title ?? url}
       </Text>
-      <Text
-        testID="share-url"
-        numberOfLines={1}
-        className="mt-0.5 font-sans text-sm text-gray-500 dark:text-gray-400"
-      >
+      <Text testID="share-url" numberOfLines={1} className="text-muted-foreground mt-0.5 text-sm">
         {url}
       </Text>
 
-      <Text className="mt-4 font-sans text-xs font-medium text-gray-400 uppercase dark:text-gray-500">
-        List
-      </Text>
+      <Text className="text-muted-foreground mt-4 text-xs font-medium uppercase">List</Text>
       <ShareListPicker
         lists={taxonomy.lists}
         newList={newList}
@@ -320,9 +299,7 @@ export function ShareScreen({ url, title }: SharePayload) {
         onCreateName={submitListName}
       />
 
-      <Text className="mt-4 font-sans text-xs font-medium text-gray-400 uppercase dark:text-gray-500">
-        Tags
-      </Text>
+      <Text className="text-muted-foreground mt-4 text-xs font-medium uppercase">Tags</Text>
       <ShareTagsPicker
         tags={taxonomy.tags}
         selectedTagIds={selectedTagIds}
@@ -333,10 +310,7 @@ export function ShareScreen({ url, title }: SharePayload) {
       />
 
       {error !== null && (
-        <Text
-          testID="share-error"
-          className="mt-3 font-sans text-sm text-red-600 dark:text-red-400"
-        >
+        <Text testID="share-error" className="text-destructive mt-3 text-sm">
           {error}
         </Text>
       )}
@@ -350,7 +324,7 @@ export function ShareScreen({ url, title }: SharePayload) {
         {phase === 'saving' ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text className="font-sans text-base font-semibold text-white">Add to Brace</Text>
+          <Text className="text-primary-foreground font-semibold">Add to Brace</Text>
         )}
       </Pressable>
     </Sheet>

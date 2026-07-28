@@ -9,9 +9,12 @@
 // live-hook-fed in-app editor.
 
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import type { ShareNewEntity, ShareTaxonomyList } from '@stxapps/expo-react';
+
+import { Input } from '../../components/ui/input';
+import { Text } from '../../components/ui/text';
 
 export function ShareListPicker({
   lists,
@@ -50,12 +53,8 @@ export function ShareListPicker({
             onPress={() => onSelect(newList.id)}
             className="flex-row items-center justify-between py-2"
           >
-            <Text className="font-sans text-base text-gray-800 dark:text-gray-100">
-              {newList.name}
-            </Text>
-            {newList.id === selectedId && (
-              <Text className="text-primary font-sans text-base">✓</Text>
-            )}
+            <Text>{newList.name}</Text>
+            {newList.id === selectedId && <Text className="text-primary">✓</Text>}
           </Pressable>
         )}
         {lists.map((list) => (
@@ -66,14 +65,12 @@ export function ShareListPicker({
             className="flex-row items-center justify-between py-2"
             style={{ paddingLeft: list.depth * 16 }}
           >
-            <Text className="font-sans text-base text-gray-800 dark:text-gray-100">
-              {list.name}
-            </Text>
-            {list.id === selectedId && <Text className="text-primary font-sans text-base">✓</Text>}
+            <Text>{list.name}</Text>
+            {list.id === selectedId && <Text className="text-primary">✓</Text>}
           </Pressable>
         ))}
       </ScrollView>
-      <TextInput
+      <Input
         testID="share-list-input"
         value={input}
         onChangeText={setInput}
@@ -82,7 +79,7 @@ export function ShareListPicker({
         autoCapitalize="none"
         autoCorrect={false}
         submitBehavior="submit"
-        className="mt-2 rounded-lg bg-gray-100 px-3 py-2 font-sans text-base text-gray-900 dark:bg-gray-800 dark:text-gray-50"
+        className="mt-2"
       />
     </View>
   );

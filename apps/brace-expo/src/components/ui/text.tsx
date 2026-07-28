@@ -3,6 +3,7 @@ import { Platform, type Role, Text as RNText } from 'react-native';
 import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
+import { MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
 import { cn } from '../../lib/utils';
 
 // react-native-reusables `text` (uniwind variant), copied from the registry —
@@ -11,6 +12,10 @@ import { cn } from '../../lib/utils';
 //   • imports rewritten to relative (`@/registry/uniwind/*` isn't a real path).
 //   • `font-sans` added to the base variant — RN has no CSS cascade, so this is
 //     what makes Inter the app-wide default (the plan in docs/setup.md, _font_).
+//   • `maxFontSizeMultiplier` defaulted — this component is one of the two
+//     chokepoints where the app-wide font-scale cap lives (lib/font-scale.ts
+//     carries the rationale). Set BEFORE the `{...props}` spread so a call site
+//     can still opt out or choose its own ceiling.
 
 const textVariants = cva(
   cn(
@@ -89,6 +94,7 @@ function Text({
       className={cn(textVariants({ variant }), textClass, className)}
       role={variant ? ROLE[variant] : undefined}
       aria-level={variant ? ARIA_LEVEL[variant] : undefined}
+      maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       {...props}
     />
   );

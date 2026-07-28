@@ -54,6 +54,9 @@ jest.mock('uniwind', () => ({
   Uniwind: { setTheme: jest.fn() },
   useCSSVariable: (name: string | string[]) =>
     Array.isArray(name) ? name.map(() => undefined) : undefined,
+  // Light is the jest default; specs that care can re-mock it. Read by
+  // components/ui/input.tsx for the iOS keyboardAppearance.
+  useUniwind: () => ({ theme: 'light', hasAdaptiveThemes: true }),
 }));
 
 if (typeof global.structuredClone === 'undefined') {

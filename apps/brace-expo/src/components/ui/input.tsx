@@ -1,5 +1,7 @@
 import { Platform, TextInput } from 'react-native';
+import { useUniwind } from 'uniwind';
 
+import { MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
 import { cn } from '../../lib/utils';
 
 // react-native-reusables `input` (uniwind variant), copied from the registry —
@@ -10,12 +12,24 @@ import { cn } from '../../lib/utils';
 // `Text` base variant); and the `placeholderClassName` destructure dropped —
 // that's NativeWind's prop name, which Uniwind neither types nor reads (its
 // equivalent is `placeholderTextColorClassName`, already covered by the
-// `placeholder:` variant in the classes below).
+// `placeholder:` variant in the classes below); `maxFontSizeMultiplier`
+// defaulted — this is the second of the two font-scale-cap chokepoints (the
+// first is `text.tsx`; lib/font-scale.ts carries the rationale), set before the
+// `{...props}` spread so a call site can still override it; and
+// `keyboardAppearance` bound to the active theme (below).
 
 function Input({
   className,
   ...props
 }: React.ComponentProps<typeof TextInput> & React.RefAttributes<TextInput>) {
+  // iOS renders the system keyboard LIGHT regardless of the app's appearance
+  // unless asked — the rest of the app themes itself through Uniwind's CSS
+  // variables, which the native keyboard obviously can't read, so this is the
+  // one place the theme has to be lifted back into JS. `useUniwind()` is the
+  // reader for that (uniwind resolves `hasAdaptiveThemes` against the device
+  // setting, so this follows a system light/dark switch). No-op on Android,
+  // where the keyboard follows the system theme on its own.
+  const { theme } = useUniwind();
   return (
     <TextInput
       className={cn(
@@ -35,6 +49,8 @@ function Input({
         }),
         className,
       )}
+      maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
+      keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
       {...props}
     />
   );
