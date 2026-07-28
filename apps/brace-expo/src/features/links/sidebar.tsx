@@ -51,7 +51,7 @@ import {
   type TreeNode,
 } from '@stxapps/shared';
 
-import { BraceIcon } from '../../components/brace-icon';
+import { BraceIcon } from '../../components/icons/brace-icon';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
