@@ -29,8 +29,8 @@ import {
   useEntitlements,
   useHasRecoveryDoor,
   useRecoveryCode,
-  useSignOutOthers,
 } from '@stxapps/expo-react';
+import { hasRecoveryDoorQueryKey, useSignOutOthers } from '@stxapps/react';
 import {
   canonicalizePassword,
   generatePassphrase,
@@ -457,7 +457,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       });
       setCode(result.recoveryCode);
       // The nudge on the overview reads this query — refresh it so it clears.
-      void queryClient.invalidateQueries({ queryKey: ['recovery-door-exists'] });
+      void queryClient.invalidateQueries({ queryKey: hasRecoveryDoorQueryKey });
     } catch (err) {
       if (err instanceof InvalidCredentialsError) setError('Incorrect password.');
       else setError('Could not generate a recovery code. Please try again.');

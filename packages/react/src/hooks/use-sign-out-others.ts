@@ -2,15 +2,19 @@
 
 import { useMutation } from '@tanstack/react-query';
 
-import { useApiClient } from '@stxapps/react';
 import { signOutOthersEndpoint } from '@stxapps/shared';
+
+import { useApiClient } from '../contexts/api-client-provider';
 
 // "Sign out other devices" (Settings → Account). Revokes every OTHER session for
 // the account server-side, keeping THIS device signed in — so, unlike useSignOut,
 // it does NOT call endSession or touch the local session store. Session-only on
 // the server (requireAuth, no fresh proof): a low-harm, reversible action, the
-// plural of sign-out. Web-only, same as use-sign-out (it reaches the configured
-// api client via useApiClient).
+// plural of sign-out.
+//
+// Platform-agnostic, unlike its useSignOut neighbour: leaving the local session
+// alone is exactly what removes the dependency on a platform session store, so
+// there's nothing left here but the api call. Both apps use this one copy.
 export function useSignOutOthers() {
   const api = useApiClient();
 

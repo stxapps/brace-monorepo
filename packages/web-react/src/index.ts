@@ -49,7 +49,6 @@ export * from './hooks/use-settings';
 export * from './hooks/use-sign-in';
 export * from './hooks/use-sign-in-with-recovery';
 export * from './hooks/use-sign-out';
-export * from './hooks/use-sign-out-others';
 export * from './hooks/use-tag-mutations';
 export * from './hooks/use-tags';
 export * from './lib/auth-api-client';
