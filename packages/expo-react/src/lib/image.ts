@@ -28,8 +28,13 @@
 import { Image } from 'react-native';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-const DEFAULT_MAX_DIMENSION = 1024;
-const DEFAULT_QUALITY = 0.82;
+import { PREVIEW_JPEG_QUALITY, PREVIEW_MAX_DIMENSION } from '@stxapps/shared';
+
+// The cap + quality are `@stxapps/shared`'s (image/preview.ts), shared with the web
+// sibling so the same og:image is stored at the same size whichever platform captured it.
+// `SaveFormat.JPEG` below is that contract's format, spelled this platform's way.
+const DEFAULT_MAX_DIMENSION = PREVIEW_MAX_DIMENSION;
+const DEFAULT_QUALITY = PREVIEW_JPEG_QUALITY;
 
 export interface ResizeImageSource {
   uri: string;

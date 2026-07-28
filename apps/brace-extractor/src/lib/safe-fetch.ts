@@ -35,8 +35,16 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 // A typed failure carrying the per-URL `ExtractError` the contract speaks, so the
 // route maps an internal error straight onto the result entry / response code
 // without re-deriving it. NEVER embed the URL in `message` (docs "Never log the URL").
+//
+// `status` is the UPSTREAM code, set only for `bad_status` — the contract relays it so the
+// client can tell a 404 (permanent) from a 503 (retry); see extractResultSchema.status.
+// It's the upstream's own status, never anything about our request, so it discloses
+// nothing about the caller.
 export class SafeFetchError extends Error {
-  constructor(readonly code: ExtractError) {
+  constructor(
+    readonly code: ExtractError,
+    readonly status?: number,
+  ) {
     super(code);
     this.name = 'SafeFetchError';
   }
@@ -91,6 +99,9 @@ export async function safeFetch(
       const location = res.headers.get('location');
       // Always drain/cancel the redirect response body so the connection is freed.
       await res.body?.cancel().catch(() => undefined);
+      // A 3xx with no Location is a MALFORMED response, not a verdict on the URL — so no
+      // status is relayed and the client keeps its transient default, rather than reading
+      // the 301 as "settled, never retry".
       if (!location) throw new SafeFetchError('bad_status');
       if (hop === MAX_REDIRECTS) throw new SafeFetchError('fetch_failed'); // too many hops
 
@@ -110,7 +121,7 @@ export async function safeFetch(
 
     if (!res.ok) {
       await res.body?.cancel().catch(() => undefined);
-      throw new SafeFetchError('bad_status');
+      throw new SafeFetchError('bad_status', res.status);
     }
 
     return { response: res, finalUrl: current };

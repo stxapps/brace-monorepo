@@ -50,8 +50,10 @@ export const MAX_EXTRACT_URLS = 20;
 // Per-URL failure reasons. An enum (not a free string) so the client can branch:
 //  - 'blocked'          — SSRF guard rejected the URL or a redirect hop (private
 //                         IP, non-http(s) scheme). Permanent: don't retry.
-//  - 'bad_status'       — upstream returned a non-2xx (404/410 → the link's facet
-//                         records `permanent`; 5xx/429 → transient `failed`).
+//  - 'bad_status'       — upstream returned a non-2xx. The code itself is relayed in
+//                         `status` (404/410 → the link's facet records `permanent`;
+//                         5xx/429 → transient `failed`), since the enum alone can't
+//                         split those and the verdict SYNCS to every device.
 //  - 'unsupported_type' — content-type not in the allowlist for this endpoint.
 //  - 'too_large'        — upstream body exceeded the per-response byte ceiling.
 //  - 'timeout'          — upstream didn't respond within the cap.
@@ -106,6 +108,14 @@ export const extractResultSchema = z.object({
   imageBase64: z.base64().optional(),
   // Present iff `ok === false`.
   error: extractErrorSchema.optional(),
+  // The UPSTREAM HTTP status, relayed only with `error: 'bad_status'` — the one error
+  // whose retryability the enum can't express (404 is permanent, 503 is not). It exists
+  // so the server tier reaches the SAME verdict a client fetching the page itself would
+  // (`verdictForStatus`, extract/retry.ts): the facet's permanent/failed state syncs, so
+  // two tiers disagreeing would make a link's fate depend on which device saw it first.
+  // Optional, not required, so a client stays compatible with an extractor that predates
+  // it (the fallback is the enum's transient default).
+  status: z.number().int().optional(),
 });
 export type ExtractResult = z.infer<typeof extractResultSchema>;
 

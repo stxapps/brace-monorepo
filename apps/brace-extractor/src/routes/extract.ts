@@ -111,7 +111,14 @@ async function extractOne(requestedUrl: string, inline: boolean): Promise<Extrac
     return result;
   } catch (err) {
     if (err instanceof SafeFetchError) {
-      return { url: requestedUrl, ok: false, error: err.code };
+      // Relay the upstream status when there is one (`bad_status`) — it's what lets the
+      // client settle a 404 `permanent` and a 503 `failed` instead of retrying both.
+      return {
+        url: requestedUrl,
+        ok: false,
+        error: err.code,
+        ...(err.status !== undefined ? { status: err.status } : {}),
+      };
     }
     // Unexpected — record a generic transient failure, never leak internals/the URL.
     console.error('extractOne failed:', err instanceof Error ? err.name : 'unknown');

@@ -2,8 +2,7 @@ import { File, Paths } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
-  backoff,
-  EXTRACTION_BACKOFF_MAX_MS,
+  type ExtractVerdict,
   hostFromUrl,
   idFromPath,
   isRenderableIconBytes,
@@ -13,6 +12,7 @@ import {
   selectFaviconUrl,
   selectTitleImage,
   sniffImageMime,
+  verdictForStatus,
 } from '@stxapps/shared';
 
 import { putFavicon, readFavicon } from '../data/favicon-store';
@@ -178,7 +178,8 @@ async function extractOne(
   const page = await fetchPage(url);
   if (page.kind === 'unreached') return false;
   if (page.kind === 'status') {
-    await settle(username, targets, tier, await verdictForStatus(targets, page.status));
+    const verdict = await verdictForStatus(page.status, () => priorAttempts(targets));
+    await settle(username, targets, tier, verdict);
     return true;
   }
 
@@ -393,35 +394,17 @@ async function captureDeclaredFavicon(
 
 // --- outcome classification --------------------------------------------------
 
-// Expo owns this mapping: unlike the web worker it has no `ExtractError` enum from the
-// extractor to defer to, only the raw status. `permanent` links are never retried by any
-// device (the outcome syncs), so the bar for it is "a later attempt cannot succeed".
-async function verdictForStatus(
-  targets: LinkItem[],
-  status: number,
-): Promise<'failed' | 'permanent'> {
-  // Retryable by definition: rate limits, request timeouts, and server faults.
-  if (status === 408 || status === 425 || status === 429 || status >= 500) return 'failed';
+// The status → `failed`/`permanent` rules are `@stxapps/shared`'s `verdictForStatus`
+// (extract/retry.ts), NOT expo's own: the verdict SYNCS (a `permanent` facet stops every
+// device retrying), so the server tier — which reaches the same rules through
+// `verdictForExtractError` once brace-extractor relays the upstream code — and this one
+// must classify a 404 identically, or a link's fate would depend on which device saw it
+// first. Our synthetic statuses (`0`/`415`/`204` from fetchPage) are part of that shared
+// vocabulary. All that's left here is reading the attempt count the 403 ladder asks for.
 
-  // Bot walls are the awkward case: a `403` is frequently PER-IP and transient (a CDN
-  // challenge, a shared mobile IP in a penalty box), so retrying is often right — but a
-  // site that simply refuses this UA will return it forever, and a link retried until the
-  // heat death of the app is worse than one settled. So: retry it up the normal backoff
-  // ladder, and give up once the ladder has topped out at EXTRACTION_BACKOFF_MAX_MS.
-  if (status === 403) {
-    const attempts = await priorAttempts(targets);
-    return backoff(attempts + 1) >= EXTRACTION_BACKOFF_MAX_MS ? 'permanent' : 'failed';
-  }
-
-  // Everything else — 404/410/451, the auth walls, our synthetic `0` (not an http(s) URL)
-  // / `415` (not a page) / `204` (empty body) — the server answered on the merits and the
-  // answer won't change for us.
-  return 'permanent';
-}
-
-// How many times this link's `titleImage` has already failed. Read only for the `403`
-// ladder, so the common paths stay decode-free. Group members share a URL but not a facet,
-// so the MAX is the honest count for the decision.
+// How many times this link's `titleImage` has already failed. Passed as a THUNK so it's
+// read only for the `403` ladder and the common paths stay decode-free. Group members share
+// a URL but not a facet, so the MAX is the honest count for the decision.
 async function priorAttempts(targets: LinkItem[]): Promise<number> {
   let attempts = 0;
   for (const link of targets) {
@@ -447,7 +430,7 @@ function settle(
   username: string,
   links: LinkItem[],
   tier: DeviceExtractionTier,
-  status: 'failed' | 'permanent',
+  status: ExtractVerdict,
 ): Promise<unknown> {
   return writeAll(username, links, { facet: 'titleImage', state: newFacet(status, tier) });
 }

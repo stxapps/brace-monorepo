@@ -1,4 +1,4 @@
-import { cleanTitle, newFacet } from '@stxapps/shared';
+import { newFacet, normalizeUrl } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 import {
   type ExtractionFacet,
@@ -37,26 +37,50 @@ export async function runExtraction(
   linkId: string,
   facet: ExtractionFacet,
 ): Promise<void> {
-  // Guard: the link must exist locally (we only need to know it's real; the URL to
-  // fetch isn't needed for active-tab capture, which reads the live DOM).
-  if (!(await readLinkById(linkId))) {
-    throw new Error(`runExtraction: link ${linkId} not found locally`);
-  }
+  // Guard: the link must exist locally.
+  const link = await readLinkById(linkId);
+  if (!link) throw new Error(`runExtraction: link ${linkId} not found locally`);
 
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (tab?.id == null || tab.windowId == null) throw new Error('No active tab to extract from');
   const tabId = tab.id;
 
+  // And the active tab must still BE this link's page. Active-tab capture doesn't need the
+  // URL to fetch anything — it reads the live DOM — but it does need it to know the DOM is
+  // the right one: the popup sends EXTRACT fire-and-forget and closes, the heavy facets are
+  // button-driven, and every capture is seconds of async during which the user can switch
+  // tabs or the page can navigate. `captureVisibleTab` is the sharpest case — it takes a
+  // windowId, not a tabId, so it photographs whatever is frontmost when it runs. Storing
+  // another page's title/screenshot under this link would be permanent: `extension:fg` is
+  // `tierOf`'s ceiling, so nothing outranks it later.
+  //
+  // Compared through `normalizeUrl` because that's what the popup stored (App.tsx), not
+  // `tab.url` raw. Thrown BEFORE the try below on purpose: this is our mistake, not the
+  // host's, so it must not burn the facet's backoff — the link stays pending for a later
+  // pass (here, or a lower tier elsewhere).
+  const tabUrl = tab.url ?? '';
+  if ((normalizeUrl(tabUrl) ?? tabUrl) !== link.url) {
+    throw new Error('Active tab is no longer this link’s page');
+  }
+
   try {
     switch (facet) {
       case 'titleImage': {
-        // capture.ts is a pure extractor; this consumer normalizes — cleanTitle caps to
-        // LINK_TITLE_MAX (satisfies `extractionSchema.title`) and resizeImage bounds the
-        // stored blob — the same split the server tier uses (server-extraction.ts).
+        // The title arrives already selected AND cleaned — capture.ts runs the shared
+        // `selectTitleImage`, whose last step is `cleanTitle` (LINK_TITLE_MAX, satisfying
+        // `extractionSchema.title`), so every tier's title is capped identically. Only
+        // resizeImage is left here: it needs a canvas the injected func has no access to.
         const { title, image } = await captureTitleImage(tabId);
+
+        // PASS 1 — the title alone, FIELDS-ONLY (the facet stays pending so pass 2 still
+        // sets the terminal state). Both other tiers split the write this way so an image
+        // failure can't cost the title, and the reason binds harder here: this tier's retry
+        // needs the user back on this tab, so a title dropped now is realistically a title
+        // that waits for some LOWER tier to re-derive it.
+        if (title) await writeExtraction(username, linkId, { fields: { title } });
+
+        // PASS 2 — the image, then the terminal write.
         const fields: ExtractionFields = {};
-        const cleaned = cleanTitle(title);
-        if (cleaned) fields.title = cleaned;
         if (image) {
           const resized = await resizeImage(image);
 

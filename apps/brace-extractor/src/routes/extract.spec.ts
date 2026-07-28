@@ -106,10 +106,38 @@ describe('POST /v1/extract', () => {
     const { body } = await postExtract(['https://good.example.com/', 'https://bad.example.com/']);
     expect(body.results[0].ok).toBe(true);
     expect(body.results[0].title).toBe('Good');
+    // `status` relays the UPSTREAM code, which is what lets the client settle this 404
+    // `permanent` instead of retrying it forever (shared `verdictForExtractError`).
     expect(body.results[1]).toEqual({
       url: 'https://bad.example.com/',
       ok: false,
       error: 'bad_status',
+      status: 404,
+    });
+  });
+
+  it('relays a transient upstream status distinctly from a permanent one', async () => {
+    stubFetch(() => new Response('busy', { status: 503 }));
+
+    const { body } = await postExtract(['https://busy.example.com/']);
+    expect(body.results[0]).toEqual({
+      url: 'https://busy.example.com/',
+      ok: false,
+      error: 'bad_status',
+      status: 503,
+    });
+  });
+
+  it('omits status for errors that carry no upstream code', async () => {
+    stubFetch(() => {
+      throw new TypeError('connection reset');
+    });
+
+    const { body } = await postExtract(['https://dead.example.com/']);
+    expect(body.results[0]).toEqual({
+      url: 'https://dead.example.com/',
+      ok: false,
+      error: 'fetch_failed',
     });
   });
 

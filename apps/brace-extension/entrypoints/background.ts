@@ -33,6 +33,9 @@ const SYNC_ALARM = 'brace-sync';
 // post-EXTRACT sync). See docs/link-extraction.md "the queue is a query".
 const SYNC_PERIOD_MINUTES = 60;
 
+// `${linkId}:${facet}` for every capture running right now — see the EXTRACT handler.
+const extractionsInFlight = new Set<string>();
+
 export default defineBackground(() => {
   // Periodic sync. `create` with the same name is idempotent across restarts.
   browser.alarms.create(SYNC_ALARM, { periodInMinutes: SYNC_PERIOD_MINUTES });
@@ -78,7 +81,27 @@ async function handle(
       const username = currentUsername();
       if (!username) return { ok: false, error: 'Not signed in' };
 
-      await runExtraction(username, message.linkId, message.facet);
+      // One run per link+facet at a time. Messages are handled concurrently (the listener
+      // dispatches and returns), so a double-clicked screenshot button — or a save whose
+      // auto-extract overlaps a manual one — would otherwise run the capture twice. What
+      // that costs is more than a wasted capture: both runs reach `writeFile`, each writes
+      // a `files/` blob, the second `extractions/` write wins, and the loser's blob is left
+      // referenced by nothing — synced, charged against the byte quota, never reclaimed.
+      // (The expo drain guards the same hazard with `inFlightPathsRef`.)
+      //
+      // In-memory and released in a `finally`, never persisted: a mark that outlived its
+      // run — a killed service worker, a torn-down popup — would strand the facet where no
+      // path looks at it again. Cross-DEVICE duplication stays unguarded on purpose
+      // (docs/link-extraction.md — the extraction entity: self-healing, and a lease would
+      // cost a write-then-sync on the critical path).
+      const inFlightKey = `${message.linkId}:${message.facet}`;
+      if (extractionsInFlight.has(inFlightKey)) return { ok: true };
+      extractionsInFlight.add(inFlightKey);
+      try {
+        await runExtraction(username, message.linkId, message.facet);
+      } finally {
+        extractionsInFlight.delete(inFlightKey);
+      }
       // Push the freshly written files/links to the server (and pull anything new).
       void runSync();
       return { ok: true };

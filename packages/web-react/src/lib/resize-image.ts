@@ -15,6 +15,8 @@
 // `imageOrientation: 'from-image'` honors EXIF, the one thing such libraries are
 // otherwise useful for here.
 
+import { PREVIEW_JPEG_QUALITY, PREVIEW_MAX_DIMENSION } from '@stxapps/shared';
+
 export interface ResizeImageOptions {
   // Cap on the longest side, in CSS pixels. An image already within the cap is
   // returned UNCHANGED (no needless transcode); only oversized images are scaled.
@@ -28,9 +30,13 @@ export interface ResizeImageOptions {
   quality?: number;
 }
 
-const DEFAULT_MAX_DIMENSION = 1024;
+// The cap + quality are `@stxapps/shared`'s (image/preview.ts) — the same numbers the
+// expo sibling reads, so a preview stored from a phone and one stored from a browser are
+// the same size against the same byte quota. Only the FORMAT is spelled locally: this
+// decoder wants a MIME string where the manipulator wants a `SaveFormat`.
+const DEFAULT_MAX_DIMENSION = PREVIEW_MAX_DIMENSION;
 const DEFAULT_TYPE = 'image/jpeg';
-const DEFAULT_QUALITY = 0.82;
+const DEFAULT_QUALITY = PREVIEW_JPEG_QUALITY;
 
 // Decode `bytes`, and if its longest side exceeds `maxDimension`, return a
 // scaled-down re-encode; otherwise return the original bytes untouched. NEVER throws

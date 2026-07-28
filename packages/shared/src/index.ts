@@ -25,6 +25,7 @@ export * from './extract/select';
 export * from './iap/endpoints';
 export * from './iap/plans';
 export * from './iap/store-products';
+export * from './image/preview';
 export * from './image/sniff';
 export * from './import/bundle';
 export * from './import/csv';

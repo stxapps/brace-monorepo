@@ -5,11 +5,11 @@ import {
   type ExtractClient,
   type ExtractResult,
   idFromPath,
-  isPermanent,
   LINKS_PREFIX,
   mapLimit,
   MAX_EXTRACT_URLS,
   newFacet,
+  verdictForExtractError,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
@@ -19,7 +19,7 @@ import {
   writeExtraction,
   writeFile,
 } from '../data/mutations';
-import { type LinkItem } from '../data/queries';
+import { type LinkItem, readExtraction } from '../data/queries';
 import { resizeImage } from './resize-image';
 
 // The SERVER-tier extraction worker: extract a PAGE of links' `titleImage` facet via
@@ -108,10 +108,17 @@ export async function runServerTitleImageBatch(
       const result = resultsByUrl.get(url);
       if (!result) return; // server omitted this URL — leave pending for a later scan.
       if (!result.ok) {
-        const status = isPermanent(result.error) ? 'permanent' : 'failed';
+        // The SAME verdict rules brace-expo applies to a page it fetched itself — the
+        // extractor relays the upstream status on `bad_status`, so a 404 settles
+        // `permanent` here too rather than being retried daily forever. The status
+        // decides when present; otherwise the error enum's transient default holds.
+        // `priorAttempts` is a thunk because only the 403 ladder reads it (a decode).
+        const verdict = await verdictForExtractError(result.error, result.status, () =>
+          priorAttempts(targets),
+        );
         await writeAll(username, targets, {
           facet: 'titleImage',
-          state: newFacet(status, EXTRACTED_BY),
+          state: newFacet(verdict, EXTRACTED_BY),
         });
         return;
       }
@@ -169,6 +176,19 @@ export async function runServerTitleImageBatch(
 // The drain imports it straight from @stxapps/shared, beside its sibling `retryAfterMsOf`.
 // A non-retryable throw (a non-429 4xx, the oversized-batch guard, a bug) still stops the
 // drain rather than spinning.
+
+// How many times this link's `titleImage` has already failed. Read only for the `403`
+// ladder in `verdictForStatus`, so the common paths stay decode-free. Group members share
+// a URL but not a facet, so the MAX is the honest count for the decision. The expo sibling
+// (device-extraction.ts) is identical over its own store.
+async function priorAttempts(targets: LinkItem[]): Promise<number> {
+  let attempts = 0;
+  for (const link of targets) {
+    const extraction = await readExtraction(idFromPath(link.path, LINKS_PREFIX));
+    attempts = Math.max(attempts, extraction?.facets.titleImage?.attempts ?? 0);
+  }
+  return attempts;
+}
 
 // Apply one extraction patch to every link in a group (links sharing a URL). Identity
 // comes from the PATH (the one authority a round-tripped blob can't drift from), same as
