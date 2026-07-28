@@ -9,7 +9,7 @@
 // `type="time"` input).
 
 import { useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   ArrowDown,
   ArrowUp,
@@ -49,6 +49,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
+import { Switch } from '../../components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';

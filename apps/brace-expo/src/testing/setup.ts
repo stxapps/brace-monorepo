@@ -45,9 +45,15 @@ jest.mock('react-native-gesture-handler', () => {
 // Uniwind's className→style bridge runs in the Metro transform / native
 // runtime; under jest the HOC is an identity wrapper (className is ignored), and
 // the `Uniwind` runtime (ThemeProvider's `setTheme`) is a no-op stub.
+// `useCSSVariable` (ui/switch.tsx's token bridge) resolves against the theme vars
+// the Metro transform generates, so it has nothing to read here — it returns
+// `undefined` per name, the real hook's own miss value, which leaves the wrapped
+// component on its platform default colors.
 jest.mock('uniwind', () => ({
   withUniwind: (Component: unknown) => Component,
   Uniwind: { setTheme: jest.fn() },
+  useCSSVariable: (name: string | string[]) =>
+    Array.isArray(name) ? name.map(() => undefined) : undefined,
 }));
 
 if (typeof global.structuredClone === 'undefined') {
