@@ -59,7 +59,13 @@
         {
           "activationRules": [{ "type": "url", "max": 1 }, { "type": "text" }],
           "height": 520,
-          "excludedPackages": ["expo-dev-client", "expo-splash-screen", "expo-updates"],
+          "excludedPackages": [
+            "expo-dev-client",
+            "expo-splash-screen",
+            "expo-updates",
+            "expo-image",
+            "expo-iap"
+          ],
           "preprocessingFile": "./share-extension/preprocessing.js"
         }
       ]
