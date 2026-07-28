@@ -58,6 +58,16 @@ spirit.
 
 Both platforms read and write the same **layout** (`manifest.json` +
 `items.jsonl` + `files/{id}`), so a backup made on either imports on the other.
+That layout is **one definition, not a convention both sides honor**:
+`@stxapps/shared` `data/backup.ts` owns the format id and version, the entry
+names, the manifest build/parse, the `items.jsonl` line shape and its
+per-namespace schema gate, and the referenced-blob walk. It lives in `data/`
+rather than `export/` or `import/` because those two namespaces are the
+**interop** ones (netscape/csv/text) — a round-trip contract belongs to neither
+direction — and because the cross-platform round trip is the whole point:
+a `BRACE_BACKUP_VERSION` bump landing on web alone would produce archives
+expo's importer accepts and misreads. Bump it once, both platforms move.
+
 The zip **container library** differs, and not by preference:
 
 - **web** — `@zip.js/zip.js`. Streams straight to disk through the File System
@@ -158,6 +168,15 @@ The policy, decided once:
 - Folder paths **find-or-create lists** by case-insensitive name walk; without
   the `nestedLists` entitlement a nested path flattens to one root-level list.
   Trash never matches a folder name.
+
+Only the platform-bound half of that lives in each orchestrator (the store
+reads, the zip library, the file API). The rest is shared, so the two can't
+drift: the archive contract is `data/backup.ts` (above), the outcome/progress
+vocabulary and the quota gate are `data/import-run.ts`, the format→parser
+dispatch is `import/parse.ts`, and the folder/tag find-or-create walks are
+`import/resolve.ts` — the resolvers take `newId` as a constructor argument,
+since id minting is the one genuinely platform-specific piece (`web-crypto` vs.
+`expo-crypto`, neither reachable from `shared`).
 
 ### delete all data — one server-side wipe, not a client delete loop
 

@@ -46,12 +46,16 @@ import type {
   TreeNode,
 } from '@stxapps/shared';
 import {
+  BACKUP_ITEMS_ENTRY,
+  BACKUP_MANIFEST_ENTRY,
+  backupFileEntry,
   buildTree,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
   hostFromText,
   idFromPath,
+  jsonlLine,
   LINKS_PREFIX,
   linkSchema,
   LIST_NO_CHILDREN_IDS,
@@ -62,6 +66,8 @@ import {
   PINS_PREFIX,
   pinSchema,
   rekey,
+  serializeBackupItems,
+  serializeBackupManifest,
   SETTINGS_GENERAL_PATH,
   TAGS_PREFIX,
   tagSchema,
@@ -106,12 +112,6 @@ export class ExportCancelledError extends Error {
     this.name = 'ExportCancelledError';
   }
 }
-
-// The brace-backup manifest's format/version contract — the import side's
-// dispatch key. Bump `version` (and keep reading old ones) on any breaking
-// change to the zip layout or items.jsonl line shape.
-export const BRACE_BACKUP_FORMAT = 'brace-backup';
-export const BRACE_BACKUP_VERSION = 1;
 
 // --- gather -------------------------------------------------------------------
 
@@ -221,12 +221,6 @@ function buildInteropBundle(links: GatheredLink[], lists: ListItem[], tags: Tag[
 
 // --- the brace backup -----------------------------------------------------------
 
-// One items.jsonl line — the raw storage contract: the entity's plaintext under
-// its items/R2 path, exactly what import writes back.
-function jsonlLine(path: string, data: unknown): string {
-  return JSON.stringify({ path, data });
-}
-
 // Every `files/{id}.enc` path the included links/extractions reference —
 // referenced-only, so orphaned blobs and locked lists' media never ship.
 function referencedFilePaths(links: GatheredLink[]): string[] {
@@ -317,26 +311,21 @@ async function assembleBraceZip(
     fileCount += 1;
   }
 
-  const manifest = {
-    format: BRACE_BACKUP_FORMAT,
-    version: BRACE_BACKUP_VERSION,
-    exportedAt: Date.now(),
-    counts: {
-      links: links.length,
-      lists: lists.length,
-      tags: tags.length,
-      pins: pins.length,
-      extractions: links.filter((l) => l.extraction !== undefined).length,
-      files: fileCount,
-    },
-  };
-  await zipWriter.add('manifest.json', new TextReader(JSON.stringify(manifest, null, 2)));
-  await zipWriter.add('items.jsonl', new TextReader(lines.join('\n') + (lines.length ? '\n' : '')));
+  const manifest = serializeBackupManifest({
+    links: links.length,
+    lists: lists.length,
+    tags: tags.length,
+    pins: pins.length,
+    extractions: links.filter((l) => l.extraction !== undefined).length,
+    files: fileCount,
+  });
+  await zipWriter.add(BACKUP_MANIFEST_ENTRY, new TextReader(manifest));
+  await zipWriter.add(BACKUP_ITEMS_ENTRY, new TextReader(serializeBackupItems(lines)));
   for (const id of includedFileIds) {
     const record = await db.items.get(pathFromId(id, FILES_PREFIX));
     if (record?.data === undefined) continue; // raced away since the count pass
     // Stored, not deflated: these are already-compressed media formats.
-    await zipWriter.add(`files/${id}`, new Uint8ArrayReader(record.data), { level: 0 });
+    await zipWriter.add(backupFileEntry(id), new Uint8ArrayReader(record.data), { level: 0 });
   }
 
   const zipped = await zipWriter.close();

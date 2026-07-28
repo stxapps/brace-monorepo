@@ -8,15 +8,11 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { useApiClient } from '@stxapps/react';
+import type { ImportOutcome, ImportProgress } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
-import {
-  importAllData,
-  type ImportOutcome,
-  type ImportProgress,
-  type PickedFile,
-} from '../data/import-all-data';
+import { importAllData, type PickedFile } from '../data/import-all-data';
 import { getSession } from '../data/session-store';
 import type { SyncDeps } from '../sync/engine';
 import { useEntitlements } from './use-entitlements';

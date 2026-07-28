@@ -39,16 +39,30 @@
 //     named by the slash-joined path (the CSV `folder` column's own shape).
 //     Trash never matches a folder name — importing live bookmarks as
 //     deleted-pending links is never wanted.
+//
+// What's NOT here, because both platforms need the same answer: the
+// brace-backup archive contract (entry names, manifest, items.jsonl
+// classification, referenced blob ids) is @stxapps/shared data/backup.ts — the
+// format is a ROUND TRIP, so a version bump has to land for web and expo at
+// once or a web-written archive is misread on mobile; the outcome/progress
+// vocabulary and the quota gate are data/import-run.ts; the interop parse
+// dispatch and the folder/tag resolvers are import/parse.ts and
+// import/resolve.ts (the resolvers take `newId` as an argument — the one thing
+// that differs, web-crypto vs. expo-crypto). What stays here is what's actually
+// platform-bound: Dexie reads, zip.js, and the DOM File.
 
 // Type-only — erased at compile time, so zip.js itself stays lazily imported.
 import type { FileEntry } from '@zip.js/zip.js';
 
-import type { Extraction, Link, List, Tag } from '@stxapps/shared';
+import type { BundleEntry, Extraction, ImportOutcome, ImportProgress, Link } from '@stxapps/shared';
 import {
+  assertUnderImportQuota,
+  BACKUP_ITEMS_ENTRY,
+  BACKUP_MANIFEST_ENTRY,
+  backupFileEntry,
   canonicalUrlKey,
+  classifyBundleLine,
   cleanTitle,
-  compareRank,
-  detectTextImportFormat,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
@@ -58,68 +72,20 @@ import {
   LINK_NOTE_MAX,
   LINKS_PREFIX,
   linkSchema,
-  LISTS_PREFIX,
-  listSchema,
-  MY_LIST_ID,
-  parseNetscapeHtml,
-  parseRaindropCsv,
-  parseUrlText,
+  ListResolver,
+  parseBackupManifest,
+  parseImportText,
   pathFromId,
   PINS_PREFIX,
-  pinSchema,
-  rankForIndex,
-  SETTINGS_GENERAL_PATH,
-  settingsGeneralSchema,
-  TAGS_PREFIX,
-  tagSchema,
-  TRASH_ID,
+  referencedFileIds,
+  TagResolver,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { db } from './db';
-import { BRACE_BACKUP_FORMAT, BRACE_BACKUP_VERSION } from './export-all-data';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
 import { readLists, readTags } from './queries';
-
-// The running phases, in order. `sync` and `parse` are indeterminate; `items`
-// counts entity writes, `files` counts blob restores (brace only).
-export interface ImportProgress {
-  step: 'sync' | 'parse' | 'items' | 'files';
-  done?: number;
-  total?: number;
-}
-
-export interface ImportOutcome {
-  // Links written (new links; skips and invalid rows are counted separately).
-  linkCount: number;
-  // Lists / tags newly created (interop) or restored (brace).
-  listCount: number;
-  tagCount: number;
-  // `files/` blobs restored from the zip (brace only; 0 otherwise).
-  fileCount: number;
-  // Interop: URLs skipped as already saved (or repeated in the file).
-  // Brace: entities skipped because their path already exists locally.
-  skippedCount: number;
-  // Rows/lines that didn't parse or validate — reported, never fatal.
-  invalidCount: number;
-  // The pre-import refresh failed (offline / server down); the import carried on
-  // against this device's local copy. A warning, not an error — local-first.
-  syncFailed: boolean;
-}
-
-// The plan's link cap would be exceeded — thrown BEFORE anything is written.
-// The message is user-facing (the import view renders it verbatim).
-export class ImportQuotaError extends Error {
-  constructor(newCount: number, existingCount: number, maxLinks: number) {
-    super(
-      `Importing ${newCount} new ${newCount === 1 ? 'link' : 'links'} would exceed your ` +
-        `plan's limit of ${maxLinks} links (you have ${existingCount}). ` +
-        'Upgrade your plan or import fewer links.',
-    );
-    this.name = 'ImportQuotaError';
-  }
-}
 
 // Writes land in bounded transactions so IndexedDB isn't asked for one
 // transaction per link and progress can tick between chunks.
@@ -148,123 +114,6 @@ async function readExistingLinks(): Promise<ExistingLinks> {
   return { count: records.length, ids, urlKeys };
 }
 
-function assertUnderQuota(
-  newLinkCount: number,
-  existingCount: number,
-  maxLinks: number | null,
-): void {
-  if (maxLinks !== null && existingCount + newLinkCount > maxLinks) {
-    throw new ImportQuotaError(newLinkCount, existingCount, maxLinks);
-  }
-}
-
-// --- interop: folder → list and tag-name → id resolution ------------------------
-
-// Find-or-create lists for the parsed folder paths. Stateful over one run: the
-// sibling groups (sorted like the sidebar) grow as folders are created, so a
-// second link into the same new folder reuses it and ranks stay monotonic.
-class ListResolver {
-  private childrenOf = new Map<string | null, { id: string; name: string; rank: string }[]>();
-  private resolved = new Map<string, string>();
-  readonly created: RawEntityEntry[] = [];
-  private readonly now: number;
-
-  constructor(
-    lists: { id: string; name: string; parentId: string | null; rank: string }[],
-    now: number,
-  ) {
-    this.now = now;
-    for (const list of lists) {
-      const siblings = this.childrenOf.get(list.parentId) ?? [];
-      siblings.push(list);
-      this.childrenOf.set(list.parentId, siblings);
-    }
-    for (const siblings of this.childrenOf.values()) siblings.sort(compareRank);
-  }
-
-  resolve(folderPath: string[]): string {
-    if (folderPath.length === 0) return MY_LIST_ID;
-    const memoKey = folderPath.join('\u0000');
-    const memoized = this.resolved.get(memoKey);
-    if (memoized !== undefined) return memoized;
-
-    let parentId: string | null = null;
-    let listId = MY_LIST_ID;
-    for (const segment of folderPath) {
-      const siblings = this.childrenOf.get(parentId) ?? [];
-      this.childrenOf.set(parentId, siblings);
-      const wanted = segment.toLowerCase();
-      // Trash is excluded from matching — a folder named "Trash" becomes a
-      // regular list rather than mapping links into deletion staging.
-      const match = siblings.find(
-        (list) => list.id !== TRASH_ID && list.name.trim().toLowerCase() === wanted,
-      );
-      if (match) {
-        listId = match.id;
-      } else {
-        const list: List = {
-          id: newId(),
-          name: segment,
-          parentId,
-          rank: rankForIndex(siblings, siblings.length),
-          createdAt: this.now,
-          updatedAt: this.now,
-        };
-        this.created.push({ path: pathFromId(list.id, LISTS_PREFIX), data: list });
-        siblings.push({ id: list.id, name: list.name, rank: list.rank });
-        listId = list.id;
-      }
-      parentId = listId;
-    }
-    this.resolved.set(memoKey, listId);
-    return listId;
-  }
-}
-
-// Find-or-create tags by case-insensitive name. New tags are root-level,
-// appended after the existing root siblings in rank order.
-class TagResolver {
-  private idByName = new Map<string, string>();
-  private rootSiblings: { id: string; rank: string }[];
-  readonly created: RawEntityEntry[] = [];
-  private readonly now: number;
-
-  constructor(
-    tags: { id: string; name: string; parentId: string | null; rank: string }[],
-    now: number,
-  ) {
-    this.now = now;
-    for (const tag of tags) this.idByName.set(tag.name.trim().toLowerCase(), tag.id);
-    this.rootSiblings = tags.filter((tag) => tag.parentId === null).sort(compareRank);
-  }
-
-  resolve(names: string[]): string[] {
-    const ids: string[] = [];
-    for (const name of names) {
-      const wanted = name.trim().toLowerCase();
-      if (wanted === '') continue;
-      let id = this.idByName.get(wanted);
-      if (id === undefined) {
-        const tag: Tag = {
-          id: newId(),
-          name: name.trim(),
-          parentId: null,
-          rank: rankForIndex(this.rootSiblings, this.rootSiblings.length),
-          createdAt: this.now,
-          updatedAt: this.now,
-        };
-        this.created.push({ path: pathFromId(tag.id, TAGS_PREFIX), data: tag });
-        this.rootSiblings.push({ id: tag.id, rank: tag.rank });
-        this.idByName.set(wanted, tag.id);
-        id = tag.id;
-      }
-      // A link's tag set — repeated names in one row collapse.
-      if (!ids.includes(id)) ids.push(id);
-    }
-    return ids;
-  }
-}
-
 // --- interop: parsed rows → new entities -----------------------------------------
 
 async function importInterop(
@@ -287,11 +136,11 @@ async function importInterop(
   }
   const skippedCount = parsed.length - rows.length;
 
-  assertUnderQuota(rows.length, existing.count, maxLinks);
+  assertUnderImportQuota(rows.length, existing.count, maxLinks);
 
   const now = Date.now();
-  const lists = new ListResolver(await readLists(), now);
-  const tags = new TagResolver(await readTags(), now);
+  const lists = new ListResolver(await readLists(), now, newId);
+  const tags = new TagResolver(await readTags(), now, newId);
 
   let invalidCount = 0;
   let linkCount = 0;
@@ -359,67 +208,6 @@ async function importInterop(
 
 // --- the brace backup -------------------------------------------------------------
 
-// One items.jsonl line, classified. The schema gate mirrors the read layer's:
-// an entity that wouldn't decode there doesn't get imported here.
-interface BundleEntry {
-  path: string;
-  data: object;
-  kind: 'link' | 'list' | 'tag' | 'pin' | 'extraction' | 'settings';
-}
-
-const BUNDLE_NAMESPACES = [
-  { prefix: LINKS_PREFIX, schema: linkSchema, kind: 'link' as const },
-  { prefix: LISTS_PREFIX, schema: listSchema, kind: 'list' as const },
-  { prefix: TAGS_PREFIX, schema: tagSchema, kind: 'tag' as const },
-  { prefix: PINS_PREFIX, schema: pinSchema, kind: 'pin' as const },
-  { prefix: EXTRACTIONS_PREFIX, schema: extractionSchema, kind: 'extraction' as const },
-];
-
-function classifyBundleLine(line: string): BundleEntry | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(line);
-  } catch {
-    return undefined;
-  }
-  if (typeof parsed !== 'object' || parsed === null) return undefined;
-  const { path, data } = parsed as { path?: unknown; data?: unknown };
-  if (typeof path !== 'string' || typeof data !== 'object' || data === null) return undefined;
-
-  if (path === SETTINGS_GENERAL_PATH) {
-    if (!settingsGeneralSchema.safeParse(data).success) return undefined;
-    return { path, data, kind: 'settings' };
-  }
-  for (const { prefix, schema, kind } of BUNDLE_NAMESPACES) {
-    if (!path.startsWith(prefix)) continue;
-    // The id between prefix and `.enc` must be a plain token — a malformed path
-    // would poison the store/R2 key space.
-    const id = path.slice(prefix.length, path.length - '.enc'.length);
-    if (!path.endsWith('.enc') || id === '' || !/^[A-Za-z0-9_-]+$/.test(id)) return undefined;
-    if (!schema.safeParse(data).success) return undefined;
-    return { path, data, kind };
-  }
-  return undefined;
-}
-
-// Every `files/{id}` zip entry the IMPORTED links/extractions reference —
-// referenced-only, mirroring export's referencedFilePaths.
-function referencedFileIds(entries: BundleEntry[]): Set<string> {
-  const ids = new Set<string>();
-  for (const entry of entries) {
-    if (entry.kind === 'link') {
-      const { customImageId } = entry.data as Link;
-      if (customImageId !== undefined) ids.add(customImageId);
-    } else if (entry.kind === 'extraction') {
-      const { imageId, pageCopyId, screenshotId } = entry.data as Extraction;
-      if (imageId !== undefined) ids.add(imageId);
-      if (pageCopyId !== undefined) ids.add(pageCopyId);
-      if (screenshotId !== undefined) ids.add(screenshotId);
-    }
-  }
-  return ids;
-}
-
 async function importBraceBackup(
   username: string,
   byName: Map<string, FileEntry>,
@@ -430,26 +218,14 @@ async function importBraceBackup(
   // cached module.
   const { TextWriter, Uint8ArrayWriter } = await import('@zip.js/zip.js');
 
-  const manifestEntry = byName.get('manifest.json');
+  const manifestEntry = byName.get(BACKUP_MANIFEST_ENTRY);
   if (manifestEntry === undefined) {
     throw new Error('This zip is not a Brace backup (no manifest.json).');
   }
-  let manifest: { format?: unknown; version?: unknown };
-  try {
-    manifest = JSON.parse(await manifestEntry.getData(new TextWriter())) as typeof manifest;
-  } catch {
-    throw new Error('This zip is not a Brace backup (unreadable manifest).');
-  }
-  if (manifest.format !== BRACE_BACKUP_FORMAT) {
-    throw new Error('This zip is not a Brace backup (unrecognized format).');
-  }
-  if (typeof manifest.version !== 'number' || manifest.version > BRACE_BACKUP_VERSION) {
-    throw new Error(
-      'This backup was created by a newer version of Brace. Update the app and try again.',
-    );
-  }
+  // Format/version gate — throws the user-facing message (shared data/backup.ts).
+  parseBackupManifest(await manifestEntry.getData(new TextWriter()));
 
-  const itemsEntry = byName.get('items.jsonl');
+  const itemsEntry = byName.get(BACKUP_ITEMS_ENTRY);
   const itemsText = itemsEntry === undefined ? '' : await itemsEntry.getData(new TextWriter());
 
   let invalidCount = 0;
@@ -472,7 +248,7 @@ async function importBraceBackup(
 
   const existing = await readExistingLinks();
   const freshLinks = fresh.filter((entry) => entry.kind === 'link');
-  assertUnderQuota(freshLinks.length, existing.count, maxLinks);
+  assertUnderImportQuota(freshLinks.length, existing.count, maxLinks);
 
   // A pin/extraction whose link is neither imported nor already local is a
   // dangling satellite — drop it rather than restore garbage.
@@ -508,7 +284,7 @@ async function importBraceBackup(
   let fileCount = 0;
   onProgress({ step: 'files', done: 0, total: fileIds.length });
   for (let i = 0; i < fileIds.length; i++) {
-    const zipEntry = byName.get(`files/${fileIds[i]}`);
+    const zipEntry = byName.get(backupFileEntry(fileIds[i]));
     if (zipEntry !== undefined && localFiles[i]?.data === undefined) {
       const bytes = await zipEntry.getData(new Uint8ArrayWriter());
       await bulkWriteEntities(username, [{ path: filePaths[i], data: bytes }]);
@@ -556,15 +332,7 @@ async function parseInteropZip(byName: Map<string, FileEntry>): Promise<Imported
 
   const parsed: ImportedLink[] = [];
   for (const [name, entry] of candidates) {
-    const text = await entry.getData(new TextWriter());
-    const format = detectTextImportFormat(text, name);
-    parsed.push(
-      ...(format === 'netscape'
-        ? parseNetscapeHtml(text)
-        : format === 'csv'
-          ? parseRaindropCsv(text)
-          : parseUrlText(text)),
-    );
+    parsed.push(...parseImportText(await entry.getData(new TextWriter()), name));
   }
   return parsed;
 }
@@ -590,7 +358,7 @@ async function importZip(
         .map((entry) => [entry.filename, entry]),
     );
 
-    if (byName.has('manifest.json')) {
+    if (byName.has(BACKUP_MANIFEST_ENTRY)) {
       return await importBraceBackup(username, byName, maxLinks, onProgress);
     }
     const parsed = await parseInteropZip(byName);
@@ -632,14 +400,7 @@ export async function importAllData(options: {
     return { ...outcome, syncFailed };
   }
 
-  const text = new TextDecoder().decode(bytes);
-  const format = detectTextImportFormat(text, file.name);
-  const parsed =
-    format === 'netscape'
-      ? parseNetscapeHtml(text)
-      : format === 'csv'
-        ? parseRaindropCsv(text)
-        : parseUrlText(text);
+  const parsed = parseImportText(new TextDecoder().decode(bytes), file.name);
   const outcome = await importInterop(deps.username, parsed, maxLinks, nestedLists, onProgress);
   return { ...outcome, syncFailed };
 }

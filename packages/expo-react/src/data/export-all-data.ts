@@ -38,12 +38,16 @@ import type {
   TreeNode,
 } from '@stxapps/shared';
 import {
+  BACKUP_ITEMS_ENTRY,
+  BACKUP_MANIFEST_ENTRY,
+  backupFileEntry,
   buildTree,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
   hostFromText,
   idFromPath,
+  jsonlLine,
   LINKS_PREFIX,
   linkSchema,
   LIST_NO_CHILDREN_IDS,
@@ -54,6 +58,8 @@ import {
   PINS_PREFIX,
   pinSchema,
   rekey,
+  serializeBackupItems,
+  serializeBackupManifest,
   SETTINGS_GENERAL_PATH,
   TAGS_PREFIX,
   tagSchema,
@@ -103,12 +109,6 @@ export interface ExportOutcome {
   // Where the output landed — the UI shares/saves it from here.
   file: ExportedFile;
 }
-
-// The brace-backup manifest's format/version contract — mirrors web's
-// (data/export-all-data.ts owns the canonical definition; the two must agree,
-// since a backup made on either platform imports on both).
-export const BRACE_BACKUP_FORMAT = 'brace-backup';
-export const BRACE_BACKUP_VERSION = 1;
 
 // --- the zip32 ceilings ---------------------------------------------------------
 
@@ -265,12 +265,6 @@ function buildInteropBundle(links: GatheredLink[], lists: ListItem[], tags: Tag[
 
 // --- the brace backup -----------------------------------------------------------
 
-// One items.jsonl line — the raw storage contract: the entity's plaintext under
-// its items/R2 path, exactly what import writes back.
-function jsonlLine(path: string, data: unknown): string {
-  return JSON.stringify({ path, data });
-}
-
 // Every `files/{id}.enc` path the included links/extractions reference —
 // referenced-only, so orphaned blobs and locked lists' media never ship.
 function referencedFilePaths(links: GatheredLink[]): string[] {
@@ -320,37 +314,32 @@ async function assembleBraceZip(
     const record = await getItem(path);
     const plain = dataFileFor(path);
     if (!record?.hasDataFile || !plain.exists) continue;
-    fileEntries.push([`files/${idFromPath(path, FILES_PREFIX)}`, await plain.bytes()]);
+    fileEntries.push([backupFileEntry(idFromPath(path, FILES_PREFIX)), await plain.bytes()]);
   }
 
-  const manifest = {
-    format: BRACE_BACKUP_FORMAT,
-    version: BRACE_BACKUP_VERSION,
-    exportedAt: Date.now(),
-    counts: {
+  const manifestBytes = utf8(
+    serializeBackupManifest({
       links: links.length,
       lists: lists.length,
       tags: tags.length,
       pins: pins.length,
       extractions: links.filter((l) => l.extraction !== undefined).length,
       files: fileEntries.length,
-    },
-  };
-
-  const manifestBytes = utf8(JSON.stringify(manifest, null, 2));
-  const itemsBytes = utf8(lines.join('\n') + (lines.length ? '\n' : ''));
+    }),
+  );
+  const itemsBytes = utf8(serializeBackupItems(lines));
 
   // Every entry the archive will hold — checked before anything is deflated,
   // since fflate would silently truncate rather than fail (see the ceilings).
   assertZipWritable([
-    ['manifest.json', manifestBytes],
-    ['items.jsonl', itemsBytes],
+    [BACKUP_MANIFEST_ENTRY, manifestBytes],
+    [BACKUP_ITEMS_ENTRY, itemsBytes],
     ...fileEntries,
   ]);
 
   const zipped = zipSync({
-    'manifest.json': manifestBytes,
-    'items.jsonl': itemsBytes,
+    [BACKUP_MANIFEST_ENTRY]: manifestBytes,
+    [BACKUP_ITEMS_ENTRY]: itemsBytes,
     ...Object.fromEntries(
       fileEntries.map(([name, bytes]) => [name, [bytes, { level: 0 }] as const]),
     ),
