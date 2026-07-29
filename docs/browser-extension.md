@@ -33,11 +33,10 @@ context that has to reach the data:
 
 - **`browser.storage.local` / `.session`** — the primary cross-context store.
   Reach for it for state the background worker and the popup both touch, because
-  the **popup's lifecycle is short** (it unmounts on close, so its in-memory and
-  page-scoped `localStorage` state is fragile), and the **MV3 background service
-  worker has no DOM and no `localStorage`** at all. `.session` is
-  memory-backed and cleared on browser restart — the right home for ephemeral
-  unlocked state.
+  the **popup's lifecycle is short** (it unmounts on close, so anything it holds
+  in memory dies with it) and the **MV3 background service worker has no DOM and
+  no `localStorage`** at all. `.session` is memory-backed and cleared on browser
+  restart — the right home for ephemeral unlocked state.
 - **IndexedDB** — for larger structured data and richer local querying (e.g. a
   local encrypted link index for search), available in both popup and background
   contexts. It is also where the extension keeps its **non-extractable
@@ -45,9 +44,36 @@ context that has to reach the data:
   being JSON-serialized, can't hold a `CryptoKey`) — the same `session-store.ts`
   shape brace-web uses, on the `chrome-extension://` origin. This is consistent
   with the extension deriving and holding its **own** key (see _the extension runs
-  its own sign-in_ above).
-- **`localStorage`** — technically works in the popup/options pages, but not worth
-  relying on given the popup's short lifecycle; prefer `browser.storage`.
+  its own sign-in_ above). Dexie's reactivity crosses contexts here for free: it
+  broadcasts each commit over a `BroadcastChannel`, which exists in the MV3
+  service worker too, so a `useLiveQuery` in the open popup updates as the
+  background's sync cycle writes — the popup doesn't have to poll or re-open to
+  see synced data.
+- **`localStorage`** — the popup/options pages have it (they're real pages on the
+  `chrome-extension://` origin, and it does persist across popup closes), but the
+  background worker doesn't, so it can't be the home for anything cross-context.
+  Default to `browser.storage`. The one **deliberate exception** is
+  web-react's `subscription-store.ts` (the last-known plan behind `useEntitlements`),
+  and the reason is that it must be read **synchronously at first render** to seed
+  react-query's `placeholderData`. `browser.storage.local` is async, so the popup —
+  which remounts on every open, with a fresh `QueryClient` and therefore no warm
+  query cache — would paint one frame of `FREE_SUBSCRIPTION_STATUS` each time, and
+  `Editor`'s `useLinkQuota` gate would flash the `LinkQuotaBanner` at a paid
+  account that's over the free cap. Don't "fix" that store to `browser.storage`
+  without moving the read ahead of `createRoot().render()`. Two things make the
+  trade cheap: the cache only gates client-side UX (the server re-checks the cap at
+  `files/sign`), and it's shared code with brace-web, where `browser.*` doesn't
+  exist at all.
+
+  Note the flip side of that sharing: `background.ts` imports from the
+  `@stxapps/web-react` barrel, so `subscription-store.ts` and `clear-data.ts` are
+  in the service worker's module graph. They're safe there only because every
+  access is inside a function and optional-chained (`globalThis.localStorage?.`) —
+  nothing touches it at module scope. A background caller of
+  `clearCachedSubscriptionStatus()` would therefore silently no-op rather than
+  throw, leaving the cache for the next account on the device. Sign-out is
+  popup-driven today; keep it that way, or mirror the clear through a message to
+  the popup/offscreen context.
 
 ### the extension runs its own sign-in — it does not inherit the web session
 
