@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
+import { bytesToBase64Url } from '@stxapps/shared';
+
 import type { PurchaseStatus } from '../db/repositories/purchases';
-import { pemToPkcs8, type StoreSubscriptionSnapshot } from './appstore';
 import type { Bindings } from './env';
+import { b64urlEncodeJson, pemToPkcs8 } from './jwt';
+import type { StoreSubscriptionSnapshot } from './store';
 
 // Play Store provider-vocab edge — the `lib/paddle.ts` sibling for Google.
 // Everything Play-shaped (the service-account OAuth token, the subscriptionsv2
@@ -19,16 +22,6 @@ import type { Bindings } from './env';
 const PLAY_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const PLAY_API_BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
 const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
-
-function b64urlEncode(bytes: Uint8Array): string {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function b64urlEncodeJson(value: unknown): string {
-  return b64urlEncode(new TextEncoder().encode(JSON.stringify(value)));
-}
 
 // Service-account access token via the OAuth2 JWT-bearer flow: an RS256 JWT
 // signed with the service account's key (the PLAY_SA_PRIVATE_KEY secret —
@@ -56,7 +49,7 @@ export async function playAccessToken(env: Bindings, now: number = Date.now()): 
   const sig = new Uint8Array(
     await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput)),
   );
-  const assertion = `${signingInput}.${b64urlEncode(sig)}`;
+  const assertion = `${signingInput}.${bytesToBase64Url(sig)}`;
 
   const res = await fetch(PLAY_TOKEN_URL, {
     method: 'POST',

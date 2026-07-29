@@ -2,11 +2,13 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  bytesToBase64Url,
   iapCheckoutEndpoint,
   iapStatusEndpoint,
   iapVerifyEndpoint,
   STORE_PRODUCT_IDS,
   type SubscriptionStatus,
+  utf8,
 } from '@stxapps/shared';
 
 import { app } from '../app';
@@ -73,11 +75,13 @@ function takeUnusedStub(match: string) {
 }
 
 // A compact-JWS-shaped blob whose payload decodes to `payload` (signature is
-// garbage — see the trust-model note above).
+// garbage — see the trust-model note above). Encoded through the same shared
+// base64url as production, over utf8 BYTES rather than `btoa` on the JSON
+// string, so a fixture carrying non-ASCII (a product name, say) still matches
+// what Apple would actually send.
 function fakeJws(payload: unknown): string {
-  const b64url = (value: unknown) =>
-    btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  return `${b64url({ alg: 'ES256' })}.${b64url(payload)}.sig`;
+  const segment = (value: unknown) => bytesToBase64Url(utf8(JSON.stringify(value)));
+  return `${segment({ alg: 'ES256' })}.${segment(payload)}.sig`;
 }
 
 // Script the App Store Server API's subscription-statuses answer for one GET.

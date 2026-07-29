@@ -13,7 +13,7 @@ import {
   paddleCheckoutsRepo,
 } from '../db/repositories/paddle-checkouts';
 import { type PurchaseEntity, purchasesRepo } from '../db/repositories/purchases';
-import { fetchAppstoreSubscription, type StoreSubscriptionSnapshot } from '../lib/appstore';
+import { fetchAppstoreSubscription } from '../lib/appstore';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -27,6 +27,7 @@ import {
   paddleTimeToMs,
 } from '../lib/paddle';
 import { acknowledgePlaystorePurchase, fetchPlaystoreSubscription } from '../lib/playstore';
+import type { StoreSource, StoreSubscriptionSnapshot } from '../lib/store';
 
 // Subscription/entitlement service. Purchases land in DIRECTORY_DB (written by
 // the provider webhooks / future store verifiers); this service owns the FOLD
@@ -532,7 +533,7 @@ export async function applyPaddleEvent(env: Bindings, event: PaddleEvent): Promi
 // key — see the trust-model notes in lib/appstore.ts / lib/playstore.ts).
 async function fetchStoreSubscription(
   env: Bindings,
-  source: 'appstore' | 'playstore',
+  source: StoreSource,
   token: string,
 ): Promise<StoreSubscriptionSnapshot | null> {
   return source === 'appstore'
@@ -707,7 +708,7 @@ export async function verifyStorePurchase(
 // purchase token) extracted by the lib decoder.
 export async function applyStoreNotification(
   env: Bindings,
-  source: 'appstore' | 'playstore',
+  source: StoreSource,
   token: string,
 ): Promise<void> {
   let snapshot: StoreSubscriptionSnapshot | null;

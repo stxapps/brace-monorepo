@@ -17,6 +17,7 @@ import type { AppEnv, Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { paddleEventSchema, verifyPaddleSignature } from '../lib/paddle';
 import { playNotificationPurchaseToken } from '../lib/playstore';
+import type { StoreSource } from '../lib/store';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
 import {
@@ -46,7 +47,7 @@ export const PLAYSTORE_NOTIFY_PATH = `${API_V1}/iap/playstore/notify`;
 // The store verifiers need per-source config (JWT signing keys etc. — see
 // lib/env.ts). Checked up front so a missing secret is a clear 500, not a
 // garbage outbound request.
-function requireStoreConfig(env: Bindings | undefined, source: 'appstore' | 'playstore'): void {
+function requireStoreConfig(env: Bindings | undefined, source: StoreSource): void {
   const ok =
     source === 'appstore'
       ? env?.APPSTORE_API_BASE &&

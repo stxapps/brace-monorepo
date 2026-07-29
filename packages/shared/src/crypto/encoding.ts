@@ -58,6 +58,28 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+// base64url ⇄ bytes: the URL/header-safe alphabet (`+/` → `-_`, padding
+// stripped), which is what anything travelling in a URL, an HTTP header, or a
+// JWS compact serialization uses. Same `atob`/`btoa` runtime requirement as the
+// plain-base64 pair above — including the Hermes caveat, already covered by the
+// polyfill brace-expo installs.
+//
+// Today's callers are all brace-api (session tokens, and the App Store / Play
+// Store JWTs in `lib/jwt.ts`), but the encoding itself is neither
+// server-specific nor tied to our crypto contract — it's the same class of pure
+// byte rendering as the hex and base64 pairs, so it lives beside them rather
+// than being re-hand-rolled per call site. Note this is NOT part of the frozen
+// key-derivation contract: nothing in crypto/contract-vectors.ts depends on it.
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Tolerates the missing tail padding that base64url conventionally strips.
+export function base64UrlToBytes(base64url: string): Uint8Array<ArrayBuffer> {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  return base64ToBytes(base64 + '='.repeat((4 - (base64.length % 4)) % 4));
+}
+
 // One encoder reused across calls: TextEncoder is stateless and `.encode()` is
 // synchronous, so a singleton is safe and avoids per-call alloc. Created lazily
 // on first use (not at module load) so merely importing `shared` never assumes a

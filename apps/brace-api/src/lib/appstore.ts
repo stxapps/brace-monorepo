@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
+import { base64UrlToBytes, bytesToBase64Url, bytesToUtf8 } from '@stxapps/shared';
+
 import type { PurchaseStatus } from '../db/repositories/purchases';
 import type { Bindings } from './env';
+import { b64urlEncodeJson, pemToPkcs8 } from './jwt';
+import type { StoreSubscriptionSnapshot } from './store';
 
 // App Store provider-vocab edge — the `lib/paddle.ts` sibling for Apple.
 // Everything App-Store-shaped (the Server API JWT, the subscription-status
@@ -29,36 +33,7 @@ import type { Bindings } from './env';
 export const APPSTORE_PRODUCTION_API_BASE = 'https://api.storekit.itunes.apple.com';
 export const APPSTORE_SANDBOX_API_BASE = 'https://api.storekit-sandbox.itunes.apple.com';
 
-// --- base64url + PEM helpers (Workers-runtime, no Node Buffer) --------------
-
-function b64urlEncode(bytes: Uint8Array): string {
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function b64urlEncodeJson(value: unknown): string {
-  return b64urlEncode(new TextEncoder().encode(JSON.stringify(value)));
-}
-
-function b64urlDecodeToString(b64url: string): string {
-  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
-  const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-// PEM (PKCS#8) → raw DER bytes for crypto.subtle.importKey. Tolerates the
-// header/footer and line breaks `wrangler secret put` preserves. (Built over a
-// plain ArrayBuffer explicitly — importKey's BufferSource rejects the
-// ArrayBufferLike-typed view Uint8Array.from would produce.)
-export function pemToPkcs8(pem: string): Uint8Array<ArrayBuffer> {
-  const body = pem.replace(/-----(BEGIN|END)[A-Z ]*KEY-----/g, '').replace(/\s+/g, '');
-  const bin = atob(body);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
+// --- JWS payload decoding ---------------------------------------------------
 
 // Decode a JWS compact serialization's PAYLOAD without verifying its signature.
 // Safe ONLY for payloads we fetched from Apple over TLS ourselves (see the
@@ -68,7 +43,7 @@ export function decodeJwsPayload(jws: string): unknown | null {
   const parts = jws.split('.');
   if (parts.length !== 3) return null;
   try {
-    return JSON.parse(b64urlDecodeToString(parts[1]));
+    return JSON.parse(bytesToUtf8(base64UrlToBytes(parts[1])));
   } catch {
     return null;
   }
@@ -108,7 +83,7 @@ export async function appstoreApiJwt(env: Bindings, now: number = Date.now()): P
       new TextEncoder().encode(signingInput),
     ),
   );
-  return `${signingInput}.${b64urlEncode(sig)}`;
+  return `${signingInput}.${bytesToBase64Url(sig)}`;
 }
 
 // --- the subscription-status fetch + normalization --------------------------
@@ -147,29 +122,6 @@ const statusResponseSchema = z.looseObject({
     }),
   ),
 });
-
-// What the service consumes: one normalized snapshot of the subscription the
-// looked-up transaction belongs to. `plan` mapping stays in the service (the
-// shared planOfStoreProduct table).
-export type StoreSubscriptionSnapshot = {
-  externalId: string; // the provider's stable subscription identity
-  productId: string;
-  status: PurchaseStatus;
-  expiresAt: number | null;
-  canceledAt: number | null;
-  // PLAY ONLY (lib/playstore.ts) — the purchase token this one replaced, which
-  // the service must then retire. Absent here because Apple has no analogue:
-  // originalTransactionId is stable across an upgrade/downgrade within a
-  // subscription group, so a plan change UPDATES the existing row rather than
-  // minting a second identity that can go on entitling in parallel.
-  linkedExternalId?: string | null;
-  // PLAY ONLY (lib/playstore.ts) — true while Google still reports the purchase
-  // unacknowledged (`acknowledgementState`), i.e. the 3-day auto-refund fuse is
-  // burning. Every path that records the entitlement re-checks it and
-  // acknowledges, so the acknowledge converges instead of being fire-once.
-  // Absent here because Apple has no acknowledge concept at all.
-  needsAcknowledge?: boolean;
-};
 
 // Apple's subscription status codes → our vocabulary. Explicit map like
 // PADDLE_STATUS_MAP: an unknown code comes back null (→ log + drop), never
@@ -283,6 +235,10 @@ export async function fetchAppstoreSubscription(
       const effectiveStatus: PurchaseStatus =
         status === 'active' && info.data.offerDiscountType === 'FREE_TRIAL' ? 'trialing' : status;
 
+      // The snapshot's two optional fields are Play-only and stay unset: Apple
+      // has no acknowledge concept, and no linked-purchase analogue either —
+      // originalTransactionId survives a plan change within a subscription
+      // group, so an upgrade updates this identity instead of minting a second.
       const snapshot: StoreSubscriptionSnapshot = {
         externalId: info.data.originalTransactionId,
         productId: info.data.productId,
