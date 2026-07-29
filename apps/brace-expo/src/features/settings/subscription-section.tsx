@@ -23,9 +23,8 @@ import { Check, ExternalLink, RefreshCw } from 'lucide-react-native';
 
 import { useEntitlements } from '@stxapps/expo-react';
 import {
-  AVAILABLE_PAID_PLANS,
   type AvailablePaidPlan,
-  type PaidPlan,
+  PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
 } from '@stxapps/shared';
@@ -41,29 +40,9 @@ import {
   STORE_SOURCE,
 } from '../../lib/iap';
 
-// Upgrade-card copy — kept VERBATIM in step with the web section's
-// PLAN_CARD_COPY (the customer-facing rendering of the entitlements table,
-// iap/plans.ts); tune tiers in all three places together. Same two rules: only
-// list what actually ships, and Pro's copy stays spec-in-waiting (only
-// AVAILABLE_PAID_PLANS get a card).
-const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[] }> = {
-  plus: {
-    blurb: 'The full visual library',
-    features: [
-      'Unlimited saved links',
-      'Preview images',
-      'App lock & hidden lists',
-      'Advanced search',
-    ],
-  },
-  pro: {
-    blurb: 'The permanent offline library',
-    features: ['Everything in Plus', 'Full on-device AI — summaries & semantic search'],
-  },
-};
-
-const PLAN_CARDS: { plan: AvailablePaidPlan; blurb: string; features: string[] }[] =
-  AVAILABLE_PAID_PLANS.map((plan) => ({ plan, ...PLAN_CARD_COPY[plan] }));
+// The upgrade cards (copy + which plans are on sale) come from PLAN_CARDS in
+// @stxapps/shared iap/plans.ts, next to the entitlements table they render —
+// the SAME cards the web section renders, so the two storefronts can't drift.
 
 function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, {

@@ -19,12 +19,11 @@ import { Check, ExternalLink, RefreshCw } from 'lucide-react';
 
 import { useApiClient } from '@stxapps/react';
 import {
-  AVAILABLE_PAID_PLANS,
   type AvailablePaidPlan,
   iapCheckoutEndpoint,
   iapPortalEndpoint,
-  type PaidPlan,
   type Plan,
+  PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
 } from '@stxapps/shared';
@@ -33,35 +32,9 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import { openPaddleCheckout } from '@/lib/paddle';
 
-// Upgrade-card copy — the customer-facing rendering of the entitlements table
-// (iap/plans.ts); keep the two in step when tuning tiers. Two rules:
-//   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
-//     are gated in plans.ts but not yet built, so they are NOT promised here —
-//     re-add each line as it lands. At launch Plus is unlimited links + preview
-//     images + app lock/hidden lists + the storage bump.
-//   - Pro's copy is kept as spec-in-waiting even though Pro isn't sold: only
-//     AVAILABLE_PAID_PLANS get a card (see below), so putting Pro on sale stays a
-//     one-line change in iap/plans.ts.
-const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[] }> = {
-  plus: {
-    blurb: 'The full visual library',
-    features: [
-      'Unlimited saved links',
-      'Preview images',
-      'App lock & hidden lists',
-      'Advanced search',
-    ],
-  },
-  pro: {
-    blurb: 'The permanent offline library',
-    features: ['Everything in Plus', 'Full on-device AI — summaries & semantic search'],
-  },
-};
-
-// Only the plans currently on sale get a card — Pro's copy above stays dormant
-// until it joins AVAILABLE_PAID_PLANS.
-const PLAN_CARDS: { plan: AvailablePaidPlan; blurb: string; features: string[] }[] =
-  AVAILABLE_PAID_PLANS.map((plan) => ({ plan, ...PLAN_CARD_COPY[plan] }));
+// The upgrade cards (copy + which plans are on sale) come from PLAN_CARDS in
+// @stxapps/shared iap/plans.ts, next to the entitlements table they render —
+// shared with brace-expo's store section so the two storefronts can't drift.
 
 // How long to poll `iap/status` after a completed checkout before telling the
 // user it's still processing (the webhook usually lands within seconds).

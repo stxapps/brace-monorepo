@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { clearData } from '../data/clear-data';
 import {
@@ -60,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [username, setUsername] = useState<string | null>(null);
   const [reason, setReason] = useState<EndReason | null>(null);
+  // For the sign-out wipe below: the react-query cache is the one per-account
+  // store clearData can't reach (it's in-memory React state, not a device store).
+  const queryClient = useQueryClient();
 
   // Hydrate from IndexedDB once on mount. An expired session is cleared and
   // treated as signed-out.
@@ -83,7 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // load, so this always runs first). clearSession with no session is a
           // no-op. A stored-but-expired session additionally records 'expired' so
           // AuthGuard resumes the user at /sign-in?next=; no session at all stays
-          // null (a direct visit).
+          // null (a direct visit). No queryClient.clear() here (unlike endSession):
+          // this runs on mount of a fresh load, when the cache is still empty.
           void Promise.allSettled([clearSession(), clearData()]);
           if (s) setReason('expired');
           setUsername(null);
@@ -105,17 +110,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated');
   }, []);
 
-  const endSession = useCallback(async (reason: EndReason = 'signed-out') => {
-    // Drop the session AND the synced local data together. The local store holds
-    // DECRYPTED bookmarks, so leaving them behind would let the next user on this
-    // device read the previous user's plaintext. One active session per device
-    // (see session-store), so a full wipe is correct; both clears run regardless
-    // of which one rejects. Covers the onSessionInvalid (expired) path too.
-    await Promise.allSettled([clearSession(), clearData()]);
-    setUsername(null);
-    setReason(reason);
-    setStatus('unauthenticated');
-  }, []);
+  const endSession = useCallback(
+    async (reason: EndReason = 'signed-out') => {
+      // Drop the session AND the synced local data together. The local store holds
+      // DECRYPTED bookmarks, so leaving them behind would let the next user on this
+      // device read the previous user's plaintext. One active session per device
+      // (see session-store), so a full wipe is correct; both clears run regardless
+      // of which one rejects. Covers the onSessionInvalid (expired) path too.
+      await Promise.allSettled([clearSession(), clearData()]);
+
+      // The third per-account store: react-query's in-memory cache. clearData
+      // can't reach it (it wipes DEVICE stores), and the account-scoped server
+      // reads are keyed by CONSTANTS — ['iap','status'], hasRecoveryDoorQueryKey —
+      // not by userId. So without this, signing in as a different account in the
+      // same JS context inherits the previous account's cached answers: the
+      // subscription read is the worst of them (staleTime 5min means it isn't even
+      // refetched on mount, and useEntitlements would then persist the wrong plan
+      // into the new account's device cache). Wiping the whole cache is right for
+      // the same reason the data wipe isn't account-scoped.
+      //
+      // Ordering is load-bearing: this runs AFTER clearSession, so an observer
+      // that hasn't unmounted yet can only refetch with no token AND no session
+      // record — authFetch's expired-mid-session branch stays quiet
+      // (lib/auth-api-client.ts), so the wipe can't bounce back through
+      // onSessionInvalid and overwrite this sign-out's reason with 'expired'.
+      queryClient.clear();
+
+      setUsername(null);
+      setReason(reason);
+      setStatus('unauthenticated');
+    },
+    [queryClient],
+  );
 
   // React to the api client detecting an invalid session (server 401, or a
   // mid-session token expiry) by dropping to signed-out. AuthGuard then bounces

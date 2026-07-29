@@ -35,11 +35,17 @@ export function useEntitlements(): UseEntitlementsResult {
   const [cached] = useState(readCachedStatus);
   const query = useSubscriptionStatus({ placeholderData: cached ?? undefined });
 
-  // Persist each fresh answer as the device's last-known copy.
+  // Persist each fresh answer as the device's last-known copy. `isSuccess` alone
+  // does NOT mean "fresh": react-query reports status 'success' the whole time it
+  // is serving placeholderData, so the isPlaceholderData guard is what keeps this
+  // from writing the placeholder straight back. Usually that would be a harmless
+  // rewrite of the value we just read — but not when the placeholder came from
+  // ANOTHER account's cache entry, which is the failure the sign-out
+  // queryClient.clear() (auth-provider) closes from the other side.
   useEffect(() => {
-    if (query.data === undefined || !query.isSuccess) return;
+    if (query.data === undefined || !query.isSuccess || query.isPlaceholderData) return;
     writeCachedStatus(query.data);
-  }, [query.data, query.isSuccess]);
+  }, [query.data, query.isSuccess, query.isPlaceholderData]);
 
   const subscription = query.data ?? cached ?? FREE_SUBSCRIPTION_STATUS;
   return {

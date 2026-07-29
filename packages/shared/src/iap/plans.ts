@@ -225,3 +225,39 @@ export const PLAN_USD_PER_YEAR: Record<PaidPlan, number> = {
   plus: 24,
   pro: 48,
 };
+
+// The upgrade cards' customer-facing copy — the human rendering of the
+// entitlements table above, so it lives HERE rather than in each app: it is plain
+// data with no platform types, and every checkout surface (brace-web's Paddle
+// section, brace-expo's store section, any future one) renders the same words.
+// It used to be copy-pasted per app under a "keep these VERBATIM in step"
+// comment, which is exactly the drift the rest of this file exists to prevent —
+// the place that defines a tier and the place that sells it can't disagree if
+// there's only one of each. Two rules when editing:
+//   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
+//     are gated in ENTITLEMENTS above but not yet built, so they are NOT promised
+//     here — re-add each line as it lands. At launch Plus is unlimited links +
+//     preview images + app lock/hidden lists + the structured search editor.
+//   - Pro's copy is kept as spec-in-waiting even though Pro isn't sold: only
+//     AVAILABLE_PAID_PLANS get a card, so putting Pro on sale stays the one-line
+//     change described above.
+export const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[] }> = {
+  plus: {
+    blurb: 'The full visual library',
+    features: [
+      'Unlimited saved links',
+      'Preview images',
+      'App lock & hidden lists',
+      'Advanced search',
+    ],
+  },
+  pro: {
+    blurb: 'The permanent offline library',
+    features: ['Everything in Plus', 'Full on-device AI — summaries & semantic search'],
+  },
+};
+
+// The upgrade cards actually rendered: the plans on sale, with their copy. Both
+// checkout surfaces map straight over this.
+export const PLAN_CARDS: { plan: AvailablePaidPlan; blurb: string; features: string[] }[] =
+  AVAILABLE_PAID_PLANS.map((plan) => ({ plan, ...PLAN_CARD_COPY[plan] }));

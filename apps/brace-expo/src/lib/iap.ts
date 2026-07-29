@@ -65,6 +65,20 @@ let onCompleted: ((status: SubscriptionStatus) => void) | null = null;
 let onFailed: ((message: string) => void) | null = null;
 let onClosed: (() => void) | null = null;
 
+// Read the handlers AND drop them — a checkout settles exactly once (completed,
+// failed, or canceled), so holding them past that would let a REPLAYED
+// transaction (which arrives with no checkout open) fire the previous
+// checkout's callbacks into a section that has since unmounted. React no-ops
+// those setStates, so this is tidiness rather than a live bug — but it's what
+// makes the replay path actually silent, the way ensureConnection describes it.
+function takeHandlers() {
+  const handlers = { onCompleted, onFailed, onClosed };
+  onCompleted = null;
+  onFailed = null;
+  onClosed = null;
+  return handlers;
+}
+
 // Send the store's proof of purchase to brace-api, then — only once the server
 // has recorded it — finish the transaction with the store. Returns the fresh
 // fold from `iap/verify`. On verify failure the transaction is deliberately
@@ -103,17 +117,18 @@ function ensureConnection(): Promise<void> {
         // completed purchase; the listener fires again once it's `purchased`.
         if (purchase.purchaseState !== 'purchased') return;
         void verifyAndFinish(purchase)
-          .then((status) => onCompleted?.(status))
+          .then((status) => takeHandlers().onCompleted?.(status))
           .catch((e) => {
-            onFailed?.(e instanceof Error ? e.message : String(e));
+            takeHandlers().onFailed?.(e instanceof Error ? e.message : String(e));
           });
       });
 
       purchaseErrorListener((error) => {
         // The user backing out of the store sheet is a close, not a failure —
         // mirror Paddle's `closed` semantics.
-        if (error.code === ErrorCode.UserCancelled) onClosed?.();
-        else onFailed?.(error.message);
+        const handlers = takeHandlers();
+        if (error.code === ErrorCode.UserCancelled) handlers.onClosed?.();
+        else handlers.onFailed?.(error.message);
       });
     })().catch((e) => {
       connectPromise = null; // a failed connection may be retried
@@ -189,16 +204,31 @@ export async function openStoreCheckout(options: {
 // it's also the reinstall / new-device / new-account recovery). Returns the
 // fold after the last successful verify, or null when the store held nothing
 // of ours. A purchase bound to ANOTHER Brace account surfaces as the server's
-// 409 (`purchase_bound`) — thrown for the section to show.
+// 409 (`purchase_bound`) — thrown for the section to show, but only if nothing
+// else restored (see the loop).
 export async function restoreStorePurchases(): Promise<SubscriptionStatus | null> {
   await ensureConnection();
   const purchases = await getAvailablePurchases();
 
   let last: SubscriptionStatus | null = null;
+  let firstError: unknown = null;
   for (const purchase of purchases) {
     if (planOfStoreProduct(purchase.productId) === null) continue;
-    last = await verifyAndFinish(purchase);
+    try {
+      last = await verifyAndFinish(purchase);
+    } catch (e) {
+      // One purchase failing must NOT abandon the rest. A store account can hold
+      // several of ours (an old lapsed one, one bound to the user's other Brace
+      // account → 409 `purchase_bound`), and the very next one may be the live
+      // subscription this restore exists to recover. Each is independent — its
+      // transaction is left unfinished for the usual replay retry.
+      firstError ??= e;
+    }
   }
+  // Surface a failure only when NOTHING restored: if some purchase did verify,
+  // that fold is the answer the user asked for, and an unrelated 409 alongside
+  // it is noise.
+  if (last === null && firstError !== null) throw firstError;
   return last;
 }
 
