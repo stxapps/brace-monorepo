@@ -181,10 +181,11 @@ export async function openStoreCheckout(options: {
   const sku = STORE_PRODUCT_IDS[options.plan];
   // Play requires the base-plan/offer token from the fetched product; the
   // first offer is the base yearly plan (we configure no promotional offers).
+  // `subscriptionOffers` is the cross-platform standard shape — its Android-only
+  // predecessor `subscriptionOfferDetailsAndroid` is deprecated upstream.
   const offerToken =
     options.product.platform === 'android'
-      ? (options.product.subscriptionOffers[0]?.offerTokenAndroid ??
-        options.product.subscriptionOfferDetailsAndroid[0]?.offerToken)
+      ? options.product.subscriptionOffers?.[0]?.offerTokenAndroid
       : undefined;
 
   await requestPurchase({
