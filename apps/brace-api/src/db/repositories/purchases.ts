@@ -24,6 +24,12 @@ export type PurchaseEntity = {
   providerCustomerId: string | null;
   expiresAt: number | null; // epoch ms; null = non-expiring (manual/lifetime)
   canceledAt: number | null;
+  // PLAY ONLY — the purchase token this row replaced (see the schema note).
+  // Null for every other source, and for a Play row that started a chain.
+  linkedExternalId: string | null;
+  // Last refresh ATTEMPT against the provider (see the schema note) — read by
+  // the staleness gate in services/iap.ts to debounce, never by the fold.
+  lastSyncedAt: number;
 };
 
 // Raw row as it sits in D1 (snake_case columns). Internal to this repo.
@@ -37,10 +43,13 @@ type PurchaseRow = {
   provider_customer_id: string | null;
   expires_at: number | null;
   canceled_at: number | null;
+  linked_external_id: string | null;
+  last_synced_at: number;
 };
 
 const SELECT_COLUMNS = `id, user_id, source, external_id, plan, status,
-       provider_customer_id, expires_at, canceled_at`;
+       provider_customer_id, expires_at, canceled_at, linked_external_id,
+       last_synced_at`;
 
 function toEntity(r: PurchaseRow): PurchaseEntity {
   return {
@@ -53,6 +62,8 @@ function toEntity(r: PurchaseRow): PurchaseEntity {
     providerCustomerId: r.provider_customer_id,
     expiresAt: r.expires_at,
     canceledAt: r.canceled_at,
+    linkedExternalId: r.linked_external_id,
+    lastSyncedAt: r.last_synced_at,
   };
 }
 
@@ -79,6 +90,11 @@ export function purchasesRepo(db: D1Database) {
     //    period end when an event (e.g. an immediate cancel) omits it, while
     //    `canceled_at` IS overwritten as sent — null must be able to CLEAR it
     //    (the user resumed a scheduled cancellation).
+    // `last_synced_at` is stamped `now` on both insert and update: applying
+    // provider state IS a sync, whether it arrived by webhook or by refetch, so
+    // a subscription whose events land normally never trips the staleness gate.
+    // A STALE event loses the whole update set including this — correct, since
+    // it taught us nothing about the current state.
     async upsertFromProvider(p: {
       id: string; // used only on INSERT (a fresh newId()); conflicts keep the stored id
       userId: string;
@@ -89,6 +105,7 @@ export function purchasesRepo(db: D1Database) {
       providerCustomerId: string | null;
       expiresAt: number | null;
       canceledAt: number | null;
+      linkedExternalId?: string | null; // Play only; see the type note
       eventOccurredAt: number;
     }): Promise<void> {
       const now = Date.now();
@@ -96,16 +113,18 @@ export function purchasesRepo(db: D1Database) {
         .prepare(
           `INSERT INTO purchases (
              id, user_id, source, external_id, plan, status,
-             provider_customer_id, expires_at, canceled_at,
-             event_occurred_at, created_at, updated_at
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             provider_customer_id, expires_at, canceled_at, linked_external_id,
+             event_occurred_at, last_synced_at, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (source, external_id) DO UPDATE SET
              plan                 = excluded.plan,
              status               = excluded.status,
              provider_customer_id = COALESCE(excluded.provider_customer_id, provider_customer_id),
              expires_at           = COALESCE(excluded.expires_at, expires_at),
              canceled_at          = excluded.canceled_at,
+             linked_external_id   = COALESCE(excluded.linked_external_id, linked_external_id),
              event_occurred_at    = excluded.event_occurred_at,
+             last_synced_at       = excluded.last_synced_at,
              updated_at           = excluded.updated_at
            WHERE excluded.event_occurred_at >= event_occurred_at`,
         )
@@ -119,10 +138,67 @@ export function purchasesRepo(db: D1Database) {
           p.providerCustomerId,
           p.expiresAt,
           p.canceledAt,
+          p.linkedExternalId ?? null,
           p.eventOccurredAt,
           now,
           now,
+          now,
         )
+        .run();
+    },
+
+    // Retire a row REPLACED by a newer purchase: end it now and mark it
+    // canceled, so the fold stops entitling it (services/iap.ts isEntitled
+    // gives 'canceled' no expiry slack). Play-only in practice — the
+    // linkedPurchaseToken chain, see supersedeLinkedPlayPurchase.
+    //
+    // Three deliberate differences from upsertFromProvider, all because this is
+    // an INFERENCE we are asserting rather than a provider event we are
+    // applying:
+    //  - NOT scoped to a user_id. The replaced token may be bound to a DIFFERENT
+    //    account than the replacement (re-signup while signed into a second
+    //    account) — retiring only the caller's own rows would leave exactly the
+    //    duplicate-entitlement hole this exists to close.
+    //  - No `event_occurred_at` guard, and the column is left alone. Ordering
+    //    that column against provider events would let a stale-looking clock
+    //    drop the retirement; supersession isn't a state report that a newer
+    //    one supersedes, it's terminal.
+    //  - `expires_at` moves BACKWARD (MIN), which no other write does.
+    // Idempotent: MIN keeps the earliest end, COALESCE keeps the first
+    // canceled_at, so replaying it is a no-op. Returns whether a row existed.
+    async supersedeByExternalId(
+      source: SubscriptionSource,
+      externalId: string,
+      at: number = Date.now(),
+    ): Promise<boolean> {
+      const res = await db
+        .prepare(
+          `UPDATE purchases
+              SET status         = 'canceled',
+                  canceled_at    = COALESCE(canceled_at, ?),
+                  expires_at     = MIN(COALESCE(expires_at, ?), ?),
+                  last_synced_at = ?,
+                  updated_at     = ?
+            WHERE source = ? AND external_id = ?`,
+        )
+        .bind(at, at, at, at, at, source, externalId)
+        .run();
+      return (res.meta?.changes ?? 0) > 0;
+    },
+
+    // Stamp a refresh ATTEMPT without touching state — the failure path of
+    // services/iap.ts's refreshPurchase (provider unreachable, 404, a snapshot
+    // we can't apply). Without this a permanently-unrefreshable row would fire
+    // an outbound call on EVERY status read of that account; with it, a failure
+    // costs the same one call per debounce window a success does.
+    async markSyncAttempt(
+      source: SubscriptionSource,
+      externalId: string,
+      at: number = Date.now(),
+    ): Promise<void> {
+      await db
+        .prepare(`UPDATE purchases SET last_synced_at = ? WHERE source = ? AND external_id = ?`)
+        .bind(at, source, externalId)
         .run();
     },
 

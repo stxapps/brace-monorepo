@@ -351,8 +351,21 @@ export async function deleteAccount(
   // once (it's only set below, after this check), so skipping it here can never
   // weaken a first-time deletion. Matches the "every crash window is finishable
   // by retrying" invariant above.
+  //
+  // REFRESHES (the third opt-in — see services/iap.ts): this is the last read
+  // before an IRREVERSIBLE action whose wrong answer bills the user. A row stale
+  // in the "period ended, renewal event never landed" direction reads as free
+  // and waves the deletion through while the provider keeps charging — and there
+  // is no account left to reach the portal with (POST /v1/iap/portal needs a
+  // session). That shape is exactly what needsRefresh catches. The opposite
+  // staleness (looks healthy, actually canceled at the provider) is invisible to
+  // any read-path heuristic — the scheduled-sweep case — so refreshing here can
+  // never 409 a deletion that would otherwise have passed. Once per account
+  // ever, on a path already doing proof verification plus a DO + R2 wipe; and
+  // refreshPurchase never throws, so a provider that's down simply leaves the
+  // gate reading the stored row, exactly as it does today.
   if (entry.deletedAt === null) {
-    const subscription = await getSubscriptionStatus(env, session.userId);
+    const subscription = await getSubscriptionStatus(env, session.userId, { refresh: true });
     if (subscription.status === 'grace' || subscription.willRenew) {
       throw new HttpError(
         409,

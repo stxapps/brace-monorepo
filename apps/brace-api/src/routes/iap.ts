@@ -62,8 +62,15 @@ function requireStoreConfig(env: Bindings | undefined, source: 'appstore' | 'pla
 
 export const iapRoutes = new Hono<AppEnv>()
   // --- status — the fold every device reads + caches ------------------------
+  // The one caller that passes `refresh`: a stale-looking row gets re-pulled
+  // from its provider before folding, which is what makes a webhook that never
+  // arrived self-heal (services/iap.ts — staleness refresh). Bounded there by a
+  // per-row debounce and a per-read cap, and non-fatal, so an unreachable
+  // provider degrades to the stored answer rather than failing the read.
   .get(iapStatusEndpoint.path, requireAuth, async (c) => {
-    const body: SubscriptionStatus = await getSubscriptionStatus(c.env, c.get('session').userId);
+    const body: SubscriptionStatus = await getSubscriptionStatus(c.env, c.get('session').userId, {
+      refresh: true,
+    });
     return c.json(body);
   })
   // --- checkout — create the Paddle transaction the client opens ------------

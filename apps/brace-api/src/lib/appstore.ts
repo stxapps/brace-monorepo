@@ -150,6 +150,12 @@ export type StoreSubscriptionSnapshot = {
   status: PurchaseStatus;
   expiresAt: number | null;
   canceledAt: number | null;
+  // PLAY ONLY (lib/playstore.ts) — the purchase token this one replaced, which
+  // the service must then retire. Absent here because Apple has no analogue:
+  // originalTransactionId is stable across an upgrade/downgrade within a
+  // subscription group, so a plan change UPDATES the existing row rather than
+  // minting a second identity that can go on entitling in parallel.
+  linkedExternalId?: string | null;
 };
 
 // Apple's subscription status codes → our vocabulary. Explicit map like

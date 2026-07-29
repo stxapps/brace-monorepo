@@ -82,6 +82,9 @@ export async function playAccessToken(env: Bindings, now: number = Date.now()): 
 // fields freely).
 const subscriptionV2Schema = z.looseObject({
   subscriptionState: z.string(),
+  // Set when this purchase REPLACED an earlier one — see the supersession note
+  // on the return below.
+  linkedPurchaseToken: z.string().optional(),
   lineItems: z.array(
     z.looseObject({
       productId: z.string(),
@@ -99,6 +102,9 @@ const subscriptionV2Schema = z.looseObject({
 //  - CANCELED means auto-renew off, entitled until expiry — exactly our
 //    canceled semantics; EXPIRED is the same row with the expiry in the past.
 //  - PENDING purchases haven't been paid → null (drop until a real state).
+//  - PENDING_PURCHASE_CANCELED is a pending purchase that never completed —
+//    also never entitled, and listed explicitly so it takes the quiet null path
+//    instead of logging "unmapped state" on every delivery.
 const PLAY_STATE_MAP: Record<string, PurchaseStatus | null> = {
   SUBSCRIPTION_STATE_ACTIVE: 'active',
   SUBSCRIPTION_STATE_IN_GRACE_PERIOD: 'past_due',
@@ -107,6 +113,7 @@ const PLAY_STATE_MAP: Record<string, PurchaseStatus | null> = {
   SUBSCRIPTION_STATE_CANCELED: 'canceled',
   SUBSCRIPTION_STATE_EXPIRED: 'canceled',
   SUBSCRIPTION_STATE_PENDING: null,
+  SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED: null,
 };
 
 // Fetch + normalize the subscription a purchase token identifies. Null when the
@@ -156,15 +163,84 @@ export async function fetchPlaystoreSubscription(
     line.autoRenewingPlan?.autoRenewEnabled === true;
 
   return {
-    // The purchase token is the stable identity of one subscription instance
-    // (a resubscribe mints a new token → a new row; the old one expires) — the
-    // Play analogue of Paddle's sub_… id.
+    // The purchase token is the stable identity of one subscription instance —
+    // the Play analogue of Paddle's sub_… id. Note "instance", not
+    // "subscription": unlike Paddle's sub_… and Apple's originalTransactionId,
+    // which survive a plan change, Play RE-KEYS on one (see linkedExternalId).
     externalId: purchaseToken,
     productId: line.productId,
     status,
     expiresAt,
     canceledAt: willRenew ? null : expiresAt,
+    // The token this purchase REPLACED, when it replaced one. Play mints a new
+    // token — a new identity, so a new row — for an upgrade/downgrade, for a
+    // re-signup of a canceled-but-not-yet-lapsed subscription, and for the
+    // prepaid conversions; `linkedPurchaseToken` on the new record points back
+    // at the old one.
+    //
+    // Google does NOT reliably retire the old token for us: it goes on
+    // resolving through this same endpoint with its ORIGINAL period, so a
+    // refetch can't discover that it died and the staleness backstop
+    // (services/iap.ts needsRefresh) never even looks at a row that still reads
+    // active with a future expiry. Retiring it is the server's job, which
+    // services/iap.ts supersedeLinkedPlayPurchase does — without it a downgrade
+    // leaves the higher-plan row entitled (the fold takes the best plan), and a
+    // re-signup under a second account leaves BOTH accounts entitled on one
+    // payment.
+    linkedExternalId: parsed.data.linkedPurchaseToken ?? null,
   };
+}
+
+// ACKNOWLEDGE a new Play purchase — the only hard DEADLINE anywhere in the IAP
+// design. Google auto-refunds and REVOKES an initial subscription purchase that
+// goes unacknowledged for 3 days (renewals are exempt). Apple has no equivalent:
+// StoreKit's finishTransaction is client-only and an unfinished transaction is
+// simply redelivered forever, which is why this has no appstore sibling.
+//
+// The app already satisfies the requirement — expo-iap's
+// `finishTransaction({ isConsumable: false })` acknowledges on Android — and
+// that call is deliberately deferred until THIS server has recorded the
+// purchase (docs/iap.md, the store purchase flow), which is what makes an
+// unfinished transaction a free retry. On iOS that retry is unbounded; on
+// Android it runs against the 3-day fuse. So the server acknowledges too, the
+// moment the entitlement is recorded: a client that dies between `iap/verify`
+// returning and `finishTransaction` no longer risks a silent revoke. It does
+// NOT replace the client call — that's still what stops the store replaying the
+// transaction — and acknowledging twice is harmless.
+//
+// Note this is the v1 `purchases.subscriptions` endpoint: `subscriptionsv2` is
+// query-only, and acknowledge never moved to it.
+//
+// Returns whether Google accepted the acknowledgement. A 4xx is BENIGN and
+// swallowed — "already acknowledged" is the common one (every restore
+// re-verifies purchases long since acknowledged), and no 4xx here gets better
+// on a retry. Only a 5xx/network failure throws, and even that is caught by the
+// caller: the client's own acknowledgement remains the primary path.
+export async function acknowledgePlaystorePurchase(
+  env: Bindings,
+  productId: string,
+  purchaseToken: string,
+): Promise<boolean> {
+  // Both are interpolated into the URL path — same guard as the fetch above.
+  if (!/^[A-Za-z0-9._-]+$/.test(productId)) return false;
+  if (!/^[A-Za-z0-9._-]+$/.test(purchaseToken)) return false;
+
+  const accessToken = await playAccessToken(env);
+  const res = await fetch(
+    `${PLAY_API_BASE}/applications/${env.PLAY_PACKAGE_NAME}/purchases/subscriptions/${productId}/tokens/${purchaseToken}:acknowledge`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    },
+  );
+  if (res.ok) return true; // 204 No Content
+  if (res.status < 500) {
+    console.log(`acknowledgePlaystorePurchase: Play API ${res.status} (already acknowledged?)`);
+    return false;
+  }
+  console.error(`acknowledgePlaystorePurchase: Play Developer API ${res.status}`);
+  throw new Error(`Play Developer API ${res.status}`);
 }
 
 // RFC 3339 → epoch ms, null for absent/unparseable (paddleTimeToMs's sibling).

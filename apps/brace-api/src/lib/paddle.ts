@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { PurchaseStatus } from '../db/repositories/purchases';
+import type { Bindings } from './env';
 
 // Paddle Billing webhook plumbing: signature verification and the typed slice of
 // a subscription event the service consumes. This is the PROVIDER-VOCAB edge —
@@ -70,35 +71,128 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   return diff === 0;
 }
 
-// The slice of a Paddle event we consume, permissively typed (`looseObject`
-// everywhere — Paddle adds fields freely and unknown ones must pass through;
-// a shape we can't parse is logged and ACKed, never 500ed, or Paddle retries a
-// permanently-unparseable event forever).
+// The slice of a Paddle SUBSCRIPTION we consume, permissively typed
+// (`looseObject` everywhere — Paddle adds fields freely and unknown ones must
+// pass through; a shape we can't parse is logged and ACKed, never 500ed, or
+// Paddle retries a permanently-unparseable event forever).
+//
+// Deliberately shared by both directions: it's the `data` of a subscription.*
+// webhook event AND the `data` of a GET /subscriptions/{id} response, which
+// Paddle documents as the same subscription entity. That identity is what lets
+// services/iap.ts apply a pushed event and a pulled refetch through one code
+// path (applyPaddleSubscription) — see fetchPaddleSubscription below.
+export const paddleSubscriptionSchema = z.looseObject({
+  id: z.string(), // sub_… for subscription.* events
+  status: z.string(),
+  customer_id: z.string().nullish(),
+  // Set by OUR checkout (customData: { userId }) and persisted onto the
+  // subscription by Paddle, so every later event carries it back.
+  custom_data: z.looseObject({ userId: z.string().optional() }).nullish(),
+  items: z.array(z.looseObject({ price: z.looseObject({ id: z.string() }).nullish() })).optional(),
+  current_billing_period: z.looseObject({ ends_at: z.string() }).nullish(),
+  canceled_at: z.string().nullish(),
+  // A pending change scheduled for period end — action 'cancel' means the user
+  // canceled but stays entitled until effective_at (willRenew=false); the field
+  // going back to null means they resumed.
+  scheduled_change: z
+    .looseObject({ action: z.string(), effective_at: z.string().nullish() })
+    .nullish(),
+});
+export type PaddleSubscription = z.infer<typeof paddleSubscriptionSchema>;
+
 export const paddleEventSchema = z.looseObject({
   event_id: z.string(),
   event_type: z.string(),
   occurred_at: z.string(), // ISO 8601
-  data: z.looseObject({
-    id: z.string(), // sub_… for subscription.* events
-    status: z.string(),
-    customer_id: z.string().nullish(),
-    // Set by OUR checkout (customData: { userId }) and persisted onto the
-    // subscription by Paddle, so every later event carries it back.
-    custom_data: z.looseObject({ userId: z.string().optional() }).nullish(),
-    items: z
-      .array(z.looseObject({ price: z.looseObject({ id: z.string() }).nullish() }))
-      .optional(),
-    current_billing_period: z.looseObject({ ends_at: z.string() }).nullish(),
-    canceled_at: z.string().nullish(),
-    // A pending change scheduled for period end — action 'cancel' means the user
-    // canceled but stays entitled until effective_at (willRenew=false); the field
-    // going back to null means they resumed.
-    scheduled_change: z
-      .looseObject({ action: z.string(), effective_at: z.string().nullish() })
-      .nullish(),
-  }),
+  data: paddleSubscriptionSchema,
 });
 export type PaddleEvent = z.infer<typeof paddleEventSchema>;
+
+// PULL the authoritative state of one subscription — the Paddle sibling of
+// fetchAppstoreSubscription / fetchPlaystoreSubscription, and the piece that
+// makes Paddle recoverable when a webhook never lands (delivery exhausted its
+// retries, the destination was disabled, or WE ACKed an event and dropped it —
+// see the log-and-drop branches in services/iap.ts, which are permanent by
+// design since a 200 is never redelivered).
+//
+// Null means Paddle doesn't know this subscription id (404) — a caller-decided
+// non-event, never an error. Any other failure THROWS: it's transient, and the
+// caller must keep the stored row rather than treat "couldn't ask" as "gone".
+export async function fetchPaddleSubscription(
+  env: Bindings,
+  subscriptionId: string,
+): Promise<PaddleSubscription | null> {
+  // The id is interpolated into the URL path — reject anything that could change
+  // the path shape before it reaches fetch (Paddle ids are `sub_` + base32-ish,
+  // but being strict costs nothing). Same guard as the store fetchers.
+  if (!/^[A-Za-z0-9._-]+$/.test(subscriptionId)) return null;
+
+  const res = await fetch(`${env.PADDLE_API_BASE}/subscriptions/${subscriptionId}`, {
+    headers: { Authorization: `Bearer ${env.PADDLE_API_KEY}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    console.error(`fetchPaddleSubscription: Paddle API ${res.status}`);
+    throw new Error(`Paddle API ${res.status}`);
+  }
+
+  const parsed = z.looseObject({ data: paddleSubscriptionSchema }).safeParse(await res.json());
+  if (!parsed.success) {
+    console.error('fetchPaddleSubscription: unexpected response shape', parsed.error.message);
+    return null;
+  }
+  return parsed.data.data;
+}
+
+// The slice of a Paddle TRANSACTION we consume. A transaction is what our
+// checkout creates (createPaddleTransaction) and what the overlay bills; a
+// successful one GROWS a `subscription_id` once Paddle has provisioned the
+// subscription. That field is the entire point of this fetch: it's the hop from
+// the only Paddle handle we can persist BEFORE a purchase exists (the txn_… we
+// minted) to the sub_… the whole rest of the system is keyed on.
+export const paddleTransactionSchema = z.looseObject({
+  id: z.string(),
+  status: z.string(),
+  subscription_id: z.string().nullish(),
+  custom_data: z.looseObject({ userId: z.string().optional() }).nullish(),
+});
+export type PaddleTransaction = z.infer<typeof paddleTransactionSchema>;
+
+// Transaction statuses that will NEVER grow a subscription — the caller drops
+// its pending row on sight rather than waiting out the TTL. Everything else
+// (`draft`/`ready`/`billed`/`paid`/`completed`/`past_due`) is either in flight
+// or already carries the subscription id.
+export function isPaddleTransactionDead(status: string): boolean {
+  return status === 'canceled';
+}
+
+// PULL one transaction — the FIRST hop of the missed-first-webhook recovery
+// (services/iap.ts resolvePendingCheckouts); `fetchPaddleSubscription` below is
+// the second. Same contract as it: null for 404 (Paddle doesn't know this id),
+// THROW for anything else (transient — the caller must not read "couldn't ask"
+// as "never happened").
+export async function fetchPaddleTransaction(
+  env: Bindings,
+  transactionId: string,
+): Promise<PaddleTransaction | null> {
+  if (!/^[A-Za-z0-9._-]+$/.test(transactionId)) return null;
+
+  const res = await fetch(`${env.PADDLE_API_BASE}/transactions/${transactionId}`, {
+    headers: { Authorization: `Bearer ${env.PADDLE_API_KEY}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    console.error(`fetchPaddleTransaction: Paddle API ${res.status}`);
+    throw new Error(`Paddle API ${res.status}`);
+  }
+
+  const parsed = z.looseObject({ data: paddleTransactionSchema }).safeParse(await res.json());
+  if (!parsed.success) {
+    console.error('fetchPaddleTransaction: unexpected response shape', parsed.error.message);
+    return null;
+  }
+  return parsed.data.data;
+}
 
 // Paddle Billing subscription statuses happen to be exactly our normalized
 // vocabulary (PURCHASE_STATUSES). Mapped explicitly anyway so a value Paddle

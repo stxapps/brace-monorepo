@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
+  iapCheckoutEndpoint,
   iapStatusEndpoint,
   iapVerifyEndpoint,
   STORE_PRODUCT_IDS,
@@ -63,6 +64,14 @@ function assertNoPendingStubs() {
   expect(pending).toEqual([]);
 }
 
+// Drop a stub that must NOT have been consumed (proving no outbound call),
+// keeping afterEach's assertNoPendingStubs meaningful.
+function takeUnusedStub(match: string) {
+  const i = fetchStubs.findIndex((s) => s.match === match);
+  expect(i, `expected NO outbound call matching ${match}`).toBeGreaterThanOrEqual(0);
+  fetchStubs.splice(i, 1);
+}
+
 // A compact-JWS-shaped blob whose payload decodes to `payload` (signature is
 // garbage — see the trust-model note above).
 function fakeJws(payload: unknown): string {
@@ -108,6 +117,7 @@ function mockPlaySubscription(options: {
   productId?: string;
   expiryTime?: number;
   autoRenewEnabled?: boolean;
+  linkedPurchaseToken?: string;
 }) {
   fetchStubs.push({
     match: 'oauth2.googleapis.com/token',
@@ -119,6 +129,9 @@ function mockPlaySubscription(options: {
     status: 200,
     body: {
       subscriptionState: options.state ?? 'SUBSCRIPTION_STATE_ACTIVE',
+      ...(options.linkedPurchaseToken
+        ? { linkedPurchaseToken: options.linkedPurchaseToken }
+        : undefined),
       lineItems: [
         {
           productId: options.productId ?? STORE_PRODUCT_IDS.plus,
@@ -128,6 +141,19 @@ function mockPlaySubscription(options: {
       ],
     },
   });
+}
+
+// Script the token exchange + the `:acknowledge` POST that follows a successful
+// PLAY verify (Google's 3-day auto-refund deadline — lib/playstore.ts). Only
+// the verify path acknowledges, so notification/refresh tests don't need this.
+// `status` 204 is Google's success; a 4xx stands in for "already acknowledged".
+function mockPlayAcknowledge(status = 204) {
+  fetchStubs.push({
+    match: 'oauth2.googleapis.com/token',
+    status: 200,
+    body: { access_token: 'test-access-token', expires_in: 3600 },
+  });
+  fetchStubs.push({ match: ':acknowledge', status, body: {} });
 }
 
 async function authFor(userId: string): Promise<{ userId: string; auth: Record<string, string> }> {
@@ -214,6 +240,20 @@ function subscriptionEvent(overrides: {
       scheduled_change: overrides.scheduledChange ?? null,
     },
   };
+}
+
+// Script Paddle's GET /subscriptions/{id}. Built from the SAME event builder as
+// the webhook tests — deliberately: the whole design rests on Paddle's event
+// `data` and its subscription-read `data` being one entity, so the test would
+// rather fail than let those drift apart. Shared by both pull-side suites
+// (staleness refresh and pending-checkout reconciliation), which reach the same
+// applyPaddleSubscription by different routes.
+function mockPaddleSubscription(overrides: Parameters<typeof subscriptionEvent>[0]) {
+  fetchStubs.push({
+    match: `/subscriptions/${overrides.subscriptionId}`,
+    status: 200,
+    body: { data: subscriptionEvent(overrides).data },
+  });
 }
 
 describe('iap', () => {
@@ -311,6 +351,7 @@ describe('iap', () => {
     it('verifies a Play purchase through the token exchange + subscriptionsv2', async () => {
       const { auth } = await authFor('iap-verify-ps-1');
       mockPlaySubscription({});
+      mockPlayAcknowledge();
 
       const res = await postVerify(auth, { source: 'playstore', token: 'play-token-ps-1' });
       expect(res.status).toBe(200);
@@ -318,6 +359,44 @@ describe('iap', () => {
       expect(status.plan).toBe('plus');
       expect(status.source).toBe('playstore');
       expect(status.willRenew).toBe(true);
+    });
+
+    // Google auto-refunds and REVOKES an initial subscription purchase left
+    // unacknowledged for 3 days. The app acknowledges too (finishTransaction),
+    // but only once this call has returned — so the server closes the window
+    // between "entitlement recorded" and "client got the response".
+    it('acknowledges a Play purchase once the entitlement is recorded', async () => {
+      const { auth } = await authFor('iap-verify-ack-1');
+      mockPlaySubscription({});
+      mockPlayAcknowledge();
+
+      const res = await postVerify(auth, { source: 'playstore', token: 'play-token-ack-1' });
+      expect(res.status).toBe(200);
+      // assertNoPendingStubs proves the `:acknowledge` POST was actually made.
+    });
+
+    it('still returns the fold when acknowledgement fails', async () => {
+      const { auth } = await authFor('iap-verify-ack-2');
+      mockPlaySubscription({});
+      // A 4xx is the "already acknowledged" case (every restore re-verifies
+      // purchases Google has long since acknowledged) — benign, and swallowed.
+      mockPlayAcknowledge(400);
+
+      const res = await postVerify(auth, { source: 'playstore', token: 'play-token-ack-2' });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
+    });
+
+    it('does not acknowledge an App Store purchase (no such concept)', async () => {
+      const { auth } = await authFor('iap-verify-ack-3');
+      mockAppstoreStatuses({ originalTransactionId: 'otid-ack-3' });
+      // Apple has no acknowledge endpoint — finishTransaction is client-only and
+      // an unfinished transaction just replays, with no deadline attached.
+      fetchStubs.push({ match: ':acknowledge', status: 204, body: {} });
+
+      const res = await postVerify(auth, { source: 'appstore', token: '2000000000000003' });
+      expect(res.status).toBe(200);
+      takeUnusedStub(':acknowledge');
     });
 
     it('maps auto-renew OFF to a scheduled cancel (entitled, not renewing)', async () => {
@@ -367,6 +446,87 @@ describe('iap', () => {
       expect(((await res.json()) as { error: string }).error).toBe('purchase_bound');
       expect((await getStatus(second.auth)).plan).toBe('free');
     });
+
+    // --- Play's linkedPurchaseToken supersession (lib/playstore.ts) ----------
+    // Play RE-KEYS a subscription on an upgrade/downgrade/re-signup: the new
+    // purchase token is a new identity, so a new row, and the old token goes on
+    // resolving as valid at Google. Unless the server retires it, the old row
+    // keeps entitling — and nothing else can notice (the staleness refresh
+    // ignores a row that reads active with a future expiry).
+
+    it('retires the token a Play downgrade replaced (no free ride on the old plan)', async () => {
+      const { auth } = await authFor('iap-verify-link-1');
+
+      // On pro.
+      mockPlaySubscription({ productId: STORE_PRODUCT_IDS.pro });
+      mockPlayAcknowledge();
+      expect((await postVerify(auth, { source: 'playstore', token: 'play-link-pro' })).status).toBe(
+        200,
+      );
+      expect((await getStatus(auth)).plan).toBe('pro');
+
+      // Downgrades to plus → a NEW token, linked back to the pro one. The pro
+      // row still has a year to run, and the fold takes the best PLAN — so
+      // without supersession the user pays plus and keeps pro.
+      mockPlaySubscription({
+        productId: STORE_PRODUCT_IDS.plus,
+        linkedPurchaseToken: 'play-link-pro',
+      });
+      mockPlayAcknowledge();
+      const res = await postVerify(auth, { source: 'playstore', token: 'play-link-plus' });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
+      expect((await getStatus(auth)).plan).toBe('plus');
+    });
+
+    it('retires a replaced token bound to ANOTHER account (one payment, one entitlement)', async () => {
+      // The duplicate-subscription hole: re-signup while signed into a second
+      // Brace account. `purchase_bound` cannot catch it — the tokens differ —
+      // so both accounts would be entitled on a single payment.
+      const first = await authFor('iap-verify-link-a');
+      mockPlaySubscription({});
+      mockPlayAcknowledge();
+      expect(
+        (await postVerify(first.auth, { source: 'playstore', token: 'play-link-acct-a' })).status,
+      ).toBe(200);
+      expect((await getStatus(first.auth)).plan).toBe('plus');
+
+      const second = await authFor('iap-verify-link-b');
+      mockPlaySubscription({ linkedPurchaseToken: 'play-link-acct-a' });
+      mockPlayAcknowledge();
+      expect(
+        (await postVerify(second.auth, { source: 'playstore', token: 'play-link-acct-b' })).status,
+      ).toBe(200);
+
+      expect((await getStatus(second.auth)).plan).toBe('plus');
+      expect((await getStatus(first.auth)).plan).toBe('free');
+    });
+
+    it('walks a replacement chain across a hop it never recorded', async () => {
+      // X was verified; Y's verify never landed (so there is no Y row); Z now
+      // arrives linked to Y. One hop would stop at the missing Y row and leave
+      // X entitled forever, so the walk bridges Y by asking Google what IT
+      // replaced.
+      const { auth } = await authFor('iap-verify-link-chain');
+      mockPlaySubscription({ productId: STORE_PRODUCT_IDS.pro });
+      mockPlayAcknowledge();
+      expect((await postVerify(auth, { source: 'playstore', token: 'play-chain-x' })).status).toBe(
+        200,
+      );
+      expect((await getStatus(auth)).plan).toBe('pro');
+
+      // Stubs are consumed in push order: Z's own lookup, then the bridging
+      // lookup of Y, then the acknowledge.
+      mockPlaySubscription({
+        productId: STORE_PRODUCT_IDS.plus,
+        linkedPurchaseToken: 'play-chain-y',
+      });
+      mockPlaySubscription({ linkedPurchaseToken: 'play-chain-x' }); // the Y bridge
+      mockPlayAcknowledge();
+      const res = await postVerify(auth, { source: 'playstore', token: 'play-chain-z' });
+      expect(res.status).toBe(200);
+      expect((await getStatus(auth)).plan).toBe('plus');
+    });
   });
 
   describe(`store notifications`, () => {
@@ -386,6 +546,7 @@ describe('iap', () => {
       // Bind the subscription first via verify (notifications carry no account).
       const { auth } = await authFor('iap-notify-ps-1');
       mockPlaySubscription({});
+      mockPlayAcknowledge();
       const verifyRes = await app.request(
         iapVerifyEndpoint.path,
         {
@@ -434,6 +595,65 @@ describe('iap', () => {
       const status = await getStatus(auth);
       expect(status.plan).toBe('plus'); // entitled through the paid period
       expect(status.willRenew).toBe(false);
+    });
+
+    it('playstore: retires a replaced token even when the REPLACEMENT is unbound', async () => {
+      // The upgrade RTDN can beat the app's `iap/verify`, so the new token has
+      // no account yet and the notification drops out at the binding check.
+      // Supersession must still happen: it is a fact about the OLD token, whose
+      // row is bound and entitled, and dropping it there would leave the user
+      // on the higher plan for free until the old period ran out.
+      const { auth } = await authFor('iap-notify-ps-link');
+      mockPlaySubscription({ productId: STORE_PRODUCT_IDS.pro });
+      mockPlayAcknowledge();
+      const verifyRes = await app.request(
+        iapVerifyEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({
+            source: 'playstore',
+            productId: STORE_PRODUCT_IDS.pro,
+            token: 'play-notify-link-old',
+          }),
+        },
+        env,
+      );
+      expect(verifyRes.status).toBe(200);
+      expect((await getStatus(auth)).plan).toBe('pro');
+
+      mockPlaySubscription({
+        productId: STORE_PRODUCT_IDS.plus,
+        linkedPurchaseToken: 'play-notify-link-old',
+      });
+      const res = await app.request(
+        `${PLAYSTORE_NOTIFY_PATH}?token=${env.PLAY_NOTIFY_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: {
+              data: btoa(
+                JSON.stringify({
+                  version: '1.0',
+                  packageName: 'to.brace.app',
+                  subscriptionNotification: {
+                    notificationType: 4, // SUBSCRIPTION_PURCHASED — advisory only
+                    purchaseToken: 'play-notify-link-new',
+                    subscriptionId: STORE_PRODUCT_IDS.plus,
+                  },
+                }),
+              ),
+            },
+          }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200); // ACKed despite the unbound replacement
+
+      // The old row is retired; the new one isn't ours yet, so the account
+      // falls to free until the app's verify lands and binds it.
+      expect((await getStatus(auth)).plan).toBe('free');
     });
 
     it('appstore: extracts the transaction id, re-fetches Apple, applies to the bound row', async () => {
@@ -658,6 +878,340 @@ describe('iap', () => {
         }),
       );
       expect(res.status).toBe(200);
+    });
+  });
+
+  // The PULL side: a row that looks wrong gets re-read from its provider on the
+  // status route, so a webhook that never landed (retries exhausted, destination
+  // disabled, or an event we ACKed and dropped — all permanent) still converges.
+  describe('staleness refresh', () => {
+    beforeAll(stubOutboundFetch);
+    afterEach(assertNoPendingStubs);
+
+    // Age a row's debounce clock: "the last time we heard anything about this
+    // subscription was long ago". Every write stamps it `now`, so without this
+    // a just-applied row is never refetched — the property that keeps the
+    // healthy path free of outbound calls.
+    async function clearSyncClock(externalId: string) {
+      await env.DIRECTORY_DB.prepare(
+        `UPDATE purchases SET last_synced_at = 0 WHERE external_id = ?`,
+      )
+        .bind(externalId)
+        .run();
+    }
+
+    it('re-pulls Paddle for an expired row and self-heals the missed renewal', async () => {
+      const { userId, auth } = await authFor('iap-refresh-1');
+
+      // The last event we ever got put the period end in the past: the renewal
+      // webhook never arrived, so the account reads free despite being paid.
+      await postWebhook(
+        subscriptionEvent({
+          subscriptionId: 'sub_refresh_1',
+          userId,
+          endsAt: Date.now() - 2 * DAY_MS,
+        }),
+      );
+      await clearSyncClock('sub_refresh_1');
+
+      // Paddle's actual state: renewed, running another month.
+      const renewedTo = Date.now() + 28 * DAY_MS;
+      mockPaddleSubscription({ subscriptionId: 'sub_refresh_1', userId, endsAt: renewedTo });
+
+      const status = await getStatus(auth);
+      expect(status.plan).toBe('plus');
+      expect(status.status).toBe('active');
+      expect(status.expiresAt).toBe(renewedTo);
+    });
+
+    it('does not call the provider for a healthy row', async () => {
+      const { userId, auth } = await authFor('iap-refresh-healthy-1');
+      await postWebhook(
+        subscriptionEvent({
+          subscriptionId: 'sub_refresh_h1',
+          userId,
+          endsAt: Date.now() + 30 * DAY_MS,
+        }),
+      );
+      // Even with the debounce clock cleared, an entitled active row inside its
+      // period has nothing to ask about — the 99% case stays one D1 query.
+      await clearSyncClock('sub_refresh_h1');
+      mockPaddleSubscription({ subscriptionId: 'sub_refresh_h1', userId });
+
+      expect((await getStatus(auth)).plan).toBe('plus');
+      takeUnusedStub('/subscriptions/sub_refresh_h1');
+    });
+
+    it('debounces: a second read inside the window does not re-ask', async () => {
+      const { userId, auth } = await authFor('iap-refresh-debounce-1');
+      await postWebhook(
+        subscriptionEvent({
+          subscriptionId: 'sub_refresh_d1',
+          userId,
+          endsAt: Date.now() - 2 * DAY_MS,
+        }),
+      );
+      await clearSyncClock('sub_refresh_d1');
+
+      // First read refreshes, and Paddle answers `past_due` — a state that stays
+      // refresh-worthy (dunning moves on the provider's schedule). So the second
+      // read is blocked by the DEBOUNCE alone, not by the row looking healthy.
+      mockPaddleSubscription({
+        subscriptionId: 'sub_refresh_d1',
+        userId,
+        status: 'past_due',
+        endsAt: Date.now() - 2 * DAY_MS,
+      });
+      const first = await getStatus(auth);
+      expect(first.plan).toBe('plus'); // entitled through the dunning grace
+      expect(first.status).toBe('grace');
+
+      mockPaddleSubscription({ subscriptionId: 'sub_refresh_d1', userId });
+      expect((await getStatus(auth)).status).toBe('grace');
+      takeUnusedStub('/subscriptions/sub_refresh_d1');
+    });
+
+    it('still answers with the stored fold when the provider is unreachable', async () => {
+      const { userId, auth } = await authFor('iap-refresh-down-1');
+      const endsAt = Date.now() - 2 * DAY_MS;
+      await postWebhook(subscriptionEvent({ subscriptionId: 'sub_refresh_x1', userId, endsAt }));
+      await clearSyncClock('sub_refresh_x1');
+
+      fetchStubs.push({ match: '/subscriptions/sub_refresh_x1', status: 500, body: {} });
+
+      // A read must never fail because a payment provider is down.
+      const status = await getStatus(auth);
+      expect(status.plan).toBe('free');
+
+      // …and the failed attempt still advanced the debounce clock, so a hot
+      // client can't hammer a provider that's already struggling.
+      mockPaddleSubscription({ subscriptionId: 'sub_refresh_x1', userId });
+      await getStatus(auth);
+      takeUnusedStub('/subscriptions/sub_refresh_x1');
+    });
+
+    it('refreshes a store row by its stored external id, with no notification', async () => {
+      const { auth } = await authFor('iap-refresh-store-1');
+      mockPlaySubscription({ expiryTime: Date.now() + 30 * DAY_MS });
+      mockPlayAcknowledge();
+      const verifyRes = await app.request(
+        iapVerifyEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({
+            source: 'playstore',
+            productId: STORE_PRODUCT_IDS.plus,
+            token: 'play-token-refresh-1',
+          }),
+        },
+        env,
+      );
+      expect(verifyRes.status).toBe(200);
+
+      // Push the row past its period without any notification arriving — the
+      // account now reads free while Google still has it active.
+      await env.DIRECTORY_DB.prepare(
+        `UPDATE purchases SET expires_at = ?, last_synced_at = 0 WHERE external_id = ?`,
+      )
+        .bind(Date.now() - 2 * DAY_MS, 'play-token-refresh-1')
+        .run();
+
+      // The status read pulls the truth using the purchase token we ALREADY
+      // store as external_id — it is Google's own lookup key, so re-reading
+      // needs no notification and no extra column.
+      const renewedTo = Date.now() + 28 * DAY_MS;
+      mockPlaySubscription({ expiryTime: renewedTo });
+      const status = await getStatus(auth);
+      expect(status.plan).toBe('plus');
+      expect(status.expiresAt).toBe(renewedTo);
+    });
+  });
+
+  // The PRE-ROW hole the staleness refresh cannot reach: a FIRST purchase whose
+  // subscription webhook never arrived leaves no purchase row to look stale, and
+  // Paddle can't be asked about a userId. The persisted txn_… is the only key,
+  // so these tests drive the whole recovery through the public surface —
+  // POST /iap/checkout, then GET /iap/status with no webhook in between.
+  describe('pending checkout reconciliation', () => {
+    beforeAll(stubOutboundFetch);
+    afterEach(assertNoPendingStubs);
+
+    // Create a checkout the way the web client does, with Paddle's POST
+    // /transactions scripted to mint `transactionId`.
+    async function postCheckout(auth: Record<string, string>, transactionId: string) {
+      fetchStubs.push({
+        match: '/transactions',
+        status: 200,
+        body: { data: { id: transactionId } },
+      });
+      const res = await app.request(
+        iapCheckoutEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({ plan: 'plus' }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ transactionId });
+    }
+
+    // Script Paddle's GET /transactions/{id} — the first hop. `subscriptionId`
+    // omitted is the in-flight case (paid, not provisioned yet).
+    function mockPaddleTransaction(o: {
+      transactionId: string;
+      subscriptionId?: string;
+      status?: string;
+    }) {
+      fetchStubs.push({
+        match: `/transactions/${o.transactionId}`,
+        status: 200,
+        body: {
+          data: {
+            id: o.transactionId,
+            status: o.status ?? 'completed',
+            subscription_id: o.subscriptionId ?? null,
+          },
+        },
+      });
+    }
+
+    // Age a pending checkout: "created N ago, never attempted". The gate
+    // deliberately ignores a brand-new row (the payment can't have landed yet),
+    // so anything expecting a resolve has to clear that floor.
+    async function ageCheckout(transactionId: string, ageMs = 5 * 60 * 1000) {
+      await env.DIRECTORY_DB.prepare(
+        `UPDATE paddle_checkouts SET created_at = ?, last_synced_at = 0 WHERE transaction_id = ?`,
+      )
+        .bind(Date.now() - ageMs, transactionId)
+        .run();
+    }
+
+    async function isPending(transactionId: string): Promise<boolean> {
+      const row = await env.DIRECTORY_DB.prepare(
+        `SELECT COUNT(*) AS n FROM paddle_checkouts WHERE transaction_id = ?`,
+      )
+        .bind(transactionId)
+        .first<{ n: number }>();
+      return (row?.n ?? 0) > 0;
+    }
+
+    it('recovers a first purchase whose webhook never arrived', async () => {
+      const { userId, auth } = await authFor('iap-checkout-1');
+      await postCheckout(auth, 'txn_recover_1');
+      await ageCheckout('txn_recover_1');
+
+      // No webhook is ever posted. Paddle's truth: the transaction completed and
+      // grew a subscription — the hop the persisted txn_… exists to make.
+      const endsAt = Date.now() + 30 * DAY_MS;
+      mockPaddleTransaction({ transactionId: 'txn_recover_1', subscriptionId: 'sub_recover_1' });
+      mockPaddleSubscription({ subscriptionId: 'sub_recover_1', userId, endsAt });
+
+      const status = await getStatus(auth);
+      expect(status.plan).toBe('plus');
+      expect(status.status).toBe('active');
+      expect(status.expiresAt).toBe(endsAt);
+
+      // Resolved rows are deleted — the purchase row is the durable record from
+      // here on, so a later read costs nothing extra.
+      expect(await isPending('txn_recover_1')).toBe(false);
+      mockPaddleTransaction({ transactionId: 'txn_recover_1', subscriptionId: 'sub_recover_1' });
+      expect((await getStatus(auth)).plan).toBe('plus');
+      takeUnusedStub('/transactions/txn_recover_1');
+    });
+
+    it('binds through the stored checkout when custom_data did not survive', async () => {
+      const { auth } = await authFor('iap-checkout-unbound-1');
+      await postCheckout(auth, 'txn_unbound_1');
+      await ageCheckout('txn_unbound_1');
+
+      // `userId: undefined` ⇒ custom_data null on the subscription. A webhook
+      // carrying this would drop as 'unbound'; here the checkout row names the
+      // account, because the server wrote it from the session.
+      mockPaddleTransaction({ transactionId: 'txn_unbound_1', subscriptionId: 'sub_unbound_1' });
+      mockPaddleSubscription({ subscriptionId: 'sub_unbound_1' });
+
+      expect((await getStatus(auth)).plan).toBe('plus');
+    });
+
+    it('does not ask before a checkout could plausibly have completed', async () => {
+      const { auth } = await authFor('iap-checkout-fresh-1');
+      await postCheckout(auth, 'txn_fresh_1');
+      // Deliberately NOT aged: at t≈0 the answer is a near-certain "not yet",
+      // and spending the row's first attempt there would then debounce away the
+      // window the user is actually watching.
+      mockPaddleTransaction({ transactionId: 'txn_fresh_1', subscriptionId: 'sub_fresh_1' });
+
+      expect((await getStatus(auth)).plan).toBe('free');
+      takeUnusedStub('/transactions/txn_fresh_1');
+    });
+
+    it('waits out a transaction with no subscription yet, then debounces', async () => {
+      const { auth } = await authFor('iap-checkout-inflight-1');
+      await postCheckout(auth, 'txn_inflight_1');
+      await ageCheckout('txn_inflight_1');
+
+      // Billed but not provisioned: nothing to apply, and the row must survive.
+      mockPaddleTransaction({ transactionId: 'txn_inflight_1' });
+      expect((await getStatus(auth)).plan).toBe('free');
+      expect(await isPending('txn_inflight_1')).toBe(true);
+
+      // The attempt stamped the debounce clock, so an activation poll re-reading
+      // every 2s can't turn into a Paddle call per poll.
+      mockPaddleTransaction({ transactionId: 'txn_inflight_1', subscriptionId: 'sub_inflight_1' });
+      expect((await getStatus(auth)).plan).toBe('free');
+      takeUnusedStub('/transactions/txn_inflight_1');
+    });
+
+    it('drops the row when Paddle does not know the transaction', async () => {
+      const { auth } = await authFor('iap-checkout-404-1');
+      await postCheckout(auth, 'txn_gone_1');
+      await ageCheckout('txn_gone_1');
+
+      fetchStubs.push({ match: '/transactions/txn_gone_1', status: 404, body: {} });
+      expect((await getStatus(auth)).plan).toBe('free');
+
+      // Terminal: nothing will ever come of it, so it isn't left to age out.
+      expect(await isPending('txn_gone_1')).toBe(false);
+    });
+
+    it('keeps the row when Paddle is unreachable, and still answers', async () => {
+      const { auth } = await authFor('iap-checkout-down-1');
+      await postCheckout(auth, 'txn_down_1');
+      await ageCheckout('txn_down_1');
+
+      fetchStubs.push({ match: '/transactions/txn_down_1', status: 500, body: {} });
+      expect((await getStatus(auth)).plan).toBe('free');
+      // A provider outage is transient — the row survives to be retried, but the
+      // failed attempt still advanced the clock.
+      expect(await isPending('txn_down_1')).toBe(true);
+
+      mockPaddleTransaction({ transactionId: 'txn_down_1', subscriptionId: 'sub_down_1' });
+      expect((await getStatus(auth)).plan).toBe('free');
+      takeUnusedStub('/transactions/txn_down_1');
+    });
+
+    it('ignores pending checkouts once the account is entitled', async () => {
+      const { userId, auth } = await authFor('iap-checkout-paid-1');
+      await postCheckout(auth, 'txn_paid_1');
+      await ageCheckout('txn_paid_1');
+
+      // The webhook DID land for this one, by its own path.
+      await postWebhook(
+        subscriptionEvent({
+          subscriptionId: 'sub_paid_1',
+          userId,
+          endsAt: Date.now() + 30 * DAY_MS,
+        }),
+      );
+
+      mockPaddleTransaction({ transactionId: 'txn_paid_1', subscriptionId: 'sub_paid_1' });
+      expect((await getStatus(auth)).plan).toBe('plus');
+      // An entitled fold can't be hiding a lost first webhook, so the paid
+      // majority never pays for this table.
+      takeUnusedStub('/transactions/txn_paid_1');
     });
   });
 });
