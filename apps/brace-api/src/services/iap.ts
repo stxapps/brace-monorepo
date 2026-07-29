@@ -98,10 +98,12 @@ export function foldSubscriptionStatus(
     status: best.status === 'past_due' ? 'grace' : 'active',
     source: best.source,
     expiresAt: best.expiresAt,
-    // Renews only in good standing, not canceled (scheduled or effective), and
-    // with something to renew (a non-expiring grant doesn't).
+    // Renews whenever the provider will try to collect again: good standing,
+    // and dunning too (past_due means retries are scheduled — auto-renew is
+    // still on unless canceledAt says otherwise). Not canceled (scheduled or
+    // effective), and with something to renew (a non-expiring grant doesn't).
     willRenew:
-      (best.status === 'active' || best.status === 'trialing') &&
+      (best.status === 'active' || best.status === 'trialing' || best.status === 'past_due') &&
       best.canceledAt === null &&
       best.expiresAt !== null,
   };
@@ -473,6 +475,27 @@ async function applyPaddleSubscription(
   const userId = existing?.userId ?? data.custom_data?.userId ?? fallbackUserId;
   if (!userId) return fail('unbound', `no userId for ${data.id}`);
 
+  const periodEndsAt = paddleTimeToMs(data.current_billing_period?.ends_at);
+  // Cancellation is either effective (canceled_at) or scheduled for period end
+  // (scheduled_change.action === 'cancel'); computed to null when neither, and
+  // the upsert OVERWRITES with null so a resumed subscription clears it.
+  const canceledAt =
+    paddleTimeToMs(data.canceled_at) ??
+    (data.scheduled_change?.action === 'cancel'
+      ? paddleTimeToMs(data.scheduled_change.effective_at)
+      : null);
+  // An IMMEDIATE cancellation (refund/chargeback — Paddle's effective_from
+  // 'immediately') ends entitlement at canceled_at, but the event DROPS
+  // current_billing_period, and the upsert's COALESCE would then keep the
+  // stale period end — entitling a refunded user to the rest of the period.
+  // Clamp: for a canceled subscription the entitlement runs to the EARLIER of
+  // the period end and the cancellation time (a period-end cancel has
+  // canceled_at ≈ period end, so this is a no-op there).
+  const expiresAt =
+    status === 'canceled' && canceledAt !== null
+      ? Math.min(periodEndsAt ?? canceledAt, canceledAt)
+      : periodEndsAt;
+
   await repo.upsertFromProvider({
     id: newId(),
     userId,
@@ -481,15 +504,8 @@ async function applyPaddleSubscription(
     plan,
     status,
     providerCustomerId: data.customer_id ?? null,
-    expiresAt: paddleTimeToMs(data.current_billing_period?.ends_at),
-    // Cancellation is either effective (canceled_at) or scheduled for period end
-    // (scheduled_change.action === 'cancel'); computed to null when neither, and
-    // the upsert OVERWRITES with null so a resumed subscription clears it.
-    canceledAt:
-      paddleTimeToMs(data.canceled_at) ??
-      (data.scheduled_change?.action === 'cancel'
-        ? paddleTimeToMs(data.scheduled_change.effective_at)
-        : null),
+    expiresAt,
+    canceledAt,
     eventOccurredAt: occurredAt,
   });
   return { applied: true };
@@ -658,11 +674,13 @@ export async function verifyStorePurchase(
 
   // Play's 3-day acknowledgement deadline, closed from the server side the
   // moment the entitlement is recorded (lib/playstore.ts has the full argument).
-  // Best-effort by design: the app acknowledges too, via the `finishTransaction`
-  // it makes as soon as this call returns, so a failure here costs nothing that
-  // the client's own call doesn't already cover. Never let it fail a purchase
-  // the server has already recorded.
-  if (req.source === 'playstore') {
+  // Gated on Google's own acknowledgementState, so a restore — whose purchase
+  // was acknowledged long ago — makes no call. Best-effort by design: the app
+  // acknowledges too, via the `finishTransaction` it makes as soon as this call
+  // returns, and applyStoreNotification retries off the same flag, so a failure
+  // here costs nothing that isn't covered. Never let it fail a purchase the
+  // server has already recorded.
+  if (req.source === 'playstore' && snapshot.needsAcknowledge) {
     try {
       await acknowledgePlaystorePurchase(env, snapshot.productId, snapshot.externalId);
     } catch (e) {
@@ -745,6 +763,22 @@ export async function applyStoreNotification(
     linkedExternalId: snapshot.linkedExternalId,
     eventOccurredAt: Date.now(),
   });
+
+  // The convergent retry for Play's 3-day acknowledge fuse: if both
+  // purchase-time acknowledgements failed (the server's 5xx'd AND the client
+  // died before `finishTransaction`), the purchase RTDN and the staleness
+  // refresh land here with Google still reporting the purchase unacknowledged.
+  // Only for a purchase we have RECORDED (the binding check above) — an
+  // unbound purchase's revoke-after-3-days is Google refunding a payment we
+  // never entitled, which is the right outcome. Best-effort like the verify
+  // path: never fail (the route must ACK) over it.
+  if (source === 'playstore' && snapshot.needsAcknowledge) {
+    try {
+      await acknowledgePlaystorePurchase(env, snapshot.productId, snapshot.externalId);
+    } catch (e) {
+      console.error(`applyStoreNotification: acknowledge failed for ${snapshot.externalId}`, e);
+    }
+  }
 }
 
 // Create a Paddle transaction for the authed user to open in the overlay

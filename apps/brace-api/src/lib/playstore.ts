@@ -82,6 +82,9 @@ export async function playAccessToken(env: Bindings, now: number = Date.now()): 
 // fields freely).
 const subscriptionV2Schema = z.looseObject({
   subscriptionState: z.string(),
+  // ACKNOWLEDGEMENT_STATE_PENDING until the purchase is acknowledged — the
+  // flag the acknowledge retry keys on (needsAcknowledge on the return below).
+  acknowledgementState: z.string().optional(),
   // Set when this purchase REPLACED an earlier one — see the supersession note
   // on the return below.
   linkedPurchaseToken: z.string().optional(),
@@ -151,10 +154,23 @@ export async function fetchPlaystoreSubscription(
     return null;
   }
 
-  const line = parsed.data.lineItems[0];
-  if (!line) {
+  const [first] = parsed.data.lineItems;
+  if (!first) {
     console.error('fetchPlaystoreSubscription: no line items');
     return null;
+  }
+  // Normally one line item, but a deferred plan change can carry two — the
+  // expiring current item and the incoming one. Take the line with the LATEST
+  // expiry (the one that governs where the subscription is headed); [0] would
+  // be order-of-response luck.
+  let line = first;
+  for (const candidate of parsed.data.lineItems) {
+    if (
+      (playTimeToMs(candidate.expiryTime) ?? -Infinity) >
+      (playTimeToMs(line.expiryTime) ?? -Infinity)
+    ) {
+      line = candidate;
+    }
   }
 
   const expiresAt = playTimeToMs(line.expiryTime);
@@ -188,6 +204,11 @@ export async function fetchPlaystoreSubscription(
     // re-signup under a second account leaves BOTH accounts entitled on one
     // payment.
     linkedExternalId: parsed.data.linkedPurchaseToken ?? null,
+    // Still unacknowledged at Google — the 3-day auto-refund fuse is burning.
+    // Surfacing the store's own flag (rather than "is this a verify?") is what
+    // lets EVERY path that records the entitlement retry the acknowledge until
+    // Google confirms it — see acknowledgePlaystorePurchase below.
+    needsAcknowledge: parsed.data.acknowledgementState === 'ACKNOWLEDGEMENT_STATE_PENDING',
   };
 }
 
@@ -208,14 +229,25 @@ export async function fetchPlaystoreSubscription(
 // NOT replace the client call — that's still what stops the store replaying the
 // transaction — and acknowledging twice is harmless.
 //
+// Callers gate on the snapshot's `needsAcknowledge` (Google's own
+// acknowledgementState), which buys two things: a restore — whose purchase was
+// acknowledged long ago — makes no call at all, and the acknowledge is
+// CONVERGENT rather than fire-once: the purchase RTDN and the staleness
+// refresh re-check the same flag when they re-fetch a recorded purchase
+// (services/iap.ts applyStoreNotification), so even both purchase-time
+// acknowledgements failing (this one 5xx-ing AND the client dying before
+// finishTransaction) is healed by the next event or refresh that touches the
+// row inside the 3-day window.
+//
 // Note this is the v1 `purchases.subscriptions` endpoint: `subscriptionsv2` is
 // query-only, and acknowledge never moved to it.
 //
 // Returns whether Google accepted the acknowledgement. A 4xx is BENIGN and
-// swallowed — "already acknowledged" is the common one (every restore
-// re-verifies purchases long since acknowledged), and no 4xx here gets better
-// on a retry. Only a 5xx/network failure throws, and even that is caught by the
-// caller: the client's own acknowledgement remains the primary path.
+// swallowed — "already acknowledged" can still race in (the client's
+// finishTransaction landing between our fetch and this call), and no 4xx here
+// gets better on a retry. Only a 5xx/network failure throws, and even that is
+// caught by the caller: the client's own acknowledgement remains the primary
+// path.
 export async function acknowledgePlaystorePurchase(
   env: Bindings,
   productId: string,

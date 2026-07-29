@@ -86,7 +86,9 @@ function mockAppstoreStatuses(options: {
   status?: number;
   productId?: string;
   expiresDate?: number;
+  revocationDate?: number;
   autoRenewStatus?: number;
+  gracePeriodExpiresDate?: number;
   offerDiscountType?: string;
 }) {
   const body = {
@@ -101,8 +103,16 @@ function mockAppstoreStatuses(options: {
               originalTransactionId: options.originalTransactionId,
               expiresDate: options.expiresDate ?? Date.now() + 30 * DAY_MS,
               offerDiscountType: options.offerDiscountType ?? null,
+              ...(options.revocationDate !== undefined
+                ? { revocationDate: options.revocationDate }
+                : undefined),
             }),
-            signedRenewalInfo: fakeJws({ autoRenewStatus: options.autoRenewStatus ?? 1 }),
+            signedRenewalInfo: fakeJws({
+              autoRenewStatus: options.autoRenewStatus ?? 1,
+              ...(options.gracePeriodExpiresDate !== undefined
+                ? { gracePeriodExpiresDate: options.gracePeriodExpiresDate }
+                : undefined),
+            }),
           },
         ],
       },
@@ -112,40 +122,55 @@ function mockAppstoreStatuses(options: {
 }
 
 // Script the Play token exchange + subscriptionsv2 answer for one lookup.
+// `acknowledgementState` defaults to PENDING — the realistic state for a fresh
+// lookup, since verify runs BEFORE the client's finishTransaction; tests whose
+// lookup stands in for an already-settled purchase (notifications, refreshes)
+// pass ACKNOWLEDGED so no acknowledge call fires.
 function mockPlaySubscription(options: {
   state?: string;
   productId?: string;
   expiryTime?: number;
   autoRenewEnabled?: boolean;
   linkedPurchaseToken?: string;
+  acknowledgementState?: string;
+  // Overrides the single default line entirely (the deferred-plan-change case).
+  lineItems?: { productId: string; expiryTime: number; autoRenewEnabled?: boolean }[];
 }) {
   fetchStubs.push({
     match: 'oauth2.googleapis.com/token',
     status: 200,
     body: { access_token: 'test-access-token', expires_in: 3600 },
   });
+  const lines = options.lineItems ?? [
+    {
+      productId: options.productId ?? STORE_PRODUCT_IDS.plus,
+      expiryTime: options.expiryTime ?? Date.now() + 30 * DAY_MS,
+      autoRenewEnabled: options.autoRenewEnabled,
+    },
+  ];
   fetchStubs.push({
     match: '/purchases/subscriptionsv2/tokens/',
     status: 200,
     body: {
       subscriptionState: options.state ?? 'SUBSCRIPTION_STATE_ACTIVE',
+      acknowledgementState: options.acknowledgementState ?? 'ACKNOWLEDGEMENT_STATE_PENDING',
       ...(options.linkedPurchaseToken
         ? { linkedPurchaseToken: options.linkedPurchaseToken }
         : undefined),
-      lineItems: [
-        {
-          productId: options.productId ?? STORE_PRODUCT_IDS.plus,
-          expiryTime: new Date(options.expiryTime ?? Date.now() + 30 * DAY_MS).toISOString(),
-          autoRenewingPlan: { autoRenewEnabled: options.autoRenewEnabled ?? true },
-        },
-      ],
+      lineItems: lines.map((line) => ({
+        productId: line.productId,
+        expiryTime: new Date(line.expiryTime).toISOString(),
+        autoRenewingPlan: { autoRenewEnabled: line.autoRenewEnabled ?? true },
+      })),
     },
   });
 }
 
-// Script the token exchange + the `:acknowledge` POST that follows a successful
-// PLAY verify (Google's 3-day auto-refund deadline — lib/playstore.ts). Only
-// the verify path acknowledges, so notification/refresh tests don't need this.
+// Script the token exchange + the `:acknowledge` POST that follows recording a
+// PLAY purchase Google still reports unacknowledged (the 3-day auto-refund
+// deadline — lib/playstore.ts). Both the verify path and the notification/
+// refresh retry acknowledge, gated on the lookup's acknowledgementState (see
+// mockPlaySubscription's default).
 // `status` 204 is Google's success; a 4xx stands in for "already acknowledged".
 function mockPlayAcknowledge(status = 204) {
   fetchStubs.push({
@@ -378,13 +403,27 @@ describe('iap', () => {
     it('still returns the fold when acknowledgement fails', async () => {
       const { auth } = await authFor('iap-verify-ack-2');
       mockPlaySubscription({});
-      // A 4xx is the "already acknowledged" case (every restore re-verifies
-      // purchases Google has long since acknowledged) — benign, and swallowed.
+      // A 4xx is the "already acknowledged" race (the client's own
+      // finishTransaction landing between our fetch and the acknowledge) —
+      // benign, and swallowed.
       mockPlayAcknowledge(400);
 
       const res = await postVerify(auth, { source: 'playstore', token: 'play-token-ack-2' });
       expect(res.status).toBe(200);
       expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
+    });
+
+    it('skips the acknowledge when Google already reports it acknowledged (a restore)', async () => {
+      const { auth } = await authFor('iap-verify-ack-4');
+      // A restore re-verifies a purchase Google settled long ago — the gate on
+      // acknowledgementState means no acknowledge round-trip at all.
+      mockPlaySubscription({ acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' });
+      fetchStubs.push({ match: ':acknowledge', status: 204, body: {} });
+
+      const res = await postVerify(auth, { source: 'playstore', token: 'play-token-ack-4' });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
+      takeUnusedStub(':acknowledge');
     });
 
     it('does not acknowledge an App Store purchase (no such concept)', async () => {
@@ -407,6 +446,99 @@ describe('iap', () => {
       const status = (await res.json()) as SubscriptionStatus;
       expect(status.plan).toBe('plus');
       expect(status.willRenew).toBe(false);
+    });
+
+    it("honors Apple's billing grace period as the period end", async () => {
+      const { auth } = await authFor('iap-verify-grace-1');
+      const graceEndsAt = Date.now() + 10 * DAY_MS;
+      // Status 4: the renewal lapsed but the account is inside the grace window
+      // configured in App Store Connect — Apple says entitled through
+      // gracePeriodExpiresDate, even though expiresDate is already past.
+      mockAppstoreStatuses({
+        originalTransactionId: 'otid-grace-1',
+        status: 4,
+        expiresDate: Date.now() - 2 * DAY_MS,
+        gracePeriodExpiresDate: graceEndsAt,
+      });
+
+      const res = await postVerify(auth, { source: 'appstore', token: '2000000000000005' });
+      expect(res.status).toBe(200);
+      const status = (await res.json()) as SubscriptionStatus;
+      expect(status.plan).toBe('plus');
+      expect(status.status).toBe('grace');
+      expect(status.expiresAt).toBe(graceEndsAt);
+      expect(status.willRenew).toBe(true); // dunning: collection retries are scheduled
+    });
+
+    it('prefers the transaction matching the looked-up id over other subscription groups', async () => {
+      const { auth } = await authFor('iap-verify-match-1');
+      const matchExpiry = Date.now() + 30 * DAY_MS;
+      // The statuses response spans EVERY subscription group. "First parseable"
+      // would record the other group's pro subscription instead of the one the
+      // app actually asked about.
+      fetchStubs.push({
+        match: '/inApps/v1/subscriptions/',
+        status: 200,
+        body: {
+          data: [
+            {
+              lastTransactions: [
+                {
+                  originalTransactionId: 'otid-match-other',
+                  status: 1,
+                  signedTransactionInfo: fakeJws({
+                    productId: STORE_PRODUCT_IDS.pro,
+                    originalTransactionId: 'otid-match-other',
+                    expiresDate: Date.now() + 300 * DAY_MS,
+                  }),
+                  signedRenewalInfo: fakeJws({ autoRenewStatus: 1 }),
+                },
+              ],
+            },
+            {
+              lastTransactions: [
+                {
+                  originalTransactionId: 'otid-match-mine',
+                  status: 1,
+                  signedTransactionInfo: fakeJws({
+                    productId: STORE_PRODUCT_IDS.plus,
+                    originalTransactionId: 'otid-match-mine',
+                    expiresDate: matchExpiry,
+                  }),
+                  signedRenewalInfo: fakeJws({ autoRenewStatus: 1 }),
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const res = await postVerify(auth, { source: 'appstore', token: 'otid-match-mine' });
+      expect(res.status).toBe(200);
+      const status = (await res.json()) as SubscriptionStatus;
+      expect(status.plan).toBe('plus');
+      expect(status.expiresAt).toBe(matchExpiry);
+    });
+
+    it('takes the line item with the latest expiry on a deferred Play plan change', async () => {
+      const { auth } = await authFor('iap-verify-lines-1');
+      const laterExpiry = Date.now() + 35 * DAY_MS;
+      // A deferred change carries two lines: the expiring current item and the
+      // incoming one. The latest expiry is the line that governs where the
+      // subscription is headed; [0] would be order-of-response luck.
+      mockPlaySubscription({
+        lineItems: [
+          { productId: STORE_PRODUCT_IDS.pro, expiryTime: Date.now() + 5 * DAY_MS },
+          { productId: STORE_PRODUCT_IDS.plus, expiryTime: laterExpiry },
+        ],
+      });
+      mockPlayAcknowledge();
+
+      const res = await postVerify(auth, { source: 'playstore', token: 'play-token-lines-1' });
+      expect(res.status).toBe(200);
+      const status = (await res.json()) as SubscriptionStatus;
+      expect(status.plan).toBe('plus');
+      expect(status.expiresAt).toBe(laterExpiry);
     });
 
     it('422s a token the store does not recognize', async () => {
@@ -564,8 +696,13 @@ describe('iap', () => {
       expect((await getStatus(auth)).willRenew).toBe(true);
 
       // The user cancels in the Play app → an RTDN arrives; the route must
-      // re-read Google's (now canceled) state, never the pushed payload.
-      mockPlaySubscription({ state: 'SUBSCRIPTION_STATE_CANCELED', autoRenewEnabled: false });
+      // re-read Google's (now canceled) state, never the pushed payload. Long
+      // since acknowledged, so the notification path makes no acknowledge call.
+      mockPlaySubscription({
+        state: 'SUBSCRIPTION_STATE_CANCELED',
+        autoRenewEnabled: false,
+        acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
+      });
       const push = {
         message: {
           data: btoa(
@@ -656,6 +793,59 @@ describe('iap', () => {
       expect((await getStatus(auth)).plan).toBe('free');
     });
 
+    it('playstore: retries the acknowledge when both purchase-time acks failed', async () => {
+      const { auth } = await authFor('iap-notify-ack-1');
+      // Purchase-time: the entitlement records, but the server-side acknowledge
+      // 5xxes (and the client, say, dies before its finishTransaction).
+      mockPlaySubscription({});
+      mockPlayAcknowledge(500);
+      const verifyRes = await app.request(
+        iapVerifyEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({
+            source: 'playstore',
+            productId: STORE_PRODUCT_IDS.plus,
+            token: 'play-token-ack-retry-1',
+          }),
+        },
+        env,
+      );
+      expect(verifyRes.status).toBe(200); // a recorded purchase never fails over the ack
+      expect((await getStatus(auth)).plan).toBe('plus');
+
+      // The purchase RTDN re-fetches, sees the purchase still PENDING on a row
+      // we HAVE recorded, and closes Google's 3-day auto-refund fuse.
+      mockPlaySubscription({});
+      mockPlayAcknowledge();
+      const res = await app.request(
+        `${PLAYSTORE_NOTIFY_PATH}?token=${env.PLAY_NOTIFY_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: {
+              data: btoa(
+                JSON.stringify({
+                  version: '1.0',
+                  packageName: 'to.brace.app',
+                  subscriptionNotification: {
+                    notificationType: 4, // SUBSCRIPTION_PURCHASED — advisory only
+                    purchaseToken: 'play-token-ack-retry-1',
+                    subscriptionId: STORE_PRODUCT_IDS.plus,
+                  },
+                }),
+              ),
+            },
+          }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+      // assertNoPendingStubs proves the second `:acknowledge` was actually made.
+    });
+
     it('appstore: extracts the transaction id, re-fetches Apple, applies to the bound row', async () => {
       const { auth } = await authFor('iap-notify-as-1');
       mockAppstoreStatuses({ originalTransactionId: 'otid-notify-1' });
@@ -698,6 +888,55 @@ describe('iap', () => {
       const status = await getStatus(auth);
       expect(status.plan).toBe('plus');
       expect(status.willRenew).toBe(false);
+    });
+
+    it('appstore: a refund (revocation) claws back entitlement at revocationDate', async () => {
+      const { auth } = await authFor('iap-notify-refund-1');
+      mockAppstoreStatuses({ originalTransactionId: 'otid-refund-1' });
+      const verifyRes = await app.request(
+        iapVerifyEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({
+            source: 'appstore',
+            productId: STORE_PRODUCT_IDS.plus,
+            token: '5000000000000001',
+          }),
+        },
+        env,
+      );
+      expect(verifyRes.status).toBe(200);
+      expect((await getStatus(auth)).plan).toBe('plus');
+
+      // Apple refunds mid-period: status 5 arrives with the ORIGINAL
+      // expiresDate still months out — entitlement must end at revocationDate,
+      // not ride the paid-through date to its end.
+      mockAppstoreStatuses({
+        originalTransactionId: 'otid-refund-1',
+        status: 5,
+        expiresDate: Date.now() + 300 * DAY_MS,
+        revocationDate: Date.now() - 1000,
+      });
+      const res = await app.request(
+        APPSTORE_NOTIFY_PATH,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            signedPayload: fakeJws({
+              notificationType: 'REFUND',
+              data: {
+                signedTransactionInfo: fakeJws({ originalTransactionId: 'otid-refund-1' }),
+              },
+            }),
+          }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+
+      expect((await getStatus(auth)).plan).toBe('free');
     });
 
     it('appstore: ACKs a notification for a never-verified subscription (no binding yet)', async () => {
@@ -824,6 +1063,35 @@ describe('iap', () => {
       const status = await getStatus(auth);
       expect(status.plan).toBe('plus'); // entitled through the paid period
       expect(status.willRenew).toBe(false);
+    });
+
+    it('an immediate cancellation (refund/chargeback) ends entitlement now, not at period end', async () => {
+      const { userId, auth } = await authFor('iap-hook-refund-1');
+      await postWebhook(
+        subscriptionEvent({
+          subscriptionId: 'sub_hook_r1',
+          userId,
+          endsAt: Date.now() + 30 * DAY_MS,
+        }),
+      );
+      expect((await getStatus(auth)).plan).toBe('plus');
+
+      // Paddle cancels immediately: canceled_at = now and the billing period is
+      // GONE from the payload — without the clamp, the upsert's COALESCE would
+      // keep the stale period end and entitle the refunded user for the rest of
+      // the month.
+      await postWebhook(
+        subscriptionEvent({
+          eventType: 'subscription.canceled',
+          occurredAt: Date.now() + 1000,
+          subscriptionId: 'sub_hook_r1',
+          userId,
+          status: 'canceled',
+          endsAt: null,
+          canceledAt: Date.now() - 1000,
+        }),
+      );
+      expect((await getStatus(auth)).plan).toBe('free');
     });
 
     it('drops an out-of-order older event instead of regressing state', async () => {
@@ -965,6 +1233,7 @@ describe('iap', () => {
       const first = await getStatus(auth);
       expect(first.plan).toBe('plus'); // entitled through the dunning grace
       expect(first.status).toBe('grace');
+      expect(first.willRenew).toBe(true); // dunning: collection retries are scheduled
 
       mockPaddleSubscription({ subscriptionId: 'sub_refresh_d1', userId });
       expect((await getStatus(auth)).status).toBe('grace');
@@ -1019,9 +1288,13 @@ describe('iap', () => {
 
       // The status read pulls the truth using the purchase token we ALREADY
       // store as external_id — it is Google's own lookup key, so re-reading
-      // needs no notification and no extra column.
+      // needs no notification and no extra column. (Acknowledged long ago, so
+      // the refresh makes no acknowledge call either.)
       const renewedTo = Date.now() + 28 * DAY_MS;
-      mockPlaySubscription({ expiryTime: renewedTo });
+      mockPlaySubscription({
+        expiryTime: renewedTo,
+        acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
+      });
       const status = await getStatus(auth);
       expect(status.plan).toBe('plus');
       expect(status.expiresAt).toBe(renewedTo);

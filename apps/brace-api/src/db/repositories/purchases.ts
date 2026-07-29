@@ -163,7 +163,10 @@ export function purchasesRepo(db: D1Database) {
     //    that column against provider events would let a stale-looking clock
     //    drop the retirement; supersession isn't a state report that a newer
     //    one supersedes, it's terminal.
-    //  - `expires_at` moves BACKWARD (MIN), which no other write does.
+    //  - `expires_at` moves BACKWARD (MIN). Provider writes only do that when
+    //    reporting a clawback (an Apple revocation / a Paddle immediate cancel
+    //    — provider-stated facts); here the pull-back is our own inference,
+    //    hence MIN rather than an overwrite.
     // Idempotent: MIN keeps the earliest end, COALESCE keeps the first
     // canceled_at, so replaying it is a no-op. Returns whether a row existed.
     async supersedeByExternalId(

@@ -87,8 +87,17 @@ wins (plan rank, then latest expiry; `expiresAt: null` = non-expiring
 manual/lifetime grant). Entitlement windows: `active`/`trialing` get +1 day
 slack past `expires_at` (renewal-webhook lag must not flicker subscribers to
 free); `past_due` stays entitled ~16 days (Paddle dunning) and surfaces as
-`status: 'grace'` (the UI shows "payment issue", features stay on);
-`canceled` is entitled to `expires_at` exactly; `paused` is not entitled.
+`status: 'grace'` (the UI shows "payment issue", features stay on — and still
+`willRenew: true` while nothing says otherwise: dunning means collection
+retries are scheduled); `canceled` is entitled to `expires_at` exactly;
+`paused` is not entitled. **Refunds claw back** — `expires_at` is the actual
+entitlement end, not the originally paid-through date: an Apple revocation
+(refund / Family Sharing) clamps it to `revocationDate`, an immediate Paddle
+cancel (refund/chargeback) ends at `canceled_at` even though that event drops
+the billing period, and Play pulls `expiryTime` back itself. In the other
+direction, Apple's configured billing grace period (`gracePeriodExpiresDate`)
+is honored as the period end while in grace, with the fold's `past_due` slack
+running past whatever the provider last promised.
 
 **Manage/cancel** — `POST /v1/iap/portal` mints a Paddle customer-portal
 session URL (needs the secret API key + stored `ctm_…` id, hence server-side).
@@ -161,9 +170,20 @@ the server only learns about from the receipt the app submits.
    (`purchases.subscriptions.acknowledge`, the v1 endpoint —
    `subscriptionsv2` is query-only) the moment the entitlement is recorded: a
    client that dies in between can no longer lose the purchase to a silent
-   revoke. Best-effort and idempotent — a 4xx ("already acknowledged", which
-   every restore produces) is swallowed, and the client call remains what stops
-   the store replaying the transaction. **Apple has no equivalent**: StoreKit's
+   revoke. Gated on Google's own `acknowledgementState` (carried on the
+   snapshot as `needsAcknowledge`), which buys two things: a restore — whose
+   purchase was acknowledged long ago — makes no call at all, and the
+   acknowledge is **convergent** rather than fire-once: the purchase RTDN and
+   the staleness refresh re-check the same flag when they re-fetch a purchase
+   we have recorded (`applyStoreNotification`), so even both purchase-time
+   acknowledgements failing (server 5xx + client death) is healed by the next
+   event or refresh that touches the row inside the 3-day window. Best-effort
+   throughout — a failure is logged and never fails a recorded purchase, a 4xx
+   ("already acknowledged", the client's own call racing in) is swallowed, and
+   the client call remains what stops the store replaying the transaction.
+   Deliberately **not** retried for an unbound purchase: revoke-after-3-days
+   there is Google refunding a payment we never entitled, which is the right
+   outcome. **Apple has no equivalent**: StoreKit's
    `finishTransaction` is client-only, there is no server acknowledge endpoint,
    and an unfinished transaction is simply replayed forever with nothing
    revoked. Not to be confused with ACKing the _notifications_ below (a 200 so
@@ -205,8 +225,10 @@ Retiring it is the server's job — `supersedeLinkedPlayPurchase` in
   Google's own guidance is about.
 
 Retirement ends the row now (`status='canceled'`, `expires_at` pulled back to
-the supersession time — the one write in the system that moves an expiry
-**backward**), rather than deleting it, so the replacement chain stays auditable.
+the supersession time — a backward expiry move like the refund clawbacks, but
+asserted as our own inference rather than a provider-stated fact, hence the
+idempotent MIN), rather than deleting it, so the replacement chain stays
+auditable.
 It is deliberately **not** scoped to the caller's `user_id`: the replaced token
 may be bound to a different account, which is the whole point of the second case
 above. Rows carry `linked_external_id`, so walking a Z→Y→X chain is a local read

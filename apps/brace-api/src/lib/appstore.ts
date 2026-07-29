@@ -119,11 +119,18 @@ const transactionInfoSchema = z.looseObject({
   productId: z.string(),
   originalTransactionId: z.string(),
   expiresDate: z.number().optional(), // epoch ms
+  // epoch ms; present when Apple refunded the transaction or revoked it from
+  // Family Sharing — entitlement ends HERE, not at expiresDate (see the clamp).
+  revocationDate: z.number().optional(),
   offerDiscountType: z.string().nullish(), // 'FREE_TRIAL' | 'PAY_AS_YOU_GO' | …
 });
 
 const renewalInfoSchema = z.looseObject({
   autoRenewStatus: z.number().optional(), // 1 = will renew, 0 = user turned it off
+  // epoch ms; present while a lapsed subscription is inside the billing grace
+  // period CONFIGURED in App Store Connect (up to 28 days) — Apple's own
+  // entitled-through date for status 4.
+  gracePeriodExpiresDate: z.number().optional(),
 });
 
 const statusResponseSchema = z.looseObject({
@@ -156,6 +163,12 @@ export type StoreSubscriptionSnapshot = {
   // subscription group, so a plan change UPDATES the existing row rather than
   // minting a second identity that can go on entitling in parallel.
   linkedExternalId?: string | null;
+  // PLAY ONLY (lib/playstore.ts) — true while Google still reports the purchase
+  // unacknowledged (`acknowledgementState`), i.e. the 3-day auto-refund fuse is
+  // burning. Every path that records the entitlement re-checks it and
+  // acknowledges, so the acknowledge converges instead of being fire-once.
+  // Absent here because Apple has no acknowledge concept at all.
+  needsAcknowledge?: boolean;
 };
 
 // Apple's subscription status codes → our vocabulary. Explicit map like
@@ -165,9 +178,12 @@ export type StoreSubscriptionSnapshot = {
 //  5 revoked (family-sharing revocation / refund).
 // 3 maps to past_due: the fold's PAST_DUE_GRACE_MS (16 days past expiry) is the
 // product decision on how long dunning stays entitled — tighter than Apple's
-// 60-day retry window, same posture as Paddle dunning. 2 and 5 map to canceled:
-// the fold entitles canceled only until expires_at, which for both is in the
-// past — the row records WHY it ended, the fold decides entitlement from time.
+// 60-day retry window, same posture as Paddle dunning. 4 also honors Apple's
+// own gracePeriodExpiresDate as the period end (the clamp below). 2 and 5 map
+// to canceled: the row records WHY it ended, the fold decides entitlement from
+// time — for 2 the expiry is already past; for 5 (refund / Family Sharing
+// revocation) expiresDate keeps the originally paid-through date, so the
+// snapshot clamps it to revocationDate — a refund must not keep entitling.
 const APPSTORE_STATUS_MAP: Record<number, PurchaseStatus> = {
   1: 'active',
   2: 'canceled',
@@ -214,8 +230,12 @@ export async function fetchAppstoreSubscription(
   }
 
   // One subscription group in practice (all our plans share one group so
-  // upgrades are proper StoreKit crossgrades); take the transaction that
-  // matches the looked-up subscription, else the first.
+  // upgrades are proper StoreKit crossgrades) — but the response spans EVERY
+  // group, so prefer the transaction whose originalTransactionId matches the
+  // looked-up id; with a second group, "the first parseable" would be an
+  // arbitrary subscription. The fallback covers the common case where the app
+  // sent a LATER transaction id of the same subscription.
+  let fallback: StoreSubscriptionSnapshot | null = null;
   for (const group of parsed.data.data) {
     for (const last of group.lastTransactions) {
       const status = APPSTORE_STATUS_MAP[last.status] ?? null;
@@ -233,7 +253,24 @@ export async function fetchAppstoreSubscription(
         ? renewalInfoSchema.safeParse(decodeJwsPayload(last.signedRenewalInfo))
         : null;
 
-      const expiresAt = info.data.expiresDate ?? null;
+      let expiresAt = info.data.expiresDate ?? null;
+      // Billing grace period (status 4): Apple keeps the user entitled through
+      // the grace window configured in App Store Connect, and renewalInfo
+      // carries its end — honor it as the period end. The fold's own past_due
+      // slack then runs past what Apple last promised, the same posture as
+      // Paddle dunning.
+      const graceEndsAt = renewal?.success ? (renewal.data.gracePeriodExpiresDate ?? null) : null;
+      if (status === 'past_due' && graceEndsAt !== null) {
+        expiresAt = Math.max(expiresAt ?? graceEndsAt, graceEndsAt);
+      }
+      // Revocation (refund / Family Sharing revocation): entitlement ends at
+      // revocationDate, but expiresDate keeps the originally paid-through date
+      // — an annual plan refunded in month one would otherwise go on entitling
+      // for eleven more months. Clamp.
+      if (info.data.revocationDate !== undefined) {
+        expiresAt = Math.min(expiresAt ?? info.data.revocationDate, info.data.revocationDate);
+      }
+
       // Auto-renew off while still entitled is Apple's "scheduled cancel" —
       // record it like Paddle's scheduled_change (canceledAt = period end) so
       // willRenew folds false; null CLEARS it when the user resumes.
@@ -246,16 +283,18 @@ export async function fetchAppstoreSubscription(
       const effectiveStatus: PurchaseStatus =
         status === 'active' && info.data.offerDiscountType === 'FREE_TRIAL' ? 'trialing' : status;
 
-      return {
+      const snapshot: StoreSubscriptionSnapshot = {
         externalId: info.data.originalTransactionId,
         productId: info.data.productId,
         status: effectiveStatus,
         expiresAt,
         canceledAt: willRenew ? null : expiresAt,
       };
+      if (info.data.originalTransactionId === transactionId) return snapshot;
+      fallback ??= snapshot;
     }
   }
-  return null;
+  return fallback;
 }
 
 // The slice of an App Store Server Notification V2 we consume: just enough to
