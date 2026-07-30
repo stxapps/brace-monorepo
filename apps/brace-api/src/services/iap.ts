@@ -21,6 +21,7 @@ import {
   fetchPaddleSubscription,
   fetchPaddleTransaction,
   isPaddleTransactionDead,
+  isPaddleTransactionUnbilled,
   normalizePaddleStatus,
   type PaddleEvent,
   type PaddleSubscription,
@@ -126,10 +127,25 @@ export function foldSubscriptionStatus(
 // client can't turn a status read into provider fan-out, and a healthy account
 // (the overwhelming majority) still costs exactly one indexed D1 query.
 
-// Minimum spacing between refresh ATTEMPTS on one row. Sized as "a user who
-// notices a wrong plan and retries won't be rate-limited into confusion", while
-// still bounding a hot-looping client to one outbound call an hour per row.
-const REFRESH_DEBOUNCE_MS = 60 * 60 * 1000;
+// Minimum spacing between refresh ATTEMPTS on one row.
+//
+// Sized by the USER-VISIBLE path, not the background one: this same clock gates
+// the settings page's Refresh button (it is just `iap/status` again), and
+// refreshPurchase stamps the attempt in a `finally` — so a provider that was
+// down, or a row the provider still reports as wrong, makes that button a
+// silent no-op for the rest of the window. The scenario that matters is exactly
+// the one this backstop exists for: the user fixes a past_due card or resumes a
+// paused subscription in the provider's portal, the event doesn't reach us, and
+// they come back and press Refresh. Anything on the order of an hour turns that
+// into "the button does nothing" for as long as they're willing to wait.
+//
+// Going shorter costs approximately nothing, because the debounce was never the
+// only bound: MAX_REFRESH_PER_READ caps calls per read, the global `standard`
+// rate limiter caps reads at 60/min per IP, and a refresh-worthy row can only
+// exist for an account that actually bought something (rows are minted by real
+// provider events or the tight-limited verify route). The ceiling here is 3
+// outbound calls per 5 minutes on an account whose rows already look wrong.
+const REFRESH_DEBOUNCE_MS = 5 * 60 * 1000;
 
 // A hard ceiling on outbound calls per status read, independent of the debounce.
 // listByUserId is "a handful of rows at most" by design, but that's a property
@@ -213,26 +229,93 @@ async function refreshPurchase(env: Bindings, p: PurchaseEntity): Promise<void> 
 // situations are nothing alike: a stale purchase row can be days old and its
 // user isn't watching, whereas a pending checkout's whole life is the minute
 // after a payment, with the user staring at the screen (brace-web's
-// `pollActivation` re-reads `iap/status` every 2s for 30s). Reusing the 1-hour
-// REFRESH_DEBOUNCE_MS would be worse than useless here: the first poll fires
-// before Paddle has even provisioned the subscription, learns nothing, and would
-// then block every later poll AND the user's own Refresh for the rest of the
-// hour they're actually waiting.
+// `pollActivation` re-reads `iap/status` every 2s for 30s). Reusing even the
+// 5-minute REFRESH_DEBOUNCE_MS would be worse than useless here: the first poll
+// fires before Paddle has provisioned the subscription, learns nothing, and
+// would then block every remaining poll in the window the user is watching.
+//
+// So the constants below are sized against that 30s client window rather than
+// against a background sweep — a debounce only earns its place if the window
+// fits SEVERAL attempts, since the first one is the least likely to succeed.
 
 // Don't ask before a checkout could plausibly have completed. Below this the
-// answer is a near-certain "no subscription yet", which would burn the row's
-// first attempt on the least informative moment in its life.
+// answer is a near-certain "no subscription yet".
+//
+// Note what this can and cannot do: `created_at` is stamped when the
+// transaction is MINTED — before the overlay even opens — so it measures time
+// since the user started checking out, not time since they paid (which the
+// server never observes). A user who spends longer than this typing card
+// details, i.e. nearly all of them, has already cleared the floor by the time
+// `pollActivation` starts. It therefore only really suppresses reads that
+// arrive WHILE the overlay is open (another tab, another device), and the job
+// of not spending everything on one premature attempt belongs to the debounce
+// below. Kept because that suppression is free, not because it paces the poll.
 const CHECKOUT_MIN_AGE_MS = 20 * 1000;
 
-// Minimum spacing between resolve attempts on one checkout — comfortably inside
-// the client's 30s activation poll, so a user watching the screen gets a couple
-// of real attempts, while a hot-looping client still can't fan out.
-const CHECKOUT_DEBOUNCE_MS = 60 * 1000;
+// Minimum spacing between resolve attempts on one checkout. The client polls 15
+// times at 2s (see brace-web's ACTIVATION_TRIES/ACTIVATION_INTERVAL_MS), so the
+// window a user actually watches is ~30s — and the row is inserted with
+// `last_synced_at = 0`, so attempt #1 always fires on the first poll past
+// CHECKOUT_MIN_AGE_MS, seconds after payment, which is when Paddle is least
+// likely to have populated `transaction.subscription_id` yet. Anything at or
+// near the width of that window therefore yields exactly ONE attempt, at the
+// worst moment, and the user is told "still processing" for a purchase we could
+// have found. At 10s the window instead holds 3-4 attempts, the last of them a
+// full ~30s after payment.
+//
+// Still bounded against a hot-looping client, and by more than this number:
+// MAX_CHECKOUT_RESOLVE_PER_READ caps calls per read, the global rate limiter
+// caps reads, the whole path is skipped unless the fold is `free` (so no paying
+// account ever reaches it), and a resolved row is DELETED rather than re-polled.
+const CHECKOUT_DEBOUNCE_MS = 10 * 1000;
 
-// How long a pending checkout stays worth asking about. Past this it's an
-// abandoned checkout (indistinguishable from a lost webhook, which is exactly
-// why the row is disposable) and gets deleted on the next scan.
-const CHECKOUT_TTL_MS = 24 * 60 * 60 * 1000;
+// How long a pending checkout stays worth asking about. Past this it gets
+// deleted on the next scan and automatic recovery is over.
+//
+// Sized to outlive PADDLE's own retries. Paddle redelivers a failed live
+// notification 60 times across 3 days (47 of them in the first day) before
+// marking it failed, so at 3 days this row is still around to pull whatever
+// Paddle eventually gave up pushing. It also covers the two windows a shorter
+// TTL cuts off: a user who paid into silence on Friday and reopens the app on
+// Monday, and an operator fixing the config bug behind an ACKed-but-unapplied
+// drop (`unknown_price` — the one hole Paddle does not retry at all, and whose
+// alert token this path deliberately suppresses).
+//
+// The floor is NOT the client's activation poll — CHECKOUT_DEBOUNCE_MS owns
+// that window. It's when the user comes back, which is why anything on the
+// order of an hour would throw away the only case with real value.
+//
+// The ceiling is that an ABANDONED checkout never resolves, and until it's gone
+// it adds an inline Paddle round-trip to that free account's status reads. That
+// cost is what the abandonment delete in resolveCheckout pays off: a row that
+// is old and still unbilled leaves early, so this TTL governs (almost) only
+// rows that could still turn into a purchase.
+const CHECKOUT_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+// How long an UNBILLED transaction is given before its row is read as an
+// abandoned checkout and dropped (see isPaddleTransactionUnbilled — no payment
+// has been attempted, so this is not the paid-into-silence case).
+//
+// Deliberately far past any plausible checkout session, because this is the one
+// IRREVERSIBLE decision on this path and Paddle gives no help with it: a `ready`
+// transaction has no documented expiry, so "old and unbilled" never becomes
+// "can no longer be paid" — the delete is always a bet that the user won't come
+// back to an overlay they left open.
+//
+// To lose a purchase to it, all of this has to line up: the user takes longer
+// than this to pay, a status read lands in that window (which happens — see the
+// CHECKOUT_MIN_AGE_MS note on reads arriving while the overlay is open), they
+// then pay, and their webhook is lost. Rare, but the second link stops being
+// rare at hour scale ("open checkout, go find the card, come back"), and the
+// victim is exactly who this table is for.
+//
+// The other side is cheap by comparison: an abandoned row costs a Paddle
+// round-trip on that free account's status reads until it goes, and those reads
+// block nothing (useEntitlements renders a device-local last-known copy while
+// the query is in flight). Half a day still clears ~5/6 of that tax, so it keeps
+// paying for the 3-day TTL above without betting a paid user's recovery on a
+// slow checkout.
+const CHECKOUT_ABANDONED_MS = 12 * 60 * 60 * 1000;
 
 // Per-read cap on checkout→Paddle round-trips, the sibling of
 // MAX_REFRESH_PER_READ. Ordered newest-first, so the cap keeps the checkout the
@@ -250,10 +333,11 @@ export function needsCheckoutResolve(c: PaddleCheckoutEntity, now: number): bool
 // Never throws — the caller is a read that must still answer.
 //
 // Every terminal outcome DELETES the row: applied (the `purchases` row is the
-// durable record from then on), the transaction canceled, or Paddle not knowing
-// the id at all. Non-terminal outcomes (not billed yet, Paddle unreachable, a
-// snapshot we couldn't apply) stamp the debounce clock and leave the row for the
-// next window — bounded by the TTL, after which it's swept.
+// durable record from then on), the transaction canceled, Paddle not knowing the
+// id at all, or a checkout that was plainly abandoned (old and still unbilled).
+// Non-terminal outcomes (payment in flight, Paddle unreachable, a snapshot we
+// couldn't apply) stamp the debounce clock and leave the row for the next
+// window — bounded by the TTL, after which it's swept.
 async function resolveCheckout(env: Bindings, c: PaddleCheckoutEntity): Promise<boolean> {
   const repo = paddleCheckoutsRepo(env.DIRECTORY_DB);
   try {
@@ -265,9 +349,17 @@ async function resolveCheckout(env: Bindings, c: PaddleCheckoutEntity): Promise<
     }
 
     if (!txn.subscription_id) {
-      // Either still in flight (the overwhelmingly likely case this early) or
-      // dead — only the latter is worth stopping for.
-      if (isPaddleTransactionDead(txn.status)) await repo.delete(c.transactionId);
+      // No subscription yet — three cases, and only the first is worth waiting
+      // on:
+      //   - payment in flight (the overwhelmingly likely case this early);
+      //   - the transaction is dead (canceled) — nothing will come of it;
+      //   - it's old and payment was never even attempted: an abandoned
+      //     checkout, which would otherwise spend the rest of the TTL adding an
+      //     inline Paddle round-trip to this free account's status reads while
+      //     having nothing left to recover.
+      const abandoned =
+        isPaddleTransactionUnbilled(txn.status) && Date.now() - c.createdAt > CHECKOUT_ABANDONED_MS;
+      if (isPaddleTransactionDead(txn.status) || abandoned) await repo.delete(c.transactionId);
       else await repo.markSyncAttempt(c.transactionId);
       return false;
     }
@@ -317,9 +409,14 @@ async function resolvePendingCheckouts(
 
   // Opportunistic cleanup on a path that has already read the table — a row past
   // the TTL can no longer do anything, so dropping it needs no sweep and no
-  // timeliness. (A user who upgraded successfully never reaches here, so a
-  // handful of their rows may outlive the TTL until their next checkout; that's
-  // the same "a handful per account, ever" bound `purchases` already accepts.)
+  // timeliness.
+  //
+  // This is not the reaper for a SUCCESSFUL purchase's row, and can't be: an
+  // entitled account returns before it gets here (see getSubscriptionStatus), and
+  // its next checkout — the other caller of deleteStale — is refused by the
+  // already-subscribed guard, so a subscriber has no next checkout to ride
+  // along on. Those rows are retired by applyPaddleEvent, at the moment the
+  // webhook lands, or by resolveCheckout when it's the one that applied them.
   if (pending.some((c) => now - c.createdAt > CHECKOUT_TTL_MS)) {
     await repo.deleteStale(userId, now - CHECKOUT_TTL_MS);
   }
@@ -535,7 +632,32 @@ export async function applyPaddleEvent(env: Bindings, event: PaddleEvent): Promi
     return;
   }
 
-  await applyPaddleSubscription(env, event.data, occurredAt, event.event_id);
+  const result = await applyPaddleSubscription(env, event.data, occurredAt, event.event_id);
+
+  // The happy path's cleanup: this subscription's pending checkout has done its
+  // job, and `purchases` is the durable record from here on. `transaction_id` is
+  // carried by `subscription.created` alone (lib/paddle.ts), which is precisely
+  // the event that retires a row — a later event's id, if Paddle ever adds one,
+  // would name a renewal transaction we never inserted, so the delete would find
+  // nothing.
+  //
+  // Gated on `applied`: an UNAPPLIED event is the exact permanent drop this row
+  // exists to retry (we ACKed it, so Paddle will never resend), and deleting
+  // here would hand that hole straight back — plus re-arm IAP_DROP_UNRECOVERABLE
+  // for a case that is in fact still recoverable. Best-effort like the write in
+  // createPaddleTransaction: the route must 200, and a cleanup that doesn't
+  // happen only leaves a row the TTL will sweep.
+  if (result.applied && event.data.transaction_id) {
+    try {
+      await paddleCheckoutsRepo(env.DIRECTORY_DB).delete(event.data.transaction_id);
+    } catch (e) {
+      console.error(
+        `applyPaddleEvent: could not clear checkout ${event.data.transaction_id} ` +
+          `(${event.event_id})`,
+        e,
+      );
+    }
+  }
 }
 
 // Create a Paddle transaction for the authed user to open in the overlay
@@ -694,7 +816,7 @@ async function supersedeLinkedPlayPurchase(
         await repo.supersedeByExternalId('playstore', token, now);
         console.log(
           `supersedeLinkedPlayPurchase: retired playstore ${token} (user ${row.userId}, ` +
-          `replaced by ${snapshot.externalId})`,
+            `replaced by ${snapshot.externalId})`,
         );
         token = row.linkedExternalId;
         continue;
@@ -706,7 +828,7 @@ async function supersedeLinkedPlayPurchase(
   } catch (e) {
     console.error(
       `supersedeLinkedPlayPurchase: could not retire playstore ${token} ` +
-      `(replaced by ${snapshot.externalId}) ${IAP_DROP}`,
+        `(replaced by ${snapshot.externalId}) ${IAP_DROP}`,
       e,
     );
   }

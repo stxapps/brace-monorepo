@@ -264,6 +264,10 @@ function subscriptionEvent(overrides: {
   endsAt?: number | null;
   canceledAt?: number | null;
   scheduledChange?: { action: string; effective_at?: string } | null;
+  // The checkout transaction Paddle carries back on `subscription.created` only
+  // — omitted everywhere else, which is also what GET /subscriptions/{id}
+  // returns (mockPaddleSubscription builds off this same fixture).
+  transactionId?: string;
 }) {
   const occurredAt = overrides.occurredAt ?? Date.now();
   const endsAt = overrides.endsAt === undefined ? Date.now() + 30 * DAY_MS : overrides.endsAt;
@@ -281,6 +285,7 @@ function subscriptionEvent(overrides: {
       canceled_at:
         overrides.canceledAt == null ? null : new Date(overrides.canceledAt).toISOString(),
       scheduled_change: overrides.scheduledChange ?? null,
+      transaction_id: overrides.transactionId ?? null,
     },
   };
 }
@@ -1503,6 +1508,85 @@ describe('iap', () => {
       // An entitled fold can't be hiding a lost first webhook, so the paid
       // majority never pays for this table.
       takeUnusedStub('/transactions/txn_paid_1');
+    });
+
+    it('retires the pending checkout when the created webhook lands', async () => {
+      const { userId, auth } = await authFor('iap-checkout-retire-1');
+      await postCheckout(auth, 'txn_retire_1');
+
+      // The HAPPY path: `subscription.created` carries our txn_… back, so the
+      // push side can retire the row itself. Nothing else would: an entitled
+      // account short-circuits before the scan, and its next checkout — the
+      // other deleteStale caller — is refused as already-subscribed.
+      await postWebhook(
+        subscriptionEvent({
+          eventType: 'subscription.created',
+          subscriptionId: 'sub_retire_1',
+          userId,
+          transactionId: 'txn_retire_1',
+        }),
+      );
+
+      expect(await isPending('txn_retire_1')).toBe(false);
+      expect((await getStatus(auth)).plan).toBe('plus');
+    });
+
+    it('keeps the pending checkout when the created event could not be applied', async () => {
+      const { userId, auth } = await authFor('iap-checkout-unapplied-1');
+      await postCheckout(auth, 'txn_unapplied_1');
+
+      // An unknown pri_… (the config-bug drop): we ACK, so Paddle never resends,
+      // and no purchase row is written. Retiring the checkout here would discard
+      // the only key left to recover the purchase with.
+      const res = await postWebhook(
+        subscriptionEvent({
+          eventType: 'subscription.created',
+          subscriptionId: 'sub_unapplied_1',
+          userId,
+          priceId: 'pri_not_configured',
+          transactionId: 'txn_unapplied_1',
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(await isPending('txn_unapplied_1')).toBe(true);
+      expect((await getStatus(auth)).plan).toBe('free');
+
+      // …and the row does its job on the next window, once Paddle is asked
+      // about a subscription whose price the server does know.
+      await ageCheckout('txn_unapplied_1');
+      mockPaddleTransaction({
+        transactionId: 'txn_unapplied_1',
+        subscriptionId: 'sub_unapplied_1',
+      });
+      mockPaddleSubscription({ subscriptionId: 'sub_unapplied_1', userId });
+      expect((await getStatus(auth)).plan).toBe('plus');
+    });
+
+    it('drops a checkout left unbilled long enough to read as abandoned', async () => {
+      const { auth } = await authFor('iap-checkout-abandoned-1');
+      await postCheckout(auth, 'txn_abandoned_1');
+      await ageCheckout('txn_abandoned_1', 18 * 60 * 60 * 1000);
+
+      // `ready` means no payment was ever ATTEMPTED, so this cannot be the case
+      // the table exists for (paid, subscription never seen) — it's a closed
+      // overlay. Dropped rather than left to bill the account's every status
+      // read with a Paddle round-trip for the rest of the TTL.
+      mockPaddleTransaction({ transactionId: 'txn_abandoned_1', status: 'ready' });
+      expect((await getStatus(auth)).plan).toBe('free');
+      expect(await isPending('txn_abandoned_1')).toBe(false);
+    });
+
+    it('keeps a young unbilled checkout — the user may still be paying', async () => {
+      const { auth } = await authFor('iap-checkout-paying-1');
+      await postCheckout(auth, 'txn_paying_1');
+      await ageCheckout('txn_paying_1');
+
+      // Same `ready` status, minutes old instead of half a day: the overlay is
+      // plausibly still open, and the abandonment rule must not race a payment
+      // that hasn't been submitted yet.
+      mockPaddleTransaction({ transactionId: 'txn_paying_1', status: 'ready' });
+      expect((await getStatus(auth)).plan).toBe('free');
+      expect(await isPending('txn_paying_1')).toBe(true);
     });
   });
 });

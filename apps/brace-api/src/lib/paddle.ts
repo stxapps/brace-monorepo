@@ -97,6 +97,14 @@ export const paddleSubscriptionSchema = z.looseObject({
   scheduled_change: z
     .looseObject({ action: z.string(), effective_at: z.string().nullish() })
     .nullish(),
+  // The txn_… that CAUSED Paddle to create this subscription — i.e. our own
+  // checkout transaction, handed back so the two can be matched during
+  // provisioning. Paddle documents it on `subscription.created` ONLY (it is
+  // absent from later subscription.* events and from GET /subscriptions/{id}),
+  // which is exactly the event that retires a pending checkout row: it's the
+  // one place the push path learns the key that table is keyed on
+  // (services/iap.ts applyPaddleEvent).
+  transaction_id: z.string().nullish(),
 });
 export type PaddleSubscription = z.infer<typeof paddleSubscriptionSchema>;
 
@@ -164,6 +172,18 @@ export type PaddleTransaction = z.infer<typeof paddleTransactionSchema>;
 // or already carries the subscription id.
 export function isPaddleTransactionDead(status: string): boolean {
   return status === 'canceled';
+}
+
+// Transaction statuses that mean NO PAYMENT HAS BEEN ATTEMPTED yet: `draft`
+// (created, still missing required fields) and `ready` (complete, awaiting
+// checkout). Paying moves a transaction through `billed`/`paid`/`completed`
+// BEFORE Paddle provisions the subscription, so a transaction that is still
+// unbilled cannot be the scary case (paid, subscription never seen) — it's a
+// checkout in progress or, once old enough, an abandoned one. Distinguishing
+// those two is a clock, not a status, so the age policy stays with the caller
+// (services/iap.ts CHECKOUT_ABANDONED_MS).
+export function isPaddleTransactionUnbilled(status: string): boolean {
+  return status === 'draft' || status === 'ready';
 }
 
 // PULL one transaction — the FIRST hop of the missed-first-webhook recovery

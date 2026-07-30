@@ -294,6 +294,15 @@ are the design:
   applied push — so a permanently-broken row costs one outbound call per window,
   not one per poll, and a provider being down degrades the read to the stored
   fold rather than failing it. A per-read cap bounds the fan-out independently.
+  The window (~5 min) is sized by the **user-visible** path, not the background
+  one: the settings page's Refresh button is just `iap/status` again, and because
+  a failed attempt stamps the clock too, the window is exactly how long that
+  button stays a silent no-op after one. That's the case this backstop exists
+  for — the user fixes a card or resumes in the provider's portal, the event
+  doesn't reach us, they press Refresh — so an hour-scale window would read as a
+  broken button. Shortening it costs little, since the debounce was never the
+  only bound: the per-read cap, the global rate limiter, and the fact that a
+  refresh-worthy row requires a real purchase all still apply.
 
 Three callers opt in, each where a wrong answer costs more than the round-trip:
 `iap/status` (the user is asking this exact question), `iap/checkout`'s
@@ -324,21 +333,67 @@ note in `db/schemas/directory.sql`). Recovery is two hops onto the existing path
 `applyPaddleSubscription`. Same posture as the staleness gate — the server
 decides from stored state, the client has no say — but on a **much shorter
 clock**: a pending checkout's whole life is the minute after a payment with the
-user watching (`pollActivation` re-reads `iap/status` every 2s for 30s), so the
-1-hour `REFRESH_DEBOUNCE_MS` would be actively harmful here. The first poll fires
-before Paddle has provisioned anything, learns nothing, and would then debounce
-away the entire window the user is actually waiting through. Hence its own
-constants: **don't ask under ~20s** (below that "not yet" is near-certain and the
-attempt is wasted), **~60s between attempts**, **24h TTL**, and a per-read cap of
-2, the sibling of `MAX_REFRESH_PER_READ`.
+user watching (`pollActivation` re-reads `iap/status` every 2s for 30s), so even
+the 5-minute `REFRESH_DEBOUNCE_MS` would be actively harmful here. The first poll
+fires before Paddle has provisioned anything, learns nothing, and would then
+debounce away the entire window the user is actually waiting through. Hence its
+own constants, sized against that ~30s window rather than against a background
+sweep: **don't ask under ~20s**, **~10s between attempts**, **3-day TTL**, and a
+per-read cap of 2, the sibling of `MAX_REFRESH_PER_READ`.
+
+The spacing is the load-bearing one. A row is inserted with `last_synced_at = 0`,
+so the first attempt always lands on the first poll past the age floor — seconds
+after payment, when Paddle is least likely to have populated
+`transaction.subscription_id` yet. A debounce anywhere near the width of the
+client's window would therefore buy exactly **one** attempt, at the worst moment
+in the checkout's life; at ~10s the window holds 3-4, the last a full ~30s after
+payment. (The age floor can't cover for it: `created_at` is stamped when the
+transaction is minted, _before_ the overlay opens, so it measures time since
+checkout started, not since payment — nearly every user has cleared it before
+polling begins. It suppresses reads that arrive while the overlay is still open,
+and little else.)
+
+The TTL is the other end of the same argument, and it is sized by **when the user
+comes back**, not by the poll window (the debounce owns that) — so an hour-scale
+TTL would discard the only case with real value. 3 days lines it up with
+[Paddle's own retry exhaustion](https://developer.paddle.com/webhooks/about/respond-to-webhooks/)
+(60 attempts across 3 days, 47 in the first day), so the row is still there to
+_pull_ whatever Paddle eventually gave up _pushing_; it also spans a
+pay-Friday-reopen-Monday gap and gives an operator time to fix the config bug
+behind an `unknown_price` drop — the one hole Paddle never retries at all, and
+whose alert token this path suppresses.
 
 The table means exactly one thing — "this account started a checkout we've seen
 no subscription for" — so pending is _row exists_, with no status column: every
-terminal outcome **deletes** (applied — `purchases` is the durable record from
-then on; the transaction canceled; Paddle 404ing the id), and the rest age out on
-the next scan. An abandoned checkout is indistinguishable from a lost webhook,
-which is precisely why the row is disposable. Two properties fall out: the gate
-is a plain existence check, and the row's `user_id` (written from the **session**)
+terminal outcome **deletes**, and the rest age out on the next scan. Four are
+terminal:
+
+- **applied** — `purchases` is the durable record from then on (`resolveCheckout`
+  when the pull side got there first);
+- **the created webhook landed** — the happy path, and the common one.
+  `subscription.created` is the one event Paddle stamps with the `transaction_id`
+  that caused it, so the push side can retire the row by exact key
+  (`applyPaddleEvent`). Gated on the apply having **landed**: an unapplied event
+  is exactly the permanent drop the row exists to retry. It's also the only
+  reaper for a successful purchase — an entitled account returns before the scan,
+  and its next checkout (the other `deleteStale` caller) is refused as
+  already-subscribed, so without this a subscriber's row would never leave;
+- **the transaction is canceled**, or **Paddle 404s the id** — nothing will come
+  of either;
+- **abandoned** — old (~12h) and the transaction is still `draft`/`ready`, i.e. no
+  payment was ever _attempted_, so it cannot be the paid-into-silence case at all.
+  This is what pays for the 3-day TTL: abandonment is the bulk of the table, and
+  until a row is gone it adds a Paddle round-trip to that free account's status
+  reads (background ones — `useEntitlements` renders a last-known copy meanwhile).
+  Gating on the **status** and not on age alone is what makes it safe, and the
+  clock is generous on purpose: it's the only irreversible step here, a `ready`
+  transaction has no documented expiry at Paddle, and hour-scale delays between
+  opening a checkout and paying are ordinary. Half a day sheds ~5/6 of the tax
+  without betting a paid user's recovery on a slow checkout.
+
+An abandoned checkout is otherwise indistinguishable from a lost webhook, which
+is precisely why the row is disposable. Two properties fall out: the gate is a
+plain existence check, and the row's `user_id` (written from the **session**)
 serves as a fallback binding when a first-seen subscription's `custom_data`
 didn't survive. Cost to everyone else is nil — an entitled fold can't be hiding a
 lost first webhook, so the check runs only after a read still says `free`.
