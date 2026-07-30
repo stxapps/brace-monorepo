@@ -100,7 +100,10 @@ export type Bindings = {
   APPSTORE_BUNDLE_ID: string;
   APPSTORE_PRIVATE_KEY: string;
   // Play Developer API: a service account with "View financial data" on the
-  // Play Console account. SA_EMAIL is the account's client_email; the key's
+  // Play Console account. There is deliberately no PLAY_API_BASE analogue —
+  // Google ships one host for every purchase (test purchases included; see
+  // lib/playstore.ts), so Play's per-env dimension is the package name + service
+  // account below, not a base URL. SA_EMAIL is the account's client_email; the key's
   // PKCS#8 PEM (the JSON's private_key field) is a SECRET
   // (`wrangler secret put PLAY_SA_PRIVATE_KEY --env …`). PLAY_NOTIFY_TOKEN is
   // the static `?token=` guard on the Pub/Sub push endpoint (any long random

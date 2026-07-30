@@ -19,6 +19,19 @@ import type { StoreSubscriptionSnapshot } from './store';
 // fetches nothing (404 → invalid_receipt); a forged Pub/Sub push can only make
 // us re-read the truth.
 
+// A module CONSTANT, not a per-env binding like APPSTORE_API_BASE — and there is
+// no production-first-then-sandbox retry here, because Google ships no sandbox
+// host to retry against. The Play Developer API has exactly ONE host: a license
+// tester's test purchase, an internal/closed-track purchase, and a real paid
+// purchase all resolve through this same URL under the same package name, and
+// Google marks the difference in the RESPONSE BODY (`testPurchase` on
+// SubscriptionPurchaseV2) rather than by endpoint. Same for RTDNs — test
+// notifications arrive on the same Pub/Sub topic (and drop out of
+// playNotificationPurchaseToken as `testNotification`). So a 404 from Play means
+// the token genuinely doesn't exist and the null below is the whole answer;
+// Apple's fallback exists only because a sandbox transaction id is invisible to
+// the production host (see lib/appstore.ts). Play's per-env dimension is the
+// package name + service account, which are bindings.
 const PLAY_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const PLAY_API_BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
 const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';

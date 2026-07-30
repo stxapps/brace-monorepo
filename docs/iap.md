@@ -149,8 +149,15 @@ the server only learns about from the receipt the app submits.
    token). The token is only a **lookup key**: brace-api fetches the
    authoritative state server-to-server — App Store Server API
    `subscriptions/{transactionId}` (ES256 JWT; production falls back to the
-   sandbox host on 404 for App Review) or Play Developer API
-   `subscriptionsv2.get` (service-account OAuth) — normalizes the status at the
+   sandbox host on 404 for App Review, since a sandbox transaction id is
+   invisible to the production host — App Review buys with sandbox accounts
+   against the production build) or Play Developer API
+   `subscriptionsv2.get` (service-account OAuth; **no such fallback and none
+   needed** — Google ships one host, so a license tester's purchase, an
+   internal-track purchase and a real paid one all resolve through the same URL
+   under the same package name, flagged in the response body's `testPurchase`
+   rather than by endpoint; a Play 404 means the token genuinely doesn't exist)
+   — normalizes the status at the
    edge (`lib/appstore.ts` / `lib/playstore.ts`, the `lib/paddle.ts` siblings),
    and upserts the same `purchases` row. **This call is what binds
    subscription → account** (first sight is for life, the webhook rule); a
@@ -196,7 +203,13 @@ the server only learns about from the receipt the app submits.
    subscription changed, and the facts are **re-fetched from the store's API**
    (the call-back pattern — a forged POST can only make the server re-read the
    truth, bounded by the webhook rate tier). Log-and-ACK like Paddle;
-   notifications carry no account and rely on the binding verify created.
+   notifications carry no account and rely on the binding verify created. On a
+   FIRST purchase the push routinely arrives before that binding exists — both
+   stores emit it when THEIR backend completes the purchase, while verify
+   additionally needs the result to reach the device and the device to reach us
+   — so `applyStoreNotification`'s no-binding drop is logged at `console.log`,
+   not `error`: it is the ordinary case, and verify lands seconds behind it.
+   Making the push self-binding is a follow-up below.
 
 #### plan changes on Play — the `linkedPurchaseToken` chain
 
@@ -384,7 +397,10 @@ deep-links to it); a Paddle purchase seen from the app gets a
   for development/staging, production host for production — production also
   falls back to sandbox on 404 in code, for App Review),
   `APPSTORE_ISSUER_ID`/`APPSTORE_KEY_ID`/`APPSTORE_BUNDLE_ID`,
-  `PLAY_PACKAGE_NAME`/`PLAY_SA_EMAIL`; secrets `APPSTORE_PRIVATE_KEY` (the
+  `PLAY_PACKAGE_NAME`/`PLAY_SA_EMAIL` (**no `PLAY_API_BASE`** — the Play
+  Developer API has one host for test and real purchases alike, so Play's
+  per-env dimension is the package name + service account); secrets
+  `APPSTORE_PRIVATE_KEY` (the
   In-App Purchase key's PKCS#8 PEM), `PLAY_SA_PRIVATE_KEY` (the service
   account's), and `PLAY_NOTIFY_TOKEN` (the push-endpoint guard) via
   `wrangler secret put` (`.dev.vars` locally). Register per env: App Store
@@ -418,6 +434,25 @@ deep-links to it); a Paddle purchase seen from the app gets a
 - **Plan change on the stores** — same gap as Paddle's Plus→Pro: a store
   crossgrade (both plans share one App Store subscription group / Play
   subscription) is its own flow; until then upgrade cards show only on free.
+- **Self-binding store notifications** — give the stores their own
+  `custom_data.userId` so a push can record a purchase the app never verified:
+  stamp the account onto the purchase at request time via `appAccountToken`
+  (iOS) / `obfuscatedAccountId` (Android) — both typed by the installed
+  expo-iap, and both returned on the authoritative fetch (the JWS transaction
+  payload; `obfuscatedExternalAccountId` on `subscriptionsv2`). Then
+  `applyStoreNotification` gets the same `fallbackUserId` parameter
+  `applyPaddleSubscription` already takes for pending checkouts, and the trust
+  split is unchanged: **plan from the store, account from the stamp**. Needs a
+  binding-key decision first — the client doesn't know its own userId (the fact
+  that makes Paddle checkout server-created), so either expose it or mint a
+  per-purchase token, which Apple constrains to UUID format (`newId()` is
+  `crypto.randomUUID()`, so both qualify). Deliberately deferred: this is
+  **purchase recovery, not latency**. Losing the notification race costs the
+  user nothing today — verify's own response is the flipped plan, with no
+  polling — so the payoff is only where verify never lands at all (app killed,
+  offline, a 502), which today ends in Google's 3-day auto-refund or an Apple
+  user tapping "Restore purchases". Worth building when store volume makes that
+  tail real.
 - **Privacy note** — payment inherently deanonymizes (Paddle holds email +
   payment identity). brace-api stores only `userId ↔ subscription id ↔ ctm_…`;
   keep it that minimal so "the server knows who pays but still can't read

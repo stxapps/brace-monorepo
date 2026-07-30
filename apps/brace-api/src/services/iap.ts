@@ -360,6 +360,15 @@ export async function getSubscriptionStatus(
 
   const now = Date.now();
   const stale = purchases.filter((p) => needsRefresh(p, now)).slice(0, MAX_REFRESH_PER_READ);
+  // Sequential, not Promise.all: these rows are NOT independent. A playstore
+  // refresh reaches applyStoreNotification → supersedeLinkedPlayPurchase, which
+  // writes OTHER rows of this same account — so two stale rows in one
+  // replacement chain would race that supersede against the superseded row's own
+  // upsert, both stamped with ~the same time, which the repo's out-of-order guard
+  // can't arbitrate. The cost of ordering them is bounded and rare: the cap is
+  // MAX_REFRESH_PER_READ round-trips, on an account whose rows already look
+  // wrong, at most once per REFRESH_DEBOUNCE_MS per row — a healthy account
+  // (the overwhelming majority) never enters this loop at all.
   for (const p of stale) await refreshPurchase(env, p);
   // Re-read rather than patching the in-memory list: refreshPurchase writes
   // through the repo's guarded upsert, which may legitimately decline the write
@@ -384,6 +393,8 @@ export async function getSubscriptionStatus(
 export async function getEntitlements(env: Bindings, userId: string): Promise<Entitlements> {
   return entitlementsOf((await getSubscriptionStatus(env, userId)).plan);
 }
+
+// --- paddle (web overlay checkout) ----------------------------------
 
 // Why an apply didn't land. Every value is a PERMANENT drop (a webhook that
 // hits one has been ACKed and will never be redelivered), which is exactly what
@@ -527,6 +538,103 @@ export async function applyPaddleEvent(env: Bindings, event: PaddleEvent): Promi
   await applyPaddleSubscription(env, event.data, occurredAt, event.event_id);
 }
 
+// Create a Paddle transaction for the authed user to open in the overlay
+// checkout. Server-created so the webhook's account binding
+// (`custom_data.userId`) is stamped from the SESSION — the client never knows
+// its own userId (it's server-minted) — and so the purchased price is the
+// server's configured pri_… id, never a client-supplied one.
+export async function createPaddleTransaction(
+  env: Bindings,
+  userId: string,
+  plan: PaidPlan,
+): Promise<string> {
+  // Guard the double-subscription hole: a second checkout from an already-
+  // entitled account would mint a SECOND live Paddle subscription (double
+  // billing) — a plan change is a subscription UPDATE (proration), a separate
+  // flow. Best-effort (two concurrent checkouts can still race past it), but it
+  // closes the ordinary path; the UI hides upgrade cards on paid plans too.
+  // Refreshes: this is the one read where a stale row costs the USER money (a
+  // subscriber whose renewal event was lost would be waved through to a second
+  // subscription), and the path is already outbound + tight-rate-limited.
+  const current = await getSubscriptionStatus(env, userId, { refresh: true });
+  if (current.plan !== 'free') {
+    throw new HttpError(409, 'already_subscribed', 'This account already has a subscription');
+  }
+
+  const priceId = plan === 'pro' ? env.PADDLE_PRICE_ID_PRO : env.PADDLE_PRICE_ID_PLUS;
+
+  const res = await fetch(`${env.PADDLE_API_BASE}/transactions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.PADDLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      items: [{ price_id: priceId, quantity: 1 }],
+      custom_data: { userId },
+    }),
+  });
+  if (!res.ok) {
+    console.error(`createPaddleTransaction: Paddle API ${res.status}`);
+    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
+  }
+
+  const body = (await res.json()) as { data?: { id?: string } };
+  if (!body.data?.id) {
+    console.error('createPaddleTransaction: no transaction id in Paddle response');
+    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
+  }
+  const transactionId = body.data.id;
+
+  // Record the txn_… before handing it to the client: it is the ONLY key that
+  // can re-find this purchase if the subscription webhook never lands (see the
+  // pending-checkouts section above). Best-effort — this is a backstop, and
+  // failing the user's checkout because the backstop couldn't be written would
+  // trade a rare recovery for a certain outage. The stale sweep rides along on
+  // the write we're already doing.
+  try {
+    const repo = paddleCheckoutsRepo(env.DIRECTORY_DB);
+    await repo.create({ transactionId, userId, plan });
+    await repo.deleteStale(userId, Date.now() - CHECKOUT_TTL_MS);
+  } catch (e) {
+    console.error(`createPaddleTransaction: could not record checkout ${transactionId}`, e);
+  }
+
+  return transactionId;
+}
+
+// Mint a Paddle customer-portal session (payment method, invoices, cancel) for
+// the authed user's Paddle subscription. Server-side because it needs the
+// secret API key + the stored ctm_… id; the client just opens the URL.
+export async function createPaddlePortalSession(env: Bindings, userId: string): Promise<string> {
+  const purchases = await purchasesRepo(env.DIRECTORY_DB).listByUserId(userId);
+  const paddle = purchases.find((p) => p.source === 'paddle' && p.providerCustomerId !== null);
+  if (!paddle) {
+    throw new HttpError(404, 'no_paddle_subscription', 'No Paddle subscription on this account');
+  }
+
+  const res = await fetch(`${env.PADDLE_API_BASE}/customer-portal-sessions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.PADDLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ customer_id: paddle.providerCustomerId }),
+  });
+  if (!res.ok) {
+    console.error(`createPaddlePortalSession: Paddle API ${res.status}`);
+    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
+  }
+
+  const body = (await res.json()) as { data?: { urls?: { general?: { overview?: string } } } };
+  const url = body.data?.urls?.general?.overview;
+  if (!url) {
+    console.error('createPaddlePortalSession: no overview url in Paddle response');
+    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
+  }
+  return url;
+}
+
 // --- store IAP (brace-expo) -------------------------------------------------
 
 // Fetch a store subscription's authoritative state (the token is only a lookup
@@ -586,7 +694,7 @@ async function supersedeLinkedPlayPurchase(
         await repo.supersedeByExternalId('playstore', token, now);
         console.log(
           `supersedeLinkedPlayPurchase: retired playstore ${token} (user ${row.userId}, ` +
-            `replaced by ${snapshot.externalId})`,
+          `replaced by ${snapshot.externalId})`,
         );
         token = row.linkedExternalId;
         continue;
@@ -598,7 +706,7 @@ async function supersedeLinkedPlayPurchase(
   } catch (e) {
     console.error(
       `supersedeLinkedPlayPurchase: could not retire playstore ${token} ` +
-        `(replaced by ${snapshot.externalId}) ${IAP_DROP}`,
+      `(replaced by ${snapshot.externalId}) ${IAP_DROP}`,
       e,
     );
   }
@@ -742,12 +850,22 @@ export async function applyStoreNotification(
 
   // Notifications carry no account: the binding must already exist from the
   // purchase-time `iap/verify`. A notification for a never-verified
-  // subscription (e.g. it arrived before the app's verify call landed) is
-  // dropped — the app's verify (or the next notification after it) records it.
+  // subscription is dropped — the app's verify (or the next notification after
+  // it) records it.
+  //
+  // LOG, not error: on a FIRST purchase this is the ordinary case, not a fault.
+  // Both stores emit the notification when THEIR backend completes the purchase,
+  // while verify additionally needs the result to reach the device and the
+  // device to reach us — so the push routinely wins the race. Nothing here is
+  // actionable either: this line cannot tell that benign race apart from a
+  // purchase that never gets verified at all, and both already have owners (the
+  // app's verify; failing that, Play's 3-day acknowledge fuse auto-refunding, or
+  // a later "Restore purchases" on the App Store). Kept at error it would fire
+  // on a large share of all first store purchases and drown IAP_DROP.
   const repo = purchasesRepo(env.DIRECTORY_DB);
   const existing = await repo.findBySourceExternalId(source, snapshot.externalId);
   if (!existing) {
-    console.error(`applyStoreNotification: no binding for ${source} ${snapshot.externalId}`);
+    console.log(`applyStoreNotification: no binding yet for ${source} ${snapshot.externalId}`);
     return;
   }
 
@@ -780,101 +898,4 @@ export async function applyStoreNotification(
       console.error(`applyStoreNotification: acknowledge failed for ${snapshot.externalId}`, e);
     }
   }
-}
-
-// Create a Paddle transaction for the authed user to open in the overlay
-// checkout. Server-created so the webhook's account binding
-// (`custom_data.userId`) is stamped from the SESSION — the client never knows
-// its own userId (it's server-minted) — and so the purchased price is the
-// server's configured pri_… id, never a client-supplied one.
-export async function createPaddleTransaction(
-  env: Bindings,
-  userId: string,
-  plan: PaidPlan,
-): Promise<string> {
-  // Guard the double-subscription hole: a second checkout from an already-
-  // entitled account would mint a SECOND live Paddle subscription (double
-  // billing) — a plan change is a subscription UPDATE (proration), a separate
-  // flow. Best-effort (two concurrent checkouts can still race past it), but it
-  // closes the ordinary path; the UI hides upgrade cards on paid plans too.
-  // Refreshes: this is the one read where a stale row costs the USER money (a
-  // subscriber whose renewal event was lost would be waved through to a second
-  // subscription), and the path is already outbound + tight-rate-limited.
-  const current = await getSubscriptionStatus(env, userId, { refresh: true });
-  if (current.plan !== 'free') {
-    throw new HttpError(409, 'already_subscribed', 'This account already has a subscription');
-  }
-
-  const priceId = plan === 'pro' ? env.PADDLE_PRICE_ID_PRO : env.PADDLE_PRICE_ID_PLUS;
-
-  const res = await fetch(`${env.PADDLE_API_BASE}/transactions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.PADDLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      items: [{ price_id: priceId, quantity: 1 }],
-      custom_data: { userId },
-    }),
-  });
-  if (!res.ok) {
-    console.error(`createPaddleTransaction: Paddle API ${res.status}`);
-    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
-  }
-
-  const body = (await res.json()) as { data?: { id?: string } };
-  if (!body.data?.id) {
-    console.error('createPaddleTransaction: no transaction id in Paddle response');
-    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
-  }
-  const transactionId = body.data.id;
-
-  // Record the txn_… before handing it to the client: it is the ONLY key that
-  // can re-find this purchase if the subscription webhook never lands (see the
-  // pending-checkouts section above). Best-effort — this is a backstop, and
-  // failing the user's checkout because the backstop couldn't be written would
-  // trade a rare recovery for a certain outage. The stale sweep rides along on
-  // the write we're already doing.
-  try {
-    const repo = paddleCheckoutsRepo(env.DIRECTORY_DB);
-    await repo.create({ transactionId, userId, plan });
-    await repo.deleteStale(userId, Date.now() - CHECKOUT_TTL_MS);
-  } catch (e) {
-    console.error(`createPaddleTransaction: could not record checkout ${transactionId}`, e);
-  }
-
-  return transactionId;
-}
-
-// Mint a Paddle customer-portal session (payment method, invoices, cancel) for
-// the authed user's Paddle subscription. Server-side because it needs the
-// secret API key + the stored ctm_… id; the client just opens the URL.
-export async function createPaddlePortalSession(env: Bindings, userId: string): Promise<string> {
-  const purchases = await purchasesRepo(env.DIRECTORY_DB).listByUserId(userId);
-  const paddle = purchases.find((p) => p.source === 'paddle' && p.providerCustomerId !== null);
-  if (!paddle) {
-    throw new HttpError(404, 'no_paddle_subscription', 'No Paddle subscription on this account');
-  }
-
-  const res = await fetch(`${env.PADDLE_API_BASE}/customer-portal-sessions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.PADDLE_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ customer_id: paddle.providerCustomerId }),
-  });
-  if (!res.ok) {
-    console.error(`createPaddlePortalSession: Paddle API ${res.status}`);
-    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
-  }
-
-  const body = (await res.json()) as { data?: { urls?: { general?: { overview?: string } } } };
-  const url = body.data?.urls?.general?.overview;
-  if (!url) {
-    console.error('createPaddlePortalSession: no overview url in Paddle response');
-    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
-  }
-  return url;
 }
