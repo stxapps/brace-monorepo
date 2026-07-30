@@ -51,18 +51,28 @@ export function decodeJwsPayload(jws: string): unknown | null {
 
 // --- the Server API JWT (ES256) ---------------------------------------------
 
+// How long a minted Server API token stays valid. Apple's ceiling is 60 min; 5
+// keeps the blast radius small, and nothing here wants more — the token is
+// signed immediately before the call it authorizes, so this only has to cover
+// clock skew against Apple. (The Play sibling's PLAY_ASSERTION_TTL_SECONDS is
+// the same idea, though what it signs is an assertion TRADED for a token rather
+// than the credential itself — see lib/playstore.ts.)
+const APPSTORE_JWT_TTL_SECONDS = 5 * 60;
+
 // Mint the short-lived App Store Server API token: an ES256 JWT signed with the
 // In-App Purchase key (App Store Connect → Users and Access → Integrations),
-// whose PKCS#8 PEM is the APPSTORE_PRIVATE_KEY secret. Minted per call — the
-// Workers isolate is ephemeral and signing is sub-millisecond, so caching would
-// only add a staleness bug surface.
+// whose PKCS#8 PEM is the APPSTORE_PRIVATE_KEY secret. Minted per call, and
+// deliberately NOT cached the way the Play access token is: this is a local
+// ES256 signature — sub-millisecond, no network — so minting it every time is
+// free, and a cache could only add a staleness surface. Play's costs a round
+// trip to Google, which is the whole reason that one is worth caching.
 export async function appstoreApiJwt(env: Bindings, now: number = Date.now()): Promise<string> {
   const header = { alg: 'ES256', kid: env.APPSTORE_KEY_ID, typ: 'JWT' };
   const iat = Math.floor(now / 1000);
   const payload = {
     iss: env.APPSTORE_ISSUER_ID,
     iat,
-    exp: iat + 5 * 60, // Apple allows up to 60 min; 5 keeps the blast radius small
+    exp: iat + APPSTORE_JWT_TTL_SECONDS,
     aud: 'appstoreconnect-v1',
     bid: env.APPSTORE_BUNDLE_ID,
   };

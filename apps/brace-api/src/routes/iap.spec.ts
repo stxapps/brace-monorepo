@@ -14,6 +14,7 @@ import {
 import { app } from '../app';
 import { purchasesRepo } from '../db/repositories/purchases';
 import { newId } from '../lib/ids';
+import { resetPlayAccessTokenCache } from '../lib/playstore';
 import { issueSession } from '../services/session';
 import { APPSTORE_NOTIFY_PATH, PADDLE_WEBHOOK_PATH, PLAYSTORE_NOTIFY_PATH } from './iap';
 
@@ -60,9 +61,14 @@ function stubOutboundFetch() {
   }) as typeof fetch;
 }
 
+// Per-test teardown: every scripted stub must have been consumed, and the Play
+// access-token cache (module state in lib/playstore.ts, which outlives a single
+// test) is dropped so each test starts cold and scripts its own exchange.
 function assertNoPendingStubs() {
   const pending = fetchStubs.map((s) => s.match);
   fetchStubs = [];
+  playTokenStubbed = false;
+  resetPlayAccessTokenCache();
   expect(pending).toEqual([]);
 }
 
@@ -130,6 +136,22 @@ function mockAppstoreStatuses(options: {
 // lookup, since verify runs BEFORE the client's finishTransaction; tests whose
 // lookup stands in for an already-settled purchase (notifications, refreshes)
 // pass ACKNOWLEDGED so no acknowledge call fires.
+// The service-account token is cached per isolate (lib/playstore.ts), so a test
+// makes exactly ONE token exchange however many Play calls it drives. Both Play
+// helpers below route through here, and only the first actually scripts it —
+// otherwise the second helper's stub would sit unconsumed and trip
+// assertNoPendingStubs, which resets this flag alongside the cache itself.
+let playTokenStubbed = false;
+function mockPlayToken() {
+  if (playTokenStubbed) return;
+  playTokenStubbed = true;
+  fetchStubs.push({
+    match: 'oauth2.googleapis.com/token',
+    status: 200,
+    body: { access_token: 'test-access-token', expires_in: 3600 },
+  });
+}
+
 function mockPlaySubscription(options: {
   state?: string;
   productId?: string;
@@ -140,11 +162,7 @@ function mockPlaySubscription(options: {
   // Overrides the single default line entirely (the deferred-plan-change case).
   lineItems?: { productId: string; expiryTime: number; autoRenewEnabled?: boolean }[];
 }) {
-  fetchStubs.push({
-    match: 'oauth2.googleapis.com/token',
-    status: 200,
-    body: { access_token: 'test-access-token', expires_in: 3600 },
-  });
+  mockPlayToken();
   const lines = options.lineItems ?? [
     {
       productId: options.productId ?? STORE_PRODUCT_IDS.plus,
@@ -177,11 +195,7 @@ function mockPlaySubscription(options: {
 // mockPlaySubscription's default).
 // `status` 204 is Google's success; a 4xx stands in for "already acknowledged".
 function mockPlayAcknowledge(status = 204) {
-  fetchStubs.push({
-    match: 'oauth2.googleapis.com/token',
-    status: 200,
-    body: { access_token: 'test-access-token', expires_in: 3600 },
-  });
+  mockPlayToken();
   fetchStubs.push({ match: ':acknowledge', status, body: {} });
 }
 

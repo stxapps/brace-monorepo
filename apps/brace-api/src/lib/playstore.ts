@@ -23,20 +23,73 @@ const PLAY_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const PLAY_API_BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3';
 const PLAY_SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 
+// Lifetime of the ASSERTION signed for the token exchange — NOT of the access
+// token Google returns (that's `expires_in`, and the margin below). It's
+// consumed once, immediately, so this only has to cover clock skew between us
+// and Google; Google rejects an assertion whose exp is over an hour out, and
+// short is strictly better anyway — nothing is gained by widening the replay
+// window on a credential that goes on the wire.
+const PLAY_ASSERTION_TTL_SECONDS = 5 * 60;
+
+// Refresh this far before Google's stated expiry, so a token handed out at the
+// edge of the window can't lapse mid-flight on the call it was fetched for.
+// Deliberately NOT shared with the assertion TTL above: this one is a haircut
+// on a lifetime GOOGLE chooses, so the two have no reason to move together.
+const PLAY_TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+
+// The cached access token. Isolate-scoped by construction: a Workers isolate
+// serves many requests before eviction and module state outlives each one, so
+// this is shared across requests — deliberately (see playAccessToken), and
+// safely, because the token carries NO request or user dimension.
+let cachedAccessToken: { token: string; expiresAt: number } | null = null;
+
+// Drop the cached token. Production calls this on a 401 (see playApiFetch); it
+// is also the specs' seam, since module state outlives a single test in the
+// same file and each one scripts its own token exchange.
+export function resetPlayAccessTokenCache(): void {
+  cachedAccessToken = null;
+}
+
 // Service-account access token via the OAuth2 JWT-bearer flow: an RS256 JWT
 // signed with the service account's key (the PLAY_SA_PRIVATE_KEY secret —
 // PKCS#8 PEM, the `private_key` field of the downloaded JSON), exchanged at
-// Google's token endpoint. Fetched per call, like the App Store JWT — the
-// verify/notify paths are tightly rate-limited, so a token cache would buy
-// little and add a staleness surface.
+// Google's token endpoint.
+//
+// CACHED in the isolate, unlike the App Store JWT — the two look alike but cost
+// nothing alike. Apple's is a local ES256 signature (sub-ms, no network), so
+// minting it per call is free and caching would only add staleness. This one is
+// a round trip to Google on the critical path of every Play operation, and the
+// operations amplify: a verify that acknowledges needs two (the subscriptionsv2
+// fetch, then the `:acknowledge` POST), and the staleness refresh adds one per
+// Play row it re-pulls. Google's tokens live an hour and their own guidance is
+// to reuse them.
+//
+// The token is per SERVICE ACCOUNT — its claims name PLAY_SA_EMAIL and the
+// androidpublisher scope, never a user — so one token is valid for every
+// lookup, and sharing it across requests leaks nothing between accounts. What
+// caching does NOT do is scale with user count: a warm isolate is the only
+// thing it rides on, and Cloudflare spreads traffic over many isolates across
+// many colos, evicting idle ones. Hit rate therefore tracks traffic
+// CONCENTRATION per isolate, not headcount; a cold isolate simply mints again,
+// which is the correct floor rather than a failure.
+//
+// Two constraints shape the implementation:
+//   - Cache the resolved STRING, never the in-flight promise. Awaiting a
+//     promise created during another request's context throws "Cannot perform
+//     I/O on behalf of a different request", so concurrent cold requests each
+//     mint their own — no cross-request single-flight is possible here.
+//   - In memory only, never KV or the Cache API: those would put a live
+//     credential outside the isolate for a marginal hit-rate gain.
 export async function playAccessToken(env: Bindings, now: number = Date.now()): Promise<string> {
+  if (cachedAccessToken && now < cachedAccessToken.expiresAt) return cachedAccessToken.token;
+
   const iat = Math.floor(now / 1000);
   const claims = {
     iss: env.PLAY_SA_EMAIL,
     scope: PLAY_SCOPE,
     aud: PLAY_TOKEN_URL,
     iat,
-    exp: iat + 5 * 60,
+    exp: iat + PLAY_ASSERTION_TTL_SECONDS,
   };
   const signingInput = `${b64urlEncodeJson({ alg: 'RS256', typ: 'JWT' })}.${b64urlEncodeJson(claims)}`;
   const key = await crypto.subtle.importKey(
@@ -63,12 +116,63 @@ export async function playAccessToken(env: Bindings, now: number = Date.now()): 
     console.error(`playAccessToken: token endpoint ${res.status}`);
     throw new Error(`Play token endpoint ${res.status}`);
   }
-  const body = z.looseObject({ access_token: z.string() }).safeParse(await res.json());
+  const body = z
+    .looseObject({ access_token: z.string(), expires_in: z.number().optional() })
+    .safeParse(await res.json());
   if (!body.success) {
     console.error('playAccessToken: no access_token in response');
     throw new Error('Play token endpoint: malformed response');
   }
+
+  // Cache only on Google's own `expires_in` (3600 in practice), and only when
+  // it outlasts the margin — an absent or implausibly short lifetime means mint
+  // per call rather than guess at one. Measured from `now` (request start)
+  // rather than after the round trip, so the window can only be conservative.
+  const ttlMs = (body.data.expires_in ?? 0) * 1000;
+  if (ttlMs > PLAY_TOKEN_REFRESH_MARGIN_MS) {
+    cachedAccessToken = {
+      token: body.data.access_token,
+      expiresAt: now + ttlMs - PLAY_TOKEN_REFRESH_MARGIN_MS,
+    };
+  }
   return body.data.access_token;
+}
+
+// One authorized Play Developer API call, retried ONCE on a 401.
+//
+// The refresh margin above handles the expiry Google announced; it can't handle
+// a credential that dies EARLY — a rotated service-account key, or the account
+// losing API access — which leaves the isolate holding a token Google no longer
+// honors. Without this, every caller sharing that isolate fails for the rest of
+// the window (up to ~55 min), and a notification redelivery lands right back on
+// the same dead token, so the usual self-healing never gets a chance.
+//
+// Exactly once: a second 401 is a real auth problem (wrong key, revoked access)
+// rather than staleness, and retrying that only doubles outbound traffic on a
+// broken config — so it's logged and returned for the caller to treat as the
+// failure it is.
+async function playApiFetch(
+  env: Bindings,
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+): Promise<Response> {
+  const send = (token: string) =>
+    fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
+
+  const token = await playAccessToken(env);
+  const res = await send(token);
+  if (res.status !== 401) return res;
+
+  // Only clear when the cache still holds the token that just failed: a
+  // concurrent request may already have replaced it, and dropping that fresh
+  // one would make every 401 in flight mint yet another.
+  if (cachedAccessToken?.token === token) resetPlayAccessTokenCache();
+
+  const retried = await send(await playAccessToken(env));
+  if (retried.status === 401) {
+    console.error('playApiFetch: 401 from the Play Developer API after a fresh token');
+  }
+  return retried;
 }
 
 // The slice of a SubscriptionPurchaseV2 we consume (permissive — Google adds
@@ -123,10 +227,9 @@ export async function fetchPlaystoreSubscription(
   // base64-ish, so anything outside that alphabet is garbage.
   if (!/^[A-Za-z0-9._-]+$/.test(purchaseToken)) return null;
 
-  const accessToken = await playAccessToken(env);
-  const res = await fetch(
+  const res = await playApiFetch(
+    env,
     `${PLAY_API_BASE}/applications/${env.PLAY_PACKAGE_NAME}/purchases/subscriptionsv2/tokens/${purchaseToken}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   // Garbage/forged tokens come back 400 ("Invalid Value") or 404 from Google.
   if (res.status === 400 || res.status === 404) return null;
@@ -235,12 +338,19 @@ export async function fetchPlaystoreSubscription(
 // Note this is the v1 `purchases.subscriptions` endpoint: `subscriptionsv2` is
 // query-only, and acknowledge never moved to it.
 //
-// Returns whether Google accepted the acknowledgement. A 4xx is BENIGN and
-// swallowed — "already acknowledged" can still race in (the client's
-// finishTransaction landing between our fetch and this call), and no 4xx here
-// gets better on a retry. Only a 5xx/network failure throws, and even that is
-// caught by the caller: the client's own acknowledgement remains the primary
-// path.
+// Returns whether Google accepted the acknowledgement. Every 4xx is swallowed
+// — no 4xx here gets better on a retry, and the client's own acknowledgement
+// remains the primary path — but they are not all the same event, so they log
+// differently:
+//   - 401/403 mean the CREDENTIAL is wrong (a rotated-away key, a service
+//     account without "View financial data", the app not linked). playApiFetch
+//     has already retried a 401 with a freshly minted token, so reaching here
+//     is a config failure that NOTHING in the convergent retry can heal — the
+//     RTDN and the staleness refresh will hit the same wall. Logged as an error.
+//   - Any other 4xx is the expected race: "already acknowledged", from the
+//     client's finishTransaction landing between our fetch and this call.
+//     Logged quietly, since it means the deadline was met by the other path.
+// Only a 5xx/network failure throws, and even that is caught by the caller.
 export async function acknowledgePlaystorePurchase(
   env: Bindings,
   productId: string,
@@ -250,16 +360,18 @@ export async function acknowledgePlaystorePurchase(
   if (!/^[A-Za-z0-9._-]+$/.test(productId)) return false;
   if (!/^[A-Za-z0-9._-]+$/.test(purchaseToken)) return false;
 
-  const accessToken = await playAccessToken(env);
-  const res = await fetch(
+  const res = await playApiFetch(
+    env,
     `${PLAY_API_BASE}/applications/${env.PLAY_PACKAGE_NAME}/purchases/subscriptions/${productId}/tokens/${purchaseToken}:acknowledge`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: '{}',
-    },
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
   );
   if (res.ok) return true; // 204 No Content
+  if (res.status === 401 || res.status === 403) {
+    console.error(
+      `acknowledgePlaystorePurchase: Play API ${res.status} — the service-account credential is not usable`,
+    );
+    return false;
+  }
   if (res.status < 500) {
     console.log(`acknowledgePlaystorePurchase: Play API ${res.status} (already acknowledged?)`);
     return false;
