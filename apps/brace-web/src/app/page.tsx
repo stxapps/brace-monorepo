@@ -11,6 +11,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import saveLinksToVisitLater from '../assets/images/save-links-to-visit-later.svg';
 import { AuthedHomeRedirect } from '../components/authed-home-redirect';
+import { CHROME_WEB_STORE_URL, FIREFOX_ADDONS_URL } from '../lib/extension-stores';
 
 export default function Page() {
   return (
@@ -82,7 +83,7 @@ export default function Page() {
               </a>
               <a
                 className={cn('group focus:outline-none')}
-                href="https://chrome.google.com/webstore/detail/brace/hennjddhjodlmdnopaggbjjkpokpbdnn"
+                href={CHROME_WEB_STORE_URL}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -93,7 +94,7 @@ export default function Page() {
               </a>
               <a
                 className={cn('group focus:outline-none')}
-                href="https://addons.mozilla.org/en-US/firefox/addon/brace/"
+                href={FIREFOX_ADDONS_URL}
                 target="_blank"
                 rel="noreferrer"
               >

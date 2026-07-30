@@ -3,9 +3,9 @@
 // Edit operations for app settings — the write side of use-settings.ts. The setters
 // mirror the read hook's values, and each routes to the right store:
 //
-//   - setLinksLayoutSource / setLocalLinksLayout / setThemeSource / setLocalTheme →
-//     the DEVICE-LOCAL `localSettings` store (no account, no sync — see
-//     local-settings-store.ts);
+//   - setLinksLayoutSource / setLocalLinksLayout / setThemeSource / setLocalTheme /
+//     dismissPreviewsPrompt → the DEVICE-LOCAL `localSettings` store (no account, no
+//     sync — see local-settings-store.ts);
 //   - setSyncLinksLayout / setServerExtraction / setSyncTheme → the SYNCED
 //     `settings/general.enc` blob via writeSettingsGeneral, then a sync kick, exactly
 //     like useListMutations writes a list and requests sync.
@@ -43,6 +43,9 @@ export interface SettingMutations {
   setSyncTheme: (theme: ThemeState) => Promise<void>;
   // Set THIS device's theme (the theme "Device" tab) — device-local, never synced.
   setLocalTheme: (theme: ThemeState) => Promise<void>;
+  // Retire the first-run link-previews banner on THIS device — device-local, never
+  // synced (db.ts). One-way: the Settings extraction section is the durable surface.
+  dismissPreviewsPrompt: () => Promise<void>;
 }
 
 export function useSettingMutations(): SettingMutations {
@@ -111,6 +114,11 @@ export function useSettingMutations(): SettingMutations {
 
   const setLocalTheme = useCallback((theme: ThemeState) => setLocalSettings({ theme }), []);
 
+  const dismissPreviewsPrompt = useCallback(
+    () => setLocalSettings({ previewsPromptDismissed: true }),
+    [],
+  );
+
   return useMemo<SettingMutations>(
     () => ({
       setLinksLayoutSource,
@@ -122,6 +130,7 @@ export function useSettingMutations(): SettingMutations {
       setThemeSource,
       setSyncTheme,
       setLocalTheme,
+      dismissPreviewsPrompt,
     }),
     [
       setLinksLayoutSource,
@@ -133,6 +142,7 @@ export function useSettingMutations(): SettingMutations {
       setThemeSource,
       setSyncTheme,
       setLocalTheme,
+      dismissPreviewsPrompt,
     ],
   );
 }

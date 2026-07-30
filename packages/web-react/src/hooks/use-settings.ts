@@ -81,6 +81,9 @@ export interface Settings {
   syncTheme: ThemeState;
   // This device's own theme (the theme "Device" tab's value).
   localTheme: ThemeState;
+  // Device-local: has the first-run link-previews offer been dismissed here? (db.ts
+  // — the banner is chrome, so it doesn't ride the synced blob.)
+  previewsPromptDismissed: boolean;
 }
 
 export function useSettings(): Settings {
@@ -134,5 +137,6 @@ export function useSettings(): Settings {
     themeSource,
     syncTheme,
     localTheme,
+    previewsPromptDismissed: local?.previewsPromptDismissed ?? false,
   };
 }

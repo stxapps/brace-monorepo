@@ -205,6 +205,13 @@ export interface LocalSettingsRecord {
   linksLayout: string;
   themeSource: 'sync' | 'local';
   theme: ThemeState;
+  // Has the first-run "your links have no previews" banner been dismissed on this
+  // device? DEVICE-LOCAL on purpose while the thing it points at (the synced
+  // `serverExtraction` opt-in, or a browser-extension install) is not: the banner is
+  // onboarding chrome, and a second browser that has never shown it should still get
+  // its one offer (docs/link-extraction.md — _the links-page offer_). Absent on rows
+  // written before the field existed; every read defaults it to `false`.
+  previewsPromptDismissed: boolean;
 }
 
 // One device-local lock — the app lock or a per-list lock. Like `localSettings`,

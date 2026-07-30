@@ -38,6 +38,7 @@ export async function setLocalSettings(
       linksLayout: existing?.linksLayout ?? 'list',
       themeSource: existing?.themeSource ?? 'sync',
       theme: existing?.theme ?? DEFAULT_THEME,
+      previewsPromptDismissed: existing?.previewsPromptDismissed ?? false,
       ...patch,
     });
   });

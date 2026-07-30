@@ -1,3 +1,4 @@
+import { PreviewsPrompt } from './_components/previews-prompt';
 import { LinksPageProvider } from './_contexts/page-provider';
 import { LinksViewStateProvider } from './_contexts/view-state-provider';
 import { Main } from './_panes/main';
@@ -25,6 +26,11 @@ export default function LinksPage() {
         <LinksViewStateProvider>
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar />
+            {/* The first-run link-previews offer — renders null unless previews are
+                still off AND links are actually waiting (see the component). Above
+                Main so it reads as chrome rather than a row, and outside it so a
+                layout switch or a locked-list swap can't remount it. */}
+            <PreviewsPrompt />
             <Main />
           </div>
         </LinksViewStateProvider>

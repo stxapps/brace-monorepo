@@ -1061,6 +1061,43 @@ whereas `off` is a decision, and re-asking someone who picked "never contact the
 sites" is nagging. The dismissal is device-local while the setting it offers is
 synced, so a second phone still gets its one offer.
 
+#### the links-page offer — same banner, two different asks
+
+Both apps put a one-time, dismissible banner on the links screen, armed on the
+same condition (previews still off, undismissed here, and the **raw** pending count
+above zero — `readRawPendingTitleImageCount`, the over-count, since the exact tally
+is gated on the very thing being asked about) and retired by the same device-local
+flag (`previewsPromptDismissed` in each app's `localSettings`, so a second browser
+or phone still gets its one offer). What each banner OFFERS is not the same thing,
+and brace-web's `_components/previews-prompt.tsx` is therefore a sibling of
+brace-expo's, not a port of it:
+
+- **expo** offers `deviceExtractionMode: 'all'` — free, on-device, no new party — so
+  the banner flips it in place. One tap resolves the count it just quoted, because
+  the foreground drain then works the backlog.
+- **brace-web, Plus/Pro** offers `serverExtraction`, which admits `brace-extractor`
+  to the URLs it fetches. The banner **does not flip it**: the button goes to
+  Settings → Link previews. Two reasons, and either alone is sufficient. Consent —
+  a list-chrome button is a thinner surface than the toggle that names the service
+  (this is the doc's _second, explicit opt-in_, not a default nobody chose). And
+  truth in advertising — enabling the opt-in alone starts only the
+  displayed-scoped auto drain, so the quoted N would barely move; the thing that
+  clears it is "Generate all", which is confirm-gated **because each link is a paid
+  request**, and that confirm belongs next to the toggle, not in a banner.
+- **brace-web, free** can't take that opt-in at all (`serverExtraction` is a Plus
+  entitlement), and free/web-only is exactly the population with the most
+  un-previewed links — so hiding the banner there would hide it where it matters
+  most, while making it a bare paywall would turn an honesty affordance into an
+  upsell. It offers the **browser extension** instead: free, local, and the best
+  extractor there is (_capability tiers_) — the same nudge _the web-only gap_ already
+  calls the right answer for this user. The copy is explicit that installing it
+  previews links **as you save them** rather than back-filling these, since it's
+  active-context only; Plus is named once, second, as what does the back-fill.
+
+An upgrade doesn't re-arm the banner (one flag, both variants). That's deliberate:
+by the time someone has upgraded they have been through Settings, which is where the
+durable surface lives.
+
 ### imported links: the bulk path
 
 Bulk import (a `bookmarks.html` export, Pocket/Raindrop/Pinboard, …) is the one
@@ -1307,7 +1344,9 @@ below, realized.) Opted out, the gap is the direct, intended consequence of
 - it keeps the default maximally private (nothing fetches your URLs until you
   install a client that does it locally);
 - it's a gentle nudge toward the extension, which is the best extractor anyway
-  (active-tab DOM + screenshot);
+  (active-tab DOM + screenshot) — and on a free account that nudge is the links
+  page's own banner, which offers the extension rather than the opt-in this user
+  can't take (_the links-page offer_);
 - the link-editor popover's promise that "the title is back-filled later" simply
   doesn't apply to this user — they only ever have the title they entered.
 
