@@ -1,0 +1,29 @@
+{
+  "ignore_dirs": [
+    ".nx",
+    "coverage",
+    "tmp",
+    "apps/brace-web/.next",
+    "apps/brace-web/dist",
+    "apps/brace-extension/.output",
+    "apps/brace-api/dist",
+    "apps/brace-api/.wrangler",
+    "apps/brace-extractor/dist",
+    "apps/brace-extractor/.wrangler",
+    "apps/brace-expo/dist",
+    "apps/brace-expo/.expo",
+    "apps/brace-expo/out-tsc",
+    "apps/brace-expo/ios/build",
+    "apps/brace-expo/ios/Pods",
+    "apps/brace-expo/android/build",
+    "apps/brace-expo/android/.gradle",
+    "packages/shared/out-tsc",
+    "packages/react/out-tsc",
+    "packages/web-ui/out-tsc",
+    "packages/web-crypto/out-tsc",
+    "packages/web-react/out-tsc",
+    "packages/expo-crypto/out-tsc",
+    "packages/expo-react/out-tsc"
+  ],
+  "fsevents_try_resync": true
+}
