@@ -591,6 +591,58 @@ run:android` (debug). Until brace-expo has a release/EAS pipeline
 (docs/deployment.md doesn't cover mobile yet), this is configured but unproven;
 verify with a release build before the first store submission.
 
+#### android release signing — the Play upload key (brace-expo)
+
+The prebuild template signs the `release` buildType with the **debug** config
+(there's a `// Caution!` comment saying so). That's fine for
+`npm run android:release` on a device, but the Play Store rejects a
+debug-signed artifact — so a real `signingConfigs.release` has to get into
+`android/app/build.gradle`. **Not by hand:** `android/` is CNG output, so
+`npm run prebuild` (`--clean`) deletes the edit every time. There's no signing
+surface in app config and none in `expo-build-properties` either, which makes
+this the workspace's first **local config plugin**:
+`apps/brace-expo/plugins/with-android-signing.js`, listed last in
+`app.config.ts`'s `plugins`.
+
+It does two things at prebuild, both driven by four env vars:
+
+- **`withGradleProperties`** writes `BRACE_UPLOAD_STORE_FILE` (resolved to an
+  absolute path), `…_STORE_PASSWORD`, `…_KEY_ALIAS`, `…_KEY_PASSWORD` into
+  `android/gradle.properties`, replacing any same-key entries so a prebuild
+  _without_ `--clean` doesn't append duplicates.
+- **`withAppBuildGradle`** inserts a `release { … }` into `signingConfigs`
+  referencing those property names, and rewires `buildTypes.release`'s
+  `signingConfig` from `signingConfigs.debug` to `signingConfigs.release`. The
+  rewrite is anchored on the template's own `// Caution!` comment so it can't hit
+  the identical line in the `debug` buildType, and it **throws** if either anchor
+  is missing — an SDK bump that moves them fails the prebuild instead of
+  silently producing a debug-signed bundle.
+
+**Credentials live in `.env.local`** — the `APPLE_TEAM_ID` precedent exactly
+(see [env-files.md](./env-files.md)): gitignored, mode-agnostic (prebuild forces
+`NODE_ENV=development` before loading env files), and deliberately not
+`EXPO_PUBLIC_`-prefixed, since these are config-time values that must never
+reach the JS bundle. **Unset is safe** — the plugin no-ops and the template's
+debug signing stands, so a fresh clone still prebuilds, the same falsy-skip
+behaviour `withDevelopmentTeam` has on iOS.
+
+**The keystore itself goes in `apps/brace-expo/credentials/`** (gitignored, as
+is `*.keystore` globally) — _outside_ `android/`, because `--clean` deletes that
+directory and would take the key with it. Never commit it: leaking it or losing
+it both permanently end the ability to update the Play listing. Google Play App
+Signing means this is the **upload** key, so a loss is recoverable by asking
+Google to reset it — but only if the app is already enrolled.
+
+Passwords therefore land in plaintext in the generated `android/gradle.properties`.
+That's gitignored, but if you'd rather they never sit in the project tree at all,
+put the same four keys in `~/.gradle/gradle.properties` and drop the
+`withGradleProperties` half of the plugin — the `build.gradle` half reads them
+identically via gradle's property resolution.
+
+Store build: `cd apps/brace-expo/android && ./gradlew bundleRelease`. Note
+`app.config.ts` still carries `android.versionCode: 0` / `version: '0.0.0'` —
+Play rejects version code 0, so both need bumping before the first upload.
+
 #### docs (future)
 
 - npx nx g @nx/next:app apps/brace-docs

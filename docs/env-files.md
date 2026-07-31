@@ -133,7 +133,7 @@ Files in `apps/brace-expo/` (committed except `.env.local`):
 | `.env.development` | `nx dev @stxapps/brace-expo`, `expo prebuild` | Expo (auto) |
 | `.env.production`  | release build / `expo export`                 | Expo (auto) |
 | `.env.staging`     | a staging build (var supplied inline)         | you         |
-| `.env.local`       | every mode — `APPLE_TEAM_ID` (gitignored)     | Expo (auto) |
+| `.env.local`       | every mode — signing creds (gitignored)       | Expo (auto) |
 
 Current public var: `EXPO_PUBLIC_API_URL` → the matching brace-api URL. It's read
 once in `src/lib/api-client.ts`, which throws if unset (mirroring brace-web's and
@@ -141,9 +141,17 @@ the extension's missing-URL guards) and binds it into `@stxapps/expo-react`'s
 `createAuthApiClient`. Adding a new var = add the line to all three files, same
 deliberate symmetry as the other frontends.
 
-**The one non-`EXPO_PUBLIC_` var: `APPLE_TEAM_ID`.** This app's config is
-`app.config.ts` (not `app.json`) for exactly one reason — `ios.appleTeamId` has
-to come from the environment, and JSON has no interpolation. At prebuild,
+**The non-`EXPO_PUBLIC_` vars are the native signing credentials**, all in
+`.env.local` and all read at config-evaluation time by `expo prebuild` rather
+than at runtime: `APPLE_TEAM_ID` (iOS, below) and the four `BRACE_UPLOAD_*` vars
+that carry the Android Play upload key into `signingConfigs.release` (see
+[setup.md](./setup.md) — _android release signing_). The three bullets below
+apply to both groups verbatim — same file, same mode-agnostic reason, same
+no-prefix reason, same falsy-skip safety.
+
+`APPLE_TEAM_ID` is the reason this app's config is `app.config.ts` and not
+`app.json` — `ios.appleTeamId` has to come from the environment, and JSON has no
+interpolation. At prebuild,
 `@expo/config-plugins`' `withDevelopmentTeam` writes it into `DEVELOPMENT_TEAM`
 for **every** native target in the pbxproj — the app _and_ the share extension —
 which is what keeps local device signing from needing a manual team pick in

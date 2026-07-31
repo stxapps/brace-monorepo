@@ -74,10 +74,16 @@ node_modules/
 # stay tracked.
 /apps/brace-expo/ios/
 /apps/brace-expo/android/
+# Release signing material — the Play upload keystore, read by the
+# with-android-signing config plugin. Lives here rather than under android/
+# because --clean deletes that directory. NEVER commit it: leaking it or losing
+# it both end the ability to update the Play listing.
+/apps/brace-expo/credentials/
 .yarn/
 dist/
 npm-debug.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key

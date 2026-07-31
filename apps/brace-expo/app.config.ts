@@ -116,6 +116,11 @@ const config: ExpoConfig = {
         },
       },
     ],
+    // Play upload-key signing for release builds. Local plugin because there is
+    // no signing surface in app config or expo-build-properties, and `android/`
+    // is wiped by `prebuild --clean`. No-ops when the BRACE_UPLOAD_* vars are
+    // absent from `.env.local`. See docs/setup.md — android release signing.
+    './plugins/with-android-signing',
   ],
 };
 
