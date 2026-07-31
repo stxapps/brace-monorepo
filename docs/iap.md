@@ -127,7 +127,7 @@ data loss**.
 ### the purchase flow (store IAP — brace-expo)
 
 The client library is **expo-iap** (the OpenIAP successor to the deprecated
-react-native-iap; Expo Modules-based, config plugin in `app.json`, native — so
+react-native-iap; Expo Modules-based, config plugin in `app.config.ts`, native — so
 `npx expo prebuild` required). `apps/brace-expo/src/lib/iap.ts` is the
 `lib/paddle.ts` sibling: lazy store connection, global purchase listeners
 routed to the open checkout's handlers, and the verify-then-finish protocol.

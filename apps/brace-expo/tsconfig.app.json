@@ -12,6 +12,12 @@
   "exclude": [
     "out-tsc",
     "dist",
+    // The Expo app config has to sit at the project root, but `include`'s
+    // **/*.ts glob would then pull it in against rootDir: "src" and fail the
+    // build with TS6059. (The other root-level config files escape only because
+    // they're .js and allowJs is off.) Excluded here — it's typed by its own
+    // `ExpoConfig` annotation, and `npx expo config` is the real check.
+    "app.config.ts",
     "**/*.test.ts",
     "**/*.spec.ts",
     "**/*.test.tsx",

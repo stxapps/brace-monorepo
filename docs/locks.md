@@ -324,5 +324,5 @@ would wrongly drop every list lock).
   `app-lock-gate.tsx`, `lock-password-dialog.tsx`, `lock-pane.tsx`, and (web)
   `list-lock-pane.tsx`.
 - **Biometric (expo-only):** `expo-react` `lib/biometric.ts` +
-  `expo-local-authentication` (config plugin in `app.json`); the `biometric`
+  `expo-local-authentication` (config plugin in `app.config.ts`); the `biometric`
   column in expo's `data/db.ts` / `lock-store.ts`.

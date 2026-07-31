@@ -73,6 +73,33 @@ Flag notes:
   real jest 30 deterministically (every project, including brace-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
+#### app config — `app.config.ts`, not `app.json` (brace-expo)
+
+The generator scaffolds a static `app.json`; this app uses the **dynamic TS
+config** instead (`apps/brace-expo/app.config.ts`, a plain
+`const config: ExpoConfig = {…}; export default config`, the same shape the old
+app used). Expo reads either, and `app.config.ts` wins when both exist — so the
+rename is the whole migration; nothing in the workspace reads the file
+statically (`@nx/expo`'s executors shell out to the Expo CLI).
+
+**One reason, and it's a correctness one:** `ios.appleTeamId` has to come from
+the environment, and JSON has no interpolation — the JSON version carried the
+literal string `"process.env.APPLE_TEAM_ID"`, which `withDevelopmentTeam` wrote
+verbatim into `DEVELOPMENT_TEAM` for every native target. See
+[env-files.md](./env-files.md) — _the one non-`EXPO_PUBLIC_` var_ — for where
+`APPLE_TEAM_ID` lives and why it's `.env.local`.
+
+Two gotchas if you touch this:
+
+- **`tsconfig.app.json` excludes it.** The config file must sit at the project
+  root, but that tsconfig's `include` glob is `**/*.ts` against
+  `rootDir: "src"` — left in, `tsc --build` fails with TS6059. (The other
+  root-level config files escape only because they're `.js` and `allowJs` is
+  off.) So it isn't covered by `nx typecheck`; its `ExpoConfig` annotation plus
+  `npx expo config --type prebuild` is the check. Run the latter after editing.
+- **A config change needs `npx expo prebuild`** to reach the native projects,
+  like any config-plugin change.
+
 #### expo-image-picker + expo-image-manipulator (brace-expo)
 
 The edit screen's custom-image flow (pick + client-side resize —
@@ -83,7 +110,7 @@ docs/editors.md, invariant 2). Added like expo-router below:
 (run inside `apps/brace-expo`; then move each to `*` in the app and pin the
 real version in the root `package.json`, per the normal convention).
 `expo-image-manipulator` is also a peerDependency `*` of `@stxapps/expo-react`
-(its `lib/image.ts` — the NetInfo/expo-sqlite pattern). `app.json`
+(its `lib/image.ts` — the NetInfo/expo-sqlite pattern). `app.config.ts`
 carries the `expo-image-picker` config plugin with a `photosPermission`
 string. Both are native modules — `npx expo prebuild` required. This section's
 own image surface — the edit screen's preview — deliberately stays on **core RN
@@ -134,7 +161,7 @@ Store IAP for the subscription section (docs/iap.md — the store purchase flow)
 `expo-iap` is the OpenIAP successor to the deprecated react-native-iap (same
 maintainer; the old repo is archived). Added per the normal convention: `*` in
 the app, real pin (`^4.7.0`) in the root `package.json`. Its config plugin is in
-`app.json` (`"expo-iap"` — it wires the Android BILLING permission and the
+`app.config.ts` (`expo-iap` — it wires the Android BILLING permission and the
 native OpenIAP SDKs), and it's a native module — `npx expo prebuild` required;
 the store sheet itself only works on a real device/simulator with a store
 account (jest/Metro can't exercise it). No API keys on the client: server-side
@@ -154,7 +181,7 @@ then move each to `*` in the app and pin the real version in the root
 `package.json`, per the normal convention). `react-native-screens`,
 `expo-linking`, and `expo-constants` are required peers; `react-native-safe-area-context`
 was already present. `expo install` also appends the `expo-router` config
-plugin to `app.json`. Wiring (already done):
+plugin to the app config. Wiring (already done):
 
 - **entry point**: `package.json` `"main": "expo-router/entry"` — this
   **replaces the old `index.js` + `registerRootComponent(App)`**, which were
@@ -327,8 +354,8 @@ no splash gate, and no flash. Wiring (already done):
   **"Inter"** (run once per downloaded release; needs `brew install fonttools` or
   `pip install fonttools`). This is why the committed TTF isn't byte-identical to
   upstream. Without it, iOS would need `fontFamily: 'Inter Variable'`.
-- **plugin**: `["expo-font", { "fonts": ["./assets/fonts/InterVariable.ttf"] }]`
-  in `app.json` — picked up on `npx expo prebuild` (the dev client is already
+- **plugin**: `["expo-font", { fonts: ["./assets/fonts/InterVariable.ttf"] }]`
+  in `app.config.ts` — picked up on `npx expo prebuild` (the dev client is already
   required for the expo-crypto native module). Keep `expo-font` in
   `package.json` dependencies even though nothing imports it in JS: the config
   plugin resolves from the package.
@@ -372,11 +399,11 @@ This can only be exercised on a native build, not jest/Metro.
 #### android release minification — R8 (brace-expo)
 
 Release Android builds run **R8** (shrink + obfuscate) with resource shrinking,
-via the `expo-build-properties` plugin in `app.json`:
+via the `expo-build-properties` plugin in `app.config.ts`:
 
-    ["expo-build-properties", { "android": {
-      "enableMinifyInReleaseBuilds": true,
-      "enableShrinkResourcesInReleaseBuilds": true } }]
+    ["expo-build-properties", { android: {
+      enableMinifyInReleaseBuilds: true,
+      enableShrinkResourcesInReleaseBuilds: true } }]
 
 Both are **off by default** — the prebuild template reads
 `findProperty('android.enableMinifyInReleaseBuilds') ?: false`, so without this

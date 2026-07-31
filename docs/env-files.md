@@ -118,27 +118,49 @@ start` is `development`, `expo export` / a release build is `production`. Expo h
 `staging` is the same wrinkle it is for brace-web: a staging build is a
 _production-mode_ build (`NODE_ENV=production`), so Expo won't pick `.env.staging`
 by mode. And unlike brace-web there's no Nx `envFile` seam to lean on — the Expo
-build isn't an `nx build` running a bundler in `process.env`, it's an EAS/`expo
-export` build. So `.env.staging` is selected by the **staging build profile**
-(EAS `eas.json`, or a manual `EXPO_PUBLIC_API_URL=… expo export`), which supplies
-the var and takes precedence over `.env.production`. **That profile isn't set up
-yet** (`eas.json` was removed as unused), so `.env.staging` is committed as the
-single source of the staging URL for when it lands — `.env.development` and
-`.env.production` are the two that work today.
+build isn't an `nx build` running a bundler in `process.env`. **We don't use EAS**
+— there is no `eas.json` and none is needed; builds are local (`npx expo
+prebuild` + Xcode / Gradle, or `expo export`). So a staging build is made by
+supplying the var inline (`EXPO_PUBLIC_API_URL=… expo export`), which takes
+precedence over `.env.production`; `.env.staging` is committed as the single
+source of that URL to paste from. `.env.development` and `.env.production` are
+the two that work by auto-selection today.
 
-Files in `apps/brace-expo/` (all committed — every value is public):
+Files in `apps/brace-expo/` (committed except `.env.local`):
 
-| file               | used by                                  | loaded by     |
-| ------------------ | ---------------------------------------- | ------------- |
-| `.env.development` | `nx dev @stxapps/brace-expo`             | Expo (auto)   |
-| `.env.production`  | release build / `expo export`            | Expo (auto)   |
-| `.env.staging`     | the staging build profile (EAS — future) | build profile |
+| file               | used by                                       | loaded by   |
+| ------------------ | --------------------------------------------- | ----------- |
+| `.env.development` | `nx dev @stxapps/brace-expo`, `expo prebuild` | Expo (auto) |
+| `.env.production`  | release build / `expo export`                 | Expo (auto) |
+| `.env.staging`     | a staging build (var supplied inline)         | you         |
+| `.env.local`       | every mode — `APPLE_TEAM_ID` (gitignored)     | Expo (auto) |
 
-Current var: `EXPO_PUBLIC_API_URL` → the matching brace-api URL. It's read once in
-`src/lib/api-client.ts`, which throws if unset (mirroring brace-web's and the
-extension's missing-URL guards) and binds it into `@stxapps/expo-react`'s
+Current public var: `EXPO_PUBLIC_API_URL` → the matching brace-api URL. It's read
+once in `src/lib/api-client.ts`, which throws if unset (mirroring brace-web's and
+the extension's missing-URL guards) and binds it into `@stxapps/expo-react`'s
 `createAuthApiClient`. Adding a new var = add the line to all three files, same
 deliberate symmetry as the other frontends.
+
+**The one non-`EXPO_PUBLIC_` var: `APPLE_TEAM_ID`.** This app's config is
+`app.config.ts` (not `app.json`) for exactly one reason — `ios.appleTeamId` has
+to come from the environment, and JSON has no interpolation. At prebuild,
+`@expo/config-plugins`' `withDevelopmentTeam` writes it into `DEVELOPMENT_TEAM`
+for **every** native target in the pbxproj — the app _and_ the share extension —
+which is what keeps local device signing from needing a manual team pick in
+Xcode after each regenerate of `ios/`. Three things follow:
+
+- **It lives in `.env.local`**, not one of the committed files. `.env*.local` is
+  gitignored, and the value is per-developer-account rather than per-tier.
+- **It's mode-agnostic on purpose.** `expo prebuild` calls
+  `setNodeEnv('development')` _before_ `@expo/env.load()`, so it reads
+  `.env.development`, never `.env.production` — a var only in the latter would
+  be invisible to the one command that needs it. `.env.local` is loaded in every
+  mode.
+- **No `EXPO_PUBLIC_` prefix.** That prefix means "inline into the JS bundle";
+  this is a config-time value and never belongs in shipped JS.
+
+Unset is safe: `withDevelopmentTeam` skips a falsy id and leaves the pbxproj
+alone, so a fresh clone still prebuilds — you just pick the team in Xcode.
 
 ### brace-api — Hono on Cloudflare Workers
 
@@ -199,5 +221,6 @@ browser frontends — brace-web and the marketing apex — need an allowed origi
 
 - **committed:** `.env.development`, `.env.staging`, `.env.production` for the
   frontends — every value in them is public.
-- **gitignored:** `.env*.local` (frontend personal overrides), `.dev.vars`
-  (brace-api Workers local), and all real secrets. These never enter git.
+- **gitignored:** `.env*.local` (frontend personal overrides — and brace-expo's
+  `APPLE_TEAM_ID`, above), `.dev.vars` (brace-api Workers local), and all real
+  secrets. These never enter git.

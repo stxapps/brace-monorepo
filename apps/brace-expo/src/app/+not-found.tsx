@@ -1,8 +1,8 @@
 import { Redirect, Unmatched, usePathname } from 'expo-router';
 
 // The catch-all for paths that match no route — reachable mainly through the
-// public custom scheme (`bracedotto://…` in app.json, which any web page or app
-// can fire), and in development through a mistyped `router.push`.
+// public custom scheme (`bracedotto://…` in app.config.ts, which any web page
+// or app can fire), and in development through a mistyped `router.push`.
 //
 // It sits at the ROOT of `src/app/`, a sibling of `(app)` and `(auth)`, so it
 // renders outside both AuthGuard and GuestGuard: an unmatched path is not an

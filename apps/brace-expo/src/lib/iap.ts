@@ -52,8 +52,8 @@ import { apiClient } from './api-client';
 export const STORE_SOURCE: 'appstore' | 'playstore' =
   Platform.OS === 'ios' ? 'appstore' : 'playstore';
 
-// Must match app.json's `android.package` — deepLinkToSubscriptions needs it to
-// open Play's manage-subscription screen on our app.
+// Must match app.config.ts's `android.package` — deepLinkToSubscriptions needs
+// it to open Play's manage-subscription screen on our app.
 const ANDROID_PACKAGE_NAME = 'to.brace.app';
 
 let connectPromise: Promise<void> | null = null;

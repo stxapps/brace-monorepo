@@ -11,7 +11,7 @@
 import { Directory, Paths } from 'expo-file-system';
 
 // expo-share-extension's default group id: `group.` + the bundle identifier
-// (app.json `ios.bundleIdentifier`).
+// (app.config.ts `ios.bundleIdentifier`).
 export const APP_GROUP_ID = 'group.to.brace.app';
 
 // The App Group container directory, or null off-iOS / before entitlements

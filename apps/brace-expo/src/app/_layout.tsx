@@ -18,8 +18,8 @@ import '../../global.css';
 // `main`) is the native entry — there is no registerRootComponent/index.js.
 //
 // Inter is embedded natively at build time via the expo-font config plugin
-// (app.json), under the family name "Inter" (the file's name table was renamed
-// from "Inter Variable" by tools/scripts/rename-inter.py). So `fontFamily:
+// (app.config.ts), under the family name "Inter" (the file's name table was
+// renamed from "Inter Variable" by tools/scripts/rename-inter.py). So `fontFamily:
 // 'Inter'` / the `font-sans` utility resolve at first paint on both iOS and
 // Android with no runtime load — no useFonts, no splash gate. Single variable
 // file, mirroring the web/extension build; the `wght` axis backs the

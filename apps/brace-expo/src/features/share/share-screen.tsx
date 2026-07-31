@@ -52,9 +52,9 @@ type Phase = 'loading' | 'ready' | 'saving' | 'saved';
 const SAVED_DISMISS_MS = 900;
 
 // The sheet's container. On iOS, expo-share-extension provides the floating
-// sheet (height/background from app.json) — fill it. On Android the activity
-// is translucent and full-screen — render the bottom sheet ourselves, with a
-// tap-to-dismiss backdrop.
+// sheet (height/background from app.config.ts) — fill it. On Android the
+// activity is translucent and full-screen — render the bottom sheet ourselves,
+// with a tap-to-dismiss backdrop.
 //
 // Keyboard: BOTH hosts overlay it, so the sheet must move itself. The iOS host
 // view is bottom-pinned at a fixed height with no keyboard logic of its own
