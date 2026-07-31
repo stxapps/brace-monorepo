@@ -176,6 +176,7 @@ describe('playApiFetch (via fetchPlaystoreSubscription)', () => {
 
   it('gives up after one retry — a second 401 is a real auth failure', async () => {
     apiStatuses = [401];
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     // Non-ok, non-404 surfaces as a throw (callers turn it into a 5xx /
     // redelivery), and the retry does NOT become a loop.
     await expect(fetchPlaystoreSubscription(env, 'play-token-1')).rejects.toThrow(
@@ -183,6 +184,9 @@ describe('playApiFetch (via fetchPlaystoreSubscription)', () => {
     );
     expect(apiCalls).toHaveLength(2);
     expect(tokenCalls).toBe(2);
+    // The fresh token failing the same way is the credential's problem, and
+    // says so — that's the line worth alerting on, not the first 401.
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('after a fresh token'));
   });
 
   it('does not retry a 404 — a garbage purchase token is not an auth problem', async () => {

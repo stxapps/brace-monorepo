@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { accountsDb } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
@@ -83,7 +83,13 @@ describe('createAccount', () => {
       ],
     });
 
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await expect(createAccount(env, args)).rejects.toMatchObject({ status: 500 });
+
+    // The client gets an opaque 500 on purpose, so the cause exists in exactly
+    // one place — this log. Spying keeps the suite quiet and pins that.
+    expect(error).toHaveBeenCalledWith('createAccount shard write failed:', expect.any(Error));
+    error.mockRestore();
 
     // The name must be free again (claim released) and no user row left behind —
     // the whole point of the compensation: a failed create never orphans a name.

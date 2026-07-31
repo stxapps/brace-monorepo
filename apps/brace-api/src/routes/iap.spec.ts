@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   bytesToBase64Url,
@@ -76,6 +76,20 @@ function assertNoPendingStubs() {
   playTokenStubbed = false;
   resetPlayAccessTokenCache();
   expect(pending).toEqual([]);
+}
+
+// Capture console for one test. Several tests below deliberately EXERCISE a
+// path the server logs on — a store 5xx, a webhook it can't apply, a
+// supersession it retired — so the log line is part of the behavior under test,
+// not noise. Spying keeps the suite's output clean AND turns the message into
+// an assertion, so a silent regression (the branch taken without its log, or
+// an error logged where the code promises a quiet log) fails. Restored by the
+// outer afterEach.
+function captureConsole() {
+  return {
+    error: vi.spyOn(console, 'error').mockImplementation(() => undefined),
+    log: vi.spyOn(console, 'log').mockImplementation(() => undefined),
+  };
 }
 
 // Drop a stub that must NOT have been consumed (proving no outbound call),
@@ -311,6 +325,12 @@ function mockPaddleSubscription(overrides: Parameters<typeof subscriptionEvent>[
 }
 
 describe('iap', () => {
+  // Undo captureConsole's spies (every nested describe's own afterEach runs
+  // first, so assertions still see them).
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe(`GET ${iapStatusEndpoint.path}`, () => {
     it('requires auth', async () => {
       const res = await app.request(iapStatusEndpoint.path, {}, env);
@@ -431,6 +451,7 @@ describe('iap', () => {
 
     it('still returns the fold when acknowledgement fails', async () => {
       const { auth } = await authFor('iap-verify-ack-2');
+      const logs = captureConsole();
       mockPlaySubscription({});
       // A 4xx is the "already acknowledged" race (the client's own
       // finishTransaction landing between our fetch and the acknowledge) —
@@ -440,6 +461,9 @@ describe('iap', () => {
       const res = await postVerify(auth, { source: 'playstore', token: 'play-token-ack-2' });
       expect(res.status).toBe(200);
       expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
+      // …and logged as the non-event it is: the quiet log, never an error.
+      expect(logs.log).toHaveBeenCalledWith(expect.stringContaining('already acknowledged?'));
+      expect(logs.error).not.toHaveBeenCalled();
     });
 
     it('skips the acknowledge when Google already reports it acknowledged (a restore)', async () => {
@@ -585,10 +609,16 @@ describe('iap', () => {
 
     it('422s a verified purchase for a product we never sold', async () => {
       const { auth } = await authFor('iap-verify-as-4');
+      const logs = captureConsole();
       mockAppstoreStatuses({ originalTransactionId: 'otid-as-4', productId: 'brace.unknown' });
 
       const res = await postVerify(auth, { source: 'appstore', token: '2000000000000004' });
       expect(res.status).toBe(422);
+      // A product the store sold but this server doesn't map is a CONFIG bug —
+      // it must land in the logs, not just in the client's 422.
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('unknown product "brace.unknown"'),
+      );
     });
 
     it('409s a subscription already bound to another account (first sight is for life)', async () => {
@@ -617,6 +647,7 @@ describe('iap', () => {
 
     it('retires the token a Play downgrade replaced (no free ride on the old plan)', async () => {
       const { auth } = await authFor('iap-verify-link-1');
+      const logs = captureConsole();
 
       // On pro.
       mockPlaySubscription({ productId: STORE_PRODUCT_IDS.pro });
@@ -638,6 +669,11 @@ describe('iap', () => {
       expect(res.status).toBe(200);
       expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
       expect((await getStatus(auth)).plan).toBe('plus');
+      // Retiring a row the user paid for is worth a trail — this is the line to
+      // reach for when a support ticket says "my pro just vanished".
+      expect(logs.log).toHaveBeenCalledWith(
+        expect.stringContaining('retired playstore play-link-pro'),
+      );
     });
 
     it('retires a replaced token bound to ANOTHER account (one payment, one entitlement)', async () => {
@@ -645,6 +681,7 @@ describe('iap', () => {
       // Brace account. `purchase_bound` cannot catch it — the tokens differ —
       // so both accounts would be entitled on a single payment.
       const first = await authFor('iap-verify-link-a');
+      const logs = captureConsole();
       mockPlaySubscription({});
       mockPlayAcknowledge();
       expect(
@@ -661,6 +698,11 @@ describe('iap', () => {
 
       expect((await getStatus(second.auth)).plan).toBe('plus');
       expect((await getStatus(first.auth)).plan).toBe('free');
+      // The cross-account retirement names the OLD token and its user — the
+      // only record of why that account lost its plan.
+      expect(logs.log).toHaveBeenCalledWith(
+        expect.stringContaining('retired playstore play-link-acct-a (user iap-verify-link-a'),
+      );
     });
 
     it('walks a replacement chain across a hop it never recorded', async () => {
@@ -669,6 +711,7 @@ describe('iap', () => {
       // X entitled forever, so the walk bridges Y by asking Google what IT
       // replaced.
       const { auth } = await authFor('iap-verify-link-chain');
+      const logs = captureConsole();
       mockPlaySubscription({ productId: STORE_PRODUCT_IDS.pro });
       mockPlayAcknowledge();
       expect((await postVerify(auth, { source: 'playstore', token: 'play-chain-x' })).status).toBe(
@@ -687,6 +730,10 @@ describe('iap', () => {
       const res = await postVerify(auth, { source: 'playstore', token: 'play-chain-z' });
       expect(res.status).toBe(200);
       expect((await getStatus(auth)).plan).toBe('plus');
+      // X — the far end of the chain — is what got retired, not the bridged Y.
+      expect(logs.log).toHaveBeenCalledWith(
+        expect.stringContaining('retired playstore play-chain-x'),
+      );
     });
   });
 
@@ -770,6 +817,7 @@ describe('iap', () => {
       // row is bound and entitled, and dropping it there would leave the user
       // on the higher plan for free until the old period ran out.
       const { auth } = await authFor('iap-notify-ps-link');
+      const logs = captureConsole();
       mockPlaySubscription({ productId: STORE_PRODUCT_IDS.pro });
       mockPlayAcknowledge();
       const verifyRes = await app.request(
@@ -820,10 +868,20 @@ describe('iap', () => {
       // The old row is retired; the new one isn't ours yet, so the account
       // falls to free until the app's verify lands and binds it.
       expect((await getStatus(auth)).plan).toBe('free');
+      // Both halves are logged: the retirement happened, and the drop-out that
+      // followed is the benign unbound case rather than an error.
+      expect(logs.log).toHaveBeenCalledWith(
+        expect.stringContaining('retired playstore play-notify-link-old'),
+      );
+      expect(logs.log).toHaveBeenCalledWith(
+        expect.stringContaining('no binding yet for playstore play-notify-link-new'),
+      );
+      expect(logs.error).not.toHaveBeenCalled();
     });
 
     it('playstore: retries the acknowledge when both purchase-time acks failed', async () => {
       const { auth } = await authFor('iap-notify-ack-1');
+      const logs = captureConsole();
       // Purchase-time: the entitlement records, but the server-side acknowledge
       // 5xxes (and the client, say, dies before its finishTransaction).
       mockPlaySubscription({});
@@ -843,6 +901,13 @@ describe('iap', () => {
       );
       expect(verifyRes.status).toBe(200); // a recorded purchase never fails over the ack
       expect((await getStatus(auth)).plan).toBe('plus');
+      // The 5xx throws (it's the one status worth a redelivery) and is caught
+      // at the call site — logged, never fatal to the purchase.
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('acknowledge failed for play-token-ack-retry-1'),
+        expect.any(Error),
+      );
+      logs.error.mockClear();
 
       // The purchase RTDN re-fetches, sees the purchase still PENDING on a row
       // we HAVE recorded, and closes Google's 3-day auto-refund fuse.
@@ -872,7 +937,9 @@ describe('iap', () => {
         env,
       );
       expect(res.status).toBe(200);
-      // assertNoPendingStubs proves the second `:acknowledge` was actually made.
+      // assertNoPendingStubs proves the second `:acknowledge` was actually made,
+      // and the silent error channel proves THAT one landed on Google's 204.
+      expect(logs.error).not.toHaveBeenCalled();
     });
 
     it('appstore: extracts the transaction id, re-fetches Apple, applies to the bound row', async () => {
@@ -969,6 +1036,7 @@ describe('iap', () => {
     });
 
     it('appstore: ACKs a notification for a never-verified subscription (no binding yet)', async () => {
+      const logs = captureConsole();
       mockAppstoreStatuses({ originalTransactionId: 'otid-notify-unbound' });
       const res = await app.request(
         APPSTORE_NOTIFY_PATH,
@@ -986,6 +1054,12 @@ describe('iap', () => {
         env,
       );
       expect(res.status).toBe(200);
+      // An unbound notification is expected (the RTDN can beat iap/verify), so
+      // it's the quiet log — an error here would page someone for nothing.
+      expect(logs.log).toHaveBeenCalledWith(
+        expect.stringContaining('no binding yet for appstore otid-notify-unbound'),
+      );
+      expect(logs.error).not.toHaveBeenCalled();
     });
 
     it('appstore: ACKs the TEST ping (no transaction to look up)', async () => {
@@ -1167,6 +1241,7 @@ describe('iap', () => {
 
     it('ACKs (200) an event it cannot apply, so Paddle never redelivers forever', async () => {
       // Unknown price id → logged and dropped, still 200.
+      const logs = captureConsole();
       const res = await postWebhook(
         subscriptionEvent({
           subscriptionId: 'sub_hook_unknown',
@@ -1175,6 +1250,13 @@ describe('iap', () => {
         }),
       );
       expect(res.status).toBe(200);
+      // The 200 is why the log MATTERS: Paddle is told never to retry, so this
+      // line is the only trace left of a user who paid. It carries the alert
+      // marker because the subscription is first-seen — no row to recover from.
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('no known price in [pri_unknown] for sub_hook_unknown'),
+      );
+      expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('IAP_DROP_UNRECOVERABLE'));
     });
   });
 
@@ -1271,6 +1353,7 @@ describe('iap', () => {
 
     it('still answers with the stored fold when the provider is unreachable', async () => {
       const { userId, auth } = await authFor('iap-refresh-down-1');
+      const logs = captureConsole();
       const endsAt = Date.now() - 2 * DAY_MS;
       await postWebhook(subscriptionEvent({ subscriptionId: 'sub_refresh_x1', userId, endsAt }));
       await clearSyncClock('sub_refresh_x1');
@@ -1286,6 +1369,13 @@ describe('iap', () => {
       mockPaddleSubscription({ subscriptionId: 'sub_refresh_x1', userId });
       await getStatus(auth);
       takeUnusedStub('/subscriptions/sub_refresh_x1');
+
+      // Swallowed for the caller, but not silently: the row is now knowingly
+      // stale, and only this line says so.
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('refreshPurchase: paddle sub_refresh_x1 refresh failed'),
+        expect.any(Error),
+      );
     });
 
     it('refreshes a store row by its stored external id, with no notification', async () => {
@@ -1469,6 +1559,7 @@ describe('iap', () => {
 
     it('drops the row when Paddle does not know the transaction', async () => {
       const { auth } = await authFor('iap-checkout-404-1');
+      const logs = captureConsole();
       await postCheckout(auth, 'txn_gone_1');
       await ageCheckout('txn_gone_1');
 
@@ -1477,10 +1568,16 @@ describe('iap', () => {
 
       // Terminal: nothing will ever come of it, so it isn't left to age out.
       expect(await isPending('txn_gone_1')).toBe(false);
+      // Dropping a row on the provider's say-so is logged as an error — a 404
+      // for a transaction we minted means our side and Paddle's disagree.
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('paddle does not know txn_gone_1'),
+      );
     });
 
     it('keeps the row when Paddle is unreachable, and still answers', async () => {
       const { auth } = await authFor('iap-checkout-down-1');
+      const logs = captureConsole();
       await postCheckout(auth, 'txn_down_1');
       await ageCheckout('txn_down_1');
 
@@ -1493,6 +1590,16 @@ describe('iap', () => {
       mockPaddleTransaction({ transactionId: 'txn_down_1', subscriptionId: 'sub_down_1' });
       expect((await getStatus(auth)).plan).toBe('free');
       takeUnusedStub('/transactions/txn_down_1');
+
+      // An outage reads differently from the 404 above — "failed", not "does
+      // not know" — which is what keeps the row alive for the next window.
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('resolveCheckout: txn_down_1 failed'),
+        expect.any(Error),
+      );
+      expect(logs.error).not.toHaveBeenCalledWith(
+        expect.stringContaining('does not know txn_down_1'),
+      );
     });
 
     it('ignores pending checkouts once the account is entitled', async () => {
@@ -1539,6 +1646,7 @@ describe('iap', () => {
 
     it('keeps the pending checkout when the created event could not be applied', async () => {
       const { userId, auth } = await authFor('iap-checkout-unapplied-1');
+      const logs = captureConsole();
       await postCheckout(auth, 'txn_unapplied_1');
 
       // An unknown pri_… (the config-bug drop): we ACK, so Paddle never resends,
@@ -1556,6 +1664,10 @@ describe('iap', () => {
       expect(res.status).toBe(200);
       expect(await isPending('txn_unapplied_1')).toBe(true);
       expect((await getStatus(auth)).plan).toBe('free');
+      expect(logs.error).toHaveBeenCalledWith(
+        expect.stringContaining('no known price in [pri_not_configured] for sub_unapplied_1'),
+      );
+      logs.error.mockClear();
 
       // …and the row does its job on the next window, once Paddle is asked
       // about a subscription whose price the server does know.
@@ -1566,6 +1678,8 @@ describe('iap', () => {
       });
       mockPaddleSubscription({ subscriptionId: 'sub_unapplied_1', userId });
       expect((await getStatus(auth)).plan).toBe('plus');
+      // Recovery is clean — no second drop, and nothing on the error channel.
+      expect(logs.error).not.toHaveBeenCalled();
     });
 
     it('drops a checkout left unbilled long enough to read as abandoned', async () => {
