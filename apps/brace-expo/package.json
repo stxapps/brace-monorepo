@@ -42,6 +42,7 @@
     "expo-build-properties": "*",
     "expo-clipboard": "*",
     "expo-constants": "*",
+    "expo-dev-client": "*",
     "expo-document-picker": "*",
     "expo-file-system": "*",
     "expo-font": "*",
