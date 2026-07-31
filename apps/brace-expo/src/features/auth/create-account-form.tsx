@@ -187,18 +187,18 @@ export function CreateAccountForm() {
             }}
           />
           {usernameError ? (
-            <Text className="text-destructive text-sm">{usernameError}</Text>
+            <Text className="text-sm text-destructive">{usernameError}</Text>
           ) : usernameValid && availability.isFetching ? (
-            <Text className="text-muted-foreground text-sm">Checking availability…</Text>
+            <Text className="text-sm text-muted-foreground">Checking availability…</Text>
           ) : usernameValid && usernameAvailable ? (
-            <Text className="text-muted-foreground text-sm">Username is available</Text>
+            <Text className="text-sm text-muted-foreground">Username is available</Text>
           ) : null}
         </View>
 
         {mode === 'generated' ? (
           <View className="gap-2">
             <Text className="text-sm font-medium">Your password</Text>
-            <Text className="text-muted-foreground text-sm">
+            <Text className="text-sm text-muted-foreground">
               We generated a strong password for you. Save it in your password manager — there is no
               way to reset it if it&apos;s lost.
             </Text>
@@ -214,11 +214,11 @@ export function CreateAccountForm() {
                 onPress={regeneratePassphrase}
                 className="flex-row items-center gap-1.5 py-1"
               >
-                <Icon as={RefreshCw} className="text-muted-foreground size-3.5" />
-                <Text className="text-muted-foreground text-sm">Regenerate</Text>
+                <Icon as={RefreshCw} className="size-3.5 text-muted-foreground" />
+                <Text className="text-sm text-muted-foreground">Regenerate</Text>
               </Pressable>
               <Pressable onPress={() => setMode('own')} className="py-1">
-                <Text className="text-muted-foreground text-sm underline">Choose my own</Text>
+                <Text className="text-sm text-muted-foreground underline">Choose my own</Text>
               </Pressable>
             </View>
           </View>
@@ -233,14 +233,14 @@ export function CreateAccountForm() {
             />
             <PasswordStrengthMeter displayScore={displayScore} />
             {ownPasswordError ? (
-              <Text className="text-destructive text-sm">{ownPasswordError}</Text>
+              <Text className="text-sm text-destructive">{ownPasswordError}</Text>
             ) : null}
-            <Text className="text-muted-foreground text-sm">
+            <Text className="text-sm text-muted-foreground">
               A password of random words is stronger than most passwords you&apos;d type. If you use
               your own, make it long and unique — there is no way to reset it if it&apos;s lost.
             </Text>
             <Pressable onPress={() => setMode('generated')} className="self-start py-1">
-              <Text className="text-muted-foreground text-sm underline">Generate one instead</Text>
+              <Text className="text-sm text-muted-foreground underline">Generate one instead</Text>
             </Pressable>
           </View>
         )}
@@ -259,7 +259,7 @@ export function CreateAccountForm() {
         <BackLink onPress={() => setStep('setup')} />
         <View className="gap-2">
           <Text className="text-sm font-medium">Confirm your password</Text>
-          <Text className="text-muted-foreground text-sm">
+          <Text className="text-sm text-muted-foreground">
             Re-enter it to make sure you have it saved correctly.
           </Text>
           <PasswordInput
@@ -273,7 +273,7 @@ export function CreateAccountForm() {
             }}
           />
           {confirmError ? (
-            <Text className="text-destructive text-sm">
+            <Text className="text-sm text-destructive">
               That doesn&apos;t match. Check what you saved and try again.
             </Text>
           ) : null}
@@ -291,7 +291,7 @@ export function CreateAccountForm() {
       <BackLink onPress={() => setStep('confirm')} />
       <View className="gap-2">
         <Text className="text-sm font-medium">Recovery code</Text>
-        <Text className="text-muted-foreground text-sm">
+        <Text className="text-sm text-muted-foreground">
           Save this recovery code somewhere safe. It&apos;s the only way back into your account if
           you ever lose your password.
         </Text>
@@ -306,8 +306,8 @@ export function CreateAccountForm() {
           onPress={regenerateRecovery}
           className="flex-row items-center gap-1.5 self-start py-1"
         >
-          <Icon as={RefreshCw} className="text-muted-foreground size-3.5" />
-          <Text className="text-muted-foreground text-sm">Regenerate</Text>
+          <Icon as={RefreshCw} className="size-3.5 text-muted-foreground" />
+          <Text className="text-sm text-muted-foreground">Regenerate</Text>
         </Pressable>
       </View>
 
@@ -320,11 +320,11 @@ export function CreateAccountForm() {
           disabled={pending}
           className={cn('items-center py-2', pending && 'opacity-50')}
         >
-          <Text className="text-muted-foreground text-sm underline">
+          <Text className="text-sm text-muted-foreground underline">
             Skip for now — I&apos;ll set this up later
           </Text>
         </Pressable>
-        {submitError ? <Text className="text-destructive text-sm">{submitError}</Text> : null}
+        {submitError ? <Text className="text-sm text-destructive">{submitError}</Text> : null}
       </View>
     </View>
   );
@@ -333,8 +333,8 @@ export function CreateAccountForm() {
 function BackLink({ onPress }: { onPress: () => void }) {
   return (
     <Pressable onPress={onPress} className="flex-row items-center gap-1 self-start py-1">
-      <Icon as={ChevronLeft} className="text-muted-foreground size-4" />
-      <Text className="text-muted-foreground text-sm">Back</Text>
+      <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />
+      <Text className="text-sm text-muted-foreground">Back</Text>
     </Pressable>
   );
 }

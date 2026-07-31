@@ -135,7 +135,7 @@ export function ListCommand({
       <ScrollView className="max-h-80" nestedScrollEnabled keyboardShouldPersistTaps="handled">
         {/* Suppressed when there's a Create row: that row IS the next step. */}
         {visibleRows.length === 0 && !canCreate && (
-          <Text className="text-muted-foreground px-2 py-2.5 text-sm">No lists found.</Text>
+          <Text className="px-2 py-2.5 text-sm text-muted-foreground">No lists found.</Text>
         )}
         {root && !filtering && (
           // Hidden while filtering: it has no name to match, and the flat
@@ -146,7 +146,7 @@ export function ListCommand({
               onPress={() => root.onSelect()}
               accessibilityRole="menuitem"
               className={cn(
-                'active:bg-muted flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5',
+                'flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5 active:bg-muted',
                 root.selected && 'opacity-50',
               )}
             >
@@ -154,10 +154,10 @@ export function ListCommand({
                 {root.label}
               </Text>
               {root.selected && (
-                <Icon as={Check} className="text-muted-foreground size-4 shrink-0" />
+                <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
               )}
             </Pressable>
-            <View className="bg-border my-1 h-px" />
+            <View className="my-1 h-px bg-border" />
           </>
         )}
         {visibleRows.map(({ item, depth, ancestors }) => {
@@ -169,7 +169,7 @@ export function ListCommand({
               onPress={() => onSelect(item.id)}
               accessibilityRole="menuitem"
               className={cn(
-                'active:bg-muted flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5',
+                'flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5 active:bg-muted',
                 disabled && 'opacity-50',
               )}
               style={!filtering && depth > 0 ? { paddingLeft: depth * 12 + 8 } : undefined}
@@ -181,7 +181,7 @@ export function ListCommand({
                 {item.name}
               </Text>
               {item.id === value && (
-                <Icon as={Check} className="text-muted-foreground size-4 shrink-0" />
+                <Icon as={Check} className="size-4 shrink-0 text-muted-foreground" />
               )}
             </Pressable>
           );
@@ -192,11 +192,11 @@ export function ListCommand({
             onPress={() => void create()}
             accessibilityRole="menuitem"
             className={cn(
-              'active:bg-muted flex-row items-center gap-2 rounded-md px-2 py-2.5',
+              'flex-row items-center gap-2 rounded-md px-2 py-2.5 active:bg-muted',
               creating && 'opacity-50',
             )}
           >
-            <Icon as={Plus} className="text-muted-foreground size-4 shrink-0" />
+            <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
             <Text numberOfLines={1} className="min-w-0 flex-1">
               Create “{trimmed}”
             </Text>

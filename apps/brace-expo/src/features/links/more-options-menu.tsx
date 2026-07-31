@@ -68,11 +68,11 @@ export function MoreOptionsMenu() {
           aria-label={syncError ? 'More options (sync failed)' : 'More options'}
           className="relative size-10 items-center justify-center rounded-md"
         >
-          <Icon as={MoreHorizontal} className="text-muted-foreground size-5" />
+          <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
           {syncError && (
             <View
               aria-hidden
-              className="bg-destructive absolute top-1.5 right-1.5 size-1.5 rounded-full"
+              className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive"
             />
           )}
         </Pressable>
@@ -81,7 +81,7 @@ export function MoreOptionsMenu() {
         <DropdownMenuItem onPress={requestSync}>
           {syncError ? (
             <>
-              <Icon as={CircleAlert} className="text-destructive size-4" />
+              <Icon as={CircleAlert} className="size-4 text-destructive" />
               <Text>Sync failed — Retry</Text>
             </>
           ) : (

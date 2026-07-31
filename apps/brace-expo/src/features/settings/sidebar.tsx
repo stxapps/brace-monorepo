@@ -53,7 +53,7 @@ function NavItem({
         numberOfLines={1}
         className={cn(
           'min-w-0 flex-1 text-sm',
-          active ? 'text-foreground font-medium' : 'text-muted-foreground',
+          active ? 'font-medium text-foreground' : 'text-muted-foreground',
         )}
       >
         {section.label}
@@ -73,7 +73,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           aria-label="Back to links"
           className="size-10 items-center justify-center rounded-md"
         >
-          <Icon as={ArrowLeft} className="text-foreground size-5" />
+          <Icon as={ArrowLeft} className="size-5 text-foreground" />
         </Pressable>
       </View>
 

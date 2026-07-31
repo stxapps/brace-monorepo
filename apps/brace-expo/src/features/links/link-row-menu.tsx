@@ -111,7 +111,7 @@ export function LinkRowMenu({
             aria-label="Link options"
             className="size-8 shrink-0 items-center justify-center rounded-md"
           >
-            <Icon as={MoreHorizontal} className="text-muted-foreground size-4" />
+            <Icon as={MoreHorizontal} className="size-4 text-muted-foreground" />
           </Pressable>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">

@@ -117,12 +117,12 @@ export function TagsField({
               onPress={() => void submit()}
               aria-label={`Create tag ${trimmed}`}
               className={cn(
-                'border-input flex-row items-center gap-1 rounded-full border border-dashed px-3 py-1.5',
+                'flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5',
                 creating && 'opacity-50',
               )}
             >
-              <Icon as={Plus} className="text-muted-foreground size-3.5" />
-              <Text className="text-muted-foreground text-sm">Create “{trimmed}”</Text>
+              <Icon as={Plus} className="size-3.5 text-muted-foreground" />
+              <Text className="text-sm text-muted-foreground">Create “{trimmed}”</Text>
             </Pressable>
           )}
         </View>

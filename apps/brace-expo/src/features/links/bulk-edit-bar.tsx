@@ -168,7 +168,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   const disabled = count === 0 || busy !== null;
 
   return (
-    <View className="border-border shrink-0 border-t bg-background px-3 pt-2 pb-1">
+    <View className="shrink-0 border-t border-border bg-background px-3 pt-2 pb-1">
       <View className="h-10 flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
           <Pressable
@@ -176,9 +176,9 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             onPress={exitBulkEdit}
             className="size-10 items-center justify-center rounded-md"
           >
-            <Icon as={X} className="text-foreground size-5" />
+            <Icon as={X} className="size-5 text-foreground" />
           </Pressable>
-          <Text className="text-muted-foreground text-sm">{count} selected</Text>
+          <Text className="text-sm text-muted-foreground">{count} selected</Text>
         </View>
         <Pressable
           aria-label="Select all"
@@ -186,7 +186,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           onPress={() => (allSelected ? clearSelected() : selectAll(links))}
           className="h-10 flex-row items-center gap-2 rounded-md px-1"
         >
-          <Text className="text-muted-foreground text-sm">Select all</Text>
+          <Text className="text-sm text-muted-foreground">Select all</Text>
           <Checkbox
             aria-label="Select all"
             disabled={links.length === 0}

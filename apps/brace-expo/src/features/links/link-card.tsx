@@ -64,7 +64,7 @@ export function LinkCard({
         onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
         accessibilityState={selectMode ? { selected } : undefined}
         style={{ height: cardHeight }}
-        className={`border-border overflow-hidden rounded-lg border ${
+        className={`overflow-hidden rounded-lg border border-border ${
           selected ? 'bg-muted' : 'active:bg-muted/50'
         }`}
       >
@@ -77,7 +77,7 @@ export function LinkCard({
             {pinned && <PinnedBadge />}
             {link.note !== undefined && link.note !== '' && <NoteBadge />}
             <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
-            <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1 text-xs">
+            <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-muted-foreground">
               {host}
             </Text>
           </View>

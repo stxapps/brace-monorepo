@@ -103,7 +103,7 @@ export function LockPasswordDialog({
             </Pressable>
           )}
 
-          {error && <Text className="text-destructive text-sm">{error}</Text>}
+          {error && <Text className="text-sm text-destructive">{error}</Text>}
 
           <DialogFooter>
             <Button variant="outline" onPress={() => onOpenChange(false)}>

@@ -34,7 +34,7 @@ export function PasswordInput({
         aria-label={show ? 'Hide password' : 'Show password'}
         className="absolute inset-y-0 right-0 justify-center px-3"
       >
-        <Icon as={show ? EyeOff : Eye} className="text-muted-foreground size-4" />
+        <Icon as={show ? EyeOff : Eye} className="size-4 text-muted-foreground" />
       </Pressable>
     </View>
   );

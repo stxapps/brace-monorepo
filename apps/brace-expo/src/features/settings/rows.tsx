@@ -33,7 +33,7 @@ export function ActionRow({
   return (
     <Pressable
       onPress={onPress}
-      className="border-border active:bg-muted/40 w-full flex-row items-center gap-3 rounded-lg border p-4"
+      className="w-full flex-row items-center gap-3 rounded-lg border border-border p-4 active:bg-muted/40"
     >
       <Icon
         as={icon}
@@ -44,9 +44,9 @@ export function ActionRow({
       />
       <View className="min-w-0 flex-1 gap-0.5">
         <Text className={cn('font-medium', destructive && 'text-destructive')}>{title}</Text>
-        <Text className="text-muted-foreground text-sm">{description}</Text>
+        <Text className="text-sm text-muted-foreground">{description}</Text>
       </View>
-      <Icon as={ChevronRight} className="text-muted-foreground size-4 shrink-0" />
+      <Icon as={ChevronRight} className="size-4 shrink-0 text-muted-foreground" />
     </Pressable>
   );
 }
@@ -81,7 +81,7 @@ export function CreateRow({
   };
 
   return (
-    <View className="border-border flex-row items-center gap-1 border-b px-1 py-1.5">
+    <View className="flex-row items-center gap-1 border-b border-border px-1 py-1.5">
       <Pressable
         aria-label={active ? 'Cancel' : placeholder}
         className="size-9 items-center justify-center rounded-md"
@@ -89,7 +89,7 @@ export function CreateRow({
           if (active) reset();
         }}
       >
-        <Icon as={active ? X : Plus} className="text-muted-foreground size-4" />
+        <Icon as={active ? X : Plus} className="size-4 text-muted-foreground" />
       </Pressable>
       <Input
         value={value}
@@ -107,7 +107,7 @@ export function CreateRow({
           className="size-9 items-center justify-center rounded-md"
           onPress={() => void confirm()}
         >
-          <Icon as={Check} className="text-muted-foreground size-4" />
+          <Icon as={Check} className="size-4 text-muted-foreground" />
         </Pressable>
       )}
     </View>
@@ -119,8 +119,8 @@ export function CreateRow({
 export function BackLink({ label, onBack }: { label: string; onBack: () => void }) {
   return (
     <Pressable onPress={onBack} className="mb-4 flex-row items-center gap-1 self-start rounded">
-      <Icon as={ChevronLeft} className="text-muted-foreground size-4" />
-      <Text className="text-muted-foreground text-sm">{label}</Text>
+      <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />
+      <Text className="text-sm text-muted-foreground">{label}</Text>
     </Pressable>
   );
 }

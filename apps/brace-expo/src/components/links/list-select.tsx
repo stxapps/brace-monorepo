@@ -74,7 +74,7 @@ export function ListSelect({
         accessibilityRole="combobox"
         aria-expanded={open}
         aria-label="List"
-        className="border-input dark:bg-input/30 h-10 flex-row items-center justify-between gap-2 rounded-md border bg-background px-3 shadow-sm shadow-black/5"
+        className="h-10 flex-row items-center justify-between gap-2 rounded-md border border-input bg-background px-3 shadow-sm shadow-black/5 dark:bg-input/30"
       >
         {selected ? (
           <Text numberOfLines={1} className="min-w-0 flex-1">
@@ -84,11 +84,11 @@ export function ListSelect({
             {selected.item.name}
           </Text>
         ) : (
-          <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-muted-foreground">
             Choose a list
           </Text>
         )}
-        <Icon as={ChevronsUpDown} className="text-muted-foreground size-4 shrink-0" />
+        <Icon as={ChevronsUpDown} className="size-4 shrink-0 text-muted-foreground" />
       </Pressable>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

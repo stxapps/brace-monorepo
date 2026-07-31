@@ -177,7 +177,7 @@ export function SubscriptionSection() {
         <Text role="heading" className="text-xl font-semibold">
           Subscription
         </Text>
-        <Text className="text-muted-foreground mt-2 text-sm">Loading your subscription…</Text>
+        <Text className="mt-2 text-sm text-muted-foreground">Loading your subscription…</Text>
       </View>
     );
   }
@@ -194,23 +194,23 @@ export function SubscriptionSection() {
       <Text role="heading" className="text-xl font-semibold">
         Subscription
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
         Your plan applies to your whole account, on every device. Payments are handled by the{' '}
         {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'}; Brace never sees your card
         details.
       </Text>
 
       {/* Current plan */}
-      <View className="border-border rounded-lg border p-4">
+      <View className="rounded-lg border border-border p-4">
         <View className="flex-row items-start justify-between gap-4">
           <View className="min-w-0 flex-1 gap-0.5">
             <View className="flex-row items-baseline gap-2">
               <Text className="font-medium">{PLAN_LABELS[plan]}</Text>
               {plan !== 'free' && status === 'grace' && (
-                <Text className="text-destructive text-sm">payment issue</Text>
+                <Text className="text-sm text-destructive">payment issue</Text>
               )}
             </View>
-            <Text className="text-muted-foreground text-sm">
+            <Text className="text-sm text-muted-foreground">
               {plan === 'free'
                 ? 'Encrypted saving, sync, lists and tags — up to 200 links, without previews.'
                 : expiresAt === null
@@ -232,8 +232,8 @@ export function SubscriptionSection() {
         </View>
 
         {status === 'grace' && (
-          <View className="bg-destructive/10 mt-3 rounded-md px-3 py-2">
-            <Text className="text-destructive text-sm">
+          <View className="mt-3 rounded-md bg-destructive/10 px-3 py-2">
+            <Text className="text-sm text-destructive">
               Your last payment didn&apos;t go through. Update your payment method to keep your plan
               — we&apos;ll retry for a while before it lapses.
             </Text>
@@ -249,7 +249,7 @@ export function SubscriptionSection() {
               <Icon as={ExternalLink} className="size-4" />
               <Text>{busy === 'manage' ? 'Opening…' : 'Manage subscription'}</Text>
             </Button>
-            <Text className="text-muted-foreground mt-2 text-xs">
+            <Text className="mt-2 text-xs text-muted-foreground">
               Payment method, cancellation, and renewals — in the{' '}
               {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'}&apos;s subscription
               settings.
@@ -257,13 +257,13 @@ export function SubscriptionSection() {
           </View>
         )}
         {plan !== 'free' && source === 'paddle' && (
-          <Text className="text-muted-foreground mt-3 text-sm">
+          <Text className="mt-3 text-sm text-muted-foreground">
             This subscription was purchased on the web — manage billing or cancel it in the web
             app&apos;s Subscription settings.
           </Text>
         )}
         {(source === 'appstore' || source === 'playstore') && source !== STORE_SOURCE && (
-          <Text className="text-muted-foreground mt-3 text-sm">
+          <Text className="mt-3 text-sm text-muted-foreground">
             This subscription was purchased in the{' '}
             {source === 'appstore' ? 'App Store' : 'Play Store'} — manage or cancel it there.
           </Text>
@@ -271,13 +271,13 @@ export function SubscriptionSection() {
       </View>
 
       {notice && (
-        <View className="bg-muted/50 mt-4 rounded-md px-3 py-2">
-          <Text className="text-muted-foreground text-sm">{notice}</Text>
+        <View className="mt-4 rounded-md bg-muted/50 px-3 py-2">
+          <Text className="text-sm text-muted-foreground">{notice}</Text>
         </View>
       )}
       {error && (
-        <View className="bg-destructive/10 mt-4 rounded-md px-3 py-2">
-          <Text className="text-destructive text-sm">{error}</Text>
+        <View className="mt-4 rounded-md bg-destructive/10 px-3 py-2">
+          <Text className="text-sm text-destructive">{error}</Text>
         </View>
       )}
 
@@ -287,10 +287,10 @@ export function SubscriptionSection() {
           {upgradeCards.map(({ plan: cardPlan, blurb, features }) => {
             const product = products?.[cardPlan];
             return (
-              <View key={cardPlan} className="border-border rounded-lg border p-4">
+              <View key={cardPlan} className="rounded-lg border border-border p-4">
                 <View className="flex-row items-baseline justify-between">
                   <Text className="font-medium">{PLAN_LABELS[cardPlan]}</Text>
-                  <Text className="text-muted-foreground text-sm">
+                  <Text className="text-sm text-muted-foreground">
                     {/* The store's localized price once loaded; the USD
                         planning price as a placeholder meanwhile. */}
                     {product
@@ -298,11 +298,11 @@ export function SubscriptionSection() {
                       : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
                   </Text>
                 </View>
-                <Text className="text-muted-foreground mt-1 text-sm">{blurb}</Text>
+                <Text className="mt-1 text-sm text-muted-foreground">{blurb}</Text>
                 <View className="mt-3 gap-1.5">
                   {features.map((feature) => (
                     <View key={feature} className="flex-row items-start gap-2">
-                      <Icon as={Check} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                      <Icon as={Check} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <Text className="flex-1 text-sm">{feature}</Text>
                     </View>
                   ))}

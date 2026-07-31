@@ -15,10 +15,10 @@ export default function CreateAccountScreen() {
       title="Create account"
       description="Start saving links to visit later."
       footer={
-        <Text className="text-muted-foreground text-sm">
+        <Text className="text-sm text-muted-foreground">
           Already have an account?{' '}
           <Link href="/sign-in">
-            <Text className="text-foreground text-sm font-medium underline">Sign in</Text>
+            <Text className="text-sm font-medium text-foreground underline">Sign in</Text>
           </Link>
         </Text>
       }

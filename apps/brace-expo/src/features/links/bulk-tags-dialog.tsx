@@ -101,7 +101,7 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
         <ScrollView className="max-h-60" nestedScrollEnabled keyboardShouldPersistTaps="handled">
           <TagsField value={tagIds} onChange={setTagIds} />
         </ScrollView>
-        <Text className="text-muted-foreground text-xs">
+        <Text className="text-xs text-muted-foreground">
           Only tags shared by every selected link start selected; a tag on just some of them is left
           untouched.
         </Text>

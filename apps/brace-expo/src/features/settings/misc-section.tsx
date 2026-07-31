@@ -113,17 +113,17 @@ function OptionRow({
       onPress={onSelect}
       aria-checked={selected}
       className={cn(
-        'border-border flex-row items-start gap-3 rounded-lg border p-3',
+        'flex-row items-start gap-3 rounded-lg border border-border p-3',
         selected && 'border-primary bg-muted/40',
       )}
     >
       <RadioGroupItem value={value} className="mt-0.5" />
       <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
-          <Icon as={icon} className="text-foreground size-4" />
+          <Icon as={icon} className="size-4 text-foreground" />
           <Text className="font-medium">{label}</Text>
         </View>
-        <Text className="text-muted-foreground text-sm">{hint}</Text>
+        <Text className="text-sm text-muted-foreground">{hint}</Text>
       </View>
     </Pressable>
   );
@@ -267,13 +267,13 @@ export function MiscSection() {
       <Text role="heading" className="text-xl font-semibold">
         Misc.
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
         General preferences for the app.
       </Text>
 
       {error && (
-        <View className="bg-destructive/10 mb-4 rounded-md px-3 py-2">
-          <Text className="text-destructive text-sm">{error}</Text>
+        <View className="mb-4 rounded-md bg-destructive/10 px-3 py-2">
+          <Text className="text-sm text-destructive">{error}</Text>
         </View>
       )}
 
@@ -281,7 +281,7 @@ export function MiscSection() {
         <Text role="heading" className="text-base font-medium">
           Link layout
         </Text>
-        <Text className="text-muted-foreground mt-1 text-sm">
+        <Text className="mt-1 text-sm text-muted-foreground">
           Choose how your saved links are displayed.{' '}
           <Text className="text-sm font-semibold">Sync</Text> applies your choice across all your
           devices. <Text className="text-sm font-semibold">Device</Text> keeps a separate choice for
@@ -325,7 +325,7 @@ export function MiscSection() {
         <Text role="heading" className="text-base font-medium">
           Link sort
         </Text>
-        <Text className="text-muted-foreground mt-1 text-sm">
+        <Text className="mt-1 text-sm text-muted-foreground">
           Choose how your saved links are ordered. This applies across all your devices.
         </Text>
 
@@ -385,7 +385,7 @@ export function MiscSection() {
         <Text role="heading" className="text-base font-medium">
           Theme
         </Text>
-        <Text className="text-muted-foreground mt-1 text-sm">
+        <Text className="mt-1 text-sm text-muted-foreground">
           Choose the app&apos;s appearance. <Text className="text-sm font-semibold">Sync</Text>{' '}
           applies your choice across all your devices.{' '}
           <Text className="text-sm font-semibold">Device</Text> keeps a separate choice for this
@@ -419,7 +419,7 @@ export function MiscSection() {
         <Text role="heading" className="text-base font-medium">
           App lock
         </Text>
-        <Text className="text-muted-foreground mt-1 text-sm">
+        <Text className="mt-1 text-sm text-muted-foreground">
           Lock the whole app with a password on this device only — it engages every time the app
           loads. If you forget the password, sign out and sign back in with your account password;
           signing out removes all locks on this device.
@@ -452,7 +452,7 @@ export function MiscSection() {
           <View className="mt-4 flex-row items-center justify-between gap-4">
             <View className="min-w-0 flex-1">
               <Text className="font-medium">Unlock with {biometricLabel}</Text>
-              <Text className="text-muted-foreground mt-0.5 text-sm">
+              <Text className="mt-0.5 text-sm text-muted-foreground">
                 Use {biometricLabel} instead of typing the password. The password still works as a
                 fallback.
               </Text>

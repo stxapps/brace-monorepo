@@ -129,7 +129,7 @@ function WordField({
 }) {
   return (
     <View className="gap-1">
-      <Text className="text-muted-foreground text-xs">{label}</Text>
+      <Text className="text-xs text-muted-foreground">{label}</Text>
       <Input
         value={value}
         placeholder={placeholder}
@@ -191,9 +191,9 @@ function TriCheckList({
   return (
     <View className="gap-1">
       <View className="h-6 flex-row items-center justify-between">
-        <Text className="text-muted-foreground text-xs">{label}</Text>
+        <Text className="text-xs text-muted-foreground">{label}</Text>
         {action ?? (
-          <Text aria-hidden className="text-muted-foreground text-[10px]">
+          <Text aria-hidden className="text-[10px] text-muted-foreground">
             ✓ include · − exclude
           </Text>
         )}
@@ -209,11 +209,11 @@ function TriCheckList({
           className="h-8 text-sm"
         />
       )}
-      <View className="border-border max-h-40 rounded-md border p-1">
+      <View className="max-h-40 rounded-md border border-border p-1">
         {/* Nested same-direction scrolling: fine on iOS, opt-in on Android. */}
         <ScrollView nestedScrollEnabled>
           {visible.length === 0 && (
-            <Text className="text-muted-foreground px-1.5 py-1 text-sm">No matches</Text>
+            <Text className="px-1.5 py-1 text-sm text-muted-foreground">No matches</Text>
           )}
           {visible.map((o) => {
             const state = include.includes(o.id)
@@ -233,7 +233,7 @@ function TriCheckList({
                       ? 'excluded'
                       : 'not selected'
                 }`}
-                className="active:bg-muted flex-row items-center gap-2 rounded px-1.5 py-2"
+                className="flex-row items-center gap-2 rounded px-1.5 py-2 active:bg-muted"
                 style={o.depth > 0 ? { paddingLeft: o.depth * 12 + 6 } : undefined}
               >
                 <View
@@ -285,12 +285,12 @@ function TriCheckList({
 // pushed Subscription screen.
 function LockedBanner({ onSeePlans }: { onSeePlans: () => void }) {
   return (
-    <View className="bg-muted flex-row items-start gap-2 rounded-md px-3 py-2">
-      <Icon as={Lock} className="text-muted-foreground mt-0.5 size-3.5" />
-      <Text className="text-muted-foreground min-w-0 flex-1 text-xs">
-        A <Text className="text-foreground text-xs font-medium">Plus</Text> feature. Build your
+    <View className="flex-row items-start gap-2 rounded-md bg-muted px-3 py-2">
+      <Icon as={Lock} className="mt-0.5 size-3.5 text-muted-foreground" />
+      <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
+        A <Text className="text-xs font-medium text-foreground">Plus</Text> feature. Build your
         query, then upgrade to run it.{' '}
-        <Text onPress={onSeePlans} className="text-primary text-xs font-medium">
+        <Text onPress={onSeePlans} className="text-xs font-medium text-primary">
           See plans
         </Text>
       </Text>
@@ -369,11 +369,11 @@ function AdvancedSearch() {
         aria-label="Advanced search"
         className="relative size-10 items-center justify-center rounded-md"
       >
-        <Icon as={SlidersHorizontal} className="text-muted-foreground size-5" />
+        <Icon as={SlidersHorizontal} className="size-5 text-muted-foreground" />
         {hasAdvancedFilters(query) && (
           <View
             aria-hidden
-            className="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full"
+            className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary"
           />
         )}
       </Pressable>
@@ -391,14 +391,14 @@ function AdvancedSearch() {
               its own native window, outside the root KeyboardProvider's view
               tree (the same reason the share screen avoids it). */}
           <KeyboardAvoidingView behavior="padding" className="flex-1">
-            <View className="border-border h-14 flex-row items-center justify-between border-b pr-2 pl-4">
+            <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
               <Text className="text-lg font-semibold">Advanced search</Text>
               <Pressable
                 onPress={() => setOpen(false)}
                 aria-label="Close advanced search"
                 className="size-10 items-center justify-center rounded-md"
               >
-                <Icon as={X} className="text-muted-foreground size-5" />
+                <Icon as={X} className="size-5 text-muted-foreground" />
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 p-4">
@@ -464,7 +464,7 @@ function AdvancedSearch() {
                 action={
                   draft.tagsInclude.length >= 2 ? (
                     <View className="flex-row items-center gap-1">
-                      <Text className="text-muted-foreground text-[10px]">Match</Text>
+                      <Text className="text-[10px] text-muted-foreground">Match</Text>
                       {(['any', 'all'] as const).map((mode) => (
                         <Pressable
                           key={mode}
@@ -479,7 +479,7 @@ function AdvancedSearch() {
                             className={cn(
                               'text-xs',
                               draft.tagsMode === mode
-                                ? 'text-secondary-foreground font-medium'
+                                ? 'font-medium text-secondary-foreground'
                                 : 'text-muted-foreground',
                             )}
                           >
@@ -546,10 +546,10 @@ export function SearchBar() {
   };
 
   return (
-    <View className="border-border flex-row items-center gap-1 border-b px-2 pb-2">
+    <View className="flex-row items-center gap-1 border-b border-border px-2 pb-2">
       <View className="relative min-w-0 flex-1">
         <View pointerEvents="none" className="absolute inset-y-0 left-2.5 z-10 justify-center">
-          <Icon as={Search} className="text-muted-foreground size-4" />
+          <Icon as={Search} className="size-4 text-muted-foreground" />
         </View>
         <Input
           value={text}
@@ -570,7 +570,7 @@ export function SearchBar() {
               aria-label="Clear search"
               className="size-7 items-center justify-center rounded"
             >
-              <Icon as={X} className="text-muted-foreground size-4" />
+              <Icon as={X} className="size-4 text-muted-foreground" />
             </Pressable>
           </View>
         )}

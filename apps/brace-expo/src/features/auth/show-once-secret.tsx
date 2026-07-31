@@ -63,7 +63,7 @@ export function ShowOnceSecret({
       <View className="flex-row items-stretch gap-2">
         <View
           aria-label={label}
-          className="border-border bg-muted/40 flex-1 rounded-lg border px-3 py-2.5"
+          className="flex-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5"
         >
           <Text selectable className="font-mono text-sm">
             {secret}
@@ -82,7 +82,7 @@ export function ShowOnceSecret({
 
       <Pressable
         onPress={() => onSavedChange(!saved)}
-        className="border-border flex-row items-start gap-3 rounded-lg border p-3"
+        className="flex-row items-start gap-3 rounded-lg border border-border p-3"
       >
         <Checkbox
           checked={saved}

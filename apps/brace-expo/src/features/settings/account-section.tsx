@@ -91,26 +91,26 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       <Text role="heading" className="text-xl font-semibold">
         Delete account
       </Text>
-      <Text className="text-muted-foreground mt-1 text-sm">
+      <Text className="mt-1 text-sm text-muted-foreground">
         Permanently delete your account and everything in it: all your data on all your devices,
         your account keys, and every signed-in session.
       </Text>
-      <Text className="text-muted-foreground mt-3 text-sm">
+      <Text className="mt-3 text-sm text-muted-foreground">
         Your username stays reserved and can&apos;t be registered again — by you or anyone else. If
         you have a canceled subscription with paid time remaining, that time is forfeited. Consider
         exporting your data first (Settings → Data).
       </Text>
-      <Text className="text-destructive mt-3 text-sm font-medium">
+      <Text className="mt-3 text-sm font-medium text-destructive">
         This action cannot be undone. There is no grace period and no recovery.
       </Text>
 
       {subscriptionBlocks && (
-        <View className="border-border mt-4 flex-row items-start gap-2 rounded-lg border p-3">
-          <Icon as={CircleAlert} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-          <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+        <View className="mt-4 flex-row items-start gap-2 rounded-lg border border-border p-3">
+          <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
             You have an active subscription. Cancel it in{' '}
             <Text
-              className="text-muted-foreground text-sm underline"
+              className="text-sm text-muted-foreground underline"
               onPress={() => router.push('/settings/subscription')}
             >
               Subscription settings
@@ -140,7 +140,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       </View>
 
       <Pressable
-        className="border-border mt-4 flex-row items-start gap-3 rounded-lg border p-3"
+        className="mt-4 flex-row items-start gap-3 rounded-lg border border-border p-3"
         onPress={() => {
           if (isPending) return;
           setConfirmed((v) => !v);
@@ -163,7 +163,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       </Pressable>
 
       {nudge && (
-        <Text className="text-destructive mt-2 text-sm">Please tick the box above to confirm.</Text>
+        <Text className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</Text>
       )}
 
       <View className="mt-6 flex-row">
@@ -179,8 +179,8 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
       {errorText && (
         <View className="mt-3 flex-row items-start gap-2">
-          <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-          <Text className="text-destructive min-w-0 flex-1 text-sm">{errorText}</Text>
+          <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+          <Text className="min-w-0 flex-1 text-sm text-destructive">{errorText}</Text>
         </View>
       )}
     </View>
@@ -271,13 +271,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           Change password
         </Text>
         <View className="mt-3 flex-row items-start gap-2">
-          <Icon as={ShieldCheck} className="text-primary mt-0.5 size-4 shrink-0" />
+          <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
           <Text className="min-w-0 flex-1 text-sm">
             Your password has been changed. You&apos;re still signed in on this device, and your
             other devices have been signed out.
           </Text>
         </View>
-        <Text className="text-muted-foreground mt-4 text-xs">
+        <Text className="mt-4 text-xs text-muted-foreground">
           This changed how you sign in, but didn&apos;t re-encrypt data you&apos;ve already synced.
           If your old password may have been compromised, a password change alone won&apos;t protect
           data an attacker could already have copied — export your data (Settings → Data on the web
@@ -293,7 +293,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       <Text role="heading" className="text-xl font-semibold">
         Change password
       </Text>
-      <Text className="text-muted-foreground mt-1 text-sm">
+      <Text className="mt-1 text-sm text-muted-foreground">
         You&apos;ll need your current password. There is no email reset, so keep the new one safe.
       </Text>
 
@@ -335,7 +335,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           }}
           className="-mt-2 self-start"
         >
-          <Text className="text-muted-foreground text-sm underline">
+          <Text className="text-sm text-muted-foreground underline">
             {useRecovery ? 'Use my current password instead' : 'I forgot it — use my recovery code'}
           </Text>
         </Pressable>
@@ -343,7 +343,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         {mode === 'generated' ? (
           <View className="gap-2">
             <Text className="text-sm font-medium">New password</Text>
-            <Text className="text-muted-foreground text-sm">
+            <Text className="text-sm text-muted-foreground">
               We generated a strong password for you. Save it in your password manager — there is no
               way to reset it if it&apos;s lost.
             </Text>
@@ -360,8 +360,8 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
                 disabled={changePassword.isPending}
                 className="flex-row items-center gap-1.5"
               >
-                <Icon as={RefreshCw} className="text-muted-foreground size-3.5" />
-                <Text className="text-muted-foreground text-sm">Regenerate</Text>
+                <Icon as={RefreshCw} className="size-3.5 text-muted-foreground" />
+                <Text className="text-sm text-muted-foreground">Regenerate</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -369,7 +369,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
                   if (error) setError(null);
                 }}
               >
-                <Text className="text-muted-foreground text-sm underline">Choose my own</Text>
+                <Text className="text-sm text-muted-foreground underline">Choose my own</Text>
               </Pressable>
             </View>
           </View>
@@ -388,13 +388,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             />
             <PasswordStrengthMeter displayScore={displayScore} />
             {ownPasswordError ? (
-              <Text className="text-destructive text-sm">{ownPasswordError}</Text>
+              <Text className="text-sm text-destructive">{ownPasswordError}</Text>
             ) : null}
-            <Text className="text-muted-foreground text-sm">
+            <Text className="text-sm text-muted-foreground">
               A password of random words is stronger than most passwords you&apos;d type. If you use
               your own, make it long and unique.{' '}
               <Text
-                className="text-muted-foreground text-sm underline"
+                className="text-sm text-muted-foreground underline"
                 onPress={() => {
                   setMode('generated');
                   if (error) setError(null);
@@ -416,14 +416,14 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         </View>
         {error ? (
           <View className="flex-row items-start gap-2">
-            <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-            <Text className="text-destructive min-w-0 flex-1 text-sm">{error}</Text>
+            <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <Text className="min-w-0 flex-1 text-sm text-destructive">{error}</Text>
           </View>
         ) : null}
 
         {/* Honest boundary of what a password change is: a door rotation, not a
             DEK rotation (docs/account.md) — see web for the full note. */}
-        <Text className="border-border text-muted-foreground mt-2 border-t pt-4 text-xs">
+        <Text className="mt-2 border-t border-border pt-4 text-xs text-muted-foreground">
           Changing your password replaces how you sign in — it doesn&apos;t re-encrypt data
           you&apos;ve already synced. If you think someone actually had your old password, changing
           it alone won&apos;t protect data they may have already copied. In that case the safe path
@@ -473,7 +473,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         <Text role="heading" className="text-xl font-semibold">
           Recovery code
         </Text>
-        <Text className="text-muted-foreground mt-1 mb-4 text-sm">
+        <Text className="mt-1 mb-4 text-sm text-muted-foreground">
           {hadRecovery
             ? 'Save this somewhere safe — it won’t be shown again. Your previous code has stopped working, so this is the only one that can get you back into your account.'
             : 'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'}
@@ -502,7 +502,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       <Text role="heading" className="text-xl font-semibold">
         Recovery code
       </Text>
-      <Text className="text-muted-foreground mt-1 text-sm">
+      <Text className="mt-1 text-sm text-muted-foreground">
         {hadRecovery
           ? 'Generate a new recovery code. Your previous code will stop working.'
           : 'Set up a recovery code — a second way into your account if you lose your password.'}
@@ -537,8 +537,8 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         </View>
         {error ? (
           <View className="flex-row items-start gap-2">
-            <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-            <Text className="text-destructive min-w-0 flex-1 text-sm">{error}</Text>
+            <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <Text className="min-w-0 flex-1 text-sm text-destructive">{error}</Text>
           </View>
         ) : null}
       </View>
@@ -573,7 +573,7 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
       </Text>
       {done ? (
         <View className="mt-3 flex-row items-start gap-2">
-          <Icon as={ShieldCheck} className="text-primary mt-0.5 size-4 shrink-0" />
+          <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
           <Text className="min-w-0 flex-1 text-sm">
             Your other devices have been signed out. They&apos;ll need to sign in again. This device
             stays signed in.
@@ -581,7 +581,7 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
         </View>
       ) : (
         <>
-          <Text className="text-muted-foreground mt-1 text-sm">
+          <Text className="mt-1 text-sm text-muted-foreground">
             End every other signed-in session. Any other browser or device will have to sign in
             again — this one stays signed in. Your data isn&apos;t touched.
           </Text>
@@ -592,8 +592,8 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
           </View>
           {error ? (
             <View className="mt-3 flex-row items-start gap-2">
-              <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-              <Text className="text-destructive min-w-0 flex-1 text-sm">{error}</Text>
+              <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+              <Text className="min-w-0 flex-1 text-sm text-destructive">{error}</Text>
             </View>
           ) : null}
         </>
@@ -614,27 +614,27 @@ export function AccountSection() {
           <Text role="heading" className="text-xl font-semibold">
             Account
           </Text>
-          <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+          <Text className="mt-1 mb-6 text-sm text-muted-foreground">
             Your account is your username and password — no email, nothing else on file.
           </Text>
 
-          <View className="border-border rounded-lg border p-4">
+          <View className="rounded-lg border border-border p-4">
             <View className="min-w-0 gap-0.5">
               <Text className="text-sm font-medium">Username</Text>
-              <Text numberOfLines={1} className="text-muted-foreground text-sm">
+              <Text numberOfLines={1} className="text-sm text-muted-foreground">
                 {username}
               </Text>
             </View>
           </View>
 
           {hasRecovery.data === false ? (
-            <View className="border-border mt-4 flex-row items-start gap-2 rounded-lg border p-3">
-              <Icon as={CircleAlert} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-              <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+            <View className="mt-4 flex-row items-start gap-2 rounded-lg border border-border p-3">
+              <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
                 You haven&apos;t set up a recovery code. Without one, a lost password means a lost
                 account — there is no email reset.{' '}
                 <Text
-                  className="text-muted-foreground text-sm underline"
+                  className="text-sm text-muted-foreground underline"
                   onPress={() => setView('recovery')}
                 >
                   Set one up

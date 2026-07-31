@@ -101,7 +101,7 @@ function RowActions({
           aria-label="Tag actions"
           className="size-9 items-center justify-center rounded-md"
         >
-          <Icon as={MoreHorizontal} className="text-muted-foreground size-4" />
+          <Icon as={MoreHorizontal} className="size-4 text-muted-foreground" />
         </Pressable>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
@@ -167,13 +167,13 @@ function Row({
       style={style}
       onLayout={onLayout}
       className={cn(
-        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
+        'flex-row items-center gap-1 border-b border-border/60 px-1 py-1',
         lifted && 'rounded-md border-transparent bg-background',
       )}
     >
       <DragHandle pan={pan} />
 
-      <Icon as={Tag} className="text-muted-foreground size-4 shrink-0" />
+      <Icon as={Tag} className="size-4 shrink-0 text-muted-foreground" />
 
       <View className="min-w-0 flex-1">
         <RenameField
@@ -234,14 +234,14 @@ export function TagsSection() {
       <Text role="heading" className="text-xl font-semibold">
         Tags
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-4 text-sm">
+      <Text className="mt-1 mb-4 text-sm text-muted-foreground">
         Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so
         there&apos;s no nesting.
       </Text>
 
       {error && (
-        <View className="bg-destructive/10 mb-3 rounded-md px-3 py-2">
-          <Text className="text-destructive text-sm">{error}</Text>
+        <View className="mb-3 rounded-md bg-destructive/10 px-3 py-2">
+          <Text className="text-sm text-destructive">{error}</Text>
         </View>
       )}
 
@@ -266,7 +266,7 @@ export function TagsSection() {
         </DropdownMenu>
       </View>
 
-      <View className="border-border rounded-lg border">
+      <View className="rounded-lg border border-border">
         <CreateRow
           placeholder="New tag"
           onCreate={async (name) => {
@@ -284,7 +284,7 @@ export function TagsSection() {
         />
 
         {tags.length === 0 ? (
-          <Text className="text-muted-foreground px-3 py-6 text-center text-sm">No tags yet.</Text>
+          <Text className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</Text>
         ) : (
           tags.map((tag, index) => (
             <Row

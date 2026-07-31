@@ -51,13 +51,13 @@ export function ShareTagsPicker({
               onPress={() => onToggle(tag.id)}
               className={
                 selected
-                  ? 'bg-primary rounded-full px-3 py-1'
-                  : 'bg-secondary rounded-full px-3 py-1'
+                  ? 'rounded-full bg-primary px-3 py-1'
+                  : 'rounded-full bg-secondary px-3 py-1'
               }
             >
               <Text
                 className={
-                  selected ? 'text-primary-foreground text-sm' : 'text-secondary-foreground text-sm'
+                  selected ? 'text-sm text-primary-foreground' : 'text-sm text-secondary-foreground'
                 }
               >
                 {tag.name}
@@ -70,9 +70,9 @@ export function ShareTagsPicker({
             key={tag.id}
             testID={`share-new-tag-${tag.id}`}
             onPress={() => onRemoveNew(tag.id)}
-            className="bg-primary rounded-full px-3 py-1"
+            className="rounded-full bg-primary px-3 py-1"
           >
-            <Text className="text-primary-foreground text-sm">{tag.name} ×</Text>
+            <Text className="text-sm text-primary-foreground">{tag.name} ×</Text>
           </Pressable>
         ))}
       </View>

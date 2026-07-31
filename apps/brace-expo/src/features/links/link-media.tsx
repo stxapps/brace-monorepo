@@ -193,7 +193,7 @@ export function LinkPreviewImage({
     return <PreviewFallbackPanel host={host} className={className} />;
   }
   return (
-    <View className={`bg-muted items-center justify-center ${className}`}>
+    <View className={`items-center justify-center bg-muted ${className}`}>
       <Favicon host={host} className={iconClassName ?? ''} />
     </View>
   );

@@ -64,7 +64,7 @@ export function LinkTagChips({
           onPress={() => onTagPress(chip.id)}
           className={`shrink ${TAG_CHIP_CLASS}`}
         >
-          <Text numberOfLines={1} className="text-muted-foreground text-xs">
+          <Text numberOfLines={1} className="text-xs text-muted-foreground">
             {chip.name}
           </Text>
         </Pressable>
@@ -72,7 +72,7 @@ export function LinkTagChips({
       {overflow.length > 0 &&
         (bulkEditing ? (
           <Pressable onPress={() => toggleSelected(link)} className={`shrink-0 ${TAG_CHIP_CLASS}`}>
-            <Text className="text-muted-foreground text-xs">+{overflow.length}</Text>
+            <Text className="text-xs text-muted-foreground">+{overflow.length}</Text>
           </Pressable>
         ) : (
           <DropdownMenu onOpenChange={onOverflowOpenChange}>
@@ -81,7 +81,7 @@ export function LinkTagChips({
                 aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
                 className={`shrink-0 ${TAG_CHIP_CLASS}`}
               >
-                <Text className="text-muted-foreground text-xs">+{overflow.length}</Text>
+                <Text className="text-xs text-muted-foreground">+{overflow.length}</Text>
               </Pressable>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-64">

@@ -63,7 +63,7 @@ const StyledKeyboardAwareScrollView = withUniwind(KeyboardAwareScrollView);
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <View className="gap-1.5">
-      <Text className="text-muted-foreground text-xs">{label}</Text>
+      <Text className="text-xs text-muted-foreground">{label}</Text>
       {children}
     </View>
   );
@@ -203,14 +203,14 @@ export function LinkAddScreen() {
 
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
-      <View className="border-border h-14 shrink-0 flex-row items-center justify-between border-b pr-2 pl-4">
+      <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-border pr-2 pl-4">
         <Text className="text-lg font-semibold">Add a link</Text>
         <Pressable
           onPress={close}
           aria-label="Close add link"
           className="size-10 items-center justify-center rounded-md"
         >
-          <Icon as={X} className="text-muted-foreground size-5" />
+          <Icon as={X} className="size-5 text-muted-foreground" />
         </Pressable>
       </View>
       <StyledKeyboardAwareScrollView
@@ -261,7 +261,7 @@ export function LinkAddScreen() {
                 autoCorrect={false}
               />
               {urlError !== null ? (
-                <Text role="alert" className="text-destructive text-xs">
+                <Text role="alert" className="text-xs text-destructive">
                   {urlError}
                 </Text>
               ) : urlWarning !== null ? (
@@ -279,12 +279,12 @@ export function LinkAddScreen() {
               onPress={() => setOpenAdvanced((v) => !v)}
               aria-expanded={openAdvanced}
               aria-label="Advanced"
-              className="active:bg-muted h-9 flex-row items-center justify-between rounded-md px-2"
+              className="h-9 flex-row items-center justify-between rounded-md px-2 active:bg-muted"
             >
               <Text className="text-sm font-medium">Advanced</Text>
               <Icon
                 as={openAdvanced ? ChevronUp : ChevronDown}
-                className="text-muted-foreground size-4"
+                className="size-4 text-muted-foreground"
               />
             </Pressable>
 

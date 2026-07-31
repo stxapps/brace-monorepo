@@ -24,7 +24,7 @@ function Placeholder({ id }: { id: SettingsSectionId }) {
       <Text role="heading" className="text-xl font-semibold">
         {label}
       </Text>
-      <Text className="text-muted-foreground mt-2 text-sm">{label} settings coming soon.</Text>
+      <Text className="mt-2 text-sm text-muted-foreground">{label} settings coming soon.</Text>
     </View>
   );
 }

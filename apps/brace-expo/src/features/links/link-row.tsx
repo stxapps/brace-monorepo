@@ -54,7 +54,7 @@ export function LinkRow({
     <Pressable
       onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
       accessibilityState={selectMode ? { selected } : undefined}
-      className="border-border active:bg-muted/50 flex-row items-center gap-3 border-b py-3 pr-2 pl-4"
+      className="flex-row items-center gap-3 border-b border-border py-3 pr-2 pl-4 active:bg-muted/50"
     >
       {selectMode && (
         <Checkbox
@@ -85,13 +85,13 @@ export function LinkRow({
             list layout, verbatim). */}
         <View className="flex-row items-center gap-1.5">
           <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
-          <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1 text-xs">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-muted-foreground">
             {hostFromText(link.url)}
           </Text>
         </View>
         <LinkTagChips link={link} tagsById={tagsById} className="mt-1" />
       </View>
-      <Text className="text-muted-foreground shrink-0 text-xs">
+      <Text className="shrink-0 text-xs text-muted-foreground">
         {formatRelativeTime(link[sortOn])}
       </Text>
       {/* Hidden while selecting — the checkbox column stands in (web's list

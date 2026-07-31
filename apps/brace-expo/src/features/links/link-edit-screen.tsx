@@ -97,7 +97,7 @@ function Field({
 }) {
   return (
     <View className="gap-1.5" onLayout={onLayout}>
-      <Text className="text-muted-foreground text-xs">{label}</Text>
+      <Text className="text-xs text-muted-foreground">{label}</Text>
       {children}
     </View>
   );
@@ -135,7 +135,7 @@ export function LinkEditScreen() {
       ) : (
         // The load is a single indexed read — this frame is rarely visible.
         // Keep the chrome so the modal doesn't flash empty-to-full.
-        <View className="border-border h-14 shrink-0 border-b" />
+        <View className="h-14 shrink-0 border-b border-border" />
       )}
     </StyledSafeAreaView>
   );
@@ -269,10 +269,10 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
 
   return (
     <>
-      <View className="border-border shrink-0 flex-row items-center justify-between gap-2 border-b py-2 pr-2 pl-4">
+      <View className="shrink-0 flex-row items-center justify-between gap-2 border-b border-border py-2 pr-2 pl-4">
         <View className="min-w-0 flex-1">
           <Text className="text-lg font-semibold">Edit link</Text>
-          <Text numberOfLines={1} className="text-muted-foreground text-xs">
+          <Text numberOfLines={1} className="text-xs text-muted-foreground">
             {link.url}
           </Text>
         </View>
@@ -281,7 +281,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
           aria-label="Close edit link"
           className="size-10 shrink-0 items-center justify-center rounded-md"
         >
-          <Icon as={X} className="text-muted-foreground size-5" />
+          <Icon as={X} className="size-5 text-muted-foreground" />
         </Pressable>
       </View>
       <StyledKeyboardAwareScrollView
@@ -304,12 +304,12 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               ONLY while the field is blank (no override yet) and a real
               extracted title exists — web's "Edit it instead", verbatim. */}
           <View className="flex-row items-baseline justify-between gap-2">
-            <Text className="text-muted-foreground min-w-0 flex-1 text-xs">
+            <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
               Leave blank to use the page’s own title.
             </Text>
             {title.trim() === '' && extractedTitle && (
               <Pressable onPress={() => setTitle(extractedTitle)} className="shrink-0">
-                <Text className="text-primary text-xs">Edit it instead</Text>
+                <Text className="text-xs text-primary">Edit it instead</Text>
               </Pressable>
             )}
           </View>
@@ -321,10 +321,10 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               source={{ uri: previewUri }}
               accessibilityIgnoresInvertColors
               resizeMode="cover"
-              className="border-border h-40 w-full rounded-md border"
+              className="h-40 w-full rounded-md border border-border"
             />
           ) : (
-            <Text className="text-muted-foreground text-xs">No preview image.</Text>
+            <Text className="text-xs text-muted-foreground">No preview image.</Text>
           )}
           <View className="flex-row gap-1.5">
             <Button variant="outline" size="sm" onPress={() => void onPickImage()}>

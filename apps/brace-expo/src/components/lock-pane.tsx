@@ -89,14 +89,14 @@ export function LockPane({
 
   return (
     <View className={cn('items-center justify-center gap-4 px-6 py-8', className)}>
-      <View className="bg-muted size-12 items-center justify-center rounded-full">
-        <Icon as={Lock} className="text-muted-foreground size-5" />
+      <View className="size-12 items-center justify-center rounded-full bg-muted">
+        <Icon as={Lock} className="size-5 text-muted-foreground" />
       </View>
       <View className="items-center">
         <Text role="heading" className="text-lg font-semibold">
           {title}
         </Text>
-        <Text className="text-muted-foreground mt-1 text-center text-sm">{description}</Text>
+        <Text className="mt-1 text-center text-sm text-muted-foreground">{description}</Text>
       </View>
 
       <View className="w-full max-w-xs gap-3">
@@ -121,17 +121,17 @@ export function LockPane({
           }}
           onSubmitEditing={() => void submit()}
         />
-        {error && <Text className="text-destructive text-sm">{error}</Text>}
+        {error && <Text className="text-sm text-destructive">{error}</Text>}
         <Button onPress={() => void submit()} disabled={busy}>
           <Text>{busy ? 'Unlocking…' : 'Unlock'}</Text>
         </Button>
       </View>
 
       <View className="max-w-xs">
-        <Text className="text-muted-foreground text-center text-xs">
+        <Text className="text-center text-xs text-muted-foreground">
           Forgot the password? You can{' '}
           <Text
-            className="text-muted-foreground text-xs underline"
+            className="text-xs text-muted-foreground underline"
             onPress={() => !signOut.isPending && signOut.mutate()}
           >
             sign out

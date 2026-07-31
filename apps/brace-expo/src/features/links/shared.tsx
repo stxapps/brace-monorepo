@@ -40,7 +40,7 @@ export type LinkItemProps = {
 };
 
 export function PinnedBadge() {
-  return <Icon as={Pin} className="text-muted-foreground size-3.5 shrink-0" aria-label="Pinned" />;
+  return <Icon as={Pin} className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />;
 }
 
 // Badge only — the note text stays behind the (future) edit dialog (web's "View
@@ -50,7 +50,7 @@ export function NoteBadge() {
   return (
     <Icon
       as={StickyNote}
-      className="text-muted-foreground size-3.5 shrink-0"
+      className="size-3.5 shrink-0 text-muted-foreground"
       aria-label="Has note"
     />
   );
@@ -59,7 +59,7 @@ export function NoteBadge() {
 export function EmptyState({ isLoading }: { isLoading: boolean }) {
   return (
     <View className="flex-1 items-center justify-center p-8">
-      <Text className="text-muted-foreground text-sm">
+      <Text className="text-sm text-muted-foreground">
         {isLoading ? 'Loading links…' : 'No links here yet.'}
       </Text>
     </View>
@@ -81,10 +81,10 @@ export function RefreshPill({ show, onPress }: { show: boolean; onPress: () => v
     >
       <Pressable
         onPress={onPress}
-        className="bg-primary flex-row items-center gap-2 rounded-full px-4 py-2 shadow-md"
+        className="flex-row items-center gap-2 rounded-full bg-primary px-4 py-2 shadow-md"
       >
-        <Icon as={RefreshCw} className="text-primary-foreground size-4" />
-        <Text className="text-primary-foreground text-sm font-medium">New updates</Text>
+        <Icon as={RefreshCw} className="size-4 text-primary-foreground" />
+        <Text className="text-sm font-medium text-primary-foreground">New updates</Text>
       </Pressable>
     </View>
   );

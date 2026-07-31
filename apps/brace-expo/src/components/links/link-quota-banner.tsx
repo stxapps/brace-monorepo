@@ -27,11 +27,11 @@ export function LinkQuotaBanner({
 }) {
   return (
     <View className="gap-3">
-      <View className="bg-muted flex-row items-start gap-2 rounded-md px-3 py-2">
-        <Icon as={Lock} className="text-muted-foreground mt-0.5 size-3.5" />
-        <Text className="text-muted-foreground min-w-0 flex-1 text-xs">
+      <View className="flex-row items-start gap-2 rounded-md bg-muted px-3 py-2">
+        <Icon as={Lock} className="mt-0.5 size-3.5 text-muted-foreground" />
+        <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
           You’ve saved{' '}
-          <Text className="text-foreground text-xs font-medium">
+          <Text className="text-xs font-medium text-foreground">
             {count} of {max}
           </Text>{' '}
           links on the {PLAN_LABELS.free} plan. Upgrade to save more — or empty some of the Trash to

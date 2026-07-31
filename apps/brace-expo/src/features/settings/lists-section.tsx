@@ -172,7 +172,7 @@ function RowActions({
           aria-label="List actions"
           className="size-9 items-center justify-center rounded-md"
         >
-          <Icon as={MoreHorizontal} className="text-muted-foreground size-4" />
+          <Icon as={MoreHorizontal} className="size-4 text-muted-foreground" />
         </Pressable>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
@@ -312,7 +312,7 @@ function Row({
     <DragRow
       onLayout={onLayout}
       className={cn(
-        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
+        'flex-row items-center gap-1 border-b border-border/60 px-1 py-1',
         lifted && 'rounded-md border-transparent bg-background',
       )}
       // The indent in px (not a class) so it matches the px the drag projection
@@ -331,14 +331,14 @@ function Row({
         >
           <Icon
             as={collapsedIds.has(row.item.id) ? ChevronRight : ChevronDown}
-            className="text-muted-foreground size-4"
+            className="size-4 text-muted-foreground"
           />
         </Pressable>
       ) : (
         <View className="size-9 shrink-0" />
       )}
 
-      <Icon as={listIcon(row.item.id)} className="text-muted-foreground size-4 shrink-0" />
+      <Icon as={listIcon(row.item.id)} className="size-4 shrink-0 text-muted-foreground" />
 
       <View className="min-w-0 flex-1">
         <RenameField
@@ -356,14 +356,14 @@ function Row({
           {lock.hideList && lock.locked && (
             <Icon
               as={EyeOff}
-              className="text-muted-foreground size-3.5"
+              className="size-3.5 text-muted-foreground"
               aria-label="Hidden from sidebar"
             />
           )}
           {lock.locked ? (
-            <Icon as={Lock} className="text-muted-foreground size-3.5" aria-label="Locked" />
+            <Icon as={Lock} className="size-3.5 text-muted-foreground" aria-label="Locked" />
           ) : (
-            <Icon as={LockOpen} className="text-muted-foreground size-3.5" aria-label="Unlocked" />
+            <Icon as={LockOpen} className="size-3.5 text-muted-foreground" aria-label="Unlocked" />
           )}
         </View>
       )}
@@ -560,14 +560,14 @@ export function ListsSection() {
       <Text role="heading" className="text-xl font-semibold">
         Lists
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-4 text-sm">
+      <Text className="mt-1 mb-4 text-sm text-muted-foreground">
         Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you
         can rename and reorder them, but not delete them.
       </Text>
 
       {error && (
-        <View className="bg-destructive/10 mb-3 rounded-md px-3 py-2">
-          <Text className="text-destructive text-sm">{error}</Text>
+        <View className="mb-3 rounded-md bg-destructive/10 px-3 py-2">
+          <Text className="text-sm text-destructive">{error}</Text>
         </View>
       )}
 
@@ -592,7 +592,7 @@ export function ListsSection() {
         </DropdownMenu>
       </View>
 
-      <View className="border-border rounded-lg border">
+      <View className="rounded-lg border border-border">
         <CreateRow
           placeholder="New list"
           onCreate={async (name) => {

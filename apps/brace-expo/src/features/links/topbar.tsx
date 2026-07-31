@@ -101,13 +101,13 @@ export function Topbar() {
   };
 
   return (
-    <View className="border-border h-14 shrink-0 flex-row items-center gap-3 border-b px-2">
+    <View className="h-14 shrink-0 flex-row items-center gap-3 border-b border-border px-2">
       <Pressable
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open navigation"
         className="size-10 items-center justify-center rounded-md"
       >
-        <Icon as={Menu} className="text-foreground size-5" />
+        <Icon as={Menu} className="size-5 text-foreground" />
       </Pressable>
       <Text numberOfLines={1} className="min-w-0 flex-1 text-lg font-semibold">
         {label}

@@ -365,7 +365,7 @@ export function DragHandle({ pan }: { pan: PanGesture }) {
   return (
     <GestureDetector gesture={pan}>
       <View aria-label="Drag to reorder" className="size-9 items-center justify-center rounded-md">
-        <Icon as={GripVertical} className="text-muted-foreground size-4" />
+        <Icon as={GripVertical} className="size-4 text-muted-foreground" />
       </View>
     </GestureDetector>
   );

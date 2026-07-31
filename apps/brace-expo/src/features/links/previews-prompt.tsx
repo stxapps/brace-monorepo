@@ -61,13 +61,13 @@ export function PreviewsPrompt() {
   };
 
   return (
-    <View className="border-border bg-muted/40 mx-4 mt-3 flex-row items-start gap-3 rounded-lg border p-3">
-      <Icon as={Sparkles} className="text-muted-foreground mt-0.5 size-4" />
+    <View className="mx-4 mt-3 flex-row items-start gap-3 rounded-lg border border-border bg-muted/40 p-3">
+      <Icon as={Sparkles} className="mt-0.5 size-4 text-muted-foreground" />
       <View className="min-w-0 flex-1 gap-2">
         <Text className="text-sm font-medium">
           {pending} link{pending === 1 ? '' : 's'} without a preview
         </Text>
-        <Text className="text-muted-foreground text-sm">
+        <Text className="text-sm text-muted-foreground">
           Brace can fetch their titles and images on this device. Links you save here are always
           previewed; this covers the ones that arrived from your other devices or an import.
         </Text>
@@ -83,7 +83,7 @@ export function PreviewsPrompt() {
         hitSlop={8}
         onPress={() => void dismissPreviewsPrompt().catch(() => undefined)}
       >
-        <Icon as={X} className="text-muted-foreground size-4" />
+        <Icon as={X} className="size-4 text-muted-foreground" />
       </Pressable>
     </View>
   );

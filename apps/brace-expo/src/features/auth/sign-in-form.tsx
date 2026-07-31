@@ -85,7 +85,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           )}
         />
         {errors.username ? (
-          <Text className="text-destructive text-sm">{errors.username.message}</Text>
+          <Text className="text-sm text-destructive">{errors.username.message}</Text>
         ) : null}
       </View>
 
@@ -108,7 +108,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           )}
         />
         {errors.password ? (
-          <Text className="text-destructive text-sm">{errors.password.message}</Text>
+          <Text className="text-sm text-destructive">{errors.password.message}</Text>
         ) : null}
       </View>
 
@@ -117,10 +117,10 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           <Text>{isSubmitting ? 'Signing in…' : 'Sign in'}</Text>
         </Button>
         {errors.root ? (
-          <Text className="text-destructive text-sm">{errors.root.message}</Text>
+          <Text className="text-sm text-destructive">{errors.root.message}</Text>
         ) : null}
         <Pressable onPress={onUseRecovery} className="items-center py-2">
-          <Text className="text-muted-foreground text-sm underline">
+          <Text className="text-sm text-muted-foreground underline">
             Forgot your password? Use a recovery code
           </Text>
         </Pressable>
@@ -190,9 +190,9 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
         >
           <Text>{signIn.isPending ? 'Signing in…' : 'Sign in with recovery code'}</Text>
         </Button>
-        {error ? <Text className="text-destructive text-sm">{error}</Text> : null}
+        {error ? <Text className="text-sm text-destructive">{error}</Text> : null}
         <Pressable onPress={onUsePassword} className="items-center py-2">
-          <Text className="text-muted-foreground text-sm underline">Use your password instead</Text>
+          <Text className="text-sm text-muted-foreground underline">Use your password instead</Text>
         </Pressable>
       </View>
     </View>

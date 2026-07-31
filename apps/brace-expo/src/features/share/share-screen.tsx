@@ -106,8 +106,8 @@ function Notice({ testID, message }: { testID: string; message: string }) {
       <Text testID={testID} className="py-6 text-center">
         {message}
       </Text>
-      <Pressable onPress={closeShareSheet} className="bg-secondary items-center rounded-lg py-3">
-        <Text className="text-secondary-foreground font-medium">Close</Text>
+      <Pressable onPress={closeShareSheet} className="items-center rounded-lg bg-secondary py-3">
+        <Text className="font-medium text-secondary-foreground">Close</Text>
       </Pressable>
     </Sheet>
   );
@@ -286,11 +286,11 @@ export function ShareScreen({ url, title }: SharePayload) {
       <Text testID="share-title" numberOfLines={1} className="font-semibold">
         {title ?? url}
       </Text>
-      <Text testID="share-url" numberOfLines={1} className="text-muted-foreground mt-0.5 text-sm">
+      <Text testID="share-url" numberOfLines={1} className="mt-0.5 text-sm text-muted-foreground">
         {url}
       </Text>
 
-      <Text className="text-muted-foreground mt-4 text-xs font-medium uppercase">List</Text>
+      <Text className="mt-4 text-xs font-medium text-muted-foreground uppercase">List</Text>
       <ShareListPicker
         lists={taxonomy.lists}
         newList={newList}
@@ -299,7 +299,7 @@ export function ShareScreen({ url, title }: SharePayload) {
         onCreateName={submitListName}
       />
 
-      <Text className="text-muted-foreground mt-4 text-xs font-medium uppercase">Tags</Text>
+      <Text className="mt-4 text-xs font-medium text-muted-foreground uppercase">Tags</Text>
       <ShareTagsPicker
         tags={taxonomy.tags}
         selectedTagIds={selectedTagIds}
@@ -310,7 +310,7 @@ export function ShareScreen({ url, title }: SharePayload) {
       />
 
       {error !== null && (
-        <Text testID="share-error" className="text-destructive mt-3 text-sm">
+        <Text testID="share-error" className="mt-3 text-sm text-destructive">
           {error}
         </Text>
       )}
@@ -319,12 +319,12 @@ export function ShareScreen({ url, title }: SharePayload) {
         testID="share-add"
         onPress={onAdd}
         disabled={phase === 'saving'}
-        className="bg-primary mt-4 items-center rounded-lg py-3"
+        className="mt-4 items-center rounded-lg bg-primary py-3"
       >
         {phase === 'saving' ? (
           <ActivityIndicator color="white" />
         ) : (
-          <Text className="text-primary-foreground font-semibold">Add to Brace</Text>
+          <Text className="font-semibold text-primary-foreground">Add to Brace</Text>
         )}
       </Pressable>
     </Sheet>

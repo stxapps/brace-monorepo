@@ -95,17 +95,17 @@ function OptionRow({
       onPress={onSelect}
       aria-checked={selected}
       className={cn(
-        'border-border flex-row items-start gap-3 rounded-lg border p-3',
+        'flex-row items-start gap-3 rounded-lg border border-border p-3',
         selected && 'border-primary bg-muted/40',
       )}
     >
       <RadioGroupItem value={value} className="mt-0.5" />
       <View className="min-w-0 flex-1 gap-0.5">
         <View className="flex-row items-center gap-2">
-          <Icon as={icon} className="text-foreground size-4" />
+          <Icon as={icon} className="size-4 text-foreground" />
           <Text className="font-medium">{label}</Text>
         </View>
-        <Text className="text-muted-foreground text-sm">{hint}</Text>
+        <Text className="text-sm text-muted-foreground">{hint}</Text>
       </View>
     </Pressable>
   );
@@ -114,9 +114,9 @@ function OptionRow({
 // One labelled count in a bordered tile — web's Stat, in RN boxes.
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <View className="border-border flex-1 gap-0.5 rounded-lg border p-3">
+    <View className="flex-1 gap-0.5 rounded-lg border border-border p-3">
       <Text className="text-2xl font-semibold tabular-nums">{value}</Text>
-      <Text className="text-muted-foreground text-sm">{label}</Text>
+      <Text className="text-sm text-muted-foreground">{label}</Text>
     </View>
   );
 }
@@ -149,7 +149,7 @@ export function ExtractionSection() {
       <Text role="heading" className="text-xl font-semibold">
         Link previews
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
         Brace fills in each saved link&apos;s title and preview image automatically — you don&apos;t
         need to do it by hand. The work happens on this phone: the app fetches the page itself, so
         no server of ours ever sees it. Choose how far that should go.
@@ -177,14 +177,14 @@ export function ExtractionSection() {
       </RadioGroup>
 
       {error && (
-        <View className="bg-destructive/10 mt-4 rounded-md px-3 py-2">
-          <Text className="text-destructive text-sm">{error}</Text>
+        <View className="mt-4 rounded-md bg-destructive/10 px-3 py-2">
+          <Text className="text-sm text-destructive">{error}</Text>
         </View>
       )}
 
       {deviceExtractionMode === 'all' && !enabled ? (
-        <View className="bg-muted/50 mt-6 rounded-md px-3 py-2">
-          <Text className="text-muted-foreground text-sm">
+        <View className="mt-6 rounded-md bg-muted/50 px-3 py-2">
+          <Text className="text-sm text-muted-foreground">
             Previews are on but paused — they resume once you&apos;re signed in and your links have
             finished loading.
           </Text>
@@ -197,17 +197,17 @@ export function ExtractionSection() {
             <Stat label="Failed" value={failedCount} />
           </View>
 
-          <Text className="text-muted-foreground mt-4 text-sm">
+          <Text className="mt-4 text-sm text-muted-foreground">
             {total === 0
               ? 'No links to preview yet.'
               : `${doneCount} of ${total} link${total === 1 ? '' : 's'} previewed.`}
           </Text>
 
           {autoLimitReached && !isExtractingAll && (
-            <View className="bg-muted/50 mt-4 rounded-md px-3 py-2">
-              <Text className="text-muted-foreground text-sm">
+            <View className="mt-4 rounded-md bg-muted/50 px-3 py-2">
+              <Text className="text-sm text-muted-foreground">
                 Automatic previews paused for now. Use{' '}
-                <Text className="text-muted-foreground text-sm font-semibold">Generate all</Text> to
+                <Text className="text-sm font-semibold text-muted-foreground">Generate all</Text> to
                 finish the remaining links.
               </Text>
             </View>
@@ -226,7 +226,7 @@ export function ExtractionSection() {
               </Button>
             )}
           </View>
-          <Text className="text-muted-foreground mt-2 text-sm">
+          <Text className="mt-2 text-sm text-muted-foreground">
             Generating fetches every pending link over your connection — best on Wi-Fi, and keep the
             app open while it runs.
           </Text>

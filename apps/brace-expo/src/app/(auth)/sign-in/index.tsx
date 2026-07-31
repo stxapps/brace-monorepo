@@ -15,10 +15,10 @@ export default function SignInScreen() {
       title="Sign in"
       description="Welcome back to Brace."
       footer={
-        <Text className="text-muted-foreground text-sm">
+        <Text className="text-sm text-muted-foreground">
           New to Brace?{' '}
           <Link href="/create-account">
-            <Text className="text-foreground text-sm font-medium underline">Create account</Text>
+            <Text className="text-sm font-medium text-foreground underline">Create account</Text>
           </Link>
         </Text>
       }

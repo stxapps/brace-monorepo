@@ -201,7 +201,7 @@ function NavItem({
         >
           <Icon
             as={ChevronRight}
-            className={cn('text-muted-foreground size-4', expanded && 'rotate-90')}
+            className={cn('size-4 text-muted-foreground', expanded && 'rotate-90')}
           />
         </Pressable>
       ) : showSlot ? (
@@ -226,12 +226,12 @@ function NavItem({
           numberOfLines={1}
           className={cn(
             'min-w-0 flex-1 text-sm',
-            active ? 'text-foreground font-medium' : 'text-muted-foreground',
+            active ? 'font-medium text-foreground' : 'text-muted-foreground',
           )}
         >
           {label}
         </Text>
-        {badge && <View className="text-muted-foreground shrink-0">{badge}</View>}
+        {badge && <View className="shrink-0 text-muted-foreground">{badge}</View>}
       </Pressable>
       {action}
     </View>
@@ -326,9 +326,9 @@ function Section({
       >
         <Icon
           as={ChevronRight}
-          className={cn('text-muted-foreground/70 size-3.5', !isCollapsed && 'rotate-90')}
+          className={cn('size-3.5 text-muted-foreground/70', !isCollapsed && 'rotate-90')}
         />
-        <Text className="text-muted-foreground/70 text-xs font-semibold tracking-wide uppercase">
+        <Text className="text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase">
           {label}
         </Text>
       </Pressable>
@@ -359,8 +359,8 @@ function FooterLink({
       }}
       className="w-full flex-row items-center gap-2 rounded-md px-2 py-2"
     >
-      <Icon as={icon} className="text-muted-foreground size-4 shrink-0" />
-      <Text numberOfLines={1} className="text-muted-foreground min-w-0 flex-1 text-sm">
+      <Icon as={icon} className="size-4 shrink-0 text-muted-foreground" />
+      <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-muted-foreground">
         {label}
       </Text>
     </Pressable>
@@ -410,7 +410,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   // merely covers stay unmarked — the locked ancestor is the visual cue).
   const listBadge = (id: string) =>
     listLocks.get(id)?.locked ? (
-      <Icon as={Lock} className="text-muted-foreground size-3.5" aria-label="Locked" />
+      <Icon as={Lock} className="size-3.5 text-muted-foreground" aria-label="Locked" />
     ) : undefined;
 
   // A one-tap "Lock now" for a row's OWN lock while it's currently UNLOCKED —
@@ -431,7 +431,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
         onPress={() => lockList(id)}
         className="size-8 shrink-0 items-center justify-center rounded-md"
       >
-        <Icon as={LockOpen} className="text-muted-foreground size-3.5" />
+        <Icon as={LockOpen} className="size-3.5 text-muted-foreground" />
       </Pressable>
     );
   };
@@ -450,7 +450,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
       {showFilter && (
         <View className="relative px-3 pb-1">
           <View className="absolute left-5 z-10" style={{ top: 13, pointerEvents: 'none' }}>
-            <Icon as={ListFilter} className="text-muted-foreground size-3.5" />
+            <Icon as={ListFilter} className="size-3.5 text-muted-foreground" />
           </View>
           <Input
             value={filter}
@@ -488,7 +488,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
                 />
               ))
             ) : (
-              <Text className="text-muted-foreground/60 px-2 py-1 text-xs">No matching lists</Text>
+              <Text className="px-2 py-1 text-xs text-muted-foreground/60">No matching lists</Text>
             )
           ) : (
             <NavTree
@@ -525,10 +525,10 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
                 />
               ))
             ) : (
-              <Text className="text-muted-foreground/60 px-2 py-1 text-xs">No matching tags</Text>
+              <Text className="px-2 py-1 text-xs text-muted-foreground/60">No matching tags</Text>
             )
           ) : tags.length === 0 ? (
-            <Text className="text-muted-foreground/60 px-2 py-1 text-xs">No tags yet</Text>
+            <Text className="px-2 py-1 text-xs text-muted-foreground/60">No tags yet</Text>
           ) : (
             <NavTree
               nodes={tags}
@@ -546,14 +546,14 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
             none of these are list/tag entities, so a find-in-nav query never
             matches them; clearing the box brings the band back. */}
         {!filtering && (
-          <View className="border-border mt-3 flex-col gap-0.5 border-t pt-2">
+          <View className="mt-3 flex-col gap-0.5 border-t border-border pt-2">
             <NavItem
               icon={Layers}
               label={ALL_LABEL}
               selection={{ kind: 'all' }}
               onSelected={closeDrawer}
             />
-            <View className="border-border my-1 border-t" />
+            <View className="my-1 border-t border-border" />
             <FooterLink
               icon={Settings2}
               label="Manage lists"

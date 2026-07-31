@@ -67,9 +67,9 @@ function SyncStatus() {
   const isError = phase === 'cycle-error';
 
   const icon = isError ? (
-    <Icon as={CircleAlert} className="text-destructive size-4" />
+    <Icon as={CircleAlert} className="size-4 text-destructive" />
   ) : phase === 'idle' ? (
-    <Icon as={CircleCheck} className="text-muted-foreground size-4" />
+    <Icon as={CircleCheck} className="size-4 text-muted-foreground" />
   ) : (
     <ActivityIndicator size="small" />
   );
@@ -87,7 +87,7 @@ function SyncStatus() {
         : null;
 
   return (
-    <View className="border-border flex-row items-start justify-between gap-4 rounded-lg border p-4">
+    <View className="flex-row items-start justify-between gap-4 rounded-lg border border-border p-4">
       <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
         <View className="mt-0.5 shrink-0">{icon}</View>
         <View className="min-w-0 flex-1 gap-0.5">
@@ -95,9 +95,9 @@ function SyncStatus() {
           <Text className={cn('text-sm', isError ? 'text-destructive' : 'text-muted-foreground')}>
             {text}
           </Text>
-          {detail && <Text className="text-destructive text-sm">{detail}</Text>}
+          {detail && <Text className="text-sm text-destructive">{detail}</Text>}
           {pendingCount > 0 && (
-            <Text className="text-muted-foreground text-sm">
+            <Text className="text-sm text-muted-foreground">
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
             </Text>
           )}
@@ -105,7 +105,7 @@ function SyncStatus() {
               content downloads lazily on open (docs/local-first-sync.md).
               Suppressed on an error, where it only competes with the failure. */}
           {!isError && (
-            <Text className="text-muted-foreground mt-1 text-xs">
+            <Text className="mt-1 text-xs text-muted-foreground">
               Saved page copies and images download when you open them.
             </Text>
           )}
@@ -141,7 +141,7 @@ function ImportStatus({ state }: { state: ImportState }) {
     return (
       <View className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-muted-foreground text-sm">
+        <Text className="text-sm text-muted-foreground">
           {IMPORT_STEP_LABELS[state.step]}
           {counts}
         </Text>
@@ -152,8 +152,8 @@ function ImportStatus({ state }: { state: ImportState }) {
   if (state.phase === 'error') {
     return (
       <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-        <Text className="text-destructive min-w-0 flex-1 text-sm">
+        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <Text className="min-w-0 flex-1 text-sm text-destructive">
           Import failed: {state.message}
         </Text>
       </View>
@@ -166,8 +166,8 @@ function ImportStatus({ state }: { state: ImportState }) {
   if (nothingFound) {
     return (
       <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           No links were found in that file.
         </Text>
       </View>
@@ -202,8 +202,8 @@ function ImportStatus({ state }: { state: ImportState }) {
   }
   return (
     <View className="mt-3 flex-row items-start gap-2">
-      <Icon as={CircleCheck} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-      <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+      <Icon as={CircleCheck} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
         Imported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
         {outcome.fileCount > 0
           ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
@@ -242,7 +242,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
       <Text role="heading" className="text-xl font-semibold">
         Import data
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
         Import from a file — a Brace backup (.zip), an HTML bookmarks file (web browsers,
         LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of
         links. The format is detected automatically; links you already have are skipped. Large
@@ -324,7 +324,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
     return (
       <View className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-muted-foreground text-sm">
+        <Text className="text-sm text-muted-foreground">
           {EXPORT_STEP_LABELS[state.step]}
           {counts}
         </Text>
@@ -335,8 +335,8 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
   if (state.phase === 'error') {
     return (
       <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-        <Text className="text-destructive min-w-0 flex-1 text-sm">
+        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <Text className="min-w-0 flex-1 text-sm text-destructive">
           Export failed: {state.message}
         </Text>
       </View>
@@ -363,8 +363,8 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
   return (
     <View className="mt-3">
       <View className="flex-row items-start gap-2">
-        <Icon as={CircleCheck} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+        <Icon as={CircleCheck} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           Exported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
           {outcome.fileCount > 0
             ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
@@ -410,7 +410,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
       <Text role="heading" className="text-xl font-semibold">
         Export all data
       </Text>
-      <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
         Save a copy of your data. Pick a format for where it’s going. This may take a few minutes
         for a large library.
       </Text>
@@ -427,26 +427,26 @@ function ExportView({ onBack }: { onBack: () => void }) {
             onPress={() => setFormat(option.value)}
             aria-checked={format === option.value}
             className={cn(
-              'border-border flex-row items-start gap-3 rounded-lg border p-3',
+              'flex-row items-start gap-3 rounded-lg border border-border p-3',
               format === option.value && 'border-primary bg-muted/40',
             )}
           >
             <RadioGroupItem value={option.value} className="mt-0.5" />
             <View className="min-w-0 flex-1 gap-0.5">
               <View className="flex-row items-center gap-2">
-                <Icon as={option.icon} className="text-foreground size-4" />
+                <Icon as={option.icon} className="size-4 text-foreground" />
                 <Text className="font-medium">{option.label}</Text>
               </View>
-              <Text className="text-muted-foreground text-sm">{option.hint}</Text>
+              <Text className="text-sm text-muted-foreground">{option.hint}</Text>
             </View>
           </Pressable>
         ))}
       </RadioGroup>
 
       {lockedCount > 0 && (
-        <View className="border-border mt-4 flex-row items-start gap-2 rounded-lg border p-3">
-          <Icon as={Lock} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-          <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+        <View className="mt-4 flex-row items-start gap-2 rounded-lg border border-border p-3">
+          <Icon as={Lock} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
             {lockedCount} locked {lockedCount === 1 ? 'list' : 'lists'} — and the links inside{' '}
             {lockedCount === 1 ? 'it' : 'them'} — won&apos;t be included. Unlock{' '}
             {lockedCount === 1 ? 'it' : 'them'} first if you want everything.
@@ -477,7 +477,7 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
     return (
       <View className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-muted-foreground text-sm">Deleting all your data…</Text>
+        <Text className="text-sm text-muted-foreground">Deleting all your data…</Text>
       </View>
     );
   }
@@ -485,8 +485,8 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
   if (state.phase === 'error') {
     return (
       <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="text-destructive mt-0.5 size-4 shrink-0" />
-        <Text className="text-destructive min-w-0 flex-1 text-sm">
+        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
+        <Text className="min-w-0 flex-1 text-sm text-destructive">
           Delete failed: {state.message} Nothing was removed from this device — please try again.
         </Text>
       </View>
@@ -496,8 +496,8 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
   const { deletedCount } = state.outcome;
   return (
     <View className="mt-3 flex-row items-start gap-2">
-      <Icon as={CircleCheck} className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-      <Text className="text-muted-foreground min-w-0 flex-1 text-sm">
+      <Icon as={CircleCheck} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
         {deletedCount === 0
           ? 'There was no data to delete.'
           : `All your data has been deleted (${deletedCount} ${deletedCount === 1 ? 'item' : 'items'}).`}
@@ -529,21 +529,21 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       <Text role="heading" className="text-xl font-semibold">
         Delete all data
       </Text>
-      <Text className="text-muted-foreground mt-1 text-sm">
+      <Text className="mt-1 text-sm text-muted-foreground">
         Delete all your data — every saved link in every list, all your lists and tags, and all your
         settings — from all your devices.
       </Text>
-      <Text className="text-muted-foreground mt-3 text-sm">
+      <Text className="mt-3 text-sm text-muted-foreground">
         This removes your data only, not your account — you can still sign in. If another device has
         changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
         exporting a copy first (Settings → Data).
       </Text>
-      <Text className="text-destructive mt-3 text-sm font-medium">
+      <Text className="mt-3 text-sm font-medium text-destructive">
         This action cannot be undone.
       </Text>
 
       <Pressable
-        className="border-border mt-6 flex-row items-start gap-3 rounded-lg border p-3"
+        className="mt-6 flex-row items-start gap-3 rounded-lg border border-border p-3"
         onPress={() => {
           if (running || done) return;
           setConfirmed((v) => !v);
@@ -565,7 +565,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       </Pressable>
 
       {nudge && (
-        <Text className="text-destructive mt-2 text-sm">Please tick the box above to confirm.</Text>
+        <Text className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</Text>
       )}
 
       <View className="mt-6 flex-row">
@@ -590,7 +590,7 @@ export function DataSection() {
           <Text role="heading" className="text-xl font-semibold">
             Data
           </Text>
-          <Text className="text-muted-foreground mt-1 mb-6 text-sm">
+          <Text className="mt-1 mb-6 text-sm text-muted-foreground">
             Your data syncs across your devices, end-to-end encrypted. Import, export, or delete all
             of it here.
           </Text>

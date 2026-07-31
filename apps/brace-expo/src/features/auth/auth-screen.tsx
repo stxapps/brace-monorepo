@@ -42,18 +42,18 @@ export function AuthScreen({
   children: ReactNode;
 }) {
   return (
-    <StyledSafeAreaView className="bg-secondary flex-1 dark:bg-background">
+    <StyledSafeAreaView className="flex-1 bg-secondary dark:bg-background">
       <StyledKeyboardAwareScrollView
         contentContainerClassName="grow justify-center px-4 py-12"
         keyboardShouldPersistTaps="handled"
         bottomOffset={16}
       >
-        <View className="bg-card border-border w-full max-w-sm self-center rounded-xl border py-6 shadow-sm">
+        <View className="w-full max-w-sm self-center rounded-xl border border-border bg-card py-6 shadow-sm">
           <View className="gap-1.5 px-6">
-            <Text role="heading" className="text-card-foreground font-semibold">
+            <Text role="heading" className="font-semibold text-card-foreground">
               {title}
             </Text>
-            <Text className="text-muted-foreground text-sm">{description}</Text>
+            <Text className="text-sm text-muted-foreground">{description}</Text>
           </View>
 
           <View className="mt-6 px-6">{children}</View>
