@@ -338,7 +338,7 @@ real lever on RN cold-start latency.
 | app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                       |
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceSharedKeychain, iOS Swift) |
 | write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                           |
-| iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`        |
+| iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`   |
 | Android ShareActivity + close() module                                                                           | `apps/brace-expo/modules/brace-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)          |
 
 Like the other native pieces (the `BraceCrypto` pod's modules, the embedded
