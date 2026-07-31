@@ -8,7 +8,7 @@ apply from: expoModulesCorePlugin
 applyKotlinExpoModulesCorePlugin()
 useCoreDependencies()
 useExpoPublishing()
-useManagedAndroidSdkVersions()
+useDefaultAndroidSdkVersions()
 
 android {
   namespace "to.brace.share"

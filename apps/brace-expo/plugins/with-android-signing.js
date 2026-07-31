@@ -29,10 +29,19 @@ const PROPS = {
 };
 
 // The template's release buildType, anchored on its own comment so the rewrite
-// can't hit the identical `signingConfig = signingConfigs.debug` line in the
-// debug buildType just above it.
+// can't hit the identical signingConfig line in the debug buildType just above
+// it. `\s*=?\s*` because BOTH spellings ship in practice — observed on the same
+// machine, from two different `expo-template-bare-minimum` versions: Groovy's
+// method-call form (`signingConfig signingConfigs.debug`) and the assignment
+// form (`signingConfig = signingConfigs.debug`). Matching only one is what made
+// the first version of this plugin fail a `--clean` prebuild.
 const RELEASE_SIGNING =
-  /(\/\/ Caution! In production[\s\S]*?)signingConfig = signingConfigs\.debug/;
+  /(\/\/ Caution! In production[\s\S]*?)signingConfig\s*=?\s*signingConfigs\.debug/;
+
+// What the injected block leaves behind — the marker each guard below checks for,
+// so a failure names the anchor that actually went missing.
+const INJECTED = `storeFile file(${PROPS.storeFile})`;
+const REWIRED = /signingConfig\s*=?\s*signingConfigs\.release/;
 
 const withAndroidSigning = (config) => {
   const storeFile = process.env[PROPS.storeFile];
@@ -79,18 +88,23 @@ const withAndroidSigning = (config) => {
         }
 `;
     let contents = cfg.modResults.contents.replace(/signingConfigs\s*\{/, (m) => `${m}${block}`);
+    // Group 1 is the comment only, so the whole `signingConfig … = …` line is
+    // re-emitted — always in the assignment form, whichever spelling matched.
+    // Both are valid Groovy, but AGP is moving toward `=`, and it keeps this
+    // line consistent with the debug one the template writes beside it.
     contents = contents.replace(RELEASE_SIGNING, '$1signingConfig = signingConfigs.release');
 
     // Fail loudly rather than silently emitting a debug-signed bundle if an SDK
-    // bump moves the template's anchors.
-    if (!contents.includes('signingConfigs.release')) {
+    // bump moves the template's anchors. Each guard checks the marker its own
+    // replacement leaves, so the message names the anchor that actually moved.
+    if (!contents.includes(INJECTED)) {
       throw new Error(
         'with-android-signing: could not find `signingConfigs {` in app/build.gradle — template changed',
       );
     }
-    if (!contents.includes('signingConfig = signingConfigs.release')) {
+    if (!REWIRED.test(contents)) {
       throw new Error(
-        'with-android-signing: could not rewire buildTypes.release — template changed',
+        'with-android-signing: found `signingConfigs {` but could not rewire buildTypes.release — its `// Caution! In production` comment or `signingConfig signingConfigs.debug` line moved',
       );
     }
 

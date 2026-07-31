@@ -618,6 +618,19 @@ It does two things at prebuild, both driven by four env vars:
   is missing — an SDK bump that moves them fails the prebuild instead of
   silently producing a debug-signed bundle.
 
+**The signingConfig line has two spellings, and the plugin must accept both.**
+Groovy's method-call form (`signingConfig signingConfigs.debug`) and the
+assignment form (`signingConfig = signingConfigs.debug`) are both valid, and
+both were observed on the same machine within one afternoon — `expo prebuild`
+fetches `expo-template-bare-minimum` per run, and the versions differ on this.
+Matching only the assignment form is what made the first cut of this plugin die
+with _could not find `signingConfigs {`_ on a `--clean`. The regex is therefore
+`signingConfig\s*=?\s*signingConfigs\.debug`, and the replacement always emits
+the **assignment** form (AGP is moving that way, and it matches the debug line
+beside it). If you touch that regex, test it against both spellings — the
+generated `android/app/build.gradle` can't be the fixture, since the plugin's
+own idempotency guard makes it a no-op.
+
 **Credentials live in `.env.local`** — the `APPLE_TEAM_ID` precedent exactly
 (see [env-files.md](./env-files.md)): gitignored, mode-agnostic (prebuild forces
 `NODE_ENV=development` before loading env files), and deliberately not
@@ -639,9 +652,39 @@ put the same four keys in `~/.gradle/gradle.properties` and drop the
 `withGradleProperties` half of the plugin — the `build.gradle` half reads them
 identically via gradle's property resolution.
 
-Store build: `cd apps/brace-expo/android && ./gradlew bundleRelease`. Note
-`app.config.ts` still carries `android.versionCode: 0` / `version: '0.0.0'` —
-Play rejects version code 0, so both need bumping before the first upload.
+**Escape `$` in the passwords.** Expo runs `dotenv-expand` over the env files,
+so an unescaped `$` starts a variable reference: `Brace$1MTo` loads as `Brace`,
+and gradle then fails with a keystore-password error that says nothing about
+env files. Write `Brace\$1MTo`. Verify with
+`node -e "require('@expo/env').load(process.cwd(),{force:true}); console.log(process.env.BRACE_UPLOAD_STORE_PASSWORD.length)"`
+from `apps/brace-expo`.
+
+Store build: `cd apps/brace-expo/android && ./gradlew bundleRelease`. Verify what
+actually signed it — `keytool -printcert -jarfile
+app/build/outputs/bundle/release/app-release.aab`, or ask gradle before building
+with `./gradlew :app:signingReport` (its `Variant: release` block prints the
+store path, alias, and fingerprint). `CN=Android Debug` means the plugin no-opped
+— a credential is missing from `.env.local`.
+
+Two unrelated things had to be fixed before any of that could run, both worth
+knowing about because neither is signing and both fail confusingly:
+
+- **`android.versionCode` must be ≥ 1.** It was `0`, and that is not just a
+  Play-upload rule — **AGP rejects it at configuration time** (_"versionCode is
+  set to 0, but it should be a positive integer"_), failing every Android build
+  of every variant. The version _string_ stays `0.0.0`; only the code matters to
+  the build.
+- **The two hand-written native modules called `useManagedAndroidSdkVersions()`**
+  (`apps/brace-expo/modules/brace-share/android/build.gradle` and
+  `packages/expo-crypto/android/build.gradle`), which `expo-modules-core@3.0.30`
+  does not define — it ships **`useDefaultAndroidSdkVersions`** (sets
+  compileSdk/minSdk/targetSdk from the root `ext`). Gradle failed with _Could not
+  find method useManagedAndroidSdkVersions()_ and then the misleading follow-on
+  _project ':brace-share' does not specify `compileSdk`_. Both now call the real
+  helper. The Android side of these modules had never been compiled — iOS was
+  unaffected, which is why it went unnoticed. If you hand-write another native
+  module, copy the four-call preamble from one of these two rather than from an
+  older SDK's template.
 
 #### docs (future)
 

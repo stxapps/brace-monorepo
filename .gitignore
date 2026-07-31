@@ -74,6 +74,14 @@ node_modules/
 # stay tracked.
 /apps/brace-expo/ios/
 /apps/brace-expo/android/
+# Gradle output for the COMMITTED native module sources. Unlike
+# apps/brace-expo/android above, these parent directories ARE tracked (they hold
+# hand-written Kotlin), so their build/ and .cxx/ dirs have to be named
+# explicitly — a `./gradlew bundleRelease` fills them in place.
+/apps/brace-expo/modules/*/android/build/
+/apps/brace-expo/modules/*/android/.cxx/
+/packages/*/android/build/
+/packages/*/android/.cxx/
 # Release signing material — the Play upload keystore, read by the
 # with-android-signing config plugin. Lives here rather than under android/
 # because --clean deletes that directory. NEVER commit it: leaking it or losing
