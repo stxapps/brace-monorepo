@@ -83,6 +83,99 @@ Flag notes:
   real jest 30 deterministically (every project, including brace-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
+#### local build workflow — the npm scripts (brace-expo)
+
+Builds are local (no EAS, above): `expo prebuild` regenerates the native
+projects, then **Xcode** builds/runs iOS and `expo run:android` (or gradle)
+handles Android. The commands live as **real npm scripts** in
+`apps/brace-expo/package.json`:
+
+| script            | command                              | when                                               |
+| ----------------- | ------------------------------------ | -------------------------------------------------- |
+| `prebuild`        | `expo prebuild --clean`              | after any `app.config.ts`/plugin/native-dep change |
+| `start`           | `expo start`                         | Metro, for a Debug run from Xcode                  |
+| `android`         | `expo run:android`                   | dev build → device                                 |
+| `android:release` | `expo run:android --variant release` | release build → device (R8, no Metro)              |
+| `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode          |
+
+Run them either way — `npm run <script>` from `apps/brace-expo`, or
+`npx nx <target> @stxapps/brace-expo` from the root (nx delegates to the
+script). Root also has `npm run dev:expo` for the Metro one, beside `dev:ext`.
+Extra flags pass straight through: `npm start -- --clear`,
+`npm run prebuild -- --platform ios`.
+
+**`android` and `ios` are named the way they are because PREBUILD WRITES
+THEM.** When `expo prebuild` creates a native directory it also "Updates
+package.json", adding `android`/`ios` (and `start`/`web`) scripts if absent —
+so an alternative spelling like `run-android` doesn't replace them, it just
+means every `--clean` re-adds a duplicate pair you have to delete again.
+Matching Expo's own names makes that step a no-op. `android:release` is the
+one addition (Expo has no release variant script) and follows the workspace's
+`build:staging` colon convention.
+
+**`prebuild` and `start` OVERRIDE `@nx/expo/plugin`'s inferred targets of the
+same name** — a package.json script wins over an inferred target (the
+brace-api `typecheck` precedent). That's not cosmetic: both inferred targets
+are wrong for this workflow.
+
+- **`@nx/expo:start` defaults to `--port 19000`** and exports `RCT_METRO_PORT`
+  to match. A Debug build launched from Xcode looks for Metro on **8081**, so
+  the inferred target yields "Could not connect to development server". Plain
+  `expo start` is 8081.
+- **`@nx/expo:prebuild` forks the CLI with `--no-install`**, then runs its own
+  `installAsync` — and calls `podInstall` **only when `platform === 'ios'`**.
+  The default is `platform: all`, so the common invocation regenerates `ios/`
+  and never installs the pods; the next Xcode build fails. Plain
+  `expo prebuild` installs deps and pods itself. (Both executors are also
+  `x-deprecated` — removed in Nx v24.)
+
+The plugin's `run-android`/`run-ios` targets are left alone — they're already
+correct `nx:run-commands` wrappers over the same CLI, so they coexist with the
+`android`/`ios` scripts as harmless aliases. Also still inferred and usable:
+`export`, `serve`, `install`, `submit`, and the renamed `eas-build`.
+
+Two notes:
+
+- **Don't add a `build` script to this app.** npm would treat `prebuild` as its
+  implicit pre-hook and regenerate the native projects on every build. (Nothing
+  does today — `nx.json` renames the EAS build target to `eas-build` precisely
+  so brace-expo has no `build`.)
+- **`ios/` and `android/` are gitignored** (anchored paths in the root
+  `.gitignore` — the committed native sources under `packages/expo-crypto/` and
+  `apps/brace-expo/modules/` are unaffected). They're CNG output: `--clean`
+  deletes them every time, so **nothing hand-edited in Xcode survives**. Every
+  native change belongs in `app.config.ts` or a config plugin. The one thing
+  that isn't a file — signing — comes from `APPLE_TEAM_ID` in `.env.local`
+  (see the app config section below); with it set, `withDevelopmentTeam` writes
+  `DEVELOPMENT_TEAM` into every target (app **and** share extension) and Xcode's
+  automatic signing takes it from there, so the manual team-picking step should
+  not be needed. If Xcode still asks, that's the signal `.env.local` wasn't
+  loaded — fix the env, don't fix the pbxproj.
+
+**Why not commit `ios/`+`android/` for audit?** The tempting reason is diffing
+what an SDK bump or a config-plugin change does to the native projects — but
+tracking them buys that badly and costs real safety. `project.pbxproj` churns
+on regenerated object UUIDs, so a `--clean` diff is thousands of unreviewable
+lines; and once tracked, a hand-edit in Xcode is a **clean** working tree that
+silently no longer matches `app.config.ts`, until the next `--clean` destroys
+it. The bare (committed-native) workflow is for native code you author by
+hand — and every line of that here already lives in tracked directories
+prebuild never touches (`packages/expo-crypto/{ios,android}`,
+`apps/brace-expo/modules/brace-share/{ios,android}`). Nothing under
+`apps/brace-expo/ios|android` is authored. When you do want the diff, take it
+on demand instead of carrying it forever:
+
+    npm run prebuild                              # before state
+    cp -R apps/brace-expo/ios /tmp/ios-before
+    …bump the SDK / edit app.config.ts…
+    npm run prebuild
+    diff -ru /tmp/ios-before apps/brace-expo/ios
+
+For a store `.aab`, gradle directly: `cd apps/brace-expo/android && ./gradlew
+bundleRelease` (needs a real release keystore — the prebuild template signs
+`release` with the debug config, which is fine for `run-android:release` on a
+device but not for the Play Store).
+
 #### app config — `app.config.ts`, not `app.json` (brace-expo)
 
 The generator scaffolds a static `app.json`; this app uses the **dynamic TS
@@ -177,6 +270,27 @@ the store sheet itself only works on a real device/simulator with a store
 account (jest/Metro can't exercise it). No API keys on the client: server-side
 verification config lives in brace-api's `wrangler.jsonc` (docs/iap.md — config
 per env).
+
+**Nothing to add in Xcode's Signing & Capabilities.** Ordinary StoreKit IAP
+needs **no entitlement** — Apple enables the In-App Purchase service on every
+explicit App ID by default, so the Xcode capability row writes nothing to
+`.entitlements`, and there is nothing for prebuild to omit. Verified two ways:
+`expo-iap`'s plugin touches entitlements **only** for alternative/external
+purchase (`com.apple.developer.storekit.external-purchase*`), which is opt-in
+through plugin options this app doesn't pass; and a fresh `expo prebuild
+--platform ios` emits exactly one entitlement key in each of the two targets'
+`.entitlements` — `com.apple.security.application-groups` — with no
+`SystemCapabilities` block in the pbxproj at all. So the generated project is
+complete as-is; if a purchase flow fails it is an App Store Connect problem
+(Paid Applications Agreement not active, products not created or not "Ready to
+Submit", no sandbox tester), not a missing capability.
+
+One prebuild-durability catch if you test on the **simulator** with a local
+StoreKit configuration file: the file is selected per **scheme** (Edit Scheme →
+Run → Options → StoreKit Configuration), and schemes live under `ios/`, which
+`--clean` deletes. Keep the `.storekit` file outside `ios/` and expect to
+re-select it after each prebuild — or test on a device with a sandbox account
+and skip it.
 
 #### expo-router (brace-expo)
 

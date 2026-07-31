@@ -1,13 +1,31 @@
 {
   "name": "@stxapps/brace-expo",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "private": true,
   "main": "index.js",
+  "scripts": {
+    "prebuild": "expo prebuild --clean",
+    "start": "expo start",
+    "android": "expo run:android",
+    "android:release": "expo run:android --variant release",
+    "ios": "expo run:ios"
+  },
   "nx": {
     "tags": [
       "type:app",
       "platform:expo"
-    ]
+    ],
+    "targets": {
+      "start": {
+        "continuous": true
+      },
+      "android": {
+        "continuous": true
+      },
+      "ios": {
+        "continuous": true
+      }
+    }
   },
   "dependencies": {
     "@craftzdog/react-native-buffer": "*",
