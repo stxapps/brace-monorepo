@@ -74,10 +74,18 @@ const config: ExpoConfig = {
       },
     ],
     [
+      // The app only ever calls launchImageLibraryAsync (link-edit-screen.tsx),
+      // so camera/microphone are declined explicitly. Left undefined, the plugin
+      // writes DEFAULT NSCameraUsageDescription + NSMicrophoneUsageDescription
+      // strings and adds android.permission.RECORD_AUDIO; `false` deletes those
+      // Info.plist keys and emits tools:node="remove" for CAMERA + RECORD_AUDIO
+      // (the latter also cancels expo-image-picker's own manifest CAMERA entry).
       'expo-image-picker',
       {
         photosPermission:
           'Brace uses your photo library to let you pick a custom preview image for a saved link.',
+        cameraPermission: false,
+        microphonePermission: false,
       },
     ],
     [
@@ -99,10 +107,10 @@ const config: ExpoConfig = {
       'expo-build-properties',
       {
         ios: {
-          deploymentTarget: '16.0',
+          deploymentTarget: '18.0',
         },
         android: {
-          minSdkVersion: 30,
+          minSdkVersion: 33,
           enableMinifyInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
         },
