@@ -43,6 +43,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // test asserts its stubs were consumed (assertNoPendingStubs).
 let fetchStubs: { match: string; status: number; body: unknown }[] = [];
 const realFetch = globalThis.fetch;
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
 
 function stubOutboundFetch() {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -52,9 +53,14 @@ function stubOutboundFetch() {
     const i = fetchStubs.findIndex((s) => url.includes(s.match));
     if (i >= 0) {
       const [stub] = fetchStubs.splice(i, 1);
-      return new Response(JSON.stringify(stub.body), {
+      // A null-body status must carry no body — `new Response(json, { status:
+      // 204 })` THROWS. Play's `:acknowledge` answers 204 on success, so
+      // building one here would blow up inside the code under test (swallowed
+      // by its catch) instead of returning the success the stub scripts.
+      const nullBody = NULL_BODY_STATUSES.has(stub.status);
+      return new Response(nullBody ? null : JSON.stringify(stub.body), {
         status: stub.status,
-        headers: { 'content-type': 'application/json' },
+        headers: nullBody ? undefined : { 'content-type': 'application/json' },
       });
     }
     return realFetch(input as RequestInfo, init);
