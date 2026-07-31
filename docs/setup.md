@@ -369,6 +369,77 @@ the workspace root (`^6.1.2`), the same root-pin + app-`*` convention the other
 RN native deps use (`react-native-quick-base64`, `react-native-quick-crypto`).
 This can only be exercised on a native build, not jest/Metro.
 
+#### android release minification — R8 (brace-expo)
+
+Release Android builds run **R8** (shrink + obfuscate) with resource shrinking,
+via the `expo-build-properties` plugin in `app.json`:
+
+    ["expo-build-properties", { "android": {
+      "enableMinifyInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true } }]
+
+Both are **off by default** — the prebuild template reads
+`findProperty('android.enableMinifyInReleaseBuilds') ?: false`, so without this
+block `minifyEnabled` is false and any proguard rule anywhere is inert.
+`enableShrinkResourcesInReleaseBuilds` **requires** the minify flag (the plugin
+throws otherwise). Debug builds are unaffected; `expo-build-properties` is a
+prebuild-time config plugin, so a change here needs `npx expo prebuild`.
+
+**Deliberately no `extraProguardRules`.** The old app
+(`brace-client/packages/expo/app.config.ts`) carried ~25 hand-written lines;
+none of them should be ported, because every one is either dead or now shipped
+by the library itself as `consumerProguardFiles` (R8 merges those from each AAR
+automatically):
+
+| old rule                                       | why it's not here                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `com.horcrux.svg.**`                           | shipped by `react-native-svg/android/proguard-rules.pro` (same line, verbatim) |
+| Glide / `AppGlideModule` / `ImageHeaderParser` | was for `react-native-fast-image` (not used); `expo-image` ships a superset    |
+| `com.facebook.jni.**`, `animal_sniffer`        | shipped by `react-native/ReactAndroid/proguard-rules.pro`                      |
+| `com.facebook.hermes.unicode.**`               | that Java package no longer exists in RN 0.81 — dead rule                      |
+| okhttp `PublicSuffixDatabase`, conscrypt       | shipped in okhttp's own AAR consumer rules (4.x+)                              |
+| MMKV block                                     | not a dependency (expo-sqlite + expo-secure-store instead)                     |
+| bouncycastle, slf4j                            | Blockstack-only — gone with the password-derived account model                 |
+
+Our own native code is covered the same way: `expo-modules-core`'s consumer
+rules keep every `expo.modules.kotlin.modules.Module` subclass, which is what
+`BraceFileCryptoModule` (the `BraceCrypto` pod's Kotlin side) is.
+
+**No nitro keep rule either — and specifically not
+`-keep class com.margelo.nitro.** { *; }`.** `react-native-nitro-modules` is
+the one dependency here that ships no consumer proguard file, so it looks like
+the exception. It isn't, for two checked reasons:
+
+- **`react-native-quick-crypto` has no Java/Kotlin classes for R8 to strip.**
+  Nitro resolves a hybrid object one of two ways, and only the Kotlin-backed
+  one goes through JNI `findClassStatic` by name (`DefaultConstructableObject`,
+  invisible to R8). Every one of quick-crypto's ~30 hybrids takes the **C++**
+  path — `QuickCryptoOnLoad.cpp` registers each as
+  `std::make_shared<HybridArgon2>()` etc., with zero `JHybrid` references. Its
+  whole JVM surface is one `QuickCryptoPackage.java` that calls
+  `System.loadLibrary`, reached from the generated `PackageList` (so R8 sees
+  it). R8 does not touch the `.so`.
+- **Nitro's own runtime Kotlin classes are already annotated.**
+  `HybridObject`, `Promise`, `ArrayBuffer`, `AnyMap`, `AnyValue`,
+  `NativeRunnable`, `ThreadUtils`, and `NitroModules` all carry
+  `@com.facebook.proguard.annotations.DoNotStrip` + `@androidx.annotation.Keep`
+  — kept by RN's consumer rules and AGP's default `proguard-android.txt`
+  respectively. A blanket `com.margelo.nitro.**` keep would add nothing but
+  would suppress obfuscation across the package.
+
+So the keep-set stays empty, and each future addition should name the crash it
+fixes. That's affordable because **nitro's failure mode is self-diagnosing**:
+if a Kotlin-backed hybrid ever is stripped (a future nitro module, or if
+`@stxapps/expo-crypto` grows one), the thrown message is literally
+_"Couldn't find class `X`! … If you are using ProGuard, add `@Keep` and
+`@DoNotStrip` annotations"_ — and note it prescribes annotating the class, not
+a blanket keep.
+
+**Only a real release build exercises this** — not jest, not Metro, not `expo
+run:android` (debug). Until brace-expo has a release/EAS pipeline
+(docs/deployment.md doesn't cover mobile yet), this is configured but unproven;
+verify with a release build before the first store submission.
+
 #### docs (future)
 
 - npx nx g @nx/next:app apps/brace-docs

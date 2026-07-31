@@ -2,23 +2,33 @@
   "expo": {
     "name": "Brace.to",
     "slug": "bracedotto",
-    "version": "0.0.1",
+    "version": "0.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bracedotto",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "icon": {
+        "light": "./assets/images/ios-light.png",
+        "dark": "./assets/images/ios-dark.png",
+        "tinted": "./assets/images/ios-tinted.png"
+      },
+      "supportsTablet": false,
       "bundleIdentifier": "to.brace.app",
-      "supportsTablet": false
+      "appleTeamId": "process.env.APPLE_TEAM_ID",
+      "version": "0.0.0",
+      "buildNumber": "1"
     },
     "android": {
-      "package": "to.brace.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "to.brace.app",
+      "versionCode": 0,
+      "version": "0.0.0"
     },
     "web": {
       "bundler": "metro",
@@ -26,18 +36,22 @@
     },
     "plugins": [
       [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/InterVariable.ttf"]
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
-        }
-      ],
-      [
-        "expo-font",
-        {
-          "fonts": ["./assets/fonts/InterVariable.ttf"]
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "image": "./assets/images/splash-icon-dark.png",
+            "backgroundColor": "#0a0a0a"
+          }
         }
       ],
       "expo-router",
@@ -67,6 +81,19 @@
             "expo-iap"
           ],
           "preprocessingFile": "./share-extension/preprocessing.js"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          },
+          "android": {
+            "minSdkVersion": 30,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
         }
       ]
     ]
