@@ -9,9 +9,6 @@
       "platform:expo"
     ]
   },
-  "scripts": {
-    "eas-build-post-install": "cd ../../ && node tools/scripts/eas-build-post-install.mjs . apps/brace-expo"
-  },
   "dependencies": {
     "@craftzdog/react-native-buffer": "*",
     "@expo/metro-config": "*",

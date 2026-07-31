@@ -67,6 +67,16 @@ Flag notes:
   peerDependencies — brace-expo owns them so Expo autolinking sees them. The
   version each slot declares (root pins, everyone else defers) is
   [architecture.md](./architecture.md) — _dependency versions_.
+- **No EAS.** Builds are local — `npx expo prebuild` then Xcode / Gradle (or
+  `expo export`) — so there is no `eas.json` and none is needed. The generator's
+  `eas-build-post-install` script in the app's `package.json` (and its
+  `tools/scripts/eas-build-post-install.mjs`, which symlinked the workspace
+  `node_modules` for EAS Build's isolated checkout) were deleted as dead code;
+  that lifecycle hook only ever runs on EAS. If you re-run an `@nx/expo`
+  generator, drop the script again. What stays is `nx.json`'s
+  `"buildTargetName": "eas-build"` — that's **not** leftover EAS wiring but a
+  guard: it renames @nx/expo's inferred `eas build` target away from `build`, so
+  `npm run build` (an `nx run-many -t build`) can't fire an EAS build.
 - Note: `jest-expo` ships a bin literally named `jest`, colliding with the real
   jest CLI in `node_modules/.bin` — whichever npm links last wins. The root
   `postinstall` (`tools/scripts/fix-jest-bin.mjs`) re-points the bin at the
