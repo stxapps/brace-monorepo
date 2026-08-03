@@ -43,7 +43,7 @@ const config: ExpoConfig = {
     },
     edgeToEdgeEnabled: true,
     package: 'to.brace.app',
-    versionCode: 0,
+    versionCode: 1,
     version: '0.0.0',
   },
   web: {
