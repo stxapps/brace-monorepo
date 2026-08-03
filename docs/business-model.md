@@ -38,8 +38,8 @@ Rough infra for a heavy 30k-link / 3 GB user, priced on R2:
 | R2 reads (Class B, sparse) | sync-driven     | **~$0.10–0.50** |
 | D1 (metadata rows)         | tiny            | **~cents**      |
 
-So even a worst-case whale costs **~$1–2/yr** in infra against $24+/yr revenue —
-an 85%+ gross margin. **Cost is never the wall; customer acquisition is.**
+So even a worst-case whale costs **~$1–2/yr** in infra against $48+/yr revenue —
+a 95%+ gross margin. **Cost is never the wall; customer acquisition is.**
 
 The one place cost _does_ leak in is the **`brace-extractor`** server path
 (outbound fetch + compute, and anonymous/abuse-exposed). It's now a
@@ -106,37 +106,39 @@ The two paid tiers then have a spine, not just a longer list:
 - **Pro** — the library that organizes and understands itself (automated /
   dynamic organization + intelligence).
 
-|                                         | **Free**                       | **Plus** — $24/yr | **Pro** — $48/yr _(planned)_   |
-| --------------------------------------- | ------------------------------ | ----------------- | ------------------------------ |
-| Price                                   | $0                             | $24/yr ($3/mo)    | $48/yr ($5/mo) · lifetime $149 |
-| Saved links                             | 200                            | Unlimited         | Unlimited                      |
-| Storage quota (blobs)                   | preview imgs only (≤200)       | 5 GB              | 20 GB                          |
-| E2E encryption                          | ✅                             | ✅                | ✅                             |
-| Sync across devices                     | ✅ (habit-builder — don't cap) | ✅                | ✅                             |
-| Browser extension (save)                | ✅                             | ✅                | ✅                             |
-| Mobile share sheet (save)               | ✅                             | ✅                | ✅                             |
-| Theme, flat tags, flat lists, pin       | ✅                             | ✅                | ✅                             |
-| Sort + manual reorder (lists/tags/pins) | ✅                             | ✅                | ✅                             |
-| Layouts (card, list)                    | ✅                             | ✅                | ✅                             |
-| Multi-select move / tag / delete        | ✅                             | ✅                | ✅                             |
-| Full data export (no lock-in)           | ✅                             | ✅                | ✅                             |
-| Search (words, all links)               | ✅                             | ✅                | ✅                             |
-| Preview images (downloaded blob)        | ✅ (client-extracted)          | ✅                | ✅                             |
-| Browser extension extraction            | ✅                             | ✅                | ✅                             |
-| Mobile app extraction.                  | ✅                             | ✅                | ✅                             |
-| Server extraction (`brace-extractor`)   | ❌                             | opt-in            | opt-in                         |
-| Nested lists                            | ❌                             | ✅                | ✅                             |
-| Locks (app lock + per-list hide)        | ❌                             | ✅                | ✅                             |
-| Search editor (fields, lists, tags)     | ❌                             | ✅                | ✅                             |
-| Read-mode (clean reader text)           | ❌                             | ▹ planned         | ▹ planned                      |
-| Table layout (custom columns)           | ❌                             | ▹ planned         | ▹ planned                      |
-| Screenshot capture                      | ❌                             | ▹ planned         | ▹ planned                      |
-| Full page copy (offline snapshot)       | ❌                             | ▹ planned         | ▹ planned                      |
-| Nested tags (tag hierarchy)             | ❌                             | ▹ planned         | ▹ planned                      |
-| Per-list manual link ordering           | ❌                             | ▹ planned         | ▹ planned                      |
-| Smart lists / smart tags                | ❌                             | ❌                | ▹ planned                      |
-| Saved searches (persist queries)        | ❌                             | ❌                | ▹ planned                      |
-| AI (auto-tag, summary, semantic search) | ❌                             | ❌                | ▹ planned                      |
+|                                         | **Free**                       | **Plus** — $48/yr             | **Pro** — $96/yr _(planned)_ |
+| --------------------------------------- | ------------------------------ | ----------------------------- | ---------------------------- |
+| Price                                   | $0                             | $48/yr ($4/mo) · $5.99/mo     | $96/yr ($8/mo)               |
+| Free trial                              | —                              | 14 days, **annual plan only** | 14 days, annual only         |
+| Lifetime _(launch lever, then retired)_ | —                              | $149                          | —                            |
+| Saved links                             | 200                            | Unlimited                     | Unlimited                    |
+| Storage quota (blobs)                   | preview imgs only (≤200)       | 5 GB                          | 20 GB                        |
+| E2E encryption                          | ✅                             | ✅                            | ✅                           |
+| Sync across devices                     | ✅ (habit-builder — don't cap) | ✅                            | ✅                           |
+| Browser extension (save)                | ✅                             | ✅                            | ✅                           |
+| Mobile share sheet (save)               | ✅                             | ✅                            | ✅                           |
+| Theme, flat tags, flat lists, pin       | ✅                             | ✅                            | ✅                           |
+| Sort + manual reorder (lists/tags/pins) | ✅                             | ✅                            | ✅                           |
+| Layouts (card, list)                    | ✅                             | ✅                            | ✅                           |
+| Multi-select move / tag / delete        | ✅                             | ✅                            | ✅                           |
+| Full data export (no lock-in)           | ✅                             | ✅                            | ✅                           |
+| Search (words, all links)               | ✅                             | ✅                            | ✅                           |
+| Preview images (downloaded blob)        | ✅ (client-extracted)          | ✅                            | ✅                           |
+| Browser extension extraction            | ✅                             | ✅                            | ✅                           |
+| Mobile app extraction.                  | ✅                             | ✅                            | ✅                           |
+| Server extraction (`brace-extractor`)   | ❌                             | opt-in                        | opt-in                       |
+| Nested lists                            | ❌                             | ✅                            | ✅                           |
+| Locks (app lock + per-list hide)        | ❌                             | ✅                            | ✅                           |
+| Search editor (fields, lists, tags)     | ❌                             | ✅                            | ✅                           |
+| Read-mode (clean reader text)           | ❌                             | ▹ planned                     | ▹ planned                    |
+| Table layout (custom columns)           | ❌                             | ▹ planned                     | ▹ planned                    |
+| Screenshot capture                      | ❌                             | ▹ planned                     | ▹ planned                    |
+| Full page copy (offline snapshot)       | ❌                             | ▹ planned                     | ▹ planned                    |
+| Nested tags (tag hierarchy)             | ❌                             | ▹ planned                     | ▹ planned                    |
+| Per-list manual link ordering           | ❌                             | ▹ planned                     | ▹ planned                    |
+| Smart lists / smart tags                | ❌                             | ❌                            | ▹ planned                    |
+| Saved searches (persist queries)        | ❌                             | ❌                            | ▹ planned                    |
+| AI (auto-tag, summary, semantic search) | ❌                             | ❌                            | ▹ planned                    |
 
 ▹ **planned** = held for feedback, not committed even as the destination — gate
 if/when demand shows (see _launch sequencing_).
@@ -227,7 +229,126 @@ Why these cuts:
   blob (screenshot / read-mode / page copy) is still absent, so there is nothing to
   surface in a quota UI.
 - **Lifetime ($149)** front-loads cash and suits the privacy/PKM crowd, but is a
-  long-tail liability under E2E — offer as a launch lever, then retire.
+  long-tail liability under E2E — offer as a launch lever, then retire. It's
+  attached to **Plus**, not Pro: Plus is the only paid plan on sale at launch
+  (see _launch sequencing_), and $149 against $48/yr is a ~3.1-year payback,
+  which reads as a real deal. Against the old $24/yr it was 6+ years and would
+  have converted nobody.
+
+### pricing — why $48, and why not $28
+
+The instinct is to price against **Raindrop Pro ($28/yr)**, the category
+incumbent. That's the one number to _not_ match, and the reasoning is
+positioning before it's arithmetic.
+
+**Raindrop is the wrong comp set.** The wedge audience (privacy / PKM /
+research) has different anchors, and they all sit far above $28:
+
+| product           | price   | what it buys                       |
+| ----------------- | ------- | ---------------------------------- |
+| Raindrop Pro      | $28/yr  | bookmarks, **not** private         |
+| 1Password         | ~$36/yr | E2E vault                          |
+| **Obsidian Sync** | ~$48/yr | **encrypted sync. That's all.**    |
+| Proton Mail Plus  | ~$48/yr | private mail                       |
+| Readwise Reader   | ~$90/yr | read-later + highlights (cloud AI) |
+
+Obsidian charges ~$48/yr for E2E sync **alone** — no organization, no locks, no
+capture surfaces — and the PKM tribe pays it without complaint. Brace at $48
+gives that same tribe encrypted sync _plus_ nested structure, locks, a query
+editor, a browser extension, and a mobile share sheet. In that table Brace is
+the one doing the most work for the money, not the expensive option. (Verify
+these against current pricing pages before committing — they move.)
+
+**Matching $28 invites the comparison we lose.** Sitting at the incumbent's
+price declares "Raindrop, but private," so the buyer runs a feature diff — and
+at launch Plus is thinner than Raindrop Pro (read-mode, page copy, screenshot,
+nested tags, table layout are all ▹ planned; see _launch sequencing_). $48
+positions Brace beside Obsidian Sync instead, where the differentiator is the
+axis of comparison rather than a missing row.
+
+**The elasticity math says the downside is covered.** Going $28 → $48 cuts the
+free base required for a given income by ~46% (see _break-even_). So **$48 wins
+even if the higher price costs up to ~46% of conversions** — and realistic
+prosumer elasticity in the $2–5/month band is a 10–25% hit, not 46%. Nobody
+choosing an encrypted research vault is price-shopping $2 vs $4 a month; the
+users who bounce at $4 are the ones who'd have churned in month three anyway.
+
+**Why not $60, then?** Because $60 would promise what Plus doesn't contain yet.
+The heavy-blob levers that justify a premium (read-mode, offline page copy,
+screenshot) are exactly the unbuilt ones, and the rule below is _never promise in
+the paywall what isn't built_. $48 clears that bar; $60 doesn't, **yet** —
+revisit once the fast-follows land.
+
+**Frame it monthly.** Nobody evaluates "$48.00/year"; they evaluate **"$4 a
+month,"** which lands next to Obsidian Sync and reads cheap. The sticker shock
+that makes $59.99 feel steep is a presentation problem, and the $4/mo framing
+sidesteps it while capturing most of the revenue.
+
+**Launch at $48 — don't launch low and raise later.** Raising prices on a live
+base is a thing founders plan and then never do, and it would land precisely when
+there are the most users to annoy. Launch here, use _early supporters keep this
+price forever_ as the launch urgency, and route new signups to a higher price
+once read-mode and page copy ship. The grandfathered cohort then has a standing
+reason not to churn — which, per _the thing the table hides_, is worth more than
+the price increase itself.
+
+**The trial goes on the annual plan only.** The monthly option exists to remove
+the "$48 up front" objection, not to be the default: putting the trial solely on
+annual funnels conversions into the plan that pays ~$48 at once instead of ~$6,
+which matters a lot at this stage. It also keeps the fee model below honest — an
+annual sub is **one** payment-processor charge a year, a monthly sub is twelve,
+so monthly nets materially less per dollar billed.
+
+**14 days, not 3 — because Brace's value is cumulative.** The 3-day trial is
+calibrated for apps with an instant gotcha moment (photograph a plate, get the
+calories), where the product proves itself in five seconds and a short clock
+just accelerates cash. Brace is the opposite shape: a bookmark vault is worth
+nothing on day one and something real once there's a library in it. A trial has
+to span **at least one full weekly usage cycle** plus the browser-extension
+install that unlocks thumbnails (see _the web-only gap_ under _related risks_) —
+3 days expires before the habit that justifies paying has formed, and converts
+on sunk cost rather than demonstrated value, which is churn deferred, not
+revenue earned.
+
+Note what the trial is _for_ here, though: **the free tier is the evaluation,
+not the trial.** 200 links is a serious trial of Brace-the-product, so a Plus
+trial started at signup demos features the user has no library to feel yet
+(unlimited links when they have twelve; nested lists with nothing to nest). The
+trial's real job is de-risking the upgrade at the moment the free tier binds,
+where the question isn't "is Brace good" but "is _structure_ worth $48" — and
+that question takes a couple of weekends of reorganizing to answer. 14 days
+covers it; 3 doesn't.
+
+**Trial length is not a refund strategy — and refunds aren't fully ours to
+grant.** The tempting logic is that a 14-day trial "covers" the EU/UK statutory
+14-day right of withdrawal, so nobody ever asks for their money back. It doesn't
+stack that way: the withdrawal window runs from the **contract/charge date**, so
+a trial that converts on day 14 starts a _fresh_ 14-day window on day 14. What a
+longer trial actually buys is a lower refund _rate_ (people cancel instead of
+charging back), which is worth real money — fees on a refunded sub aren't
+returned, and chargebacks carry a penalty — but it is not legal cover.
+
+More importantly, the premise that refunds are discretionary is wrong in the
+markets that matter:
+
+- **EU/UK** — distance-selling gives a **statutory 14-day withdrawal right**. For
+  digital services it is waivable, but only if the customer expressly consents to
+  immediate performance _and_ acknowledges losing the right; that consent flow is
+  a checkout requirement, not an afterthought.
+- **Paddle is the Merchant of Record**, so Paddle — not us — is the legal seller
+  (this is the point of using them: they carry VAT/sales-tax and the withdrawal
+  consent). Paddle can and does refund on its own policy, over the seller's
+  objection, because it carries the chargeback liability.
+- **App Store / Google Play** — refunds are handled entirely by Apple/Google and
+  granted at their discretion. The developer has no veto and often no notice.
+
+So the honest position is: a published, generous refund policy costs us almost
+nothing we could have withheld anyway, and buys trust with exactly the
+privacy/PKM audience that reads terms pages. Market it rather than defend
+against it — **"cancel anytime, 30-day money back, full export on the way out"**
+sits naturally beside the no-lock-in stance above. Confirm the current specifics
+with Paddle's seller terms and the store policies before writing any of it into
+customer-facing copy; the shapes above are stable, the numbers move.
 
 ### launch sequencing
 
@@ -260,64 +381,83 @@ customer can actually see and buy.
 
 ### break-even
 
-Headline: **infra break-even is trivial (~20 paying subs); the meaningful
+Headline: **infra break-even is trivial (~10 paying subs); the meaningful
 break-even is replacing your income, which is an acquisition problem.**
 
 Assumptions (all editable):
 
 | input                       | value                  | note                              |
 | --------------------------- | ---------------------- | --------------------------------- |
-| Blended price               | 80% Plus / 20% Pro     | = $28.80/yr gross per paid sub    |
+| Blended price               | 80% Plus / 20% Pro     | = $57.60/yr gross per paid sub    |
 | Payment fees                | 2.9% + $0.30/yr        | annual billing = one charge/yr    |
-| **Net revenue / paid sub**  | **~$27.7/yr**          | after Stripe                      |
+| **Net revenue / paid sub**  | **~$55.6/yr**          | after Paddle                      |
 | Infra / paid sub            | ~$2/yr                 | heavy blob user; most lighter     |
 | Infra / free sub            | ~$0.05/yr              | metadata + preview imgs, sync ops |
-| **Contribution / paid sub** | **~$25.7/yr**          | net rev − infra                   |
+| **Contribution / paid sub** | **~$53.6/yr**          | net rev − infra                   |
 | Fixed baseline              | ~$500/yr               | Workers paid plan, domains, tools |
 | Free→paid conversion        | 2% (cons.) – 4% (opt.) | typical prosumer freemium         |
 
-`paid subs needed ≈ (annual target + $500 + free_base × $0.05) ÷ $25.7`
+The blend assumes annual billing throughout. A **monthly** sub at $5.99 grosses
+~$71.88/yr but pays twelve processor charges (~$5.70/yr in fees vs ~$1.97), so
+it nets ~$66/yr — still more than annual, but only if it survives twelve months,
+which at 30–50% churn most won't. That asymmetry is the whole reason the trial
+sits on the annual plan (see _pricing_).
+
+`paid subs needed ≈ (annual target + $500 + free_base × $0.05) ÷ $53.6`
 
 | Goal                                 | Annual target | Paid subs  | Free base @ 2% | Free base @ 4% |
 | ------------------------------------ | ------------- | ---------- | -------------- | -------------- |
-| **A. Cover infra only**              | ~$500         | **~20**    | ~1,000         | ~500           |
-| **B. Ramen / part-time** ($12k)      | ~$12.5k       | **~490**   | ~24,500        | ~12,250        |
-| **C. Modest salary** ($60k)          | ~$66k¹        | **~2,560** | ~128,000       | ~64,000        |
-| **D. Comfortable solo SaaS** ($120k) | ~$126k¹       | **~4,900** | ~245,000       | ~122,500       |
+| **A. Cover infra only**              | ~$500         | **~10**    | ~500           | ~250           |
+| **B. Ramen / part-time** ($12k)      | ~$13k         | **~250**   | ~12,250        | ~6,125         |
+| **C. Modest salary** ($60k)          | ~$63.5k¹      | **~1,180** | ~59,000        | ~29,500        |
+| **D. Comfortable solo SaaS** ($120k) | ~$126.5k¹     | **~2,360** | ~118,000       | ~59,000        |
 
-¹ includes free-base infra drag: 128k free × $0.05 ≈ **$6.4k/yr** of pure
+¹ includes free-base infra drag: 118k free × $0.05 ≈ **$5.9k/yr** of pure
 hosting cost for non-payers. Real at scale — at the salary level, free-user
 hosting costs more than paid-user serving.
 
+**Scenario D is the "$10K/month" line** ($120k/yr), and it's the clearest read on
+what the repricing bought: at the old $24/$48 it needed ~4,900 subs on a
+~245,000 free base; at $48/$96 it needs **~2,360 subs on ~118,000** — and at 4%
+conversion, ~59,000. That's the difference between a number that requires a
+quarter-million free users and one that doesn't.
+
 How to read it:
 
-- **Cost is never the wall.** Infra break-even is ~20 subs.
-- **The wall is the free base.** A modest $60k salary needs ~2,560 paid subs ≈
-  **~128,000 free users at 2% conversion.** Acquiring/retaining that in the
+- **Cost is never the wall.** Infra break-even is ~10 subs.
+- **The wall is the free base.** A modest $60k salary needs ~1,180 paid subs ≈
+  **~59,000 free users at 2% conversion.** Acquiring/retaining that in the
   bookmark-app graveyard is the whole game — point every lever (extension store
   presence, a sharp wedge audience, privacy-tribe word-of-mouth) at it.
-- **Conversion is a 2× lever.** 2%→4% halves the free base required (128k→64k).
+- **Conversion is a 2× lever.** 2%→4% halves the free base required (59k→29.5k).
   Conversion rests on the load-bearing gates — the 200-link cap (scale), structure
   (nested lists/tags), locks, and the heavy-blob upgrades (read-mode / page copy) —
   **not** on crippling the daily view: free shows client-extracted thumbnails, so the
   free tier looks alive and forms the habit that retention depends on.
-- **Pricing leverages the count.** At the original $10–12/yr every "paid subs"
-  number roughly **doubles** (~5,000 for a modest salary vs ~2,560). That's the
-  concrete argument for $24/$48 — same customers, half the mountain.
+- **Pricing leverages the count, and it's the cheapest lever there is.** Every
+  halving of price roughly **doubles** every "paid subs" number: a modest salary
+  needs ~1,180 subs at $48/$96, ~2,560 at $24/$48, and ~5,000 at the original
+  $10–12/yr. Same customers, a quarter of the mountain — and unlike conversion or
+  churn, it's a config change, not a year of product work. This is the argument
+  for $48/$96 (see _pricing_); it applies again at $60 once the fast-follows ship.
 
 ### the thing the table hides: churn
 
 These are **steady-state** counts — the base you must _maintain_, not reach once.
 Read-later/bookmark apps churn hard (often 30–50%/yr). At 40% annual churn and a
-2,560-sub steady state you re-acquire ~1,000 paid subs **every year** to stand
-still — ~50,000 new free signups/yr at 2%. Retention feeds straight back into the
+1,180-sub steady state you re-acquire ~470 paid subs **every year** to stand
+still — ~23,500 new free signups/yr at 2%. Retention feeds straight back into the
 model: **a 10-point churn improvement is worth more than a 10-point price
-increase.**
+increase** — though note the corollary the repricing exposes: a 100% price
+increase beat both, and cost a config change. Take the cheap lever first, then
+go back to earning the expensive ones.
 
-Realistic read: **Scenario B (part-time income, ~490 subs / ~12–25k free users)
+Realistic read: **Scenario B (part-time income, ~250 subs / ~6–12k free users)
 is an achievable 18–24 month target** for a well-built privacy niche with
 extension distribution. **Scenario C (full salary)** is the "real business"
 threshold and depends almost entirely on holding conversion ≥3% and churn ≤30%.
+**Scenario D ($10K/month)** stays a 3–5 year outcome on organic/extension
+distribution — the repricing makes it reachable, not fast.
 
 ### the real lever: habit, not cost or marketing
 
@@ -331,8 +471,12 @@ two problems — they're both downstream of one:
   ~1,000 subs/yr just to stand still, turning acquisition into a treadmill. Fix
   retention and the acquisition target drops for the same income — a 10-point
   churn improvement beats a 10-point price increase.
-- **Acquisition here is distribution, not ad spend.** At $24/yr paid marketing
-  rarely pays back. This category grows through **browser-extension store search**
+- **Acquisition here is distribution, not ad spend.** Even at $48/yr paid
+  marketing rarely pays back: at a $2.50 CPM, 100k influencer views buys maybe
+  ~125 signups, which at 2–4% is ~$120–240 of year-one revenue against $250
+  spent — and you learn the answer over twelve months, not the one-to-three days
+  a viral-app playbook assumes. The repricing narrows that gap; it does not close
+  it. This category grows through **browser-extension store search**
   (people search "save links chrome extension"), **word-of-mouth inside a tribe**,
   and **mentions in the right communities** (privacy / PKM / Obsidian / HN). The
   extension is a _growth channel_, not just a feature — product-led distribution.
