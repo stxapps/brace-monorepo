@@ -145,7 +145,7 @@ deliberate symmetry as the other frontends.
 `.env.local` and all read at config-evaluation time by `expo prebuild` rather
 than at runtime: `APPLE_TEAM_ID` (iOS, below) and the four `BRACE_UPLOAD_*` vars
 that carry the Android Play upload key into `signingConfigs.release` (see
-[setup.md](./setup.md) — _android release signing_). The three bullets below
+[expo-build.md](./expo-build.md) — _android release signing_). The three bullets below
 apply to both groups verbatim — same file, same mode-agnostic reason, same
 no-prefix reason, same falsy-skip safety.
 

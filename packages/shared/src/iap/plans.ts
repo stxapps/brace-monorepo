@@ -52,6 +52,18 @@
 // When either ships, add a `tagHierarchy` / `linkOrdering` boolean below
 // (free:false, plus:true, pro:true — mirroring nestedLists) and the table and
 // the data reconverge.
+//
+// The same doc's PRICING section is likewise ahead of this file in two ways, and
+// neither is an entitlement, which is why nothing is stubbed here yet:
+//   - a MONTHLY price ($5.99/mo beside $48/yr). This file models one price per
+//     plan per YEAR; a monthly option is a second billing CADENCE, so it belongs
+//     in the checkout contract (iap/endpoints.ts) + the Paddle catalog, with
+//     PLAN_USD_PER_YEAR gaining a PLAN_USD_PER_MONTH sibling for card copy.
+//   - a free TRIAL (14 days, annual plan only). A trial is a subscription STATE,
+//     not a capability: a trialing account is entitled to exactly `plus`, so
+//     entitlementsOf() is already correct for it. What has to learn about trials
+//     is the subscription status/fold (trial end, converted-vs-lapsed) — see
+//     docs/iap.md — never this table.
 
 export const PLANS = ['free', 'plus', 'pro'] as const;
 export type Plan = (typeof PLANS)[number];
@@ -212,9 +224,14 @@ export function entitlementsOf(plan: Plan): Entitlements {
 }
 
 // Display metadata for the plan cards. The PRICES here are the planned list
-// prices for copy only ("$24/yr") — the authoritative, localized,
+// prices for copy only ("$48/yr") — the authoritative, localized,
 // tax-inclusive price is whatever the Paddle checkout (or the store sheet)
 // shows; these must match the catalog configured there.
+//
+// CHANGING A NUMBER BELOW IS NOT A PRICE CHANGE. These render straight onto the
+// upgrade cards (brace-web + brace-expo subscription-section.tsx), so a value
+// that disagrees with the Paddle catalog / App Store product shows the customer
+// one price and charges another. Move the catalog FIRST, then this table.
 export const PLAN_LABELS: Record<Plan, string> = {
   free: 'Free',
   plus: 'Plus',
@@ -222,8 +239,8 @@ export const PLAN_LABELS: Record<Plan, string> = {
 };
 
 export const PLAN_USD_PER_YEAR: Record<PaidPlan, number> = {
-  plus: 24,
-  pro: 48,
+  plus: 48,
+  pro: 96,
 };
 
 // The upgrade cards' customer-facing copy — the human rendering of the

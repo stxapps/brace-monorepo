@@ -1,54 +1,17 @@
 ## architecture
 
-Living reference for how the workspace is organized. See
-[setup.md](./setup.md) for the one-time scaffold commands,
-[safe-area.md](./safe-area.md) for safe-area insets, viewport sizing, and popup
-positioning on web and native (brace-expo's `SafeAreaView`-per-screen pattern
-and which surfaces use keyboard-controller vs. a plain `KeyboardAvoidingView`),
-[local-first-sync.md](./local-first-sync.md) for the
-local-first data path (local store + encrypted file sync),
-[client-queries.md](./client-queries.md) for the read edge (IndexedDB indexes,
-liveQuery + virtual scrolling, and why pagination is growing-`limit` +
-a decode cache),
-[api-contracts.md](./api-contracts.md) for the contract-first endpoint pattern
-(typed once in `@stxapps/shared`, shared by server and clients),
-[account.md](./account.md) for the password-derived account model (key
-derivation, username/password rules, the wallet comparison),
-[iap.md](./iap.md) for subscriptions (Paddle checkout + webhook, the
-entitlement fold, and the plan-aware quota gate),
-[data-lifecycle.md](./data-lifecycle.md) for the whole-library data actions
-(import/export — client-only by E2E necessity, the format matrix and dedup/
-quota policy — and delete all data & delete account: the server-side wipe,
-multi-device convergence via the sync fallback, and the username tombstone),
-[link-extraction.md](./link-extraction.md) for how a saved link's
-title/image/screenshot/page-copy get filled in (privacy-first, clients do the
-work, the `extraction/` entity),
-[browser-extension.md](./browser-extension.md) for the brace-extension auth
-flow (own sign-in, no inherited session) and the move-shared-auth-code-later
-decision,
-[env-files.md](./env-files.md) for per-app environment configuration across
-`development` / `staging` / `production`, [deployment.md](./deployment.md)
-for the deploy tiers, infrastructure (Cloudflare + AWS), and CI flow, and
-[theme.md](./theme.md) for the light/dark theme model (four modes, the
-sync/device split shared with link-layout, and the pre-paint FOUC script), and
-[editors.md](./editors.md) for the link editors (create + full edit across the
-extension and web) and the list/tag taxonomy UI — the shared `ListSelect`/
-`TagsField` pickers, the invariants every editor upholds (copy-to-draft, input
-validation, close guard), how the sidebar and the row menu's "Move to" couple to
-the same trees, and bulk edit, and [search.md](./search.md) for the links-page
-search subsystem (the URL⇄`LinkQuery` grammar, the `setSimpleQuery`/`setQuery`
-writers, `selection` as a derived projection with a `none` state, and the
-basic-box + advanced-popover UI — the read-side evaluation lives in
-client-queries.md, the tiering in business-model.md), and
-[share-sheet.md](./share-sheet.md) for the brace-expo share sheet (share from
-Safari/Chrome → pick list/tags → save; the iOS App Group snapshot/outbox next
-to a separate-process extension vs. Android's in-process translucent share
-activity, and why sync converges either way), and
-[locks.md](./locks.md) for the device-local app lock + list locks (the
-shoulder-surfing-deterrent threat model over already-decrypted data, the
-PBKDF2 verifier, the shared `computeCoverage` subtree walk, the in-memory-unlock
-invariant, and the two enforcement edges — `lockedListIds` → the link query's
-`lists.none`, `hiddenListIds` → sidebar-only pruning).
+Living reference for how the workspace is organized: what each app and package
+is, the dependency rules between them and how they're enforced, which manifest
+declares which dependency version, and how the source is resolved and bundled.
+
+**This file is not the doc index.** The routing table — which of the ~20 files
+in `docs/` covers which subject — lives in the workspace `CLAUDE.md`, so it sits
+in context from the start of a session instead of at the top of a long file you
+have to already be reading. Sections below link to their neighbours directly;
+the ones that come up most from here are [setup.md](./setup.md) (the one-time
+scaffold commands), [expo-native-deps.md](./expo-native-deps.md) and
+[expo-build.md](./expo-build.md) (how brace-expo's dependencies are wired, and
+how it's built), and [deployment.md](./deployment.md) (where each app runs).
 
 ### apps
 
@@ -94,12 +57,12 @@ _vs._ brace-extension.
   `_`-private-folder convention, so unlike brace-web's colocated
   `_components`/`_panes`, screen code lives **outside** `src/app/` in
   `src/components`/`src/features` — every file under the app root is a route.
-  See setup.md), **Uniwind**
+  See expo-native-deps.md — _expo-router_), **Uniwind**
   for Tailwind classes (styling — a Metro-plugin, Tailwind **v4** CSS-first
   binding; see the version note below), **react-native-reusables** for
   shadcn-style components (copied into the app like shadcn on web — into
   `src/components/ui/`, by hand from the Uniwind registry variant, since its
-  CLI needs tsconfig path aliases this app doesn't have; see setup.md — there
+  CLI needs tsconfig path aliases this app doesn't have; see expo-native-deps.md — there
   is no `expo-ui` package: with a single expo app, components live in the app
   until a second expo surface exists), **expo-sqlite + drizzle**
   as the Dexie analogue (drizzle's `useLiveQuery` ≈ Dexie `liveQuery`),
@@ -112,7 +75,7 @@ _vs._ brace-extension.
   and forced a version split), so every Tailwind consumer — brace-expo plus
   each web project (`brace-web`, `brace-extension`, `web-ui`) — pins
   `tailwindcss@^4.x` itself; there is no root `overrides` split anymore
-  (see setup.md).
+  (see expo-native-deps.md — _uniwind_).
 - **brace-docs** (future) — Next.js docs site
 
 ### libs
@@ -335,7 +298,7 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
 
 - **Root pins; the app declares `*`.** The app is private and never published, so
   a range in it can only ever disagree with root. (One deliberate exception:
-  `tailwindcss@^4.x`, which root does _not_ pin — see setup.md, _uniwind_.)
+  `tailwindcss@^4.x`, which root does _not_ pin — see expo-native-deps.md, _uniwind_.)
 - **`react` is pinned _exactly_, not with a caret** — `react`, `react-dom`, and
   `react-test-renderer` are all `19.1.0`, the version `expo/bundledNativeModules.json`
   names for SDK 54. React Native ships its **own** copy of the renderer built for one
