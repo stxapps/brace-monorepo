@@ -99,8 +99,9 @@
         },
       ],
       // The extractor's own origin — its whole point is to be SEPARATE from
-      // api.bracemark.com. Needs a real domain on the staging account:
-      // "routes": [{ "pattern": "extract.staging.bracemark.com", "custom_domain": true }]
+      // api.bracemark.com. bracemark.com is registered; uncomment once the
+      // staging.bracemark.com zone exists in the staging account (docs/deployment.md — _dns_):
+      // "routes": [{ "pattern": "extractor.staging.bracemark.com", "custom_domain": true }]
       //
       // IMPORTANT — never log the URL. The proxy's ?url= lands in the request line,
       // so default Cloudflare request logs / Logpush would PERSIST exactly the URLs

@@ -15,9 +15,11 @@ export const SITE_URL = 'https://bracemark.com';
 export const SIGN_IN_URL = `${APP_URL}/sign-in`;
 export const CREATE_ACCOUNT_URL = `${APP_URL}/create-account`;
 
-// TODO: a real support address. `support@bracemark.com` presumes the domain is
-// registered and mail is routed — neither is true yet (docs/brand.md — _domains_).
-export const SUPPORT_EMAIL = 'TODO_SUPPORT_EMAIL';
+// The published support address, and the contact of record for App Store, Play,
+// and Paddle review. The domain is registered; the mailbox (Namecheap Private
+// Email) and its hand-added Cloudflare MX/SPF/DKIM records are provisioning work
+// tracked in docs/deployment.md — _email_.
+export const SUPPORT_EMAIL = 'support@bracemark.com';
 
 export const HEADER_LINKS = [
   { href: '/docs', label: 'Docs' },

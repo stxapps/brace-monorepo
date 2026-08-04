@@ -11,8 +11,13 @@ how each app gets its per-environment values). This doc owns the
 > resources (placeholder account IDs / D1 / R2), and no AWS stack exists. Items
 > below marked _(planned)_ are decisions, not yet built; the
 > [status & setup checklist](#status--setup-checklist) at the end tracks what's
-> real. `TODO:` markers flag values you must fill in (domains, account IDs, CI
-> provider).
+> real. `TODO:` markers flag values you must fill in (Cloudflare account IDs, D1
+> database IDs, Paddle/store IDs, CI provider).
+>
+> **The domain is real.** `bracemark.com` was registered at Namecheap on
+> **2026-08-04**, so every host in this doc is a name you can now provision
+> rather than a placeholder. See [dns](#dns) for the zone layout and
+> [brand.md](./brand.md#domains) for the rest of the domain estate.
 
 ### topology
 
@@ -242,7 +247,8 @@ unpacked / as an unlisted item — don't publish a staging build to the stores.
 
 Stable custom domains are **required**, not optional: the frontends bake the API
 URL into their bundles, so pointing at `*.workers.dev` / `*.cloudfront.net` would
-mean rebuilding whenever an infra subdomain changes.
+mean rebuilding whenever an infra subdomain changes. This section names the
+hosts; [dns](#dns) covers the zones, records, and certs that make them resolve.
 
 | tier         | site (CloudFront)       | web (CloudFront)            | api (Worker)                | extractor (Worker)                |
 | ------------ | ----------------------- | --------------------------- | --------------------------- | --------------------------------- |
@@ -271,6 +277,139 @@ redirect-only host.
 > in another repo can only hand-copy them. See
 > [architecture.md](./architecture.md#apps) for what the site is allowed to
 > depend on.
+
+### dns
+
+**Registrar: Namecheap. Authoritative DNS: Cloudflare.** Namecheap holds the
+registration and nothing else; its nameservers point at the **production**
+Cloudflare account, which hosts the `bracemark.com` zone.
+
+That split isn't a preference. **A Workers custom domain requires its hostname's
+zone to live in the same Cloudflare account, on Cloudflare nameservers.** There
+is no record you can write at a third-party registrar that points
+`api.bracemark.com` at a Worker — Workers won't route a custom `Host` through
+`*.workers.dev`, and the CNAME-only ("partial") zone setup that would allow it is
+a Business-plan feature. That constraint covers all four Worker hosts (`api.*`
+and `extractor.*`, both tiers), so the zone has to be on Cloudflare no matter
+what else lives there.
+
+CloudFront, by contrast, doesn't care who serves DNS — it needs a CNAME, and
+Cloudflare flattens a CNAME at the apex, which also lets the apex keep MX and TXT
+records alongside it (a stricter provider would reject that pair). So splitting
+the zone across two providers buys nothing and costs a second control plane to
+keep in sync. **One zone per tier, both on Cloudflare.**
+
+#### proxy off for everything that isn't a Worker
+
+Every CloudFront and ACM-validation record is **DNS only** (grey cloud).
+Orange-clouding CloudFront stacks two CDNs: an extra hop, TLS terminated twice,
+CloudFront seeing Cloudflare IPs instead of client IPs, and two cache layers to
+invalidate on every deploy. It also puts Cloudflare's own header features in
+front of the CloudFront **response headers policy** that carries bracemark-web's
+CSP — the one place [above](#bracemark-web--aws-s3--cloudfront-planned) insists
+that CSP can live.
+
+Worker hosts are the exception: a Workers custom domain creates and proxies its
+own record, which is correct and not optional.
+
+#### production zone — `bracemark.com` (production Cloudflare account)
+
+| name                  | type    | value                                         | proxy               |
+| --------------------- | ------- | --------------------------------------------- | ------------------- |
+| `@`                   | CNAME   | `<prod-site-dist>.cloudfront.net`             | DNS only            |
+| `www`                 | CNAME   | `<prod-site-dist>.cloudfront.net`             | DNS only            |
+| `app`                 | CNAME   | `<prod-web-dist>.cloudfront.net`              | DNS only            |
+| `api`                 | —       | created by the Worker custom domain           | proxied (automatic) |
+| `extractor`           | —       | created by the Worker custom domain           | proxied (automatic) |
+| `staging`             | NS      | the staging account's two nameservers         | n/a                 |
+| `_<hash>`             | CNAME   | `…acm-validations.aws` (one per cert SAN)     | DNS only            |
+| `@` / `_dmarc` / DKIM | MX, TXT | Namecheap Private Email (see [email](#email)) | n/a                 |
+
+`www` resolves to the same distribution as the apex and **301s to the apex** in
+the shared clean-URL CloudFront Function, so one host accrues the SEO — the same
+reasoning that puts docs and blog on apex _paths_ rather than subdomains
+([brand.md](./brand.md#the-apex--bracemark-site)). It still needs to be an alternate
+domain name on the distribution and a SAN on the cert, or the redirect is a TLS
+error instead of a redirect.
+
+#### staging zone — `staging.bracemark.com` (staging Cloudflare account)
+
+Added to the **second** Cloudflare account as its own zone. Cloudflare assigns a
+different nameserver pair per zone, so this one gets its own, and the `staging`
+`NS` record in the production zone above is what delegates to it. **Nothing about
+staging is configured at Namecheap** — the registrar only ever knows the
+production pair.
+
+| name        | type  | value                               | proxy               |
+| ----------- | ----- | ----------------------------------- | ------------------- |
+| `@`         | CNAME | `<stg-site-dist>.cloudfront.net`    | DNS only            |
+| `app`       | CNAME | `<stg-web-dist>.cloudfront.net`     | DNS only            |
+| `api`       | —     | created by the Worker custom domain | proxied (automatic) |
+| `extractor` | —     | created by the Worker custom domain | proxied (automatic) |
+| `_<hash>`   | CNAME | `…acm-validations.aws`              | DNS only            |
+
+> **Confirm subdomain zones are available on your plan before relying on this.**
+> The whole nested-staging design ([why nested staging](#why-nested-staging))
+> rests on Cloudflare accepting `staging.bracemark.com` as a zone in a second
+> account. Cloudflare supports subdomain zones, but it was an Enterprise-only
+> feature for years — check that "Add a site" takes a subdomain on the free plan
+> before wiring anything to it. If it doesn't, the fallback is a **separate
+> domain** for staging (e.g. `bracemark.dev`), **not** folding staging into the
+> production account — that would discard the per-tier blast-radius isolation the
+> entire [topology](#topology) is built on.
+
+#### certificates
+
+- **ACM certs for CloudFront must be issued in `us-east-1`**, regardless of where
+  the buckets or anything else live. Validation is by CNAME, added to the zone
+  above.
+- Production cert: `bracemark.com` + `www.bracemark.com` + `app.bracemark.com`.
+  A `*.bracemark.com` wildcard covers `app.` and `www.` but **not** the apex, so
+  name the apex explicitly.
+- Staging cert: `staging.bracemark.com` + `*.staging.bracemark.com` — one label
+  deeper than a `*.bracemark.com` wildcard reaches, which is the trade-off
+  [why nested staging](#why-nested-staging) already flags.
+- The Worker hosts need no ACM work at all: a Workers custom domain
+  auto-provisions its own per-host certificate.
+
+#### email
+
+`support@bracemark.com` is the published support address (`SUPPORT_EMAIL` in
+`apps/bracemark-site/src/lib/site.ts`) and the contact of record for App Store,
+Play, and Paddle review. Mail is **Namecheap Private Email** — a real mailbox,
+not forwarding — so replies genuinely come _from_ `support@` with no SMTP relay
+in the path.
+
+Because DNS moved to Cloudflare, **Namecheap's automatic mail setup does not
+apply**: it writes records into Namecheap's own BasicDNS, which is no longer
+authoritative for this domain. Add the MX / SPF / DKIM records **by hand in the
+production Cloudflare zone**, copying the exact values from Namecheap's Private
+Email DNS panel — treat that panel as authoritative and don't transcribe them
+from here, they change. Shape, for orientation only: `MX` →
+`mx1.privateemail.com` / `mx2.privateemail.com`, SPF `TXT` →
+`v=spf1 include:spf.privateemail.com ~all`, plus the DKIM record for the key
+generated in the Private Email dashboard.
+
+Three consequences worth recording:
+
+- **Do not also enable Cloudflare Email Routing.** It and Private Email both want
+  to own the apex `MX` records; enabling both breaks inbound mail, silently.
+- **The app itself never sends email.** The account model has no email address at
+  all ([account.md](./account.md)) — no verification, no password reset — and
+  Paddle sends its own receipts. There is no transactional sender to configure
+  and no ESP in the stack, which is why a single mailbox is sufficient. Publish a
+  strict `DMARC` policy once mail is flowing and Private Email is the only
+  sender.
+- **The legacy migration email does not go out from this domain.** A bulk send
+  from a domain with no sending reputation is a deliverability problem, and
+  `brace.to` is both warm and the sender those users actually recognise — send it
+  from there, linking to `bracemark.com`. See
+  [legacy-brace-to.md](./legacy-brace-to.md).
+
+Aliases on the cheapest Private Email plan cover the inbound-only addresses that
+never reply — `abuse@` ([abuse.md](./abuse.md)), `postmaster@`, `security@` — and
+the second Cloudflare account needs its own login address, which is another
+alias rather than a personal mailbox.
 
 ### cors & frontend↔backend wiring
 
@@ -354,12 +493,24 @@ Current reality and the work to make this doc true:
       (`wrangler dev`), `build` (dry-run bundle), `deploy` (default staging,
       `-c production`); `CORS_ORIGINS` reads `c.env`. (Fill the wrangler `TODO`s
       and provision D1/R2 before a real deploy.)
+- [x] `bracemark.com` registered at Namecheap (2026-08-04).
+- [ ] DNS: add `bracemark.com` to the **production** Cloudflare account and point
+      Namecheap's nameservers at the pair it assigns; add
+      `staging.bracemark.com` as a zone in the **staging** account and delegate to
+      it with an `NS` record in the production zone. Confirm subdomain zones are
+      available on the plan first — see [dns](#dns).
+- [ ] Email: Namecheap Private Email mailbox for `support@bracemark.com`, with
+      its MX / SPF / DKIM records added **by hand** in the Cloudflare zone
+      (Namecheap's automatic setup doesn't apply once DNS moves). Don't enable
+      Cloudflare Email Routing alongside it — see [email](#email).
 - [ ] Cloudflare: create the two accounts; provision D1 + R2 per account; set
-      vars/secrets; wire custom domains.
+      vars/secrets; wire custom domains (uncomment the `routes` entries in each
+      `wrangler.jsonc` once the zone exists in that account).
 - [ ] AWS: **four** S3 buckets + four CloudFront distributions (bracemark-web and
-      bracemark-site, per tier) + shared CloudFront Function; ACM certs; custom
-      domains. Two response headers policies per tier — the app's CSP and the
-      site's much smaller one (see
+      bracemark-site, per tier) + shared CloudFront Function; ACM certs (**issued
+      in `us-east-1`** — see [certificates](#certificates)); custom domains. Two
+      response headers policies per tier — the app's CSP and the site's much
+      smaller one (see
       [bracemark-site](#bracemark-site--aws-s3--cloudfront-planned)).
 - [x] bracemark-site: scaffolded in this monorepo (`apps/bracemark-site`), env
       files + Nx `staging` build configuration mirroring bracemark-web. Not

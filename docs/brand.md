@@ -53,9 +53,11 @@ specific senior marks, not an open-ended clearance question.
 
 ### domains
 
-Verified unregistered against Verisign's authoritative `.com` RDAP endpoint
-(HTTP 404 = unregistered) on **2026-08-03**. Re-verify before purchase; these go
-stale.
+**`bracemark.com` is registered** — bought at Namecheap on **2026-08-04**, with
+DNS delegated to Cloudflare ([deployment.md](./deployment.md#dns)). The two
+defensive names below are still unbought; they were verified unregistered
+against Verisign's authoritative `.com` RDAP endpoint (HTTP 404 = unregistered)
+on **2026-08-03**, and that check goes stale — re-verify before purchase.
 
 | domain             | role          | why                                                                                                                                                                    |
 | ------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -167,11 +169,12 @@ One class was deliberately **left alone**:
   stay reserved _alongside_ the new `bracemark*` entries, so neither product's
   name can be impersonated.
 
-Still outstanding, and all of it external to the repo: registering the three
-domains, provisioning DNS and certs for the new hosts, and filling in the store
-listing URLs — which are `TODO_` placeholders in
-`packages/shared/src/stores/listings.ts`, because the values they replaced
-addressed the legacy listings.
+Still outstanding, and all of it external to the repo: registering the two
+defensive domains (`bracemark.com` itself is done — see _domains_ above),
+provisioning DNS and certs for the new hosts
+([deployment.md](./deployment.md#dns)), and filling in the store listing URLs —
+which are `TODO_` placeholders in `packages/shared/src/stores/listings.ts`,
+because the values they replaced addressed the legacy listings.
 
 ### the apex — bracemark-site
 
