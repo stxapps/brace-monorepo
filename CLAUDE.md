@@ -75,6 +75,8 @@ self-contained and cross-links its neighbours.
 | env vars, per app and per mode                                 | `env-files.md`         |
 | deploy tiers, Cloudflare/AWS infra, CI                         | `deployment.md`        |
 | blocking an abusive IP/ASN at the edge                         | `abuse.md`             |
+| the product name, the domains, the trademark, the rename       | `brand.md`             |
+| moving legacy Brace.to (v1) users onto Bracemark, v1 wind-down | `legacy-brace-to.md`   |
 | how the workspace was originally scaffolded (run-once history) | `setup.md`             |
 
 # Tripwires
