@@ -142,17 +142,25 @@ Landed in one change. What moved:
 - **User-visible strings** — web `layout.tsx` metadata, `manifest.json`, the
   landing page, the auth pages, `wxt.config.ts`.
 - **All of `docs/`**, including this file.
-
-Two classes were deliberately **left alone**:
-
 - **Frozen crypto constants** — `packages/shared/src/crypto/params.ts` holds
-  `APP_SALT` and the HKDF domain-separation labels (`brace-auth-seed`,
-  `brace-encryption-key`, `brace-recovery-kek`). The file says never edit them,
-  and the contract vectors in `crypto/contract-vectors.ts` pin values _derived_
-  from them (`saltHex`, `authSeedHex`, `encryptionKeyHex`, the recovery KEK),
-  asserted by three spec files. They are invisible to users and carry no brand
-  value, so renaming them is pure breakage. Same for the `contract-vectors.ts`
-  blob plaintext, which is paired with a fixed ciphertext.
+  `APP_SALT` and the HKDF domain-separation labels, now `bracemark.app-salt.v1.…`,
+  `bracemark-auth-seed`, `bracemark-encryption-key`, `bracemark-recovery-kek`.
+  These were skipped in the first pass and renamed in a follow-up, on the
+  greenfield argument: the file's "never edit them" rule protects _existing
+  users' keys_, and there are none, so the only cost was recomputing what they
+  derive. Everything downstream in `crypto/contract-vectors.ts` was regenerated
+  through the real web-crypto pipeline and moved with them — `saltHex`, `kekHex`,
+  `authSeedHex`, `encryptionKeyHex`, `publicKeyHex`, `signatureHex`, both wrapped
+  DEKs, the recovery KEK, and the packed blob (whose `plaintext` also changed,
+  so its fixed ciphertext changed with it). `signPayload` is now
+  `bracemark-contract-test-payload`. The `@stxapps/web-crypto` and
+  `@stxapps/expo-crypto` contract specs both re-assert the new values.
+  **This window is closed once real accounts exist**: after launch these
+  constants are frozen for good, and rotating one means minting a `.v2.`
+  constant, not editing this one.
+
+One class was deliberately **left alone**:
+
 - **The legacy spellings in the reserved-username list**
   (`packages/shared/src/auth/credentials.ts`) — `brace`, `braceto`, `braceapp`
   stay reserved _alongside_ the new `bracemark*` entries, so neither product's

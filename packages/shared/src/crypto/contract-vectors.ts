@@ -32,33 +32,33 @@ export const CRYPTO_CONTRACT_VECTOR = {
   password: 'correct horse battery staple',
 
   // deriveUserSalt(username) = SHA-256(APP_SALT ‖ canonical username)
-  saltHex: 'bd91cb5d7124594b159f5a50ac1f162ef5d38813fefb80c500603dd42a21c29b',
+  saltHex: '98e95dc7304a736ba531b62f6edb29669177b241eb41c0f2731009a78a292504',
 
   // password-KEK = Argon2id(password, salt) under ARGON2_PARAMS
-  kekHex: 'cef7ac6becd5218faa34c09b30ca36fd61ea21451c453958ef734dd18a3beb10',
+  kekHex: 'fc99df8a9f7a8af7e27d1b39ac6c3acb6cf3cf536166bbb670aa51ad09043491',
 
   // The fixed account root for this vector (real DEKs are random).
   dekHex: '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
 
   // HKDF(DEK, info=HKDF_INFO_AUTH_SEED / HKDF_INFO_ENCRYPTION_KEY), empty salt.
-  authSeedHex: '32c641d42a6dbf6926509c59eac28047992cd1054aa891230592a47bc938dfc7',
-  encryptionKeyHex: 'f9d0c6154768545033a6684da3dc089ec38e0cf83a4d5396aba1fe93af9ff009',
+  authSeedHex: 'ab08a88b64b1e0ddbfe8258859ca18f9027aa8465ac68be85933544743057df4',
+  encryptionKeyHex: 'fd85a72937230f58aa2a0d1ca1de765e4e3be7033197a6a5a003d80a0208cdae',
 
   // Ed25519 public key derived from authSeed — what the server stores as the
   // credential — and a deterministic signature over signPayload.
-  publicKeyHex: '2438e65203747dc74929559f5de79ec2402e3a2694086d9845c7564b6a308646',
-  signPayload: 'brace-contract-test-payload',
+  publicKeyHex: '8e7819544a5f3a4b2f8917760b84f4b98b3ece1be024e20246ba8b1595c8fd5f',
+  signPayload: 'bracemark-contract-test-payload',
   signatureHex:
-    '7b556650a49b4d37a50a26f7c92bab710a0b0b44570ff9421a84fc809381c0bc' +
-    'edca1af3ab2cf70b9467161278b44160704459278f9512ff930bb67da9041005',
+    'b7d383767d0d90fa9cd06090f840ef5155f366cbb21009b1b0fcc950b11ea2b4' +
+    '70601d4fde3d76faa1dff3041a8f2c2b3b883e0c5edd922fb6edcf0ab0629a0f',
 
   // The password door: AES-256-GCM(KEK, DEK, aad = dekWrapAad('password')) with
   // this fixed IV — an `account_keys` row. wrappedDek includes the 16-byte tag.
   passwordDoor: {
     ivHex: 'a0a1a2a3a4a5a6a7a8a9aaab',
     wrappedDekHex:
-      '020ee9b1c60569b4ec64dff74c1bf9f9ad9f8c0a0329299d1e84e4273ff271f8' +
-      '9a2b1f5bf9eddb75a0a70ef6411483e2',
+      '24106632c4ca3a31b4a752f93e8319d55bd73618b39b6b6abac97e580351da24' +
+      '657548c5af7a0d27da7e16b836c2670b',
   },
 
   // The RECOVERY door: a fixed recovery code (already in normalized/canonical
@@ -69,11 +69,11 @@ export const CRYPTO_CONTRACT_VECTOR = {
   // IV. Wraps the SAME fixed DEK as passwordDoor — both doors open one root.
   recovery: {
     code: '40GJ48S44MK2EA1958NJRB9E5WR32CHK6GTKCDSR74X3PF1X7RZG',
-    kekHex: '75d1ee21fc18e61374f71d370aa834f21920d0080e54e272d5ff0c7524edf04e',
+    kekHex: 'b4048426b46c824368479b47e4347f88e523efd4a1172ed1a564c128fc7051ae',
     ivHex: 'c0c1c2c3c4c5c6c7c8c9caca',
     wrappedDekHex:
-      '318468ba353d26ecb4459756582536eeb8ef0e3ced85eb328a63fd3428f23645' +
-      '7c35cf90434b42505b3ae118e6e4c6a0',
+      'c48b882d891fa2eb7c2727ddc7bb94ebaf9640cf45fde1589fe18f2b2e57178c' +
+      '70b6d2ae4aa82f43a00ce4ac0fe9238d',
   },
 
   // Pins the generated-passphrase wordlist (generatePassphrase). It is NOT a
@@ -92,9 +92,9 @@ export const CRYPTO_CONTRACT_VECTOR = {
   // Swift/Kotlin one does NOT yet — see the second limit in the header.
   blob: {
     ivHex: 'b0b1b2b3b4b5b6b7b8b9babb',
-    plaintext: 'Hello, brace! contract vector v1',
+    plaintext: 'Hello, bracemark! contract vector v1',
     packedHex:
-      '01b0b1b2b3b4b5b6b7b8b9babb13e7e3b68ff54d17c55938b709b8364b7ab717' +
-      '31d80efe746edfe626068bd5bc4f6b9be76cee6793525fa729ac7ffdea',
+      '01b0b1b2b3b4b5b6b7b8b9babbc39e5fb1cd31df39f560ba2ccb91c0b9f19a22d' +
+      'dbb4f3055fa4466d0a5e74eb1544ded59f6af512a36073c199c6c1a0208588be1',
   },
 } as const;

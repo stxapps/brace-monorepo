@@ -26,10 +26,10 @@
 // NOT a secret — it ships in every client bundle; its only job is to be a
 // stable, unique, high-entropy namespace, so it must NEVER CHANGE once real
 // users exist (changing it re-derives every key and locks everyone out). The
-// `brace.app-salt.v1.` prefix is a human-readable version namespace; the
+// `bracemark.app-salt.v1.` prefix is a human-readable version namespace; the
 // 256-bit base64url tail is the actual entropy (crypto.randomBytes(32)). To
 // rotate in a hypothetical migration, mint a `.v2.` constant — never edit this.
-export const APP_SALT = 'brace.app-salt.v1.AS0_1XNd72q_HoSAgW1Vs1e6-W389XTsi_Iy3udOoCw';
+export const APP_SALT = 'bracemark.app-salt.v1.AS0_1XNd72q_HoSAgW1Vs1e6-W389XTsi_Iy3udOoCw';
 
 export const ARGON2_PARAMS = {
   parallelism: 1,
@@ -41,15 +41,15 @@ export const ARGON2_PARAMS = {
 // HKDF context labels — distinct `info` strings fork the single master secret
 // into independent sub-keys (auth vs. encryption). Never reuse a label for two
 // purposes, or the two keys collapse into one.
-export const HKDF_INFO_AUTH_SEED = 'brace-auth-seed';
-export const HKDF_INFO_ENCRYPTION_KEY = 'brace-encryption-key';
+export const HKDF_INFO_AUTH_SEED = 'bracemark-auth-seed';
+export const HKDF_INFO_ENCRYPTION_KEY = 'bracemark-encryption-key';
 
 // The RECOVERY door's KEK label. Unlike the password door (Argon2id over a
 // low-entropy secret), the recovery code is already ≥256-bit CSPRNG entropy, so
 // its KEK is a cheap HKDF over the normalized code — this is the `info` that
 // forks it from every other HKDF use. Frozen like the labels above: change it and
 // every existing recovery code stops unwrapping the DEK. See docs/account.md.
-export const HKDF_INFO_RECOVERY_KEK = 'brace-recovery-kek';
+export const HKDF_INFO_RECOVERY_KEK = 'bracemark-recovery-kek';
 
 // --- encrypted-blob wire format ---------------------------------------------
 //
