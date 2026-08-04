@@ -25,8 +25,13 @@
 # Workspace
 
 Packages `@stxapps/{shared,react,web-ui,web-crypto,web-react,expo-crypto,expo-react}`;
-apps `bracemark-{web,extension,api,extractor,expo}`. Nx project names carry the
+apps `bracemark-{web,site,extension,api,extractor,expo}`. Nx project names carry the
 scope — `@stxapps/bracemark-web`, never the folder name `bracemark-web`.
+
+`bracemark-web` (the app, `app.bracemark.com`) and `bracemark-site` (the public
+marketing site, the apex `bracemark.com`) are **different properties**, not two
+words for one — write "the marketing site" on first mention. See
+`docs/architecture.md`, _apps_.
 
 Layering, lowest first: `shared → crypto → react → ui → app`, crossed with a
 platform axis (`agnostic` / `web` / `worker` / `expo`) where a platform may use
@@ -51,33 +56,34 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 its area, and update it in the same change when the design moves. Each is
 self-contained and cross-links its neighbours.
 
-| working on                                                      | read                   |
-| --------------------------------------------------------------- | ---------------------- |
-| workspace layout, package boundaries, module resolution         | `architecture.md`      |
-| **any dependency version / `package.json` / Expo SDK bump**     | `architecture.md` ⚠    |
-| local store + encrypted file sync (the data path)               | `local-first-sync.md`  |
-| the read edge — indexes, liveQuery, virtual scrolling, paging   | `client-queries.md`    |
-| links-page search (the URL⇄`LinkQuery` grammar, the UI)         | `search.md`            |
-| accounts — key derivation, username/password rules              | `account.md`           |
-| API endpoints (contract-first, typed once in `shared`)          | `api-contracts.md`     |
-| link editors, list/tag trees, bulk edit                         | `editors.md`           |
-| title/image/screenshot/page-copy capture, `bracemark-extractor` | `link-extraction.md`   |
-| import/export, delete all data, delete account                  | `data-lifecycle.md`    |
-| subscriptions — Paddle, store IAP, the entitlement fold         | `iap.md`               |
-| tiering, quotas, infra cost, break-even                         | `business-model.md`    |
-| app lock + list locks                                           | `locks.md`             |
-| light/dark theme                                                | `theme.md`             |
-| safe-area insets, viewport sizing, popup positioning            | `safe-area.md`         |
-| `bracemark-extension` auth flow                                 | `browser-extension.md` |
-| `bracemark-expo` share sheet (iOS + Android)                    | `share-sheet.md`       |
-| an expo dependency — router, uniwind, expo-image, fonts, IAP    | `expo-native-deps.md`  |
-| prebuild, `app.config.ts`, the npm scripts, R8, signing         | `expo-build.md`        |
-| env vars, per app and per mode                                  | `env-files.md`         |
-| deploy tiers, Cloudflare/AWS infra, CI                          | `deployment.md`        |
-| blocking an abusive IP/ASN at the edge                          | `abuse.md`             |
-| the product name, the domains, the trademark, the rename        | `brand.md`             |
-| moving legacy Brace.to (v1) users onto Bracemark, v1 wind-down  | `legacy-brace-to.md`   |
-| how the workspace was originally scaffolded (run-once history)  | `setup.md`             |
+| working on                                                      | read                        |
+| --------------------------------------------------------------- | --------------------------- |
+| workspace layout, package boundaries, module resolution         | `architecture.md`           |
+| **any dependency version / `package.json` / Expo SDK bump**     | `architecture.md` ⚠         |
+| local store + encrypted file sync (the data path)               | `local-first-sync.md`       |
+| the read edge — indexes, liveQuery, virtual scrolling, paging   | `client-queries.md`         |
+| links-page search (the URL⇄`LinkQuery` grammar, the UI)         | `search.md`                 |
+| accounts — key derivation, username/password rules              | `account.md`                |
+| API endpoints (contract-first, typed once in `shared`)          | `api-contracts.md`          |
+| link editors, list/tag trees, bulk edit                         | `editors.md`                |
+| title/image/screenshot/page-copy capture, `bracemark-extractor` | `link-extraction.md`        |
+| import/export, delete all data, delete account                  | `data-lifecycle.md`         |
+| subscriptions — Paddle, store IAP, the entitlement fold         | `iap.md`                    |
+| tiering, quotas, infra cost, break-even                         | `business-model.md`         |
+| app lock + list locks                                           | `locks.md`                  |
+| light/dark theme                                                | `theme.md`                  |
+| safe-area insets, viewport sizing, popup positioning            | `safe-area.md`              |
+| `bracemark-extension` auth flow                                 | `browser-extension.md`      |
+| `bracemark-expo` share sheet (iOS + Android)                    | `share-sheet.md`            |
+| an expo dependency — router, uniwind, expo-image, fonts, IAP    | `expo-native-deps.md`       |
+| prebuild, `app.config.ts`, the npm scripts, R8, signing         | `expo-build.md`             |
+| env vars, per app and per mode                                  | `env-files.md`              |
+| deploy tiers, Cloudflare/AWS infra, CI                          | `deployment.md`             |
+| blocking an abusive IP/ASN at the edge                          | `abuse.md`                  |
+| the product name, the domains, the trademark, the rename        | `brand.md`                  |
+| the marketing site — its pages, its apex, why it's in this repo | `brand.md`, `deployment.md` |
+| moving legacy Brace.to (v1) users onto Bracemark, v1 wind-down  | `legacy-brace-to.md`        |
+| how the workspace was originally scaffolded (run-once history)  | `setup.md`                  |
 
 # Tripwires
 

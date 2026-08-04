@@ -35,6 +35,9 @@
     },
     {
       "path": "./packages/expo-react"
+    },
+    {
+      "path": "./apps/bracemark-site"
     }
   ]
 }

@@ -140,7 +140,8 @@ Landed in one change. What moved:
   `com.bracemark.share`). The JS `requireNativeModule` call sites moved with
   them.
 - **User-visible strings** — web `layout.tsx` metadata, `manifest.json`, the
-  landing page, the auth pages, `wxt.config.ts`.
+  landing page, the auth pages, `wxt.config.ts`. (The landing page has since
+  moved off bracemark-web entirely — see _the apex_ below.)
 - **All of `docs/`**, including this file.
 - **Frozen crypto constants** — `packages/shared/src/crypto/params.ts` holds
   `APP_SALT` and the HKDF domain-separation labels, now `bracemark.app-salt.v1.…`,
@@ -169,8 +170,27 @@ One class was deliberately **left alone**:
 Still outstanding, and all of it external to the repo: registering the three
 domains, provisioning DNS and certs for the new hosts, and filling in the store
 listing URLs — which are `TODO_` placeholders in
-`apps/bracemark-web/src/lib/extension-stores.ts` and its landing page, because
-the values they replaced addressed the legacy listings.
+`packages/shared/src/stores/listings.ts`, because the values they replaced
+addressed the legacy listings.
+
+### the apex — bracemark-site
+
+`bracemark.com` is a real property with real pages, not a redirect to the app.
+It is served by **`apps/bracemark-site`**, a Next.js static export in this
+monorepo, while the app keeps `app.bracemark.com`
+([deployment.md](./deployment.md#custom-domains)). Docs and blog are **paths**
+on the apex (`/docs`, `/blog`), not subdomains, so one domain accrues the SEO
+authority — which is the point of having consolidated onto one name at all.
+
+This reverses an earlier decision that the marketing site would live in its own
+repository; the reasoning for the reversal, and what the site is allowed to
+depend on, are in [architecture.md](./architecture.md#apps).
+
+The name is `bracemark-site`, not `bracemark-marketing` or `bracemark-www`:
+"marketing" names a department rather than a property, and `-www` is one
+character from `-web` in a project list. The `web` / `site` pair does need saying
+out loud, which architecture.md's _apps_ section does — `web`/`expo`/`extension`
+are three platform builds of one product; `site` is a different property.
 
 **What the bundle-ID change costs.** Because the identifier changes, v2 gets
 brand-new listings on every store no matter what the app is called — so **no

@@ -129,8 +129,13 @@ right before submission, because a listing locks the bundle ID permanently.
 | **3 — wind-down**          | —                                                            | unlist all listings; announce and hold a sunset date                                                                    |
 
 Phase 1 is possible because this repo already puts the app at a subdomain and
-treats the apex as a separate marketing property
-([deployment.md](./deployment.md)) — so v2 never contends with v1 for a hostname.
+serves the apex as a separate property ([deployment.md](./deployment.md)) — so v2
+never contends with v1 for a hostname. "Separate property" no longer means a
+separate repo: the apex is `apps/bracemark-site` in this monorepo, deployed to its
+own bucket and distribution. What phase 2 needs from it is a **deploy**, not a
+build from scratch — the site exists and its landing page is live-ready; what it
+still lacks is real `/terms`, `/privacy`, and `/support` copy, which store
+submission in phase 1 needs anyway.
 
 Do **not** let the old infrastructure "age out naturally". That means paying for
 three GCP App Engine services (`sdrive-hub`, `brace-server`, `iap-server`) plus

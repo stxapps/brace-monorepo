@@ -4,7 +4,12 @@ import { useAuth } from '@stxapps/expo-react';
 
 // Authed visitors to the public landing ('/') belong in the app, so bounce them
 // to /links — the same rule GuestGuard applies to /sign-in and /create-account.
-// The expo sibling of bracemark-web's components/authed-home-redirect.tsx.
+//
+// This has no web sibling any more. On the web the landing page moved off the app
+// origin entirely, to bracemark-site on the apex (docs/deployment.md), so
+// bracemark-web's `/` is now an unconditional router (components/home-redirect.tsx).
+// A native app has no apex to send anyone to — its landing screen has to live in the
+// binary — so `src/app/index.tsx` keeps rendering a real hero and this stays.
 //
 // Renders null in loading / unauthenticated, so the landing hero shows for guests
 // with no flash; it only acts once AuthProvider has hydrated to 'authenticated'.

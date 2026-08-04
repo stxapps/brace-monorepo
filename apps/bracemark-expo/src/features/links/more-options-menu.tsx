@@ -16,9 +16,11 @@
 //    topbar has no slot to spare, so it lives here as "Select links" — entering
 //    the mode only (never a toggle: while the mode is on, the bulk bar's ✕ and
 //    the Android back press are the exits, and this menu is still reachable).
-//  - Support opens the bracemark-web page in the system browser — the web app's
-//    origin comes from EXPO_PUBLIC_WEB_URL (inlined by Metro from `.env.<mode>`,
-//    same convention as lib/api-client.ts).
+//  - Support opens a page in the system browser. It lives on the MARKETING SITE
+//    (bracemark-site, the apex — docs/deployment.md), not in bracemark-web: the
+//    app has no /support route and never had one. The origin comes from
+//    EXPO_PUBLIC_SITE_URL (inlined by Metro from `.env.<mode>`, same convention
+//    as lib/api-client.ts).
 
 import { Linking, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -47,8 +49,8 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { useLinksViewState } from './view-state-provider';
 
-const webUrl = process.env.EXPO_PUBLIC_WEB_URL;
-if (!webUrl) throw new Error('EXPO_PUBLIC_WEB_URL is not set');
+const siteUrl = process.env.EXPO_PUBLIC_SITE_URL;
+if (!siteUrl) throw new Error('EXPO_PUBLIC_SITE_URL is not set');
 
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, requestSync } = useSync();
@@ -99,7 +101,7 @@ export function MoreOptionsMenu() {
           <Icon as={Settings} className="size-4" />
           <Text>Settings</Text>
         </DropdownMenuItem>
-        <DropdownMenuItem onPress={() => void Linking.openURL(`${webUrl}/support`)}>
+        <DropdownMenuItem onPress={() => void Linking.openURL(`${siteUrl}/support`)}>
           <Icon as={LifeBuoy} className="size-4" />
           <Text>Support</Text>
         </DropdownMenuItem>

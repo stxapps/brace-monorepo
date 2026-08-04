@@ -90,7 +90,7 @@
   "generators": {
     "@nx/next": {
       "application": {
-        "style": "tailwind",
+        "style": "css",
         "linter": "eslint"
       }
     },

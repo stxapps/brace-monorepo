@@ -57,7 +57,9 @@
     // skipped. Keep one id per role.
     "development": {
       "vars": {
-        "CORS_ORIGINS": "http://localhost:3000",
+        // Both Next dev servers: bracemark-web on 3000, bracemark-site on 3001.
+        // The two deployed tiers below list the same pair as `app.*` + apex.
+        "CORS_ORIGINS": "http://localhost:3000,http://localhost:3001",
         // R2 S3-API credentials for presigning (lib/r2-presign.ts). LOCAL-ONLY
         // placeholders — `wrangler dev` and the Workers test pool emulate R2 with
         // miniflare, so these never authenticate against real R2; the presigned

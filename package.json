@@ -14,6 +14,7 @@
     "test": "nx run-many -t test --output-style=stream",
     "dev": "nx run-many -t dev -p @stxapps/bracemark-api @stxapps/bracemark-web @stxapps/bracemark-extractor --output-style=stream",
     "dev:ext": "nx dev @stxapps/bracemark-extension",
+    "dev:site": "nx dev @stxapps/bracemark-site",
     "build": "nx run-many -t build --output-style=stream"
   },
   "private": true,

@@ -3,11 +3,11 @@ import { render } from '@testing-library/react';
 
 import Page from './page';
 
-// Page renders <AuthedHomeRedirect />, which calls useAuth(). Stub the auth
-// context so this stays a provider-free render smoke test: 'unauthenticated'
-// means the redirector is a no-op and the landing renders as-is.
+// Page renders <HomeRedirect />, which calls useAuth() and then redirect()s in every
+// settled state. Stub the auth context at 'loading' — the one state that renders
+// without navigating — so this stays a provider-free render smoke test.
 jest.mock('@stxapps/web-react', () => ({
-  useAuth: () => ({ status: 'unauthenticated' }),
+  useAuth: () => ({ status: 'loading' }),
 }));
 
 describe('Page', () => {

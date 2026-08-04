@@ -27,15 +27,25 @@ STAGING
   S3 + CloudFront (AWS stack A)             Worker (CF acct A)     R2 (staging)
   bracemark-web  ──NEXT_PUBLIC_EXTRACT_URL──▶  bracemark-extractor        (no D1/R2)
                                             Worker (CF acct A)
+  bracemark-site ──NEXT_PUBLIC_API_URL─────▶  bracemark-api        (public data only)
+  S3 + CloudFront (AWS stack A)
 
 PRODUCTION
   bracemark-web  ──WXT_/NEXT_PUBLIC_API_URL──▶  bracemark-api        ──▶  D1 (production)
   S3 + CloudFront (AWS stack B)             Worker (CF acct B)     R2 (production)
   bracemark-web  ──NEXT_PUBLIC_EXTRACT_URL──▶  bracemark-extractor        (no D1/R2)
                                             Worker (CF acct B)
+  bracemark-site ──NEXT_PUBLIC_API_URL─────▶  bracemark-api        (public data only)
+  S3 + CloudFront (AWS stack B)
 
   bracemark-extension ──▶ Chrome Web Store + Firefox AMO (points at production api)
 ```
+
+Two static sites per tier, not one: **bracemark-web** on `app.*` and
+**bracemark-site** on the apex. They're separate S3 buckets and separate
+CloudFront distributions inside the same AWS stack, because they're separate
+origins with different headers (below) — but the same tier, so a tier is still
+one blast radius.
 
 ### bracemark-web → AWS (S3 + CloudFront) _(planned)_
 
@@ -112,6 +122,48 @@ aws cloudfront create-invalidation --distribution-id <prod-dist> --paths '/*'
 `NEXT_PUBLIC_API_URL` is **baked at build time**, so staging and production are
 genuinely different artifacts — build once per tier from the same commit, never
 reuse the staging bundle for production.
+
+### bracemark-site → AWS (S3 + CloudFront) _(planned)_
+
+The marketing apex. Same stack and the same deploy shape as bracemark-web above
+(`output: 'export'` → `apps/bracemark-site/out/`, one bucket + one distribution
+per tier, the shared clean-URL CloudFront Function), so only the differences are
+listed here:
+
+- **Its own bucket and distribution**, not a path prefix on bracemark-web's.
+  They're different origins (`bracemark.com` vs `app.bracemark.com`), which is
+  the whole point — see [custom domains](#custom-domains).
+- **A much smaller response headers policy.** bracemark-web's CSP is load-bearing
+  because that origin holds a bearer token and an encryption key in IndexedDB
+  ([account.md](./account.md)). The apex holds no credentials, runs no crypto,
+  and has no service worker, so it needs none of `wasm-unsafe-eval`,
+  `worker-src`, or the Paddle allowances — checkout happens in the app, not
+  here. Give it a tight default-src `'self'` policy plus its tier's api origin in
+  `connect-src` (for the public stats/health calls) and nothing else. **Do not
+  reuse bracemark-web's policy**: copying it would silently widen the apex to
+  every host the app needs, for no reason.
+- **Caching differs.** Marketing content changes on an editorial cadence and is
+  read by crawlers, so it wants a longer default TTL than the app shell —
+  invalidate on deploy the same way.
+
+Deploy (per tier):
+
+```bash
+# staging
+npx nx build bracemark-site --configuration=staging
+aws s3 sync apps/bracemark-site/out s3://<staging-site-bucket> --delete
+aws cloudfront create-invalidation --distribution-id <staging-site-dist> --paths '/*'
+
+# production
+npx nx build bracemark-site
+aws s3 sync apps/bracemark-site/out s3://<prod-site-bucket> --delete
+aws cloudfront create-invalidation --distribution-id <prod-site-dist> --paths '/*'
+```
+
+`NEXT_PUBLIC_APP_URL` is baked in alongside `NEXT_PUBLIC_API_URL` — it's what the
+"Sign in" / "Get Started" links point at, and it differs per tier like everything
+else. A staging build of the site linking to production's app is exactly the kind
+of cross-tier leak the two-stack split exists to prevent.
 
 ### bracemark-api → Cloudflare Workers _(planned)_
 
@@ -192,24 +244,33 @@ Stable custom domains are **required**, not optional: the frontends bake the API
 URL into their bundles, so pointing at `*.workers.dev` / `*.cloudfront.net` would
 mean rebuilding whenever an infra subdomain changes.
 
-| tier         | web (CloudFront)            | api (Worker)                | extractor (Worker)                |
-| ------------ | --------------------------- | --------------------------- | --------------------------------- |
-| `staging`    | `app.staging.bracemark.com` | `api.staging.bracemark.com` | `extractor.staging.bracemark.com` |
-| `production` | `app.bracemark.com`         | `api.bracemark.com`         | `extractor.bracemark.com`         |
+| tier         | site (CloudFront)       | web (CloudFront)            | api (Worker)                | extractor (Worker)                |
+| ------------ | ----------------------- | --------------------------- | --------------------------- | --------------------------------- |
+| `staging`    | `staging.bracemark.com` | `app.staging.bracemark.com` | `api.staging.bracemark.com` | `extractor.staging.bracemark.com` |
+| `production` | `bracemark.com`         | `app.bracemark.com`         | `api.bracemark.com`         | `extractor.bracemark.com`         |
 
 Staging nests under a `staging.bracemark.com` subdomain (`<role>.staging.bracemark.com`)
 rather than going flat (`staging-<role>.bracemark.com`) — see
-[why nested staging](#why-nested-staging) below.
+[why nested staging](#why-nested-staging) below. The site is the exception that
+proves the rule: it has no `<role>.` label because it **is** the zone apex, which
+is why staging's site host is the bare `staging.bracemark.com`.
 
 **Two web origins per tier, both real API clients.** `app.*` is the application
-(bracemark-web, this monorepo); the **apex** (`bracemark.com`, `staging.bracemark.com`) is the
-marketing site, which also calls the api for public data (stats, health check).
-Both therefore appear in `CORS_ORIGINS` — neither is a redirect-only host. The
-marketing site is a **separate static site in its own repository** — its source,
-build, and hosting are out of scope for this doc (no `bracemark-marketing-*` bucket
-or distribution is managed here); only its origin is allowlisted in
-`CORS_ORIGINS`. The S3 / CloudFront rows below cover the bracemark-web app
-(`app.*`) only.
+(bracemark-web); the **apex** (`bracemark.com`, `staging.bracemark.com`) is the
+marketing site (bracemark-site), which also calls the api for public data (stats,
+health check). Both therefore appear in `CORS_ORIGINS` — neither is a
+redirect-only host.
+
+> **This reverses an earlier decision.** The marketing site used to be specified
+> as a separate static site in its own repository, out of scope for this doc. It
+> now lives in this monorepo as `apps/bracemark-site`, and its bucket,
+> distribution, and domain are managed here like any other app. The reason for
+> the reversal is drift: the pricing/quota numbers, the store-listing URLs, and
+> the brand tokens are all defined once in `@stxapps/shared` /
+> `@stxapps/web-ui` and enforced elsewhere in the codebase, and a marketing site
+> in another repo can only hand-copy them. See
+> [architecture.md](./architecture.md#apps) for what the site is allowed to
+> depend on.
 
 ### cors & frontend↔backend wiring
 
@@ -228,7 +289,10 @@ keep the two docs in sync.
 Notes:
 
 - Build the frontends **once per tier** (baked API URLs differ) — don't promote
-  a staging bundle to production.
+  a staging bundle to production. "Frontends" is now three artifacts per tier:
+  bracemark-web, bracemark-site, and the browser extension.
+- `nx affected` is what keeps this cheap: an edit to marketing copy rebuilds and
+  redeploys only bracemark-site, and never touches the app's bucket.
 - Reproduce both builds from one source revision so the tiers never drift.
 - Secrets in CI: separate Cloudflare API token per account, separate AWS
   credentials per tier; no single credential spans both tiers.
@@ -240,12 +304,15 @@ glance tells you the tier:
 
 | resource          | staging                                                                                              | production                                                                                                    |
 | ----------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| S3 bucket         | `bracemark-web-staging`                                                                              | `bracemark-web-production`                                                                                    |
-| CloudFront dist   | comment `bracemark-web-staging`                                                                      | comment `bracemark-web-production`                                                                            |
+| S3 bucket (web)   | `bracemark-web-staging`                                                                              | `bracemark-web-production`                                                                                    |
+| S3 bucket (site)  | `bracemark-site-staging`                                                                             | `bracemark-site-production`                                                                                   |
+| CloudFront (web)  | comment `bracemark-web-staging`                                                                      | comment `bracemark-web-production`                                                                            |
+| CloudFront (site) | comment `bracemark-site-staging`                                                                     | comment `bracemark-site-production`                                                                           |
 | Worker name / env | `bracemark-api-staging` / `staging`                                                                  | `bracemark-api-production` / `production`                                                                     |
 | Extractor Worker  | `bracemark-extractor-staging` / `staging`                                                            | `bracemark-extractor-production` / `production`                                                               |
 | D1 databases      | `bracemark-directory-db-staging`, `bracemark-accounts-db-1-staging`, `bracemark-sessions-db-staging` | `bracemark-directory-db-production`, `bracemark-accounts-db-1-production`, `bracemark-sessions-db-production` |
 | R2 bucket         | `bracemark-user-files-staging`                                                                       | `bracemark-user-files-production`                                                                             |
+| site domain       | `staging.bracemark.com`                                                                              | `bracemark.com`                                                                                               |
 | web domain        | `app.staging.bracemark.com`                                                                          | `app.bracemark.com`                                                                                           |
 | api domain        | `api.staging.bracemark.com`                                                                          | `api.bracemark.com`                                                                                           |
 | extractor domain  | `extractor.staging.bracemark.com`                                                                    | `extractor.bracemark.com`                                                                                     |
@@ -289,8 +356,15 @@ Current reality and the work to make this doc true:
       and provision D1/R2 before a real deploy.)
 - [ ] Cloudflare: create the two accounts; provision D1 + R2 per account; set
       vars/secrets; wire custom domains.
-- [ ] AWS: two S3 buckets + two CloudFront distributions + shared CloudFront
-      Function; ACM certs; custom domains.
+- [ ] AWS: **four** S3 buckets + four CloudFront distributions (bracemark-web and
+      bracemark-site, per tier) + shared CloudFront Function; ACM certs; custom
+      domains. Two response headers policies per tier — the app's CSP and the
+      site's much smaller one (see
+      [bracemark-site](#bracemark-site--aws-s3--cloudfront-planned)).
+- [x] bracemark-site: scaffolded in this monorepo (`apps/bracemark-site`), env
+      files + Nx `staging` build configuration mirroring bracemark-web. Not
+      deployed; `/docs` and `/blog` still need a content pipeline, and `/terms`,
+      `/privacy`, `/support` need real copy before store submission.
 - [ ] bracemark-extractor: provision the Worker per tier (no D1/R2); set its
       `CORS_ORIGINS` var + custom domain (`extractor.*.bracemark.com`); wire
       `NEXT_PUBLIC_EXTRACT_URL` into bracemark-web's per-tier builds.

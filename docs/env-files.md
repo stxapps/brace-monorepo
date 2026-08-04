@@ -55,9 +55,58 @@ Files in `apps/bracemark-web/` (committed except `*.local`):
 | `.env.production`  | `nx build bracemark-web`            | Next (auto)  |
 | `.env.staging`     | `nx build bracemark-web -c staging` | Nx `envFile` |
 
-Current var: `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL. Adding a new
-var = add the line to all three files (the symmetry is deliberate: there is no
-config hiding in `package.json`).
+Current vars:
+
+- `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL.
+- `NEXT_PUBLIC_EXTRACT_URL` → the matching bracemark-extractor URL.
+- `NEXT_PUBLIC_SITE_URL` → the matching **bracemark-site** origin (the apex), read
+  by `src/lib/site.ts`. The app links out to pages that live on the marketing
+  site — support, terms, privacy — and those are a different origin, so a
+  relative `/support` would resolve against `app.*` and 404.
+- `NEXT_PUBLIC_PADDLE_*` → the checkout SDK's env + client token (see
+  [iap.md](./iap.md)).
+
+Adding a new var = add the line to all three files (the symmetry is deliberate:
+there is no config hiding in `package.json`).
+
+### bracemark-site — Next.js, static export
+
+Identical mechanics to bracemark-web above — same auto-loaded `.env.<mode>`, same
+`NEXT_PUBLIC_` bake, same `staging` wrinkle solved the same way (Nx `envFile` on
+the build target's `staging` configuration).
+
+Files in `apps/bracemark-site/` (committed except `*.local`):
+
+| file               | used by                              | loaded by    |
+| ------------------ | ------------------------------------ | ------------ |
+| `.env.development` | `nx dev bracemark-site`              | Next (auto)  |
+| `.env.production`  | `nx build bracemark-site`            | Next (auto)  |
+| `.env.staging`     | `nx build bracemark-site -c staging` | Nx `envFile` |
+
+Two vars:
+
+- `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL. The apex calls the api
+  for **public data only** (stats, health check) — it has no session and no
+  crypto.
+- `NEXT_PUBLIC_APP_URL` → the matching **bracemark-web** origin. Every "Sign in"
+  and "Get Started" link crosses from the apex to the app, and that target is
+  per-tier: `app.bracemark.com`, `app.staging.bracemark.com`, or
+  `localhost:3000` in dev. Hard-coding it would make a staging build of the site
+  send visitors into production's app.
+
+`npm run dev:site` (= `nx dev @stxapps/bracemark-site`) serves on **port 3001**,
+so it can run beside bracemark-web's 3000.
+
+It is deliberately **not** in `npm run dev`, which is the app stack — api + web +
+extractor, three projects that are useless apart (no api means no auth or sync;
+no extractor means no link previews). The site is only loosely coupled: it links
+to the app by URL and calls the api for public data at most. Same reasoning as
+`dev:ext`, which keeps the browser extension out of the default stack too.
+
+The one dev-time consequence: bracemark-web's Support link points at
+`localhost:3001`, so it fails unless `dev:site` is also running. That's a rare
+click while working on the app, and paying for a fourth always-on Next dev server
+to cover it isn't worth it.
 
 ### bracemark-extension — wxt / Vite
 
@@ -135,11 +184,21 @@ Files in `apps/bracemark-expo/` (committed except `.env.local`):
 | `.env.staging`     | a staging build (var supplied inline)             | you         |
 | `.env.local`       | every mode — signing creds (gitignored)           | Expo (auto) |
 
-Current public var: `EXPO_PUBLIC_API_URL` → the matching bracemark-api URL. It's read
-once in `src/lib/api-client.ts`, which throws if unset (mirroring bracemark-web's and
-the extension's missing-URL guards) and binds it into `@stxapps/expo-react`'s
-`createAuthApiClient`. Adding a new var = add the line to all three files, same
-deliberate symmetry as the other frontends.
+Current public vars:
+
+- `EXPO_PUBLIC_API_URL` → the matching bracemark-api URL. Read once in
+  `src/lib/api-client.ts`, which throws if unset (mirroring bracemark-web's and
+  the browser extension's missing-URL guards) and binds it into
+  `@stxapps/expo-react`'s `createAuthApiClient`.
+- `EXPO_PUBLIC_SITE_URL` → the matching **bracemark-site** origin (the apex),
+  read by `features/links/more-options-menu.tsx` for the Support item, which
+  opens in the system browser. It is deliberately **not** the bracemark-web
+  origin: the pages a native app links out to (support, terms, privacy) live on
+  the marketing site. (This var was `EXPO_PUBLIC_WEB_URL` and pointed at
+  `app.*`, which was wrong — bracemark-web has no `/support` route.)
+
+Adding a new var = add the line to all three files, same deliberate symmetry as
+the other frontends.
 
 **The non-`EXPO_PUBLIC_` vars are the native signing credentials**, all in
 `.env.local` and all read at config-evaluation time by `expo prebuild` rather
@@ -209,21 +268,22 @@ bracemark-api allows the matching frontend origin back:
 
 | environment   | frontend `*_API_URL` →              | bracemark-api `CORS_ORIGINS` allows                                  |
 | ------------- | ----------------------------------- | -------------------------------------------------------------------- |
-| `development` | `http://localhost:8787`             | `http://localhost:3000`                                              |
+| `development` | `http://localhost:8787`             | `http://localhost:3000`, `http://localhost:3001`                     |
 | `staging`     | `https://api.staging.bracemark.com` | `https://staging.bracemark.com`, `https://app.staging.bracemark.com` |
 | `production`  | `https://api.bracemark.com`         | `https://bracemark.com`, `https://app.bracemark.com`                 |
 
 CORS is never `*` — each API environment allows only its own frontend
-origin(s). Each tier allows **two** web origins: the `app.*` host (the bracemark-web
-application, this monorepo) and the apex (a separate marketing site in its own
-repo, which also calls the api for public data like stats / health). See
+origin(s). Each tier allows **two** web origins: the `app.*` host (bracemark-web)
+and the apex (bracemark-site, which also calls the api for public data like
+stats / health). Both are apps in this monorepo. In `development` those are
+localhost:3000 and localhost:3001 — the two Next dev servers. See
 [deployment.md](./deployment.md#custom-domains) for the host naming scheme.
 
 The `CORS_ORIGINS` column is **web-only**: bracemark-expo hits the same
 `*_API_URL` per tier, but a native RN `fetch` sends no `Origin` header and
 isn't subject to browser CORS, so the app needs no entry in the allowlist — it
 points at the matching bracemark-api URL and that's the whole story. (Only the
-browser frontends — bracemark-web and the marketing apex — need an allowed origin.)
+browser frontends — bracemark-web and bracemark-site — need an allowed origin.)
 
 ### what's committed vs ignored
 

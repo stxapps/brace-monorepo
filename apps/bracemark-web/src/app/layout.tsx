@@ -20,9 +20,10 @@ export const viewport = {
 };
 
 export const metadata: Metadata = {
-  // This app serves from the `app.` subdomain — the apex is a separate marketing
-  // property (docs/deployment.md) — so card images, which must be absolute, resolve
-  // against THIS origin. They live in this app's `public/`, not on the apex.
+  // This app serves from the `app.` subdomain — the apex is bracemark-site, a
+  // separate app on a separate origin (docs/deployment.md) — so card images, which
+  // must be absolute, resolve against THIS origin. They live in this app's
+  // `public/`, not on the apex.
   metadataBase: new URL('https://app.bracemark.com'),
   title: 'Bracemark - Save links to visit later',
   description:

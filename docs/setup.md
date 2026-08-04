@@ -89,9 +89,27 @@ Flag notes:
   real jest 30 deterministically (every project, including bracemark-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
-#### docs (future)
+#### bracemark-site (the marketing apex)
 
-- npx nx g @nx/next:app apps/bracemark-docs
+Replaces an earlier planned `apps/bracemark-docs` — docs are a path on the apex
+now, not their own host (architecture.md — _apps_).
+
+- npx nx g @nx/next:app apps/bracemark-site --name=@stxapps/bracemark-site
+  --linter=eslint --unitTestRunner=jest --e2eTestRunner=none
+  --tags=type:app,platform:web
+- Run at the time with an extra `--style=css`, because nx.json's `generators`
+  block still defaulted `@nx/next.application.style` to `tailwind` — a value
+  @nx/next 23 rejects outright (`Property 'style' does not match the schema`),
+  so **any** `nx g @nx/next:app` failed until the flag was passed. That default
+  has since been corrected to `css` in nx.json, so the flag is no longer needed
+  and the command above is what to run now. Tailwind is not a generator concern
+  here anyway: it's wired up afterwards the way bracemark-web does it —
+  `postcss.config.js` + `@tailwindcss/postcss`, and a `globals.css` that imports
+  `@stxapps/web-ui/styles.css`.
+- The generator's output was then reshaped to match bracemark-web: static export
+  in next.config.js, the `nx.targets` block (dev/start on port 3001, the
+  `staging` build configuration), tsconfig `references` to shared + web-ui, and
+  the ESM-packages patch in jest.config.cts.
 
 #### serwist
 

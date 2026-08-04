@@ -26,7 +26,31 @@ bracemark-web, the `web-*` packages, and `platform:web` (which covers
 bracemark-extension too), and `web/extension` is established shorthand for bracemark-web
 _vs._ bracemark-extension.
 
-- **bracemark-web** — Next.js web app
+**Naming — `bracemark-web` and `bracemark-site` are different properties, not two
+words for the same one.** `web` / `expo` / `extension` sit on the **platform**
+axis: three builds of one product, the thing a signed-in user works in.
+`bracemark-site` is not on that axis at all — it is the public `bracemark.com`
+property (landing, docs, blog, legal), which nobody signs into. In prose, write
+**"the marketing site"** on first mention; "the site" is fine afterwards inside a
+passage that only discusses one of them. The split is enforced by more than
+convention: the site has no auth stack, no data layer, and its own origin (see
+[deployment.md](./deployment.md) — _custom domains_).
+
+- **bracemark-web** — Next.js web app, served at `app.bracemark.com`. Its `/`
+  is a bare redirect (`/links` or `/sign-in`, whichever the session says); the
+  public landing that used to live there is now bracemark-site's.
+- **bracemark-site** — Next.js marketing site, served at the apex
+  `bracemark.com`: the landing page, `/about`, `/docs`, `/blog`, `/terms`,
+  `/privacy`, `/support`, `/contact`. Static export like bracemark-web, and
+  deliberately **thin** — it depends on `@stxapps/shared` and `@stxapps/web-ui`
+  and nothing else, so no auth stack, no Dexie, no crypto ships to the apex. It
+  links to bracemark-web across origins (`NEXT_PUBLIC_APP_URL`) rather than
+  rendering any signed-in UI. What it shares with the app it shares through
+  `shared` — the store-listing URLs (`stores/listings.ts`) are the first
+  instance, and the plan/price table (`iap/plans.ts`) is the one that matters
+  most: a marketing pricing page that hand-copies quotas is the classic drift.
+  It also calls `bracemark-api` for public data (stats, health), which is why the
+  apex is a real CORS origin and not a redirect-only host.
 - **bracemark-extension** — browser extension (wxt)
 - **bracemark-api** — backend API (hand-written, not nx-generated)
 - **bracemark-extractor** — Cloudflare Workers + hono server that fetches
@@ -76,7 +100,10 @@ _vs._ bracemark-extension.
   each web project (`bracemark-web`, `bracemark-extension`, `web-ui`) — pins
   `tailwindcss@^4.x` itself; there is no root `overrides` split anymore
   (see expo-native-deps.md — _uniwind_).
-- **bracemark-docs** (future) — Next.js docs site
+
+A separate **bracemark-docs** app was planned here once. It's gone:
+`bracemark-site` owns `/docs` as a path on the apex, so the docs accrue SEO
+authority to the one domain instead of a second host.
 
 ### libs
 
@@ -87,13 +114,18 @@ _vs._ bracemark-extension.
 
 #### @stxapps/react
 
-- used by bracemark-web, bracemark-extension, bracemark-expo, bracemark-docs
+- used by bracemark-web, bracemark-extension, bracemark-expo
 - hooks, contexts, React utilities, no-ui components
+- **not** bracemark-site: the marketing site renders no stateful UI, so it stops
+  at `shared` + `web-ui`
 
 #### @stxapps/web-ui
 
-- used by bracemark-web, bracemark-extension, bracemark-docs
+- used by bracemark-web, bracemark-extension, bracemark-site
 - web-only ui components
+- bracemark-site uses the presentational end of it (Button, the store/brand
+  icons, `lib/utils`, `styles.css`) but **not** `contexts/theme-provider`, which
+  reads settings through `web-react` — see the note in the site's root layout
 
 #### @stxapps/web-crypto
 
@@ -147,7 +179,8 @@ _vs._ bracemark-extension.
 
 #### @stxapps/web-react
 
-- used by bracemark-web, bracemark-extension, bracemark-docs, web-ui (auth forms)
+- used by bracemark-web, bracemark-extension, web-ui (auth forms) — **not**
+  bracemark-site, which has no session and no local store
 - web-only React hooks/contexts/logic — the web-only sibling of `@stxapps/react`
   (same React-logic layer, but free to use browser-only APIs like IndexedDB and
   Web Crypto). Home for things shared across the web apps that aren't components
@@ -403,13 +436,22 @@ proposes up to root and leave the app at `*`.
 
 #### the web side is different — don't propagate this
 
-`shared`, `react`, `web-crypto`, `web-ui`, `bracemark-web`, `bracemark-extension`, and the
-worker apps deliberately do **not** follow the above, and shouldn't be "fixed" to
-match. They use ordinary npm conventions: each manifest is self-describing, with
-real ranges (`bracemark-web` owns `next: ~16.1.6`; `web-ui` owns its radix/lucide
-deps; `react` and `web-ui` keep `react`/`react-dom` peer+devDep mirrors at
-`^19.0.0`). Root pins the RN/Expo constellation for the Expo side; it is not a
-version registry for the web side.
+`shared`, `react`, `web-crypto`, `web-ui`, `bracemark-web`, `bracemark-site`,
+`bracemark-extension`, and the worker apps deliberately do **not** follow the
+above, and shouldn't be "fixed" to match. They use ordinary npm conventions: each
+manifest is self-describing, with real ranges (the two Next apps each own
+`next: ~16.1.6`; `web-ui` owns its radix/lucide deps; `react` and `web-ui` keep
+`react`/`react-dom` peer+devDep mirrors at `^19.0.0`). Root pins the RN/Expo
+constellation for the Expo side; it is not a version registry for the web side.
+
+In particular **`next` does not belong in the root manifest** — it is not a second
+hoisting exception alongside `@expo/cli`. The bare-specifier concern is real
+(`@nx/next`'s inference plugin does `require('next/constants')` from inside
+`node_modules/@nx/next/`, which only resolves to a hoisted copy), but nothing
+competes to nest `next` the way `expo`'s exact pins nest `@expo/*`: both Next apps
+declare the same range, so npm hoists it, and root's `@nx/next` peers on
+`next: >=14.0.0 <17.0.0`, which keeps a copy at the root either way. A root
+declaration would add only a fourth opinion to drift from.
 
 That's not inconsistency — the hazard that motivates the Expo rule doesn't exist
 here:

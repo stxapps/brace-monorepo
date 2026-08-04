@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
+import { SUPPORT_URL } from '../../../../lib/site';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 
 export function MoreOptionsMenu() {
@@ -95,8 +96,10 @@ export function MoreOptionsMenu() {
             Settings
           </Link>
         </DropdownMenuItem>
+        {/* Support lives on the marketing site (the apex), not in this app — hence
+            an absolute cross-origin URL, not a next/link to `/support`. */}
         <DropdownMenuItem asChild>
-          <a href="/support" target="_blank" rel="noopener noreferrer">
+          <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer">
             <LifeBuoy className="size-4" />
             Support
           </a>
