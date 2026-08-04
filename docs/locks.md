@@ -10,8 +10,8 @@ the home for the feature that was previously explained only in code comments
 [account.md](./account.md) (the E2E substrate this sits _over_).
 
 Both client apps implement it symmetrically: the web stack in
-`@stxapps/web-react` (brace-web, brace-extension) and the Expo stack in
-`@stxapps/expo-react` (brace-expo). The shared, platform-agnostic pieces — the
+`@stxapps/web-react` (bracemark-web, bracemark-extension) and the Expo stack in
+`@stxapps/expo-react` (bracemark-expo). The shared, platform-agnostic pieces — the
 coverage math and the verifier parameters — live in `@stxapps/shared` /
 `@stxapps/{web,expo}-crypto` so the two can't drift.
 
@@ -142,7 +142,7 @@ currently open._ The provider holds `unlockedIds` as plain in-memory React state
   one password opens whichever it belongs to (settings' per-row "Unlock…" matches
   the row it names; the main pane's prompt opens the outer door).
 
-**brace-expo strengthens this with auto-relock (expo-only).** Web relies on
+**bracemark-expo strengthens this with auto-relock (expo-only).** Web relies on
 tab-close to re-engage locks — a naturally short session. A mobile process keeps
 `unlockedIds` in memory across backgrounding, so an unlocked, backgrounded phone
 handed to someone would stay open. So the expo `lock-provider` runs the
@@ -174,7 +174,7 @@ aren't in its `any`; Show All and tag/search views pay a `lists.none` clause.
 
 On top of that, a **locked _selected_ list swaps the whole main-pane body** for
 the unlock pane (`LockPane`) **before the data hook mounts** — the web
-`ListLockPane` component / the inline swap in brace-expo's `main.tsx`, with
+`ListLockPane` component / the inline swap in bracemark-expo's `main.tsx`, with
 `UnlockedMain` kept separate precisely so `useLinks` never runs while locked. The
 locked list's links are then never fetched, never in the DOM (find-in-page,
 screen readers). Deep links that merely _include_ a locked list (`?list-any=…`,
@@ -215,7 +215,7 @@ downgraded (ex-Plus) account**, so an existing lock is never stranded.
 
 ### biometric unlock (expo-only)
 
-Face ID / Touch ID as a **fast-path over the password**, on brace-expo only (web
+Face ID / Touch ID as a **fast-path over the password**, on bracemark-expo only (web
 has no equivalent; native biometry via `expo-local-authentication`). The design
 turns on one decision:
 
@@ -241,7 +241,7 @@ Consequences, all deliberate:
   lock stays and stays engaged. "Disable Face ID" (free toggle) and "Remove lock"
   (password-gated, actually unlocks + clears) are distinct — the clean split is
   only possible _because_ the password always exists.
-- **`disableDeviceFallback: true`.** The fallback for a brace lock is the app's
+- **`disableDeviceFallback: true`.** The fallback for a bracemark lock is the app's
   own password field, never the device passcode (a different factor — letting it
   through would let anyone with the phone PIN open every lock).
 

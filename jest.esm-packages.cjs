@@ -5,9 +5,9 @@
 //
 // Single source of truth, consumed by:
 //   - jest.preset.js          → all preset-based packages (shared, react, …)
-//   - apps/brace-web/jest.config.cts → next/jest (overrides preset, patched there)
+//   - apps/bracemark-web/jest.config.cts → next/jest (overrides preset, patched there)
 //
-// vitest-based projects (brace-api) don't need this — esbuild handles ESM.
-// `lucide-react-native` is brace-expo's icon set (the RN sibling of the web
+// vitest-based projects (bracemark-api) don't need this — esbuild handles ESM.
+// `lucide-react-native` is bracemark-expo's icon set (the RN sibling of the web
 // apps' `lucide-react`), pulled in by any spec that renders a real screen.
 module.exports = ['fractional-indexing', '@noble/ed25519', 'lucide-react-native'];

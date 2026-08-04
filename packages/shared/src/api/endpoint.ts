@@ -1,10 +1,10 @@
 import type { z } from 'zod';
 
 // The shared API "contract" primitive. Each endpoint is described once here in
-// `shared` (the lowest, platform-agnostic layer); brace-api reads it to validate
-// requests + type responses, and every client (brace-web, brace-extension,
-// future brace-expo) reads the same descriptor to build a typed fetch. Nobody
-// imports brace-api — the dependency arrow only ever points down at `shared` —
+// `shared` (the lowest, platform-agnostic layer); bracemark-api reads it to validate
+// requests + type responses, and every client (bracemark-web, bracemark-extension,
+// future bracemark-expo) reads the same descriptor to build a typed fetch. Nobody
+// imports bracemark-api — the dependency arrow only ever points down at `shared` —
 // which is why we hand-write this instead of using Hono RPC (its types are
 // derived from the app instance, forcing client → app coupling that the Nx
 // `type:`/`platform:` boundaries forbid). See docs/architecture.md.
@@ -36,7 +36,7 @@ export interface ApiEndpoint<
 
 // The uniform JSON error envelope every endpoint returns on a non-2xx response.
 // Defined here in `shared` — part of the wire contract, like the endpoint
-// descriptors themselves — so the worker apps (brace-api, brace-extractor) emit
+// descriptors themselves — so the worker apps (bracemark-api, bracemark-extractor) emit
 // one shape and every client parses one shape across both origins. `error` is a
 // stable, client-parseable code (e.g. 'unauthorized', 'rate_limited',
 // 'http_error', 'internal_error'); `message` is optional and for humans/logs only.

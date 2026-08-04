@@ -2,7 +2,7 @@ import { cleanTitle } from '../sync/extraction';
 
 // WHICH tag a page's title / preview image / favicon comes from — the selection rules,
 // separated from the PARSING that collects the candidates. Every extracting client
-// parses differently (the Workers extractor drives `HTMLRewriter`; brace-expo scans the
+// parses differently (the Workers extractor drives `HTMLRewriter`; bracemark-expo scans the
 // head with a bounded regex on Hermes, where there's no DOM; the extension reads the
 // live DOM), but they must all MEAN the same thing by "the page's title" — otherwise a
 // tier upgrade (docs/link-extraction.md — the extraction entity) would rewrite

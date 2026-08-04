@@ -26,7 +26,7 @@ export type ImportState =
 export interface UseImportAllDataResult {
   state: ImportState;
   // Start an import from the picked file; no-op while one is running. Format is
-  // detected from the file itself (zip magic → Brace backup, else sniffed text).
+  // detected from the file itself (zip magic → Bracemark backup, else sniffed text).
   run: (file: PickedFile) => void;
 }
 

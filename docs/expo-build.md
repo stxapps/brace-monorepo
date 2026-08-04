@@ -1,6 +1,6 @@
-## expo build & release (brace-expo)
+## expo build & release (bracemark-expo)
 
-How brace-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
+How bracemark-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
 app config that feeds it, and the two release-only Android concerns (R8
 minification, Play upload signing). For what each dependency _is_ and how it's
 wired, see [expo-native-deps.md](./expo-native-deps.md); for the one-time
@@ -21,7 +21,7 @@ means for `eas.json` and the renamed `eas-build` target): `expo prebuild`
 regenerates the native projects, then **Xcode** builds/runs iOS and
 `expo run:android` (or gradle) handles Android. The commands live as **real npm
 scripts** in
-`apps/brace-expo/package.json`:
+`apps/bracemark-expo/package.json`:
 
 | script            | command                              | when                                               |
 | ----------------- | ------------------------------------ | -------------------------------------------------- |
@@ -31,8 +31,8 @@ scripts** in
 | `android:release` | `expo run:android --variant release` | release build → device (R8, no Metro)              |
 | `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode          |
 
-Run them either way — `npm run <script>` from `apps/brace-expo`, or
-`npx nx <target> @stxapps/brace-expo` from the root (nx delegates to the
+Run them either way — `npm run <script>` from `apps/bracemark-expo`, or
+`npx nx <target> @stxapps/bracemark-expo` from the root (nx delegates to the
 script). Root also has `npm run dev:expo` for the Metro one, beside `dev:ext`.
 Extra flags pass straight through: `npm start -- --clear`,
 `npm run prebuild -- --platform ios`.
@@ -48,7 +48,7 @@ one addition (Expo has no release variant script) and follows the workspace's
 
 **`prebuild` and `start` OVERRIDE `@nx/expo/plugin`'s inferred targets of the
 same name** — a package.json script wins over an inferred target (the
-brace-api `typecheck` precedent). That's not cosmetic: both inferred targets
+bracemark-api `typecheck` precedent). That's not cosmetic: both inferred targets
 are wrong for this workflow.
 
 - **`@nx/expo:start` defaults to `--port 19000`** and exports `RCT_METRO_PORT`
@@ -72,10 +72,10 @@ Two notes:
 - **Don't add a `build` script to this app.** npm would treat `prebuild` as its
   implicit pre-hook and regenerate the native projects on every build. (Nothing
   does today — `nx.json` renames the EAS build target to `eas-build` precisely
-  so brace-expo has no `build`.)
+  so bracemark-expo has no `build`.)
 - **`ios/` and `android/` are gitignored** (anchored paths in the root
   `.gitignore` — the committed native sources under `packages/expo-crypto/` and
-  `apps/brace-expo/modules/` are unaffected). They're CNG output: `--clean`
+  `apps/bracemark-expo/modules/` are unaffected). They're CNG output: `--clean`
   deletes them every time, so **nothing hand-edited in Xcode survives**. Every
   native change belongs in `app.config.ts` or a config plugin. The one thing
   that isn't a file — signing — comes from `APPLE_TEAM_ID` in `.env.local`
@@ -94,17 +94,17 @@ silently no longer matches `app.config.ts`, until the next `--clean` destroys
 it. The bare (committed-native) workflow is for native code you author by
 hand — and every line of that here already lives in tracked directories
 prebuild never touches (`packages/expo-crypto/{ios,android}`,
-`apps/brace-expo/modules/brace-share/{ios,android}`). Nothing under
-`apps/brace-expo/ios|android` is authored. When you do want the diff, take it
+`apps/bracemark-expo/modules/bracemark-share/{ios,android}`). Nothing under
+`apps/bracemark-expo/ios|android` is authored. When you do want the diff, take it
 on demand instead of carrying it forever:
 
     npm run prebuild                              # before state
-    cp -R apps/brace-expo/ios /tmp/ios-before
+    cp -R apps/bracemark-expo/ios /tmp/ios-before
     …bump the SDK / edit app.config.ts…
     npm run prebuild
-    diff -ru /tmp/ios-before apps/brace-expo/ios
+    diff -ru /tmp/ios-before apps/bracemark-expo/ios
 
-For a store `.aab`, gradle directly: `cd apps/brace-expo/android && ./gradlew
+For a store `.aab`, gradle directly: `cd apps/bracemark-expo/android && ./gradlew
 bundleRelease` (needs a real release keystore — the prebuild template signs
 `release` with the debug config, which is fine for `run-android:release` on a
 device but not for the Play Store).
@@ -112,7 +112,7 @@ device but not for the Play Store).
 #### app config — `app.config.ts`, not `app.json`
 
 The generator scaffolds a static `app.json`; this app uses the **dynamic TS
-config** instead (`apps/brace-expo/app.config.ts`, a plain
+config** instead (`apps/bracemark-expo/app.config.ts`, a plain
 `const config: ExpoConfig = {…}; export default config`, the same shape the old
 app used). Expo reads either, and `app.config.ts` wins when both exist — so the
 rename is the whole migration; nothing in the workspace reads the file
@@ -170,7 +170,7 @@ automatically):
 
 Our own native code is covered the same way: `expo-modules-core`'s consumer
 rules keep every `expo.modules.kotlin.modules.Module` subclass, which is what
-`BraceFileCryptoModule` (the `BraceCrypto` pod's Kotlin side) is.
+`BracemarkFileCryptoModule` (the `BracemarkCrypto` pod's Kotlin side) is.
 
 **No nitro keep rule either — and specifically not
 `-keep class com.margelo.nitro.** { *; }`.** `react-native-nitro-modules` is
@@ -203,7 +203,7 @@ _"Couldn't find class `X`! … If you are using ProGuard, add `@Keep` and
 a blanket keep.
 
 **Only a real release build exercises this** — not jest, not Metro, not `expo
-run:android` (debug). Until brace-expo has a release/EAS pipeline
+run:android` (debug). Until bracemark-expo has a release/EAS pipeline
 (docs/deployment.md doesn't cover mobile yet), this is configured but unproven;
 verify with a release build before the first store submission.
 
@@ -217,12 +217,12 @@ debug-signed artifact — so a real `signingConfigs.release` has to get into
 `npm run prebuild` (`--clean`) deletes the edit every time. There's no signing
 surface in app config and none in `expo-build-properties` either, which makes
 this the workspace's first **local config plugin**:
-`apps/brace-expo/plugins/with-android-signing.js`, listed last in
+`apps/bracemark-expo/plugins/with-android-signing.js`, listed last in
 `app.config.ts`'s `plugins`.
 
 It does two things at prebuild, both driven by four env vars:
 
-- **`withGradleProperties`** writes `BRACE_UPLOAD_STORE_FILE` (resolved to an
+- **`withGradleProperties`** writes `BRACEMARK_UPLOAD_STORE_FILE` (resolved to an
   absolute path), `…_STORE_PASSWORD`, `…_KEY_ALIAS`, `…_KEY_PASSWORD` into
   `android/gradle.properties`, replacing any same-key entries so a prebuild
   _without_ `--clean` doesn't append duplicates.
@@ -255,7 +255,7 @@ reach the JS bundle. **Unset is safe** — the plugin no-ops and the template's
 debug signing stands, so a fresh clone still prebuilds, the same falsy-skip
 behaviour `withDevelopmentTeam` has on iOS.
 
-**The keystore itself goes in `apps/brace-expo/credentials/`** (gitignored, as
+**The keystore itself goes in `apps/bracemark-expo/credentials/`** (gitignored, as
 is `*.keystore` globally) — _outside_ `android/`, because `--clean` deletes that
 directory and would take the key with it. Never commit it: leaking it or losing
 it both permanently end the ability to update the Play listing. Google Play App
@@ -269,13 +269,13 @@ put the same four keys in `~/.gradle/gradle.properties` and drop the
 identically via gradle's property resolution.
 
 **Escape `$` in the passwords.** Expo runs `dotenv-expand` over the env files,
-so an unescaped `$` starts a variable reference: `Brace$1MTo` loads as `Brace`,
+so an unescaped `$` starts a variable reference: `Bracemark$1MTo` loads as `Bracemark`,
 and gradle then fails with a keystore-password error that says nothing about
-env files. Write `Brace\$1MTo`. Verify with
-`node -e "require('@expo/env').load(process.cwd(),{force:true}); console.log(process.env.BRACE_UPLOAD_STORE_PASSWORD.length)"`
-from `apps/brace-expo`.
+env files. Write `Bracemark\$1MTo`. Verify with
+`node -e "require('@expo/env').load(process.cwd(),{force:true}); console.log(process.env.BRACEMARK_UPLOAD_STORE_PASSWORD.length)"`
+from `apps/bracemark-expo`.
 
-Store build: `cd apps/brace-expo/android && ./gradlew bundleRelease`. Verify what
+Store build: `cd apps/bracemark-expo/android && ./gradlew bundleRelease`. Verify what
 actually signed it — `keytool -printcert -jarfile
 app/build/outputs/bundle/release/app-release.aab`, or ask gradle before building
 with `./gradlew :app:signingReport` (its `Variant: release` block prints the
@@ -291,12 +291,12 @@ knowing about because neither is signing and both fail confusingly:
   of every variant. The version _string_ stays `0.0.0`; only the code matters to
   the build.
 - **The two hand-written native modules called `useManagedAndroidSdkVersions()`**
-  (`apps/brace-expo/modules/brace-share/android/build.gradle` and
+  (`apps/bracemark-expo/modules/bracemark-share/android/build.gradle` and
   `packages/expo-crypto/android/build.gradle`), which `expo-modules-core@3.0.30`
   does not define — it ships **`useDefaultAndroidSdkVersions`** (sets
   compileSdk/minSdk/targetSdk from the root `ext`). Gradle failed with _Could not
   find method useManagedAndroidSdkVersions()_ and then the misleading follow-on
-  _project ':brace-share' does not specify `compileSdk`_. Both now call the real
+  _project ':bracemark-share' does not specify `compileSdk`_. Both now call the real
   helper. The Android side of these modules had never been compiled — iOS was
   unaffected, which is why it went unnoticed. If you hand-write another native
   module, copy the four-call preamble from one of these two rather than from an

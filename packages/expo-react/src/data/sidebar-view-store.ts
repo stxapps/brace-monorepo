@@ -1,5 +1,5 @@
 // Read/write helpers over the device-local links-drawer view row (the collapsed
-// nav sections/rows) — the expo home of what brace-web's sidebar keeps in
+// nav sections/rows) — the expo home of what bracemark-web's sidebar keeps in
 // localStorage. Its own single-row JSON bag (SidebarViewValue in db.ts), kept
 // separate from the device SETTINGS bag on purpose (see the table note). The
 // sole owner of the constant key and the read-write, so the sidebar hook stays

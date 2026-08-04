@@ -1,7 +1,7 @@
 // The link-query GRAMMAR — how a link view/search is described, independent of
-// any storage engine. Hoisted from web-react's read layer when brace-expo grew
+// any storage engine. Hoisted from web-react's read layer when bracemark-expo grew
 // its own (the same move as `WithPath`/`LinkItem` → items.ts): the grammar is a
-// cross-platform contract — brace-web's page-provider authors it from the URL,
+// cross-platform contract — bracemark-web's page-provider authors it from the URL,
 // both read layers (web-react's Dexie `readLinks`, expo-react's SQLite port)
 // evaluate it — so it lives here beside the entity shapes, and each platform's
 // queries.ts stays the engine, not the contract. Pure types + transforms, no
@@ -50,7 +50,7 @@ export interface LinkQuery {
   text: Clause;
   url: Clause;
   title: Clause;
-  // Ordering, not a filter. Resolved by the app's read edge (brace-web
+  // Ordering, not a filter. Resolved by the app's read edge (bracemark-web
   // page-provider): a global synced setting (settings/general.enc) with an
   // optional READ-ONLY URL override (`?sort`/`?order`, hand-typed) — the URL wins
   // when present, else the setting. By the time a query reaches a read layer it's
@@ -78,7 +78,7 @@ export function emptyQuery(): LinkQuery {
 // Rewrite a query to EXCLUDE a set of list ids, preserving the cheapest driver
 // a read layer can pick. Pure grammar in, grammar out — the caller decides WHICH
 // ids to suppress and why (e.g. lock coverage folds its locked set through here;
-// see brace-web's use-links). Shaped to keep the single-list index fast path
+// see bracemark-web's use-links). Shaped to keep the single-list index fast path
 // (the read layers bail to a filtered walk whenever `lists.none` is non-empty,
 // losing the exact count):
 //   - nothing to exclude → the SAME query reference (identity matters: callers

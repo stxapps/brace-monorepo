@@ -7,13 +7,13 @@ import { AVAILABLE_PAID_PLANS, PLANS } from './plans';
 // writer of record is a payment-provider webhook), so it is deliberately NOT a
 // synced entity in sync/entities.ts: the server can't write into the user's
 // encrypted keyspace, and a client-authored copy would be an unverifiable, stale
-// echo racing itself under LWW. Every device instead asks brace-api — the one
+// echo racing itself under LWW. Every device instead asks bracemark-api — the one
 // authority — via `iap/status` and caches the answer locally. See
 // docs/business-model.md for the tiers and iap/plans.ts for what a plan unlocks.
 //
 // The Paddle WEBHOOK route (`/v1/iap/paddle/webhook`) has no contract here on
 // purpose: its request shape is Paddle's, not ours, and no client of this
-// package ever calls it — it lives only in brace-api.
+// package ever calls it — it lives only in bracemark-api.
 
 // Where a subscription was purchased. 'manual' is a server-side grant (comps,
 // lifetime deals) with no external provider to verify against.
@@ -81,10 +81,10 @@ export const iapCheckoutEndpoint = defineEndpoint({
 });
 
 // POST /v1/iap/verify → SubscriptionStatus (authenticated)
-// The store-receipt seam, reserved NOW for brace-expo: App Store / Play Store
+// The store-receipt seam, reserved NOW for bracemark-expo: App Store / Play Store
 // purchases are client-side events the server only learns about from a receipt
 // the app submits (unlike Paddle, where checkout carries our userId straight to
-// the webhook). brace-api verifies the token against the store's API and
+// the webhook). bracemark-api verifies the token against the store's API and
 // records the purchase. Until the Expo app exists the server answers 501.
 export const iapVerifyRequestSchema = z.object({
   source: z.enum(['appstore', 'playstore']),

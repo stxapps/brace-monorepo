@@ -1,6 +1,6 @@
 ## account & key derivation
 
-How a brace account works: there is **no account on the server** in the
+How a bracemark account works: there is **no account on the server** in the
 traditional sense — the user's `(username, password)` pair _is_ the account.
 From it the client deterministically derives a **key-encryption-key** that
 unwraps a random **data key**, and from that data key it derives every key it
@@ -10,13 +10,13 @@ typed, and [local-first-sync.md](./local-first-sync.md) for what the derived
 encryption key protects. The crypto implementation lives in
 `@stxapps/web-crypto` (web + extension) and `@stxapps/expo-crypto` (the Expo
 client — native Argon2id/HKDF/AES-GCM via react-native-quick-crypto, plus the
-`BraceFileCrypto` native module for file-level encryption); the frozen
+`BracemarkFileCrypto` native module for file-level encryption); the frozen
 parameters and validators live in `@stxapps/shared` (`crypto/params.ts`,
 `auth/credentials.ts`).
 
 ### the model: a password-derived wallet, with extra doors
 
-brace is a **zero-knowledge** bookmark manager. The server stores only
+bracemark is a **zero-knowledge** bookmark manager. The server stores only
 ciphertext and never sees the password, the data key, or any private key. That
 makes the account model structurally identical to a **crypto wallet**:
 
@@ -29,14 +29,14 @@ makes the account model structurally identical to a **crypto wallet**:
 The one place it differs from a wallet is the part that matters most — **where
 the entropy comes from** — and that difference drives every rule below.
 
-|                     | 24-word seed (BIP-39)         | brace `(username, password)`                                |
+|                     | 24-word seed (BIP-39)         | bracemark `(username, password)`                            |
 | ------------------- | ----------------------------- | ----------------------------------------------------------- |
 | entropy source      | **forced random** (~256 bits) | **user-chosen** — whatever they pick                        |
 | offline brute force | infeasible, period            | feasible **if the password is weak**                        |
 | per-guess cost      | —                             | Argon2id (64 MiB, ~1–3s) — raises cost, **adds no entropy** |
 | recovery            | none                          | optional — see [the doors](#the-doors)                      |
 
-A wallet _forces_ high entropy; brace _trusts the user_ to choose it. Argon2id
+A wallet _forces_ high entropy; bracemark _trusts the user_ to choose it. Argon2id
 (memory-hard) makes each guess expensive — this is what defeated the old
 SHA-256 "brain wallets" that got drained — and the per-user salt stops shared
 rainbow tables. But neither manufactures entropy: **the security of the password
@@ -69,10 +69,10 @@ never derived from anything. The keypair and encryption key are derived from the
         │                 │                  │              stored server-side (ciphertext)
         └────── any one unwraps ──▶ DEK ─────┘
                                      │
-                                     ├─ HKDF(info="brace-auth-seed") ──▶ Ed25519 keypair
+                                     ├─ HKDF(info="bracemark-auth-seed") ──▶ Ed25519 keypair
                                      │                                     ├─ publicKey  (credential, sent)
                                      │                                     └─ sign()     (private key, never leaves the module)
-                                     └─ HKDF(info="brace-encryption-key") ──▶ AES-256-GCM key (non-extractable, never sent)
+                                     └─ HKDF(info="bracemark-encryption-key") ──▶ AES-256-GCM key (non-extractable, never sent)
 ```
 
 Any single door unwraps the same DEK; the DEK derives everything else.
@@ -114,7 +114,7 @@ salt)`, where `salt = SHA-256(APP_SALT ‖ canonicalizeUsername(username))` (the
   see `generatePassphrase`.)
 - **recovery code** — generated with `crypto.getRandomValues` (≥256 bits, shown
   once as grouped **Crockford base32**). Already high-entropy, so a cheap
-  `recovery-KEK = HKDF(normalizeRecoveryCode(code), info="brace-recovery-kek")`
+  `recovery-KEK = HKDF(normalizeRecoveryCode(code), info="bracemark-recovery-kek")`
   suffices. The KDF runs over the **normalized** string (uppercase, hyphens
   dropped, Crockford confusables `O→0`/`I,L→1` repaired), so a code typed with its
   display grouping still unwraps. Generator + normalizer are in `shared`
@@ -214,8 +214,8 @@ off the main thread). On **sign-in**:
         ▼
        DEK (32 bytes)
         │
-        ├─ HKDF(info="brace-auth-seed") ──▶ Ed25519 keypair → publicKey, sign()
-        └─ HKDF(info="brace-encryption-key") ──▶ AES-256-GCM key
+        ├─ HKDF(info="bracemark-auth-seed") ──▶ Ed25519 keypair → publicKey, sign()
+        └─ HKDF(info="bracemark-encryption-key") ──▶ AES-256-GCM key
 ```
 
 On **create-account** the DEK is generated fresh (not unwrapped), then wrapped
@@ -328,7 +328,7 @@ Rough entropy targets, for calibration:
 > **Gate on `guessesLog10`, never on zxcvbn's 0–4 `score`.** The score is a
 > 5-bucket label over the same estimate, and its top bucket is open-ended
 > (`guesses >= 1e10` ≈ 33 bits) — measured, score 4 covers everything from
-> `Summer2026Brace!` (~35 bits) to the generated 7-word passphrase (~121 bits). A
+> `Summer2026Bracemark!` (~35 bits) to the generated 7-word passphrase (~121 bits). A
 > `score >= 3` gate therefore admitted ~27 bits, which behind Argon2id (64 MiB,
 > t=3) is hours on a single GPU. `guessesLog10` is uncapped and is the real signal.
 > The meter still displays the score, but `usePasswordStrength` clamps it to
@@ -399,7 +399,7 @@ credential**, not "two ids."
 
 | name        | what it is                                                                                                                       | derived/stored where                                             | sent to server?        |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------- |
-| `userId`    | the account's **stable primary key** — random, server-minted (`newId()`); also the Durable Object address (`idFromName(userId)`) | brace-api `users` table                                          | issued _by_ the server |
+| `userId`    | the account's **stable primary key** — random, server-minted (`newId()`); also the Durable Object address (`idFromName(userId)`) | bracemark-api `users` table                                      | issued _by_ the server |
 | `publicKey` | the **credential** — Ed25519 public key the server verifies signatures against                                                   | derived on the client from the DEK; stored as `users.public_key` | yes (it's public)      |
 
 Why keep a separate random `userId` instead of using the `publicKey` as the id:
@@ -589,7 +589,7 @@ see [the sharding seam](#future-sharding-d1--the-seam-is-pre-cut)). The username
 is held in its own **`DIRECTORY_DB`** (the global uniqueness namespace, never
 sharded), the account rows in account **shards** (`ACCOUNTS_DB_1`, …), and
 sessions in **`SESSIONS_DB`** (high-churn, not Tier-0). Mirrored in
-`apps/brace-api/src/db/schemas/{directory,accounts,sessions}.sql`.
+`apps/bracemark-api/src/db/schemas/{directory,accounts,sessions}.sql`.
 
 ```sql
 -- DIRECTORY_DB --------------------------------------------------------------
@@ -832,7 +832,7 @@ the data is gone."**
 - **DEK indirection (Phase 0)** — adopt the random-DEK root + password door
   _before_ the first real user; it's free now and a migration later.
 - **`APP_SALT`** — ✅ set to a real 256-bit high-entropy constant
-  (`crypto/params.ts`, `brace.app-salt.v1.…`). It can never change after the
+  (`crypto/params.ts`, `bracemark.app-salt.v1.…`). It can never change after the
   first real user; a hypothetical rotation mints a `.v2.` constant rather than
   editing it.
 - **Entropy gate** — ✅ built (zxcvbn score ≥ 3 on the typed path; the meter +
@@ -854,11 +854,11 @@ the data is gone."**
   (`services/account.ts`, `routes/auth.ts`). Still open: the **orphan-claim
   sweeper** (reclaim claims with no backing `users` row, alongside
   `sessions.deleteExpired`).
-- **CSP on brace-web** — the bearer token and the (non-extractable) encryption
+- **CSP on bracemark-web** — the bearer token and the (non-extractable) encryption
   key live in IndexedDB, readable by any JS on the origin (see the SECURITY note
   in `data/session-store.ts`); a strong CSP is the real mitigation — chiefly
   `connect-src` pinned to self + the api origin, so injected script can't
-  exfiltrate what it reads. brace-web is a static export, so the header is
+  exfiltrate what it reads. bracemark-web is a static export, so the header is
   attached by the per-tier **CloudFront response headers policy**, not
   `next.config` — see [deployment.md](./deployment.md) for the policy details
   and CSP gotchas (`'wasm-unsafe-eval'` for Argon2, no nonces on static export,

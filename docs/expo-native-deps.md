@@ -1,14 +1,14 @@
-## expo native deps (brace-expo)
+## expo native deps (bracemark-expo)
 
-What brace-expo is built out of — one section per dependency (or cluster):
+What bracemark-expo is built out of — one section per dependency (or cluster):
 what it's for, why it beat the alternative, and the wiring and gotchas that
 aren't in its own README. For how the app is built and shipped, see
 [expo-build.md](./expo-build.md); for the one-time scaffold commands,
 [setup.md](./setup.md); for the RN-equivalent-of-the-web-stack overview,
-[architecture.md](./architecture.md) — _brace-expo_.
+[architecture.md](./architecture.md) — _bracemark-expo_.
 
 **The install convention every section below follows**: run
-`npx expo install <pkg>` from inside `apps/brace-expo` (it picks the
+`npx expo install <pkg>` from inside `apps/bracemark-expo` (it picks the
 SDK-54-compatible version), then move the app's entry to `*` and pin the real
 version once in the **root** `package.json` — [architecture.md](./architecture.md),
 _dependency versions_. Anything native needs `npx expo prebuild` before it
@@ -21,7 +21,7 @@ docs/editors.md, invariant 2). Added like expo-router below:
 
     npx expo install expo-image-picker expo-image-manipulator
 
-(run inside `apps/brace-expo`; then move each to `*` in the app and pin the
+(run inside `apps/bracemark-expo`; then move each to `*` in the app and pin the
 real version in the root `package.json`, per the normal convention).
 `expo-image-manipulator` is also a peerDependency `*` of `@stxapps/expo-react`
 (its `lib/image.ts` — the NetInfo/expo-sqlite pattern). `app.config.ts`
@@ -80,7 +80,7 @@ the app, real pin (`^4.7.0`) in the root `package.json`. Its config plugin is in
 native OpenIAP SDKs), and it's a native module — `npx expo prebuild` required;
 the store sheet itself only works on a real device/simulator with a store
 account (jest/Metro can't exercise it). No API keys on the client: server-side
-verification config lives in brace-api's `wrangler.jsonc` (docs/iap.md — config
+verification config lives in bracemark-api's `wrangler.jsonc` (docs/iap.md — config
 per env).
 
 **Nothing to add in Xcode's Signing & Capabilities.** Ordinary StoreKit IAP
@@ -106,13 +106,13 @@ and skip it.
 
 #### expo-router
 
-File-based routing, the RN analogue of brace-web's Next.js App Router — routes
-live in `apps/brace-expo/src/app/`, so the two apps share the same
+File-based routing, the RN analogue of bracemark-web's Next.js App Router — routes
+live in `apps/bracemark-expo/src/app/`, so the two apps share the same
 folder-is-the-route-tree mental model. Added like:
 
     npx expo install expo-router react-native-screens expo-linking expo-constants
 
-(run inside `apps/brace-expo`; `expo install` picks SDK-54-compatible versions,
+(run inside `apps/bracemark-expo`; `expo install` picks SDK-54-compatible versions,
 then move each to `*` in the app and pin the real version in the root
 `package.json`, per the normal convention). `react-native-screens`,
 `expo-linking`, and `expo-constants` are required peers; `react-native-safe-area-context`
@@ -130,14 +130,14 @@ plugin to the app config. Wiring (already done):
   `<Stack>`. Safe-area context comes from expo-router's NavigationContainer
   (react-navigation's `SafeAreaProviderCompat`), so screens use `SafeAreaView`
   with **no explicit `SafeAreaProvider`** in `_layout`.
-- **route tree — mirrors brace-web's `src/app/`.** Same `(group)` syntax as the
+- **route tree — mirrors bracemark-web's `src/app/`.** Same `(group)` syntax as the
   Next.js App Router (a folder in parens adds **no** URL segment), so the layout
   is a near 1:1 port:
 
   ```
   src/app/
     _layout.tsx                  root Stack + providers
-    index.tsx                    "/"  public landing (brace-web's page.tsx)
+    index.tsx                    "/"  public landing (bracemark-web's page.tsx)
     (auth)/_layout.tsx           GuestGuard chrome  → TODO once auth lands
     (auth)/sign-in/index.tsx     /sign-in
     (auth)/create-account/index.tsx   /create-account
@@ -147,16 +147,16 @@ plugin to the app config. Wiring (already done):
   ```
 
   `page.tsx`→`index.tsx` and `layout.tsx`→`_layout.tsx` are the only renames.
-  The auth gating (brace-web's `AuthGuard`/`GuestGuard`/`AuthedHomeRedirect`) is
+  The auth gating (bracemark-web's `AuthGuard`/`GuestGuard`/`AuthedHomeRedirect`) is
   left as `TODO(auth)` comments in the three layouts + the landing — there is
   nothing to bind to until `@stxapps/expo-react` ships the auth layer; the
   expo-router idiom will be `<Redirect>` / `<Stack.Protected guard>`.
 
-- **no `_`-private folders — the one real divergence from brace-web.** Every
+- **no `_`-private folders — the one real divergence from bracemark-web.** Every
   file under the app root becomes a route: expo-router's `getFileMeta` treats
   only `_layout`, `(group)`, `+api`, `+not-found`, and platform suffixes
   (`.ios`/`.web`) as special — it has **no** `_`-prefixed private-folder
-  convention, so brace-web's colocated `(app)/links/_components`, `_hooks`,
+  convention, so bracemark-web's colocated `(app)/links/_components`, `_hooks`,
   `_panes`, … would each become a bogus route (e.g. `/links/_components/foo`).
   So route files under `src/app/` stay **thin** and their UI lives **outside**
   the app root — `src/components/` (e.g. the shared `Screen` placeholder) and,
@@ -171,7 +171,7 @@ plugin to the app config. Wiring (already done):
   `+html`/`+api`/`+middleware`/`+native-intent` — **not `*.spec.*`**), so a
   `.spec.tsx` beside a route file would be scanned as a bogus route. That costs
   nothing here: the workspace convention is already colocated specs
-  (`foo.spec.ts` next to `foo.ts`, never a central dir), and brace-expo's real UI
+  (`foo.spec.ts` next to `foo.ts`, never a central dir), and bracemark-expo's real UI
   lives outside `src/app/` anyway (thin routes — see "no `_`-private folders"
   above). So each spec sits next to its component/feature: the landing UI is
   `src/components/landing.tsx` with `src/components/landing.spec.tsx` beside it,
@@ -206,7 +206,7 @@ plugin to the app config. Wiring (already done):
 #### uniwind + react-native-reusables
 
 The RN equivalent of the web tailwind + shadcn stack (see architecture.md —
-_brace-expo_). Styling is **Uniwind** (Tailwind **v4**, CSS-first, a Metro
+_bracemark-expo_). Styling is **Uniwind** (Tailwind **v4**, CSS-first, a Metro
 plugin — from the Unistyles authors). We migrated off NativeWind once
 react-native-reusables shipped first-class Uniwind support
 ([PR #492](https://github.com/founded-labs/react-native-reusables/pull/492));
@@ -215,12 +215,12 @@ version split is gone. Wiring (already done):
 
 - deps: `uniwind` (version in the root `package.json`, app declares `*`, per the
   normal convention) + `tailwindcss@^4.x` pinned in
-  `apps/brace-expo/package.json` — Uniwind peers on `tailwindcss@>=4`. Every
-  Tailwind consumer now pins `^4.x` itself (`brace-web`, `brace-extension`,
-  `web-ui`, and brace-expo); there is **no root-hoisted `tailwindcss` and no
+  `apps/bracemark-expo/package.json` — Uniwind peers on `tailwindcss@>=4`. Every
+  Tailwind consumer now pins `^4.x` itself (`bracemark-web`, `bracemark-extension`,
+  `web-ui`, and bracemark-expo); there is **no root-hoisted `tailwindcss` and no
   `overrides` entry** (both existed only to keep NativeWind's edge on v3). If
   styling breaks after dependency surgery, check
-  `require.resolve('tailwindcss', { paths: ['apps/brace-expo'] })` resolves v4.
+  `require.resolve('tailwindcss', { paths: ['apps/bracemark-expo'] })` resolves v4.
 - config: **no `tailwind.config.js`** (Tailwind v4 is CSS-first) and **no
   babel preset** (Uniwind is Metro-only). `global.css` holds
   `@import 'tailwindcss'; @import 'uniwind';` plus an `@source` line for any
@@ -239,10 +239,10 @@ version split is gone. Wiring (already done):
 - components come from **react-native-reusables** (the shadcn analogue —
   same copy-into-the-app model), landing in `src/components/ui/` (the mirror of
   `packages/web-ui/src/components/ui/` — in the app, not a package: there is
-  deliberately no `expo-ui` lib while brace-expo is the only expo app). But
+  deliberately no `expo-ui` lib while bracemark-expo is the only expo app). But
   **the CLI doesn't work here — copy from the registry by hand.**
   `npx @react-native-reusables/cli@latest add <component>` resolves its write
-  paths through tsconfig `paths` aliases (`tsconfig-paths`), and brace-expo has
+  paths through tsconfig `paths` aliases (`tsconfig-paths`), and bracemark-expo has
   none — apps in this workspace use relative imports (web-ui only satisfied the
   shadcn CLI via its `@stxapps/web-ui/*` self-alias + package `exports`, which
   an app has no reason to grow). Even `--yes` still blocks on an interactive
@@ -271,8 +271,8 @@ version split is gone. Wiring (already done):
 
 #### font — Inter
 
-The web apps load Inter via CSS (`next/font` in brace-web, `@font-face` in
-brace-extension) — neither works on React Native (no DOM cascade, no woff2). The
+The web apps load Inter via CSS (`next/font` in bracemark-web, `@font-face` in
+bracemark-extension) — neither works on React Native (no DOM cascade, no woff2). The
 native equivalent is **expo-font, embedded at build time via its config plugin**
 (not the runtime `useFonts` hook): the font is registered natively from process
 start, so `fontFamily: 'Inter'` is available at first paint with no async load,
@@ -326,7 +326,7 @@ both bundles, so `_layout.tsx` no longer imports it.) They're backed by
 the **native** Buffer (`@craftzdog/react-native-buffer`, C++-fast) rather than
 the pure-JS `base-64` lib, since the images that flow through base64 are
 multi-hundred-KB — see the rationale in `packages/shared/src/crypto/encoding.ts`.
-`@craftzdog/react-native-buffer` is declared in `apps/brace-expo/package.json`
+`@craftzdog/react-native-buffer` is declared in `apps/bracemark-expo/package.json`
 so the app doesn't lean on hoist order — as `*`, with the version pinned once at
 the workspace root (`^6.1.2`), the same root-pin + app-`*` convention the other
 RN native deps use (`react-native-quick-base64`, `react-native-quick-crypto`).

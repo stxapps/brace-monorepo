@@ -117,9 +117,10 @@ grant. That is the entire bridge.
 
 The single thing that makes this transition feel complex is legacy releases
 blocking the v2 launch. Sequenced this way, none of them do. The v2 column is
-the fixed backdrop — the rename work it assumes is in
-[brand.md](./brand.md#the-rename-is-outstanding-work-in-this-repo), and it must
-be finished before phase 1 ships, because store submission locks the bundle ID.
+the fixed backdrop — the rename it assumes has already landed in the repo
+([brand.md](./brand.md#the-rename-in-this-repo--done)); what phase 1 still needs
+from it is the domain registrations and the store listings, and those must be
+right before submission, because a listing locks the bundle ID permanently.
 
 | phase                      | v2                                                           | v1                                                                                                                      |
 | -------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -164,7 +165,7 @@ v2 gets brand-new listings on every store regardless of naming, because the
 bundle ID changes — so nothing carries over from the v1 listings except the
 developer accounts and the ability to cross-promote from them. That consequence
 belongs to the rename; it is spelled out in
-[brand.md](./brand.md#the-rename-is-outstanding-work-in-this-repo).
+[brand.md](./brand.md#the-rename-in-this-repo--done).
 
 ### open decisions
 

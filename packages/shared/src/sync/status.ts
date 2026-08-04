@@ -39,7 +39,7 @@ export type SyncPhase =
   | 'idle'; // settled; the last cycle (if any) succeeded
 
 // Shared derivation of the user-facing sync status. Every status surface —
-// brace-web's Settings→Data card, the extension popup's pill and detail view —
+// bracemark-web's Settings→Data card, the extension popup's pill and detail view —
 // collapses the two fields into ONE phase the same way. This owns that collapse
 // so the surfaces can't drift; each surface still picks its own presentation
 // (icons, actions, short pill labels) on top of the phase.

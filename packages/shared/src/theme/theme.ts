@@ -1,4 +1,4 @@
-// Theme preference logic, shared by every web surface (brace-web, brace-extension).
+// Theme preference logic, shared by every web surface (bracemark-web, bracemark-extension).
 //
 // The user picks one of four *modes*; the DOM only ever needs the resolved
 // light/dark result. Keeping the resolver pure and platform-agnostic lets both
@@ -26,7 +26,7 @@ export const DEFAULT_THEME: ThemeState = {
 };
 
 /** Key used in localStorage and browser.storage. */
-export const THEME_STORAGE_KEY = 'brace-theme';
+export const THEME_STORAGE_KEY = 'bracemark-theme';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 

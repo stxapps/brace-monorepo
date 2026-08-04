@@ -57,7 +57,7 @@ export async function getBiometricCapability(): Promise<BiometricCapability> {
 }
 
 // Run the OS biometric prompt; true = the enrolled user authenticated.
-// `disableDeviceFallback` on purpose — the fallback for a brace lock is the
+// `disableDeviceFallback` on purpose — the fallback for a bracemark lock is the
 // app's OWN password field (LockPane), never the device passcode, which is a
 // different auth factor (letting it through would let anyone with the phone PIN
 // open every lock). Never throws — a thrown native error reads as "not

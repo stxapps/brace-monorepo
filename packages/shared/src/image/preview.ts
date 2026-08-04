@@ -2,7 +2,7 @@
 // preview image to before it lands in `files/{id}.enc`.
 //
 // Resizing is a CLIENT step by design (docs/link-extraction.md — _server extraction_:
-// `brace-extractor` never resizes or transcodes), so each platform implements it against
+// `bracemark-extractor` never resizes or transcodes), so each platform implements it against
 // its own decoder — `createImageBitmap` + `OffscreenCanvas` on web
 // (web-react `lib/resize-image.ts`, also the extension's path), `expo-image-manipulator`
 // on native (expo-react `lib/image.ts`). Only the DECODERS differ; what "capped" means

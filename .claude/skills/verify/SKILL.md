@@ -1,19 +1,19 @@
 ---
 name: verify
-description: How to build, launch, and drive this repo's apps to verify a change end-to-end (brace-web GUI via headless Chromium).
+description: How to build, launch, and drive this repo's apps to verify a change end-to-end (bracemark-web GUI via headless Chromium).
 ---
 
 # Verifying changes in this repo
 
 ## Launch
 
-- `npm run dev` (background) starts brace-web on :3000, brace-api (wrangler,
-  local D1/R2 emulation) on :8787, and brace-extractor. Wait for
+- `npm run dev` (background) starts bracemark-web on :3000, bracemark-api (wrangler,
+  local D1/R2 emulation) on :8787, and bracemark-extractor. Wait for
   `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/` → 200 (~15s).
-- Local state lives under `apps/brace-api/.wrangler/`; creating a throwaway
+- Local state lives under `apps/bracemark-api/.wrangler/`; creating a throwaway
   account per run is cheap and avoids depending on existing state.
 
-## Drive brace-web (GUI surface)
+## Drive bracemark-web (GUI surface)
 
 - No Playwright in the workspace, but browsers are cached at
   `~/Library/Caches/ms-playwright/`. In a scratch dir: `npm i playwright-core`,

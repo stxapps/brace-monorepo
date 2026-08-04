@@ -7,7 +7,7 @@
 // data-lifecycle namespace (docs/data-lifecycle.md).
 
 // The running phases, in order. `sync` and `parse` are indeterminate; `items`
-// counts entity writes, `files` counts blob restores (brace backup only).
+// counts entity writes, `files` counts blob restores (bracemark backup only).
 export interface ImportProgress {
   step: 'sync' | 'parse' | 'items' | 'files';
   done?: number;
@@ -17,13 +17,13 @@ export interface ImportProgress {
 export interface ImportOutcome {
   // Links written (new links; skips and invalid rows are counted separately).
   linkCount: number;
-  // Lists / tags newly created (interop) or restored (brace).
+  // Lists / tags newly created (interop) or restored (bracemark).
   listCount: number;
   tagCount: number;
-  // `files/` blobs restored from the zip (brace only; 0 otherwise).
+  // `files/` blobs restored from the zip (bracemark only; 0 otherwise).
   fileCount: number;
   // Interop: URLs skipped as already saved (or repeated in the file).
-  // Brace: entities skipped because their path already exists locally.
+  // Bracemark: entities skipped because their path already exists locally.
   skippedCount: number;
   // Rows/lines that didn't parse or validate — reported, never fatal.
   invalidCount: number;

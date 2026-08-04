@@ -1,8 +1,8 @@
 'use client';
 
 // The server-extraction LOOP DRIVER for a web React app — the counterpart of the
-// extension's background-alarm sweep (apps/brace-extension/entrypoints/background.ts),
-// realized as a React provider because brace-web has no background service worker:
+// extension's background-alarm sweep (apps/bracemark-extension/entrypoints/background.ts),
+// realized as a React provider because bracemark-web has no background service worker:
 // the sync engine already runs in-page (SyncProvider), and so does this.
 //
 // It does NOT hang off the save path (useLinkMutations.create is untouched). Per
@@ -13,7 +13,7 @@
 // the save off the network.
 //
 // COST CONTROL — why this isn't a naive "drain everything while the tab is open".
-// Each pending link is a paid `brace-extractor` request (HTML fetch + maybe an image
+// Each pending link is a paid `bracemark-extractor` request (HTML fetch + maybe an image
 // proxy). A bulk import (tens of thousands of links) left draining unbounded in an
 // open — possibly ABANDONED — tab would bill the server for work no one is watching.
 // The doc sizes the SYNC poll to the backlog but never the SERVER-REQUEST rate, so
@@ -163,7 +163,7 @@ function isDocumentVisible(): boolean {
 }
 
 export function ExtractionProvider({ children }: { children: ReactNode }) {
-  // The app's env-bound `brace-extractor` client, or null when no extractor origin is
+  // The app's env-bound `bracemark-extractor` client, or null when no extractor origin is
   // configured — in which case the loop is permanently inert (server extraction off).
   // Read from the ExtractClientProvider seam rather than a prop: it's a function-bearing
   // object, so passing it from the Server-Component app layout would fail to serialize

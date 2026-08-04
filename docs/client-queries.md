@@ -4,9 +4,9 @@ How the link views read from the local store fast, stay live, and paginate at a
 few-thousand-link scale. See [architecture.md](./architecture.md) for the package
 layering and [local-first-sync.md](./local-first-sync.md) for how those links got
 into the local store in the first place (encrypted blob per file → decrypted
-local store). This doc describes the read model **canonically**, with brace-web /
+local store). This doc describes the read model **canonically**, with bracemark-web /
 `packages/web-react/src/data/queries.ts` (Dexie over IndexedDB) as the reference
-implementation; brace-expo's `packages/expo-react/src/data/queries.ts` is a
+implementation; bracemark-expo's `packages/expo-react/src/data/queries.ts` is a
 drizzle-over-SQLite port holding the same semantics — see
 [the expo port](#the-expo-sqlitedrizzle-port) at the end for where it diverges.
 The pieces: the typed read layer (`queries.ts`), the indexes in each app's
@@ -310,7 +310,7 @@ forces the issue.
 
 ### the expo (SQLite/drizzle) port
 
-brace-expo runs the **same read model over a different substrate**:
+bracemark-expo runs the **same read model over a different substrate**:
 `@stxapps/expo-react`'s `data/queries.ts` is drizzle-over-`expo-sqlite` where
 web-react is Dexie-over-IndexedDB. Everything above — the projected columns, the
 per-query-kind driver choice, the pinned overlay, the growing-`limit` pagination,
@@ -348,6 +348,6 @@ changes is mechanical, and only the substrate forces it:
 link-library query (`readLinks` and its whole driver tree), the by-id / by-url
 lookups, and the quota count. **Not yet ported:** the extraction tallies and the
 extract-all / displayed-scoped drain-page reads (§the extraction-queue reads) —
-they arrive verbatim with the brace-expo features that need them, and will keep
+they arrive verbatim with the bracemark-expo features that need them, and will keep
 the same cursor-vs-`bulkGet` split described there (unbounded-but-not-reactive
 carries a cursor; reactive-but-bounded uses `bulkGet`).

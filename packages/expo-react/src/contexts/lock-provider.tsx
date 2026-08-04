@@ -355,7 +355,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
     if (!biometricCap.available) return false;
     const row = (await readLocks()).find((l) => l.id === APP_LOCK_ID);
     if (row === undefined || !row.biometric) return false;
-    const ok = await authenticateBiometric('Unlock Brace');
+    const ok = await authenticateBiometric('Unlock Bracemark');
     if (ok) markUnlocked(APP_LOCK_ID);
     return ok;
   }, [biometricCap.available, markUnlocked]);

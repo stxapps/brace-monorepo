@@ -1,7 +1,7 @@
 // The two deterministic, pure derivations that give an icon-less host a stable
 // visual identity — the same host always draws the same letter on the same hue:
-// brace-web's monogram tile and card hue panel, and brace-expo's card panel
-// alike. Hoisted here from brace-web's link-media.tsx when the expo card layout
+// bracemark-web's monogram tile and card hue panel, and bracemark-expo's card panel
+// alike. Hoisted here from bracemark-web's link-media.tsx when the expo card layout
 // became the second consumer (the same move as LinkQuery): if each app hashed
 // hosts its own way, the "same site, same color" recognition cue would break the
 // moment a user switches devices. Callers feed the DISPLAY host (hostFromText),

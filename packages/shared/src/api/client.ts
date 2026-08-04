@@ -4,7 +4,7 @@ import type { ApiEndpoint, HttpMethod } from './endpoint';
 
 // Platform-agnostic typed fetch driven by the shared endpoint contracts. Lives
 // in `shared` (not `react`) because it's framework-free and the future
-// brace-expo client needs it too — it relies only on the global `fetch`/`URL`,
+// bracemark-expo client needs it too — it relies only on the global `fetch`/`URL`,
 // available in browsers, RN, and Node 18+. Each app supplies its own `baseUrl`
 // (and, in tests, a `fetch` impl) via createApiClient.
 

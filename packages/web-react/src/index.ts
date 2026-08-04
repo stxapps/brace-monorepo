@@ -1,8 +1,8 @@
 // Web-only React-logic layer: auth + sync providers, the local-first data layer
 // (Dexie store, mutations, queries, projection, pending/sync stores — the decode
 // cache lives in @stxapps/shared now, shared with expo-react), the hand-rolled
-// sync engine, and the editor/auth hooks. Shared by brace-web and
-// brace-extension; the app provides the configured api client via @stxapps/react's
+// sync engine, and the editor/auth hooks. Shared by bracemark-web and
+// bracemark-extension; the app provides the configured api client via @stxapps/react's
 // ApiClientProvider (the seam these modules read through useApiClient / SyncDeps.api).
 export * from './contexts/auth-provider';
 export * from './contexts/extraction-provider';

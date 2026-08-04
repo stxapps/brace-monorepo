@@ -2,8 +2,8 @@ import { createApiClient } from '@stxapps/shared';
 
 import { getSession, getToken, notifySessionInvalid } from '../data/session-store';
 
-// The shared binding of the typed API client to brace-api, used by every web app
-// (brace-web, brace-extension, and the future docs site). The only thing that
+// The shared binding of the typed API client to bracemark-api, used by every web app
+// (bracemark-web, bracemark-extension, and the future docs site). The only thing that
 // differs per app is the base URL — and that genuinely can't live here: each app
 // resolves it from its own bundler-inlined env var (`NEXT_PUBLIC_API_URL` for
 // Next, `WXT_PUBLIC_API_URL` for wxt), which the layering rules keep out of

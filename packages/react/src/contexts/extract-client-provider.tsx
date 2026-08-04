@@ -4,7 +4,7 @@ import { createContext, type ReactNode, useContext } from 'react';
 
 import type { ExtractClient } from '@stxapps/shared';
 
-// The `brace-extractor` sibling of ApiClientProvider: a client-side seam so the
+// The `bracemark-extractor` sibling of ApiClientProvider: a client-side seam so the
 // function-bearing extract client never crosses the server→client boundary as a
 // prop (functions aren't serializable — passing one from a Server Component
 // prerenders into "Functions cannot be passed directly to Client Components").

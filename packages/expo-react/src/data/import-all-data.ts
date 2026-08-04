@@ -1,6 +1,6 @@
 // Import-all-data orchestrator — the expo sibling of web-react's
 // data/import-all-data.ts, and the write-side mirror of export-all-data.ts
-// (web's file is the canonical doc: format detection — Brace-backup zip
+// (web's file is the canonical doc: format detection — Bracemark-backup zip
 // restored verbatim vs. interop rows becoming new links, and the POLICY —
 // dedupe by canonical URL, skip-existing by path, the upfront quota gate, a
 // file-carried title seeding the PROVISIONAL extraction title, folder paths
@@ -184,9 +184,9 @@ async function importInterop(
   };
 }
 
-// --- the brace backup -------------------------------------------------------------
+// --- the bracemark backup -------------------------------------------------------------
 
-async function importBraceBackup(
+async function importBracemarkBackup(
   username: string,
   byName: Map<string, Uint8Array>,
   maxLinks: number | null,
@@ -196,7 +196,7 @@ async function importBraceBackup(
 
   const manifestBytes = byName.get(BACKUP_MANIFEST_ENTRY);
   if (manifestBytes === undefined) {
-    throw new Error('This zip is not a Brace backup (no manifest.json).');
+    throw new Error('This zip is not a Bracemark backup (no manifest.json).');
   }
   // Format/version gate — throws the user-facing message (shared data/backup.ts).
   parseBackupManifest(decoder.decode(manifestBytes));
@@ -300,7 +300,7 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedLink[] {
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   if (candidates.length === 0) {
     throw new Error(
-      'This zip is neither a Brace backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
+      'This zip is neither a Bracemark backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
     );
   }
 
@@ -311,7 +311,7 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedLink[] {
   return parsed;
 }
 
-// The zip dispatch: one unzip, one entry map. manifest.json marks a Brace
+// The zip dispatch: one unzip, one entry map. manifest.json marks a Bracemark
 // backup (restored verbatim); any other zip is treated as a zipped interop
 // export and its text entries become new links.
 async function importZip(
@@ -331,7 +331,7 @@ async function importZip(
   );
 
   if (byName.has(BACKUP_MANIFEST_ENTRY)) {
-    return importBraceBackup(username, byName, maxLinks, onProgress);
+    return importBracemarkBackup(username, byName, maxLinks, onProgress);
   }
   const parsed = parseInteropZip(byName);
   return importInterop(username, parsed, maxLinks, nestedLists, onProgress);

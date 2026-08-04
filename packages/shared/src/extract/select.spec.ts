@@ -1,7 +1,7 @@
 import { type CollectedMeta, resolveHttpUrl, selectFaviconUrl, selectTitleImage } from './select';
 
 // The selection rules every extracting client shares (select.ts's header): the
-// extractor's HTMLRewriter and brace-expo's regex head scanner collect differently but
+// extractor's HTMLRewriter and bracemark-expo's regex head scanner collect differently but
 // must AGREE on which tag wins, or a tier upgrade rewrites a link's title/image with a
 // different tag's value and reads as a change rather than an improvement.
 

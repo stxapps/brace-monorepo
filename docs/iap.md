@@ -1,6 +1,6 @@
 ## iap — subscriptions, paywall, entitlements
 
-How a brace account buys, holds, and exercises a subscription. Companion to
+How a bracemark account buys, holds, and exercises a subscription. Companion to
 [business-model.md](./business-model.md) (the tiers and why they cut where they
 cut); see [api-contracts.md](./api-contracts.md) for the endpoint pattern the
 IAP contracts follow and [local-first-sync.md](./local-first-sync.md) for the
@@ -8,12 +8,12 @@ IAP contracts follow and [local-first-sync.md](./local-first-sync.md) for the
 
 ### the two decisions everything else follows from
 
-**1. IAP lives in brace-api — not a separate app.** The extractor earned its own
+**1. IAP lives in bracemark-api — not a separate app.** The extractor earned its own
 app because it fetches arbitrary user URLs (plaintext content through a server —
-the thing "api.brace.to only sees ciphertext" must exclude). Billing is not
-content: brace-api already holds plaintext _account_ metadata (usernames,
+the thing "api.bracemark.com only sees ciphertext" must exclude). Billing is not
+content: bracemark-api already holds plaintext _account_ metadata (usernames,
 `public_key`, sessions), and a subscription row is the same class. Decisively,
-brace-api is itself the main **consumer** of entitlements — the plan-aware quota
+bracemark-api is itself the main **consumer** of entitlements — the plan-aware quota
 gate runs on its own `files/sign` hot path — so a separate billing service would
 put a cross-service read on that path for nothing.
 
@@ -29,21 +29,21 @@ device that can sync can ask.
 
 ### the pieces
 
-| layer      | piece                                    | role                                                                                                                                                                             |
-| ---------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| shared     | `iap/plans.ts`                           | `PLANS`, `entitlementsOf(plan)` — the tiers table as data, read by BOTH the client paywall and the server gate (the `LINK_TITLE_MAX` move)                                       |
-| shared     | `iap/endpoints.ts`                       | contracts: `iap/status`, `iap/checkout`, `iap/portal`, `iap/verify` + `subscriptionStatusSchema`                                                                                 |
-| brace-api  | `purchases` table (DIRECTORY_DB)         | one row per provider subscription, `UNIQUE(source, external_id)`                                                                                                                 |
-| brace-api  | `services/iap.ts`                        | the purchases→status **fold** (grace windows, plan rank), webhook application, the staleness refresh (below), Paddle API calls                                                   |
-| brace-api  | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                                                            |
-| brace-api  | `lib/quota.ts`                           | `checkPutQuota(entitlements, usage, paths)` at `files/sign`                                                                                                                      |
-| react      | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                                                               |
-| shared     | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)                                               |
-| brace-api  | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                                                       |
-| brace-api  | `lib/store.ts`, `lib/jwt.ts`             | what those two edges share so neither imports the other: the normalized `StoreSubscriptionSnapshot`/`StoreSource`, and the base64url + PKCS#8 PEM helpers behind both store JWTs |
-| web-react  | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                                                              |
-| brace-web  | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal                                                                                                                                 |
-| brace-expo | `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)                                            |
+| layer          | piece                                    | role                                                                                                                                                                             |
+| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| shared         | `iap/plans.ts`                           | `PLANS`, `entitlementsOf(plan)` — the tiers table as data, read by BOTH the client paywall and the server gate (the `LINK_TITLE_MAX` move)                                       |
+| shared         | `iap/endpoints.ts`                       | contracts: `iap/status`, `iap/checkout`, `iap/portal`, `iap/verify` + `subscriptionStatusSchema`                                                                                 |
+| bracemark-api  | `purchases` table (DIRECTORY_DB)         | one row per provider subscription, `UNIQUE(source, external_id)`                                                                                                                 |
+| bracemark-api  | `services/iap.ts`                        | the purchases→status **fold** (grace windows, plan rank), webhook application, the staleness refresh (below), Paddle API calls                                                   |
+| bracemark-api  | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                                                            |
+| bracemark-api  | `lib/quota.ts`                           | `checkPutQuota(entitlements, usage, paths)` at `files/sign`                                                                                                                      |
+| react          | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                                                               |
+| shared         | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)                                               |
+| bracemark-api  | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                                                       |
+| bracemark-api  | `lib/store.ts`, `lib/jwt.ts`             | what those two edges share so neither imports the other: the normalized `StoreSubscriptionSnapshot`/`StoreSource`, and the base64url + PKCS#8 PEM helpers behind both store JWTs |
+| web-react      | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                                                              |
+| bracemark-web  | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal                                                                                                                                 |
+| bracemark-expo | `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)                                            |
 
 `purchases` is **global** (DIRECTORY*DB, not an account shard) because webhook
 events after the first arrive keyed by the \_provider's* subscription id with no
@@ -116,7 +116,7 @@ walls exactly where the cost is):
 | free: preview-image `files/` blobs        | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
 | Plus page-copy meter (last 50)            | client-only — a page copy is indistinguishable from any other `files/` blob server-side; bytes backstop                                                                                                                       |
 | read-mode / screenshot / AI gates         | client-only (they run on-device), backstopped by the blob rules                                                                                                                                                               |
-| extractor access (plan-gated opt-in)      | client + IP rate limits for now (the extractor is anonymous by design); a brace-api-minted signed entitlement token is the upgrade path if abused                                                                             |
+| extractor access (plan-gated opt-in)      | client + IP rate limits for now (the extractor is anonymous by design); a bracemark-api-minted signed entitlement token is the upgrade path if abused                                                                         |
 
 Error codes at the gate: `upgrade_required` (a **plan** gate — client maps to
 the paywall) vs `quota_exceeded` (a **capacity** gate on an entitled plan —
@@ -124,11 +124,11 @@ the paywall) vs `quota_exceeded` (a **capacity** gate on an entitled plan —
 over-quota or downgraded account degrades to **read-only-plus-delete, never
 data loss**.
 
-### the purchase flow (store IAP — brace-expo)
+### the purchase flow (store IAP — bracemark-expo)
 
 The client library is **expo-iap** (the OpenIAP successor to the deprecated
 react-native-iap; Expo Modules-based, config plugin in `app.config.ts`, native — so
-`npx expo prebuild` required). `apps/brace-expo/src/lib/iap.ts` is the
+`npx expo prebuild` required). `apps/bracemark-expo/src/lib/iap.ts` is the
 `lib/paddle.ts` sibling: lazy store connection, global purchase listeners
 routed to the open checkout's handlers, and the verify-then-finish protocol.
 The store product ids are OURS and identical in sandbox and production (unlike
@@ -146,7 +146,7 @@ the server only learns about from the receipt the app submits.
    only placeholder copy).
 2. **Verify** — on the purchase event the app POSTs `/v1/iap/verify`
    `{ source, productId, token }` (App Store transaction id / Play purchase
-   token). The token is only a **lookup key**: brace-api fetches the
+   token). The token is only a **lookup key**: bracemark-api fetches the
    authoritative state server-to-server — App Store Server API
    `subscriptions/{transactionId}` (ES256 JWT; production falls back to the
    sandbox host on 404 for App Review, since a sandbox transaction id is
@@ -196,7 +196,7 @@ the server only learns about from the receipt the app submits.
    and an unfinished transaction is simply replayed forever with nothing
    revoked. Not to be confused with ACKing the _notifications_ below (a 200 so
    the provider stops redelivering) — different mechanism, same word.
-4. **Notifications** — renewals/cancellations reach brace-api via
+4. **Notifications** — renewals/cancellations reach bracemark-api via
    `appstore/notify` (App Store Server Notifications V2) and `playstore/notify`
    (Pub/Sub RTDN push, guarded by a static `?token=` secret). Neither verifies
    provider signatures: the pushed payload is used only to find WHICH
@@ -442,13 +442,13 @@ deep-links to it); a Paddle purchase seen from the app gets a
 
 ### config per env
 
-- **brace-api** (`wrangler.jsonc`): `PADDLE_API_BASE` (sandbox for
+- **bracemark-api** (`wrangler.jsonc`): `PADDLE_API_BASE` (sandbox for
   development/staging, live for production), `PADDLE_PRICE_ID_PLUS/_PRO`
   (per-env — sandbox and live mint different `pri_…` ids); secrets
   `PADDLE_WEBHOOK_SECRET` + `PADDLE_API_KEY` via `wrangler secret put`
   (`.dev.vars` locally). Register the webhook destination per env at
   `…/v1/iap/paddle/webhook`, subscribed to `subscription.*` events.
-- **brace-api, store IAP** (`wrangler.jsonc`): `APPSTORE_API_BASE` (sandbox host
+- **bracemark-api, store IAP** (`wrangler.jsonc`): `APPSTORE_API_BASE` (sandbox host
   for development/staging, production host for production — production also
   falls back to sandbox on 404 in code, for App Review),
   `APPSTORE_ISSUER_ID`/`APPSTORE_KEY_ID`/`APPSTORE_BUNDLE_ID`,
@@ -462,14 +462,14 @@ deep-links to it); a Paddle purchase seen from the app gets a
   Server Notifications V2 → `…/v1/iap/appstore/notify`; Play RTDN Pub/Sub push
   → `…/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>`. No store product-id
   vars — those are shared constants (`iap/store-products.ts`).
-- **brace-web** (`.env.*`): `NEXT_PUBLIC_PADDLE_ENV` +
+- **bracemark-web** (`.env.*`): `NEXT_PUBLIC_PADDLE_ENV` +
   `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (client tokens are public by design).
-- **CSP note**: when brace-web's CSP ships (it lives in the **CloudFront response
-  headers policy**, not Next or Cloudflare — brace-web is a static export), it
+- **CSP note**: when bracemark-web's CSP ships (it lives in the **CloudFront response
+  headers policy**, not Next or Cloudflare — bracemark-web is a static export), it
   must allow Paddle's origins: `script-src`/`frame-src`/`connect-src`/`img-src`/
   `style-src` all need `https://*.paddle.com` (one wildcard covers sandbox +
   live). Concrete directives + the `connect-src` exfiltration-widening tradeoff
-  are in [deployment.md](./deployment.md#brace-web--aws-s3--cloudfront-planned).
+  are in [deployment.md](./deployment.md#bracemark-web--aws-s3--cloudfront-planned).
 
 ### open follow-ups
 
@@ -509,6 +509,6 @@ deep-links to it); a Paddle purchase seen from the app gets a
   user tapping "Restore purchases". Worth building when store volume makes that
   tail real.
 - **Privacy note** — payment inherently deanonymizes (Paddle holds email +
-  payment identity). brace-api stores only `userId ↔ subscription id ↔ ctm_…`;
+  payment identity). bracemark-api stores only `userId ↔ subscription id ↔ ctm_…`;
   keep it that minimal so "the server knows who pays but still can't read
   anything" stays true.

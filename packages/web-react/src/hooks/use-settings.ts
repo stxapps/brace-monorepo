@@ -46,7 +46,7 @@ export type ThemeSource = 'sync' | 'local';
 // hook lie about the result. Unknown values reach consumers INTACT rather than being
 // silently rewritten to the default, which is what keeps them round-tripping back to
 // the newer device untouched — the cost is that every consumer must handle a value
-// outside its own union (brace-web's `Main` falls back to `ListLayout`; the Settings
+// outside its own union (bracemark-web's `Main` falls back to `ListLayout`; the Settings
 // radios show no selection). Writers are still strict: `setSyncLinksLayout` /
 // `setLocalLinksLayout` take a `LinksLayout`.
 export interface Settings {
@@ -61,7 +61,7 @@ export interface Settings {
   localLinksLayout: string;
   // The synced server-extraction opt-in (Settings → the second, explicit opt-in).
   // OFF BY DEFAULT — `false` until the user turns it on; gates whether a web client
-  // sends a saved URL to `brace-extractor` (see docs/link-extraction.md).
+  // sends a saved URL to `bracemark-extractor` (see docs/link-extraction.md).
   serverExtraction: boolean;
   // The SYNCED links sort — global-only (no device split), so the synced value IS
   // the applied one. Typed `string` for the same forward-compat reason as

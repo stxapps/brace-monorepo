@@ -12,14 +12,14 @@
 //
 // Trust model: this cache only gates CLIENT-side feature UX; everything that
 // costs money is re-checked server-side at `files/sign` regardless (see
-// brace-api lib/quota.ts). A stale cached plan therefore fails soft in both
+// bracemark-api lib/quota.ts). A stale cached plan therefore fails soft in both
 // directions — an expired subscription keeps client features offline for a
 // while (they cost ~nothing), and a fresh upgrade unlocks as soon as the status
 // query lands.
 
 import { type SubscriptionStatus, subscriptionStatusSchema } from '@stxapps/shared';
 
-const STORAGE_KEY = 'brace.subscriptionStatus';
+const STORAGE_KEY = 'bracemark.subscriptionStatus';
 
 // The device's last-known status, or null if none is cached / storage is
 // unavailable. Parsed through the wire schema so a stale/corrupt shape degrades

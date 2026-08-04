@@ -1,6 +1,6 @@
 // The on-disk half of the expo local store: where decrypted `files/` CONTENT
 // lives (db.ts header — file bytes never enter SQLite or the JS heap;
-// BraceFileCrypto decrypts ciphertext path-to-path and expo-image renders the
+// BracemarkFileCrypto decrypts ciphertext path-to-path and expo-image renders the
 // plaintext file:// URI directly). This module owns the directory, the
 // path↔location mapping, and the raw file operations, so every consumer derives
 // locations one way; the sync engine (sync/engine.ts) composes them into the
@@ -17,7 +17,7 @@ import { newId } from '@stxapps/expo-crypto';
 // All plaintext blobs live under one directory in the app's document storage
 // (survives relaunches; not the cache dir, which the OS may purge — a purge
 // would silently re-break "already downloaded" bookkeeping in `items`).
-const DATA_FILES_DIR = 'brace-files';
+const DATA_FILES_DIR = 'bracemark-files';
 
 function dataFilesDir(): Directory {
   return new Directory(Paths.document, DATA_FILES_DIR);
@@ -56,7 +56,7 @@ export function deleteDataFiles(paths: string[]): void {
 // and uniquely named so concurrent transfers never collide. The caller deletes
 // it when the transfer settles.
 export function newTempEncFile(): File {
-  return new File(Paths.cache, `brace-enc-${newId()}`);
+  return new File(Paths.cache, `bracemark-enc-${newId()}`);
 }
 
 // Remove every decrypted blob — the file-system half of the `items` wipe, called

@@ -23,10 +23,10 @@ import { type LinkItem, readExtraction } from '../data/queries';
 import { resizeImage } from './resize-image';
 
 // The SERVER-tier extraction worker: extract a PAGE of links' `titleImage` facet via
-// `brace-extractor`, then write back — each (resized) image into `files/`, the
+// `bracemark-extractor`, then write back — each (resized) image into `files/`, the
 // title/imageId display fields + the facet's done/failed bookkeeping into
 // `extractions/{id}.enc`. The shared counterpart of the extension's `runExtraction`
-// (apps/brace-extension), but driven by an HTTP extract instead of an active-tab
+// (apps/bracemark-extension), but driven by an HTTP extract instead of an active-tab
 // capture, so its `extractedBy` is `server` (the lowest tier — `tierOf` → 1) and a
 // later active-page sighting can UPGRADE it.
 //
@@ -108,7 +108,7 @@ export async function runServerTitleImageBatch(
       const result = resultsByUrl.get(url);
       if (!result) return; // server omitted this URL — leave pending for a later scan.
       if (!result.ok) {
-        // The SAME verdict rules brace-expo applies to a page it fetched itself — the
+        // The SAME verdict rules bracemark-expo applies to a page it fetched itself — the
         // extractor relays the upstream status on `bad_status`, so a 404 settles
         // `permanent` here too rather than being retried daily forever. The status
         // decides when present; otherwise the error enum's transient default holds.

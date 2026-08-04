@@ -3,8 +3,8 @@ import {
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
   backupFileEntry,
-  BRACE_BACKUP_FORMAT,
-  BRACE_BACKUP_VERSION,
+  BRACEMARK_BACKUP_FORMAT,
+  BRACEMARK_BACKUP_VERSION,
   type BundleEntry,
   classifyBundleLine,
   jsonlLine,
@@ -41,8 +41,8 @@ describe('the manifest round trip', () => {
 
   it('reads back what it wrote', () => {
     const manifest = parseBackupManifest(serializeBackupManifest(counts));
-    expect(manifest.format).toBe(BRACE_BACKUP_FORMAT);
-    expect(manifest.version).toBe(BRACE_BACKUP_VERSION);
+    expect(manifest.format).toBe(BRACEMARK_BACKUP_FORMAT);
+    expect(manifest.version).toBe(BRACEMARK_BACKUP_VERSION);
     expect(manifest.counts).toEqual(counts);
     expect(manifest.exportedAt).toBeGreaterThan(0);
   });
@@ -54,14 +54,14 @@ describe('the manifest round trip', () => {
     );
     expect(() =>
       parseBackupManifest(
-        JSON.stringify({ format: BRACE_BACKUP_FORMAT, version: BRACE_BACKUP_VERSION + 1 }),
+        JSON.stringify({ format: BRACEMARK_BACKUP_FORMAT, version: BRACEMARK_BACKUP_VERSION + 1 }),
       ),
-    ).toThrow(/newer version of Brace/);
+    ).toThrow(/newer version of Bracemark/);
   });
 
   // Older archives stay readable — that's the whole point of gating on `>`.
   it('accepts an older version', () => {
-    const text = JSON.stringify({ format: BRACE_BACKUP_FORMAT, version: 0, counts: {} });
+    const text = JSON.stringify({ format: BRACEMARK_BACKUP_FORMAT, version: 0, counts: {} });
     expect(parseBackupManifest(text).version).toBe(0);
   });
 });

@@ -36,7 +36,7 @@ import { USER_AGENT } from './user-agent';
 //
 // What differs is the FETCH half, and it differs completely:
 //
-//  - NO `brace-extractor`, ever (docs/link-extraction.md — _expo drains in the
+//  - NO `bracemark-extractor`, ever (docs/link-extraction.md — _expo drains in the
 //    foreground_). Native HTTP has no CORS, so there's nothing the server buys back
 //    here; routing through it would downgrade the tier (`server` = 1 vs `expo:fg` = 3),
 //    spend a paid rate-limited request, disclose the URL to a party that would otherwise
@@ -397,7 +397,7 @@ async function captureDeclaredFavicon(
 // The status → `failed`/`permanent` rules are `@stxapps/shared`'s `verdictForStatus`
 // (extract/retry.ts), NOT expo's own: the verdict SYNCS (a `permanent` facet stops every
 // device retrying), so the server tier — which reaches the same rules through
-// `verdictForExtractError` once brace-extractor relays the upstream code — and this one
+// `verdictForExtractError` once bracemark-extractor relays the upstream code — and this one
 // must classify a 404 identically, or a link's fate would depend on which device saw it
 // first. Our synthetic statuses (`0`/`415`/`204` from fetchPage) are part of that shared
 // vocabulary. All that's left here is reading the attempt count the 403 ladder asks for.
@@ -439,7 +439,7 @@ function settle(
 // definition — an OS purge costs nothing) and uniquely named so pooled links never collide;
 // the caller deletes it when the write settles. file-store's `newTempEncFile` sibling.
 function newTempFile(): File {
-  return new File(Paths.cache, `brace-extract-${newId()}`);
+  return new File(Paths.cache, `bracemark-extract-${newId()}`);
 }
 
 function deleteQuietly(file: File): void {

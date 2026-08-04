@@ -1,5 +1,5 @@
 // The device-local expo-sqlite + drizzle database — the expo sibling of
-// web-react's Dexie 'brace-data' store (data/db.ts there). Same tables, same
+// web-react's Dexie 'bracemark-data' store (data/db.ts there). Same tables, same
 // invariants: that file is the canonical doc for what each table/column MEANS;
 // this one documents where the SQLite port diverges. drizzle's useLiveQuery
 // over these tables is the Dexie liveQuery analogue, which is why the
@@ -7,7 +7,7 @@
 // sqlite's change events).
 //
 // Kept SEPARATE from the session data (session-store.ts, expo-secure-store) —
-// the same auth≠sync split as web's 'brace-session' vs 'brace-data' databases:
+// the same auth≠sync split as web's 'bracemark-session' vs 'bracemark-data' databases:
 // auth/key material lives in credential storage, synced user data here.
 //
 // Greenfield schema policy: no migrations. The DDL below runs idempotently on
@@ -22,7 +22,7 @@
 //    extractions/settings — small JSON) keep bytes in the row's `data` BLOB,
 //    which preserves the projection invariant as-is: the `item_*` columns are
 //    written in the same statement as the bytes they're derived from.
-//    `files/` CONTENT lives in expo-file-system instead: BraceFileCrypto
+//    `files/` CONTENT lives in expo-file-system instead: BracemarkFileCrypto
 //    (@stxapps/expo-crypto) decrypts ciphertext path-to-path in the native
 //    layer, so file bytes never enter the JS heap, and e.g. expo-image renders
 //    straight from the plaintext file:// path. The row only records presence
@@ -250,7 +250,7 @@ export const favicons = sqliteTable('favicons', {
 });
 
 // Device-local links-drawer VIEW state — which nav sections/rows are currently
-// collapsed. Kept OUT of `local_settings` ON PURPOSE, mirroring web: brace-web's
+// collapsed. Kept OUT of `local_settings` ON PURPOSE, mirroring web: bracemark-web's
 // sidebar keeps this in localStorage, deliberately separate from its device
 // SETTINGS store (see that sidebar's header) — collapse is low-value,
 // page-scoped view state, not a cross-cutting device setting that surfaces in
@@ -307,7 +307,7 @@ export function prefixEnd(prefix: string): string {
 // Exported for the read edge's change subscription (hooks/use-live-read.ts):
 // expo-sqlite's addDatabaseChangeListener reports changes across every open
 // database, so subscribers filter events to this one by name.
-export const DB_NAME = 'brace-data.db';
+export const DB_NAME = 'bracemark-data.db';
 
 // Idempotent DDL, run on every open (the greenfield no-migrations policy —
 // header). Index set mirrors web-react db.ts's Dexie stores line: `updated_at`

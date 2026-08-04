@@ -1,7 +1,7 @@
 // Export-all-data orchestrator — the expo sibling of web-react's
 // data/export-all-data.ts (the canonical doc: the four formats, the gather
 // pass, and the POLICY — locked lists excluded with their entities, Trash
-// excluded from the interop formats but kept in the brace backup, dangling
+// excluded from the interop formats but kept in the bracemark backup, dangling
 // listIds filed under My List). The interop serializers stay the pure functions
 // in @stxapps/shared (export/); this module owns everything platform-bound,
 // and diverges from web only there:
@@ -15,7 +15,7 @@
 //    fflate writes classic zip32 ONLY, so this path carries two hard ceilings
 //    web's zip.js doesn't have — 65,535 entries and 4 GiB. Neither is checked
 //    by fflate, so both are enforced in assertZipWritable below rather than
-//    left to corrupt the output. See docs/data-lifecycle.md (_the brace zip is
+//    left to corrupt the output. See docs/data-lifecycle.md (_the bracemark zip is
 //    platform-split_) for why, and the native-zipper upgrade path.
 //  - There is no save dialog and no ExportCancelledError: the output is
 //    written to a cache file and returned in the outcome (`file`), and the UI
@@ -76,10 +76,10 @@ import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
 import { readLists, readSettingsGeneral } from './queries';
 
-export type ExportFormat = 'brace' | 'netscape' | 'csv' | 'text';
+export type ExportFormat = 'bracemark' | 'netscape' | 'csv' | 'text';
 
 // The running phases, in order. `sync` and `assemble` are indeterminate;
-// `gather` counts link records, `files` counts blob downloads (brace only).
+// `gather` counts link records, `files` counts blob downloads (bracemark only).
 export interface ExportProgress {
   step: 'sync' | 'gather' | 'files' | 'assemble';
   done?: number;
@@ -98,7 +98,7 @@ export interface ExportedFile {
 export interface ExportOutcome {
   // Links written to the file (after the lock/Trash policy).
   linkCount: number;
-  // `files/` blobs included in the zip (brace only; 0 otherwise).
+  // `files/` blobs included in the zip (bracemark only; 0 otherwise).
   fileCount: number;
   // Referenced blobs that couldn't be included — deleted server-side or never
   // known locally (dangling refs). Reported, never fatal.
@@ -136,10 +136,10 @@ export class ExportTooLargeError extends Error {
       reason === 'entries'
         ? `This backup would hold ${count.toLocaleString()} files, past the ` +
             `${ZIP32_MAX_ENTRIES.toLocaleString()}-entry limit of the zip format this app writes. ` +
-            'Export the backup from the Brace web app instead.'
+            'Export the backup from the Bracemark web app instead.'
         : `This backup would be about ${Math.round(count / (1024 * 1024 * 1024))} GB, past the ` +
             '4 GB limit of the zip format this app writes. ' +
-            'Export the backup from the Brace web app instead.',
+            'Export the backup from the Bracemark web app instead.',
     );
     this.name = 'ExportTooLargeError';
     this.reason = reason;
@@ -173,7 +173,7 @@ const GATHER_CHUNK = 500;
 
 // Decode every record under an id-keyed namespace prefix into (path, entity)
 // pairs, dropping unparseable blobs like the read layer does. Keeps the entity
-// and its path SEPARATE (no WithPath merge): the brace backup writes the
+// and its path SEPARATE (no WithPath merge): the bracemark backup writes the
 // plaintext exactly as stored, and `path` is storage infrastructure that must
 // not leak into the round-tripped `data`.
 function readRawNamespace<T extends z.ZodTypeAny>(
@@ -263,7 +263,7 @@ function buildInteropBundle(links: GatheredLink[], lists: ListItem[], tags: Tag[
   return { folders: tree.map(toFolder), exportedAt: Date.now() };
 }
 
-// --- the brace backup -----------------------------------------------------------
+// --- the bracemark backup -----------------------------------------------------------
 
 // Every `files/{id}.enc` path the included links/extractions reference —
 // referenced-only, so orphaned blobs and locked lists' media never ship.
@@ -284,7 +284,7 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
 // counted for the outcome). Stored, not deflated (`level: 0`), for the media
 // entries — they're already-compressed formats. Throws ExportTooLargeError if
 // the result wouldn't fit zip32 — before zipSync, so nothing lands on disk.
-async function assembleBraceZip(
+async function assembleBracemarkZip(
   outFile: File,
   links: GatheredLink[],
   lists: { path: string; entity: List }[],
@@ -367,19 +367,19 @@ function datePart(date: Date): string {
 export function exportFileName(format: ExportFormat, date = new Date()): string {
   const stamp = datePart(date);
   switch (format) {
-    case 'brace':
-      return `Brace backup ${stamp}.zip`;
+    case 'bracemark':
+      return `Bracemark backup ${stamp}.zip`;
     case 'netscape':
-      return `Brace bookmarks ${stamp}.html`;
+      return `Bracemark bookmarks ${stamp}.html`;
     case 'csv':
-      return `Brace bookmarks ${stamp}.csv`;
+      return `Bracemark bookmarks ${stamp}.csv`;
     case 'text':
-      return `Brace links ${stamp}.txt`;
+      return `Bracemark links ${stamp}.txt`;
   }
 }
 
 const EXPORT_MIME: Record<ExportFormat, string> = {
-  brace: 'application/zip',
+  bracemark: 'application/zip',
   netscape: 'text/html',
   csv: 'text/csv',
   text: 'text/plain',
@@ -416,7 +416,7 @@ export async function exportAllData(options: {
     onProgress({ step: 'gather', done, total }),
   );
 
-  if (format !== 'brace') {
+  if (format !== 'bracemark') {
     onProgress({ step: 'assemble' });
     // readLists merges the system-list defaults, so My List/Archive always
     // exist as folders even when never overridden.
@@ -444,7 +444,7 @@ export async function exportAllData(options: {
     };
   }
 
-  // Brace backup. Raw stored entities only (no synthesized system-list
+  // Bracemark backup. Raw stored entities only (no synthesized system-list
   // defaults — import's merge-on-read reconstructs those, exactly like sync).
   const includedLinkIds = new Set(links.map(({ path }) => idFromPath(path, LINKS_PREFIX)));
   const lists = readRawNamespace(LISTS_PREFIX, listSchema).filter(
@@ -464,7 +464,7 @@ export async function exportAllData(options: {
   );
 
   onProgress({ step: 'assemble' });
-  const { fileCount } = await assembleBraceZip(outFile, links, lists, tags, pins, filePaths);
+  const { fileCount } = await assembleBracemarkZip(outFile, links, lists, tags, pins, filePaths);
 
   return {
     linkCount: links.length,

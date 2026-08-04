@@ -1,6 +1,6 @@
 ## business model
 
-Working economics for brace.to as a **privacy-first** bookmark / read-later app:
+Working economics for bracemark.com as a **privacy-first** bookmark / read-later app:
 tiering, infra cost, and break-even. Companion to the product/architecture docs —
 see [link-extraction.md](./link-extraction.md) for why extraction (and its heavy
 image/screenshot/page-copy blobs) is the main storage line item,
@@ -15,14 +15,14 @@ All figures are **planning estimates**, not committed prices. Flex the assumptio
 ### the cost structure is unusually favorable
 
 Two architectural decisions make infra cost a non-issue, and they're the same
-decisions that make brace private:
+decisions that make bracemark private:
 
 - **Cloudflare R2 has zero egress fees.** The instinctive "30k images downloaded
   over and over = transfer bill" fear is the AWS/S3 model. R2 doesn't charge
   egress, so the heavy preview-image blobs (see
   [link-extraction.md](./link-extraction.md) — _the preview image is a downloaded
   blob_) cost storage only, not transfer.
-- **`brace-api` is a blind sync broker — clients do all extraction.** The server
+- **`bracemark-api` is a blind sync broker — clients do all extraction.** The server
   does no per-user fetch, render, or content compute (see
   [link-extraction.md](./link-extraction.md) — _the stance_). So none of the
   per-user CPU/egress that kills cloud-AI read-later apps applies here. Privacy
@@ -41,7 +41,7 @@ Rough infra for a heavy 30k-link / 3 GB user, priced on R2:
 So even a worst-case whale costs **~$1–2/yr** in infra against $48+/yr revenue —
 a 95%+ gross margin. **Cost is never the wall; customer acquisition is.**
 
-The one place cost _does_ leak in is the **`brace-extractor`** server path
+The one place cost _does_ leak in is the **`bracemark-extractor`** server path
 (outbound fetch + compute, and anonymous/abuse-exposed). It's now a
 **necessary** app to build — once the extension went active-context only it's the
 only bulk-enrichment path for web/desktop users — but its _feature_ stays **opt-in
@@ -50,7 +50,7 @@ and off by default**, which is the right call on cost/abuse grounds too (see
 
 **The image proxy is part of this path — and deliberately the cheap shape.** A
 web-app save can't fetch the og:image itself (CORS blocks JS from reading
-cross-origin image bytes), so `brace-extractor` **streams** the preview image
+cross-origin image bytes), so `bracemark-extractor` **streams** the preview image
 through to the client — inline for a single save, a `GET /image?url=…` proxy for a
 bulk import (see [link-extraction.md](./link-extraction.md) — _the preview image is
 a downloaded blob_ / _server extraction_). The rejected alternative — extractor
@@ -61,7 +61,7 @@ never stored**, so the proxy adds only request count + a little streaming CPU
 (streaming is I/O, billed as CPU-ms it barely uses) — ~**$0.01** even for a
 30k-link import (30k × ~$0.30/M requests). It rides the **same opt-in +
 IP-rate-limit** as the HTML fetch, opening no abuse surface that path doesn't
-already carry. Net: a rounding error on top of the already-opt-in `brace-extractor`
+already carry. Net: a rounding error on top of the already-opt-in `bracemark-extractor`
 cost, not a new cost category — the storage tables below are unchanged.
 
 ### tiers
@@ -106,39 +106,39 @@ The two paid tiers then have a spine, not just a longer list:
 - **Pro** — the library that organizes and understands itself (automated /
   dynamic organization + intelligence).
 
-|                                         | **Free**                       | **Plus** — $48/yr             | **Pro** — $96/yr _(planned)_ |
-| --------------------------------------- | ------------------------------ | ----------------------------- | ---------------------------- |
-| Price                                   | $0                             | $48/yr ($4/mo) · $5.99/mo     | $96/yr ($8/mo)               |
-| Free trial                              | —                              | 14 days, **annual plan only** | 14 days, annual only         |
-| Lifetime _(launch lever, then retired)_ | —                              | $149                          | —                            |
-| Saved links                             | 200                            | Unlimited                     | Unlimited                    |
-| Storage quota (blobs)                   | preview imgs only (≤200)       | 5 GB                          | 20 GB                        |
-| E2E encryption                          | ✅                             | ✅                            | ✅                           |
-| Sync across devices                     | ✅ (habit-builder — don't cap) | ✅                            | ✅                           |
-| Browser extension (save)                | ✅                             | ✅                            | ✅                           |
-| Mobile share sheet (save)               | ✅                             | ✅                            | ✅                           |
-| Theme, flat tags, flat lists, pin       | ✅                             | ✅                            | ✅                           |
-| Sort + manual reorder (lists/tags/pins) | ✅                             | ✅                            | ✅                           |
-| Layouts (card, list)                    | ✅                             | ✅                            | ✅                           |
-| Multi-select move / tag / delete        | ✅                             | ✅                            | ✅                           |
-| Full data export (no lock-in)           | ✅                             | ✅                            | ✅                           |
-| Search (words, all links)               | ✅                             | ✅                            | ✅                           |
-| Preview images (downloaded blob)        | ✅ (client-extracted)          | ✅                            | ✅                           |
-| Browser extension extraction            | ✅                             | ✅                            | ✅                           |
-| Mobile app extraction.                  | ✅                             | ✅                            | ✅                           |
-| Server extraction (`brace-extractor`)   | ❌                             | opt-in                        | opt-in                       |
-| Nested lists                            | ❌                             | ✅                            | ✅                           |
-| Locks (app lock + per-list hide)        | ❌                             | ✅                            | ✅                           |
-| Search editor (fields, lists, tags)     | ❌                             | ✅                            | ✅                           |
-| Read-mode (clean reader text)           | ❌                             | ▹ planned                     | ▹ planned                    |
-| Table layout (custom columns)           | ❌                             | ▹ planned                     | ▹ planned                    |
-| Screenshot capture                      | ❌                             | ▹ planned                     | ▹ planned                    |
-| Full page copy (offline snapshot)       | ❌                             | ▹ planned                     | ▹ planned                    |
-| Nested tags (tag hierarchy)             | ❌                             | ▹ planned                     | ▹ planned                    |
-| Per-list manual link ordering           | ❌                             | ▹ planned                     | ▹ planned                    |
-| Smart lists / smart tags                | ❌                             | ❌                            | ▹ planned                    |
-| Saved searches (persist queries)        | ❌                             | ❌                            | ▹ planned                    |
-| AI (auto-tag, summary, semantic search) | ❌                             | ❌                            | ▹ planned                    |
+|                                           | **Free**                       | **Plus** — $48/yr             | **Pro** — $96/yr _(planned)_ |
+| ----------------------------------------- | ------------------------------ | ----------------------------- | ---------------------------- |
+| Price                                     | $0                             | $48/yr ($4/mo) · $5.99/mo     | $96/yr ($8/mo)               |
+| Free trial                                | —                              | 14 days, **annual plan only** | 14 days, annual only         |
+| Lifetime _(launch lever, then retired)_   | —                              | $149                          | —                            |
+| Saved links                               | 200                            | Unlimited                     | Unlimited                    |
+| Storage quota (blobs)                     | preview imgs only (≤200)       | 5 GB                          | 20 GB                        |
+| E2E encryption                            | ✅                             | ✅                            | ✅                           |
+| Sync across devices                       | ✅ (habit-builder — don't cap) | ✅                            | ✅                           |
+| Browser extension (save)                  | ✅                             | ✅                            | ✅                           |
+| Mobile share sheet (save)                 | ✅                             | ✅                            | ✅                           |
+| Theme, flat tags, flat lists, pin         | ✅                             | ✅                            | ✅                           |
+| Sort + manual reorder (lists/tags/pins)   | ✅                             | ✅                            | ✅                           |
+| Layouts (card, list)                      | ✅                             | ✅                            | ✅                           |
+| Multi-select move / tag / delete          | ✅                             | ✅                            | ✅                           |
+| Full data export (no lock-in)             | ✅                             | ✅                            | ✅                           |
+| Search (words, all links)                 | ✅                             | ✅                            | ✅                           |
+| Preview images (downloaded blob)          | ✅ (client-extracted)          | ✅                            | ✅                           |
+| Browser extension extraction              | ✅                             | ✅                            | ✅                           |
+| Mobile app extraction.                    | ✅                             | ✅                            | ✅                           |
+| Server extraction (`bracemark-extractor`) | ❌                             | opt-in                        | opt-in                       |
+| Nested lists                              | ❌                             | ✅                            | ✅                           |
+| Locks (app lock + per-list hide)          | ❌                             | ✅                            | ✅                           |
+| Search editor (fields, lists, tags)       | ❌                             | ✅                            | ✅                           |
+| Read-mode (clean reader text)             | ❌                             | ▹ planned                     | ▹ planned                    |
+| Table layout (custom columns)             | ❌                             | ▹ planned                     | ▹ planned                    |
+| Screenshot capture                        | ❌                             | ▹ planned                     | ▹ planned                    |
+| Full page copy (offline snapshot)         | ❌                             | ▹ planned                     | ▹ planned                    |
+| Nested tags (tag hierarchy)               | ❌                             | ▹ planned                     | ▹ planned                    |
+| Per-list manual link ordering             | ❌                             | ▹ planned                     | ▹ planned                    |
+| Smart lists / smart tags                  | ❌                             | ❌                            | ▹ planned                    |
+| Saved searches (persist queries)          | ❌                             | ❌                            | ▹ planned                    |
+| AI (auto-tag, summary, semantic search)   | ❌                             | ❌                            | ▹ planned                    |
 
 ▹ **planned** = held for feedback, not committed even as the destination — gate
 if/when demand shows (see _launch sequencing_).
@@ -148,7 +148,7 @@ Why these cuts:
 - **The free tier is genuinely good — and that's the point; the keystone paywall
   is scale + heavy blobs, not the preview image.** A client (browser extension /
   expo) extracts the preview image itself at **zero cost to us** (the expensive,
-  abuse-exposed `brace-extractor` path never runs), and a thumbnail-less library
+  abuse-exposed `bracemark-extractor` path never runs), and a thumbnail-less library
   looks broken next to every competitor — so withholding it would lose more to
   first-impression bounce than it wins in conversion, and it's misaligned with the
   wedge (privacy / PKM / research users convert on **scale and structure**, not
@@ -225,7 +225,7 @@ Why these cuts:
   nothing bets on AI timing.
 - **Free needs no user-facing quota meter:** the only blob it stores is the
   client-extracted preview image, bounded by the 200-link cap (× a per-image byte
-  ceiling, the same one `brace-extractor`'s `safeFetch` enforces); every _heavier_
+  ceiling, the same one `bracemark-extractor`'s `safeFetch` enforces); every _heavier_
   blob (screenshot / read-mode / page copy) is still absent, so there is nothing to
   surface in a quota UI.
 - **Lifetime ($149)** front-loads cash and suits the privacy/PKM crowd, but is a
@@ -253,9 +253,9 @@ research) has different anchors, and they all sit far above $28:
 | Readwise Reader   | ~$90/yr | read-later + highlights (cloud AI) |
 
 Obsidian charges ~$48/yr for E2E sync **alone** — no organization, no locks, no
-capture surfaces — and the PKM tribe pays it without complaint. Brace at $48
+capture surfaces — and the PKM tribe pays it without complaint. Bracemark at $48
 gives that same tribe encrypted sync _plus_ nested structure, locks, a query
-editor, a browser extension, and a mobile share sheet. In that table Brace is
+editor, a browser extension, and a mobile share sheet. In that table Bracemark is
 the one doing the most work for the money, not the expensive option. (Verify
 these against current pricing pages before committing — they move.)
 
@@ -263,7 +263,7 @@ these against current pricing pages before committing — they move.)
 price declares "Raindrop, but private," so the buyer runs a feature diff — and
 at launch Plus is thinner than Raindrop Pro (read-mode, page copy, screenshot,
 nested tags, table layout are all ▹ planned; see _launch sequencing_). $48
-positions Brace beside Obsidian Sync instead, where the differentiator is the
+positions Bracemark beside Obsidian Sync instead, where the differentiator is the
 axis of comparison rather than a missing row.
 
 **The elasticity math says the downside is covered.** Going $28 → $48 cuts the
@@ -299,10 +299,10 @@ which matters a lot at this stage. It also keeps the fee model below honest — 
 annual sub is **one** payment-processor charge a year, a monthly sub is twelve,
 so monthly nets materially less per dollar billed.
 
-**14 days, not 3 — because Brace's value is cumulative.** The 3-day trial is
+**14 days, not 3 — because Bracemark's value is cumulative.** The 3-day trial is
 calibrated for apps with an instant gotcha moment (photograph a plate, get the
 calories), where the product proves itself in five seconds and a short clock
-just accelerates cash. Brace is the opposite shape: a bookmark vault is worth
+just accelerates cash. Bracemark is the opposite shape: a bookmark vault is worth
 nothing on day one and something real once there's a library in it. A trial has
 to span **at least one full weekly usage cycle** plus the browser-extension
 install that unlocks thumbnails (see _the web-only gap_ under _related risks_) —
@@ -311,11 +311,11 @@ on sunk cost rather than demonstrated value, which is churn deferred, not
 revenue earned.
 
 Note what the trial is _for_ here, though: **the free tier is the evaluation,
-not the trial.** 200 links is a serious trial of Brace-the-product, so a Plus
+not the trial.** 200 links is a serious trial of Bracemark-the-product, so a Plus
 trial started at signup demos features the user has no library to feel yet
 (unlimited links when they have twelve; nested lists with nothing to nest). The
 trial's real job is de-risking the upgrade at the moment the free tier binds,
-where the question isn't "is Brace good" but "is _structure_ worth $48" — and
+where the question isn't "is Bracemark good" but "is _structure_ worth $48" — and
 that question takes a couple of weekends of reorganizing to answer. 14 days
 covers it; 3 doesn't.
 

@@ -2,7 +2,7 @@
 /// <reference types="node" />
 
 // ESM-only node_modules that must be transpiled (single source of truth, shared
-// with jest.preset.js / brace-web). jest-expo forces us to override
+// with jest.preset.js / bracemark-web). jest-expo forces us to override
 // transformIgnorePatterns for its RN allowlist, so we can't inherit the preset's
 // value — interpolate the shared list into the allowlist instead of hardcoding.
 const esmNodeModules = require('../../jest.esm-packages.cjs');

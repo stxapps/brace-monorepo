@@ -171,7 +171,7 @@ export type Pin = z.infer<typeof pinSchema>;
 // A bulk-imported title (not a deliberate user name) seeds the provisional `title` here,
 // where extraction may still upgrade it — it does NOT go in `customTitle`. Written by
 // client extractors (the extension, future Expo app, the web app orchestrating
-// brace-extractor or an import), NEVER by `brace-api`, which stays a blind sync broker.
+// bracemark-extractor or an import), NEVER by `bracemark-api`, which stays a blind sync broker.
 // The work loop is a QUERY, not a queue object: a link with no `done` `titleImage`
 // facet (no extractions file at all, or one not yet extracted) is pending. See
 // docs/link-extraction.md.
@@ -198,7 +198,7 @@ export const facetSchema = z.looseObject({
   // `expo:bg`, `server`), NOT a device id: nothing reads this for identity
   // (there's no claim lease and no per-device coordination — see below), only for
   // QUALITY. (The extension is active-context only, so it emits `:fg` only — never an
-  // `extension:bg`; the `:bg` tier comes from Expo background / `brace-extractor`. See
+  // `extension:bg`; the `:bg` tier comes from Expo background / `bracemark-extractor`. See
   // docs/link-extraction.md "the extension is active-context only".)
   // Quality (the upgrade axis) is DERIVED from it by the shared `tierOf()` helper
   // — `:fg` → active-page beats `:bg` → bg-fetch beats `server` — so a client whose
@@ -417,21 +417,21 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // would mean a layout added later (a newer device syncing `table`) fails this parse
 // on every older client and takes the theme down with it. Unknown values instead
 // round-trip untouched, and the read edge falls back to its default for rendering
-// (brace-web's `Main` picks `ListLayout`) while the Settings UI simply shows no
+// (bracemark-web's `Main` picks `ListLayout`) while the Settings UI simply shows no
 // selection — the user's choice on the newer device is preserved, not clobbered.
-// The device-local alternative ("Device" tab) lives off-sync in the brace-web
+// The device-local alternative ("Device" tab) lives off-sync in the bracemark-web
 // `localSettings` store, never here.
 //
 // `serverExtraction` is the SECOND, explicit opt-in (see docs/link-extraction.md
 // "server extraction" / "the stance"): the user lets a web/desktop client send a
-// saved link's URL to `brace-extractor` for title/image extraction. It is a SYNCED
+// saved link's URL to `bracemark-extractor` for title/image extraction. It is a SYNCED
 // account preference (every device honors the same choice), and OFF BY DEFAULT —
 // absent or `false` means no URL ever leaves the browser. `looseObject` round-trips
 // it for clients that don't model it (e.g. the extension, which is active-context
 // only and never calls the extractor).
 //
 // `deviceExtractionMode` is its ON-DEVICE sibling — what a client that fetches the page
-// ITSELF may do (brace-expo: no CORS, so no server is involved and no new party learns
+// ITSELF may do (bracemark-expo: no CORS, so no server is involved and no new party learns
 // the URL). A DIFFERENT thing is being consented to, so they are deliberately two
 // fields, not one: `serverExtraction` admits a new party; this one governs NETWORK
 // ACTIVITY FROM THIS DEVICE. It is a three-position ladder rather than a boolean
@@ -443,7 +443,7 @@ export type SyncedThemeState = z.infer<typeof themeStateSchema>;
 // ("my devices may fetch the pages I save") that a second phone should inherit; a
 // metered-connection qualifier, if ever wanted, is a device-local companion, not a
 // second copy of this. Round-tripped by `looseObject` on clients that don't model it
-// (brace-web/the extension never read it).
+// (bracemark-web/the extension never read it).
 export const settingsGeneralSchema = z.looseObject({
   linksLayout: z.string().optional().catch(undefined),
   serverExtraction: z.boolean().optional().catch(undefined),

@@ -1,0 +1,57 @@
+/// <reference types="jest" />
+/// <reference types="node" />
+
+// ESM-only node_modules that must be transpiled (single source of truth, shared
+// with jest.preset.js / bracemark-web). jest-expo forces us to override
+// transformIgnorePatterns for its RN allowlist, so we can't inherit the preset's
+// value — interpolate the shared list into the allowlist instead of hardcoding.
+const esmNodeModules = require('../../jest.esm-packages.cjs');
+
+module.exports = {
+  displayName: '@stxapps/bracemark-expo',
+  preset: 'jest-expo',
+  moduleFileExtensions: ['ts', 'js', 'html', 'tsx', 'jsx'],
+  setupFilesAfterEnv: ['<rootDir>/src/testing/setup.ts'],
+  // Never scan build output: `typecheck` (tsc --build) emits declaration files
+  // under out-tsc/, and a `.spec.d.ts` there matches jest's default testMatch —
+  // running it as an empty suite fails with "must contain at least one test".
+  testPathIgnorePatterns: ['/node_modules/', '/out-tsc/'],
+  moduleNameMapper: {
+    '[.]svg$': '@nx/expo/plugins/jest/svg-mock',
+    '[.]css$': '<rootDir>/src/testing/css-mock.js',
+  },
+  transform: {
+    // `[cm]?` so `.mjs` is transformed too: an allowlisted ESM-only dep is no
+    // use if its entry file's extension never matches the transform (
+    // lucide-react-native resolves to dist/esm/*.mjs under the `react-native`
+    // export condition).
+    '[.][cm]?[jt]sx?$': [
+      'babel-jest',
+      {
+        // Restate jest-expo's babel `caller` — overriding its transform entry
+        // drops it, and babel-preset-expo keys the `process.env.EXPO_OS` inline
+        // off `caller.platform`. Without it every occurrence is replaced by a
+        // literal `undefined` (not left alone), so expo-modules-core's
+        // Platform.ts warns "The global process.env.EXPO_OS is not defined."
+        // on any suite that pulls in expo (e.g. via expo-router).
+        caller: { name: 'metro', bundler: 'metro', platform: 'ios' },
+        configFile: __dirname + '/.babelrc.js',
+      },
+    ],
+    '^.+[.](bmp|gif|jpg|jpeg|mp4|png|psd|svg|webp|ttf|otf|m4v|mov|mp4|mpeg|mpg|webm|aac|aiff|caf|m4a|mp3|wav|html|pdf|obj)$':
+      require.resolve('jest-expo/src/preset/assetFileTransformer.js'),
+  },
+  coverageDirectory: '../../coverage/apps/bracemark-expo',
+  // jest-expo's preset only babel-transforms an allowlist of node_modules;
+  // extend it with the ESM-only deps (jest.esm-packages.cjs — e.g.
+  // fractional-indexing via @stxapps/shared's barrel, @noble/ed25519 via
+  // @stxapps/expo-crypto — same block as @stxapps/expo-react's jest config), or
+  // their `export` syntax breaks require(). Metro has no such allowlist, so
+  // runtime needs nothing. @rn-primitives (react-native-reusables' primitives)
+  // ships raw JSX in its dist like the RN packages do, so it joins the
+  // allowlist too.
+  transformIgnorePatterns: [
+    `/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|@rn-primitives|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|${esmNodeModules.join('|')}))`,
+    '/node_modules/react-native-reanimated/plugin/',
+  ],
+};

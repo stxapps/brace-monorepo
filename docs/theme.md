@@ -1,6 +1,6 @@
 ## theme
 
-How brace decides whether to render **light or dark**, how the user's choice is
+How bracemark decides whether to render **light or dark**, how the user's choice is
 stored, and why `localStorage` stays in the loop even though the choice can sync.
 See [local-first-sync.md](./local-first-sync.md) for the encrypted-file data path
 the synced half rides on (one entity per `*.enc` blob, file-level LWW, the
@@ -124,7 +124,7 @@ the preference itself stays a single source of truth in `useSettings().theme`, s
 read it there rather than re-exposing it here.
 
 This is a deliberate change from the provider's earlier design, which took an
-injected `ThemeStorage` (localStorage for brace-web, `browser.storage.sync` for
+injected `ThemeStorage` (localStorage for bracemark-web, `browser.storage.sync` for
 the extension). Now both apps route theme through the same data layer, so the
 injection seam earned nothing — the provider reads `useSettings` directly.
 (`web-ui` may import `web-react`; see the layering table in architecture.md.)
@@ -140,7 +140,7 @@ that moment**. So:
 > `localStorage` always holds the currently-effective `ThemeState`, as a
 > synchronous pre-paint cache, no matter which source is active.
 
-`ThemeProvider` writes that mirror (`localStorage['brace-theme']`,
+`ThemeProvider` writes that mirror (`localStorage['bracemark-theme']`,
 `THEME_STORAGE_KEY`) every time the resolved theme changes. The pre-paint script
 reads it. In **device** mode the mirror equals the device value; in **sync** mode
 it's a warm copy of the synced value. On a cold first load in sync mode the synced
@@ -153,13 +153,13 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
 
 ### per-app wiring
 
-- **brace-web** — `layout.tsx` inlines `themeInitScript()` in `<head>` as a
+- **bracemark-web** — `layout.tsx` inlines `themeInitScript()` in `<head>` as a
   server-rendered `<script>`; `inner-layout.tsx` mounts `<ThemeProvider>` (no
   props) inside the data-layer providers. The theme **picker** is Settings → Misc
   (`misc-section.tsx`): a Sync/Device tab, four mode radios, and two time inputs
   revealed in `custom` mode — the same tab shape as the link-layout section right
   above it.
-- **brace-extension** — MV3 pages (popup, options). `wxt.config.ts` injects
+- **bracemark-extension** — MV3 pages (popup, options). `wxt.config.ts` injects
   `themeInitScript()` into every page's `<head>` at build time via a Vite
   `transformIndexHtml` plugin (`themeFoucPlugin`) — a deferred module `main.tsx`
   runs AFTER paint, so the FOUC script can't live there; it must be the inline
@@ -167,12 +167,12 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   it into each `index.html`. `providers.tsx` mounts `<ThemeProvider>` (no props).
   The theme **picker** is the options page (`entrypoints/options/ThemeSection.tsx`):
   a Sync/Device tab, four mode radios, and the two custom-mode time inputs — the same
-  tab shape as brace-web's Misc section, but **theme-only**. Theme is the only synced
+  tab shape as bracemark-web's Misc section, but **theme-only**. Theme is the only synced
   setting that applies to the extension: `linksLayout` has no library list to lay out
   here, and `serverExtraction` never fires (the extension is active-context only and
-  never calls `brace-extractor`). The **Device** tab is what earns the extension its
+  never calls `bracemark-extractor`). The **Device** tab is what earns the extension its
   own picker — it lets this browser keep a theme (e.g. always-dark) distinct from
-  brace-web, without a context switch to set it. Popup and options share one origin,
+  bracemark-web, without a context switch to set it. Popup and options share one origin,
   so they share both the `localStorage` mirror and the Dexie stores (a pick on the
   options page applies to the popup too).
 
@@ -181,18 +181,18 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   context sharing (popup ↔ options ↔ background) comes free from same-origin
   IndexedDB. The old `utils/theme-storage.ts` adapter is gone.
 
-- **brace-expo** — the model is identical (four modes, the sync/device split,
+- **bracemark-expo** — the model is identical (four modes, the sync/device split,
   the same `useSettings`/`useSettingMutations` seam in `@stxapps/expo-react`),
   and the picker is Settings → Misc (`features/settings/misc-section.tsx`), the
   same tab shape as web. Only the **read/apply half** differs, because RN has no
   DOM class and no pre-paint `<script>`. The `ThemeProvider`
-  (`apps/brace-expo/src/components/theme-provider.tsx`) is the port of web-ui's:
+  (`apps/bracemark-expo/src/components/theme-provider.tsx`) is the port of web-ui's:
   it consumes the already-resolved `useSettings().theme`, exposes
   `useTheme().effectiveTheme`, and re-resolves on each mode's trigger. It mounts
   once at the root `_layout.tsx`, wrapping `<Stack>` inside the data-layer
   providers, so it covers **both** route groups (`(auth)` and `(app)`) — settings
   read from the sqlite singletons, so it needs no account. There is deliberately
-  **no `expo-ui` package** while brace-expo is the only expo app, so it lives in
+  **no `expo-ui` package** while bracemark-expo is the only expo app, so it lives in
   the app, not a package (the same reason the RN reusables components do). Three
   substitutions from web:
 
@@ -236,7 +236,7 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
   `resolveTheme` (and `msUntilNextThemeSwitch` if it's time-based), mirror the
   branch in `themeInitScript`'s ES5 IIFE (web FOUC only), and add a radio in both
   apps' `misc-section.tsx`. `coerceThemeState` accepts any value in `THEME_MODES`
-  automatically. brace-expo's `ThemeProvider` needs no change for a normal
+  automatically. bracemark-expo's `ThemeProvider` needs no change for a normal
   resolve-and-pin mode (it goes through the shared `resolveTheme`); it only needs
   a new branch if the mode requires a distinct apply path like `system`'s (leave
   the `Appearance` override clear) or a non-`Appearance`/non-timer trigger.

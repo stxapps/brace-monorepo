@@ -3,7 +3,7 @@ import { ARGON2_PARAMS } from '@stxapps/shared';
 // How deriveArgon2Hash runs its ~1–3s Argon2id compute.
 //
 // Default 'worker' runs it in a dedicated worker, off the main thread, so the UI stays
-// responsive (brace-web). The browser extension flips this to 'main' at startup (see
+// responsive (bracemark-web). The browser extension flips this to 'main' at startup (see
 // its popup entry): wxt's DEV server serves the module worker cross-origin (from
 // http://localhost) to the chrome-extension:// popup, and a cross-origin module worker
 // on an extension page hard-crashes the popup renderer. In a popup that does nothing
@@ -36,7 +36,7 @@ export async function deriveArgon2Hash(password: string, salt: Uint8Array): Prom
 
 // Main-thread path: the SAME Argon2id call the worker makes, run inline. hash-wasm is
 // dynamically imported so it's pulled in only where this path is actually used — it
-// stays out of brace-web's main bundle (which uses the worker path and gets hash-wasm
+// stays out of bracemark-web's main bundle (which uses the worker path and gets hash-wasm
 // via the separate worker chunk).
 async function deriveOnMainThread(password: string, salt: Uint8Array): Promise<Uint8Array> {
   const { argon2id } = await import('hash-wasm');

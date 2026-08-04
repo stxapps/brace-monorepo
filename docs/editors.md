@@ -1,6 +1,6 @@
 ## editors & the list/tag taxonomy UI
 
-How brace **edits a link** (create + full edit, across three surfaces on two
+How bracemark **edits a link** (create + full edit, across three surfaces on two
 apps) and how the **list/tag taxonomy** those editors write into is displayed and
 picked elsewhere. This is a cross-cutting reference: the editors share a small set
 of pickers and a set of invariants, and the same pieces (or the same underlying
@@ -25,16 +25,16 @@ URL + list/tags/note, title/image back-filled later by extraction) and **full
 edit** (every `links/{id}.enc` field, including the `customTitle`/`customImageId`
 overrides). Create collects a strict subset of edit's fields.
 
-| surface                | file                                                        | kind      | fields                                             |
-| ---------------------- | ----------------------------------------------------------- | --------- | -------------------------------------------------- |
-| extension save editor  | `apps/brace-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
-| web quick-add popover  | `apps/brace-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
-| web edit dialog        | `apps/brace-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
-| brace-expo quick-add   | `apps/brace-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind "Advanced"         |
-| brace-expo edit screen | `apps/brace-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
-| brace-expo share sheet | `apps/brace-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
+| surface                    | file                                                            | kind      | fields                                             |
+| -------------------------- | --------------------------------------------------------------- | --------- | -------------------------------------------------- |
+| extension save editor      | `apps/bracemark-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
+| web quick-add popover      | `apps/bracemark-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
+| web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
+| bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind "Advanced"         |
+| bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
+| bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
-The two brace-expo in-app editors are the web pair's behavioral twins (same
+The two bracemark-expo in-app editors are the web pair's behavioral twins (same
 validation, same quota banner on create, same dirty close guard — swipe-down /
 Android-back swallowed via `usePreventRemove`) presented phone-shaped: both
 are **modal-presented expo-router screens** (`/add-link` pushed by the links
@@ -49,7 +49,7 @@ end** (expo-image-picker → `resizeImage` uri→uri → `saveCustomImage` →
 `writeFile` path-to-path copy) — file bytes never enter the JS heap, the
 platform's file-store doctrine. They can't render the web pickers (`web-ui` is
 `platform:web`), so they share **in-app native cousins** in
-`apps/brace-expo/src/components/links/` (`list-select.tsx` over the shared
+`apps/bracemark-expo/src/components/links/` (`list-select.tsx` over the shared
 `list-command.tsx` body — the same shell/body split as web, with dialogs
 standing in for anchored popovers — plus `tags-field.tsx` /
 `link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks. Unlike
@@ -73,13 +73,13 @@ Two more surfaces edit the taxonomy itself (not links), as inline row editors �
 not modal forms, so the invariants below apply loosely (they hold no snapshot
 draft; each keystroke commits or reverts in place):
 
-- `apps/brace-web/.../settings/[section]/_lists/lists-section.tsx` — create /
+- `apps/bracemark-web/.../settings/[section]/_lists/lists-section.tsx` — create /
   rename / reorder / **reparent** / delete lists. Nesting _is_ the UI here: drag
   with live depth projection, a "Move to" submenu, and collapse toggles.
-- `apps/brace-web/.../settings/[section]/_tags/tags-section.tsx` — the tag
+- `apps/bracemark-web/.../settings/[section]/_tags/tags-section.tsx` — the tag
   counterpart **minus nesting**: create / rename / **reorder** (drag or up/down) /
   delete, over one flat ranked group.
-- `apps/brace-expo/src/features/settings/{lists,tags}-section.tsx` — the same two
+- `apps/bracemark-expo/src/features/settings/{lists,tags}-section.tsx` — the same two
   tables on native, drag included. **The projection math is literally the same
   code**: `excludeActiveDescendants` / `getProjection` / `getMovePlan` live in
   `@stxapps/shared` (`sync/tree-dnd.ts`), and each platform keeps only a px
@@ -212,7 +212,7 @@ search, pins) until unlocked — but the list stays selectable as a _destination
 So: lock gates a list's contents; hide only tidies the sidebar; neither touches
 what the pickers offer. Don't re-add `hiddenListIds` to any picker's
 `excludeIds` — it looks like a privacy fix but only breaks web/extension parity.
-The brace-expo share sheet follows the same rule: its taxonomy
+The bracemark-expo share sheet follows the same rule: its taxonomy
 (`buildShareLists`) filters only Trash and never reads locks.
 
 **The coupling to watch** — the reason an editor change reaches beyond the
@@ -258,7 +258,7 @@ editors:
   would, with the edit already in hand. The item shows only when `link.note` is
   set (adding one is plain **Edit**) and is absent from the Trash variant, like
   the other edit affordances. A new "land focused on X" entry point should widen
-  this union, not grow a surface. On brace-expo the same items push `/edit-link`
+  this union, not grow a surface. On bracemark-expo the same items push `/edit-link`
   with the same `focus` union as a route param — with one native divergence:
   `focus` **scrolls** the field into view instead of focusing it, because
   focusing a native input summons the keyboard over the very note "View note"
@@ -327,7 +327,7 @@ resurrecting stale fields.
   itself) — the per-user byte quota is the only backstop otherwise.** This is the
   same client-thumbnailing step the two capture tiers run
   (`server-extraction.ts`, the extension's `extraction-worker.ts`); the
-  `brace-extractor` server deliberately never resizes (link-extraction.md). One
+  `bracemark-extractor` server deliberately never resizes (link-extraction.md). One
   exception by design: the extension's full-page **screenshot** capture is stored
   full-fidelity, not thumbnailed — resize's 1024px/JPEG spec is a preview spec,
   wrong for a faithful visual record.
@@ -396,7 +396,7 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
   selection degenerates to plain edit-in-place. It upholds the §invariants
   (copy-to-draft, dirty close guard, minimal per-link patches).
 
-**On brace-expo** the mode is ported with the same selection/action semantics
+**On bracemark-expo** the mode is ported with the same selection/action semantics
 (`features/links/` — `view-state-provider` holds the selection and the hoisted
 `retagging`/`destroying` requests; `useLinkMutations`/`usePinMutations` live in
 `@stxapps/expo-react`), with phone-shaped chrome: entry is the ⋯ menu's

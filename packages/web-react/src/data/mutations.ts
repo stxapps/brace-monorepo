@@ -125,7 +125,7 @@ export interface RawEntityEntry {
 // in ONE rw transaction (items.bulkPut + pendingOps.bulkPut), so a chunk is
 // atomic like any single write and IndexedDB isn't asked for a transaction per
 // link. Unlike writeLink/writeList this does NOT restamp createdAt/updatedAt:
-// the importer provides final values (a Brace-backup restore round-trips the
+// the importer provides final values (a Bracemark-backup restore round-trips the
 // original timestamps), and callers validate each blob against its namespace
 // schema BEFORE calling — the same defensive parity, just hoisted out of the
 // batch. `baseUpdatedAt` per path from its existing record (0 for new), exactly

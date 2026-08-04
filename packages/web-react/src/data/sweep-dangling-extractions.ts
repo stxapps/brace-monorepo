@@ -23,7 +23,7 @@
 //   - the client must sync the WHOLE library: a selective-sync client (the browser
 //     extension's documented future — docs/link-extraction.md) that skips some
 //     `links/` would judge healthy extractions dangling and delete them for every
-//     device. That's why brace-web mounts the trigger (DanglingExtractionSweep) and
+//     device. That's why bracemark-web mounts the trigger (DanglingExtractionSweep) and
 //     no shared always-on provider does.
 // A link resurrected on the server concurrently (edit-vs-delete LWW) can still lose
 // its extraction to a sweep that raced it — the machine half only: it re-queues as

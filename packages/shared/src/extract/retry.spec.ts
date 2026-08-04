@@ -35,7 +35,7 @@ describe('verdictForStatus', () => {
     await expect(verdictForStatus(status, never)).resolves.toBe('permanent');
   });
 
-  // The synthetic codes a client that never got a response reports (brace-expo's fetchPage).
+  // The synthetic codes a client that never got a response reports (bracemark-expo's fetchPage).
   it.each([0, 204, 415])('settles synthetic %i permanently', async (status) => {
     await expect(verdictForStatus(status, never)).resolves.toBe('permanent');
   });

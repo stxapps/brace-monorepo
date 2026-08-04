@@ -29,7 +29,7 @@ export interface SettingMutations {
   setLocalLinksLayout: (layout: LinksLayout) => Promise<void>;
   // Toggle the SYNCED server-extraction opt-in; writes settings/general.enc +
   // syncs, so every device honors the same choice. Expo ROUND-TRIPS this setting
-  // for the web clients and never reads it — it never calls brace-extractor
+  // for the web clients and never reads it — it never calls bracemark-extractor
   // (docs/link-extraction.md — _expo drains in the foreground_) — so it renders
   // no toggle for it either; the write edge just stays symmetric.
   setServerExtraction: (enabled: boolean) => Promise<void>;

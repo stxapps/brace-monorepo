@@ -47,8 +47,8 @@ jest.mock('expo-file-system', () => ({
   },
 }));
 
-const SESSION_KEY = 'brace-session';
-const SENTINEL_URI = 'file:///documents/brace-install-sentinel';
+const SESSION_KEY = 'bracemark-session';
+const SENTINEL_URI = 'file:///documents/bracemark-install-sentinel';
 
 type SessionStore = typeof import('./session-store');
 type SecureStoreMock = typeof import('expo-secure-store');
@@ -168,7 +168,7 @@ test('a well-formed entry with missing fields reads as signed-out', async () => 
   expect(await store.loadSession()).toBeNull();
 });
 
-const SHARED_MIRROR_KEY = 'group.to.brace.app/brace-session';
+const SHARED_MIRROR_KEY = 'group.com.bracemark.app/bracemark-session';
 
 test('saveSession mirrors the serialized session into the shared Keychain', async () => {
   await store.saveSession(record());

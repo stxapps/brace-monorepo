@@ -22,12 +22,12 @@ Cloudflare accounts, the two AWS CloudFront distributions, custom domains), see
 
 ### the one constraint that explains everything: bake-time vs run-time
 
-- **brace-web** (Next.js static export) and **brace-extension** (packaged
+- **bracemark-web** (Next.js static export) and **bracemark-extension** (packaged
   extension) **inline their public vars at _build_ time** — the value is frozen
   into the shipped artifact. So each environment is a _separate build_, and
   **nothing here can be secret**: every var ends up in code the client
   downloads. These apps use `.env` files.
-- **brace-api** reads its config **at _run_ time** from the host (Node
+- **bracemark-api** reads its config **at _run_ time** from the host (Node
   `process.env` today, Cloudflare Workers bindings later). This is where secrets
   live, and they are **never committed and never bundled**. This app uses
   host-provided vars/secrets, not committed `.env` files.
@@ -35,7 +35,7 @@ Cloudflare accounts, the two AWS CloudFront distributions, custom domains), see
 So: frontends → build-time `.env` files; backend → runtime host config. The rest
 of this doc is just the per-app spelling of that.
 
-### brace-web — Next.js, static export
+### bracemark-web — Next.js, static export
 
 Next.js auto-loads `.env.<mode>` from the app dir based on `NODE_ENV`. Public
 vars need the **`NEXT_PUBLIC_`** prefix and are baked into the static bundle.
@@ -47,24 +47,24 @@ an **Nx `run-commands` option, not a Next feature** — Nx loads the file into
 `process.env` before `next build` runs, and that overrides Next's
 auto-loaded `.env.production`.
 
-Files in `apps/brace-web/` (committed except `*.local`):
+Files in `apps/bracemark-web/` (committed except `*.local`):
 
-| file               | used by                         | loaded by    |
-| ------------------ | ------------------------------- | ------------ |
-| `.env.development` | `nx dev brace-web`              | Next (auto)  |
-| `.env.production`  | `nx build brace-web`            | Next (auto)  |
-| `.env.staging`     | `nx build brace-web -c staging` | Nx `envFile` |
+| file               | used by                             | loaded by    |
+| ------------------ | ----------------------------------- | ------------ |
+| `.env.development` | `nx dev bracemark-web`              | Next (auto)  |
+| `.env.production`  | `nx build bracemark-web`            | Next (auto)  |
+| `.env.staging`     | `nx build bracemark-web -c staging` | Nx `envFile` |
 
-Current var: `NEXT_PUBLIC_API_URL` → the matching brace-api URL. Adding a new
+Current var: `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL. Adding a new
 var = add the line to all three files (the symmetry is deliberate: there is no
 config hiding in `package.json`).
 
-### brace-extension — wxt / Vite
+### bracemark-extension — wxt / Vite
 
 wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need the
 **`WXT_PUBLIC_`** prefix and are read via `import.meta.env.WXT_PUBLIC_*` — baked
-into the bundle just like brace-web. The mode is chosen with `--mode`, and unlike
-brace-web's `staging` (which needs the Nx `envFile` indirection because Next
+into the bundle just like bracemark-web. The mode is chosen with `--mode`, and unlike
+bracemark-web's `staging` (which needs the Nx `envFile` indirection because Next
 can't pick a production-mode build by mode) wxt selects the file natively:
 
 | command                    | mode          | env file           |
@@ -73,17 +73,17 @@ can't pick a production-mode build by mode) wxt selects the file natively:
 | `wxt build`                | `production`  | `.env.production`  |
 | `wxt build --mode staging` | `staging`     | `.env.staging`     |
 
-Files in `apps/brace-extension/` (all committed — every value is public):
+Files in `apps/bracemark-extension/` (all committed — every value is public):
 
-| file               | used by                                                                   |
-| ------------------ | ------------------------------------------------------------------------- |
-| `.env.development` | `nx dev @stxapps/brace-extension`                                         |
-| `.env.production`  | `nx build @stxapps/brace-extension`                                       |
-| `.env.staging`     | `nx build:staging @stxapps/brace-extension` (and `build:firefox:staging`) |
+| file               | used by                                                                       |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `.env.development` | `nx dev @stxapps/bracemark-extension`                                         |
+| `.env.production`  | `nx build @stxapps/bracemark-extension`                                       |
+| `.env.staging`     | `nx build:staging @stxapps/bracemark-extension` (and `build:firefox:staging`) |
 
-Current var: `WXT_PUBLIC_API_URL` → the matching brace-api URL.
+Current var: `WXT_PUBLIC_API_URL` → the matching bracemark-api URL.
 
-**Two consumers, one source of truth.** Unlike brace-web (one consumer,
+**Two consumers, one source of truth.** Unlike bracemark-web (one consumer,
 `lib/api.ts`), the extension reads the URL in two places that must never drift —
 the manifest `host_permissions` grant has to match the origin the client fetches,
 or the MV3 background worker's CORS-exempt requests break. Both derive from the
@@ -95,29 +95,29 @@ same `WXT_PUBLIC_API_URL`:
   via Vite's `loadEnv(mode, process.cwd(), 'WXT_PUBLIC_')` and derives the host
   match pattern as `new URL(apiUrl).origin + '/*'`.
 
-Both throw if the var is unset, mirroring brace-web's missing-`NEXT_PUBLIC_API_URL`
+Both throw if the var is unset, mirroring bracemark-web's missing-`NEXT_PUBLIC_API_URL`
 guard. The `staging` build is a plain `--mode staging` npm script + Nx target
 (`build:staging`, `build:firefox:staging`) — no Nx `envFile` needed.
 
-### brace-expo — Expo / Metro
+### bracemark-expo — Expo / Metro
 
 Expo builds through Metro, which loads `.env` / `.env.<mode>` via `@expo/env`.
 Public vars need the **`EXPO_PUBLIC_`** prefix and are read via
 `process.env.EXPO_PUBLIC_*` — Metro **inlines** them into the JS bundle at build
-time, exactly like brace-web's `NEXT_PUBLIC_` and brace-extension's
+time, exactly like bracemark-web's `NEXT_PUBLIC_` and bracemark-extension's
 `WXT_PUBLIC_`, so nothing secret belongs here. The mode is `NODE_ENV`: `expo
 start` is `development`, `expo export` / a release build is `production`. Expo has
 **no `--mode` flag** — it only ever auto-selects `development` or `production` by
 `NODE_ENV`:
 
-| command                                     | mode          | env file           |
-| ------------------------------------------- | ------------- | ------------------ |
-| `nx dev @stxapps/brace-expo` (`expo start`) | `development` | `.env.development` |
-| release build / `expo export`               | `production`  | `.env.production`  |
+| command                                         | mode          | env file           |
+| ----------------------------------------------- | ------------- | ------------------ |
+| `nx dev @stxapps/bracemark-expo` (`expo start`) | `development` | `.env.development` |
+| release build / `expo export`                   | `production`  | `.env.production`  |
 
-`staging` is the same wrinkle it is for brace-web: a staging build is a
+`staging` is the same wrinkle it is for bracemark-web: a staging build is a
 _production-mode_ build (`NODE_ENV=production`), so Expo won't pick `.env.staging`
-by mode. And unlike brace-web there's no Nx `envFile` seam to lean on — the Expo
+by mode. And unlike bracemark-web there's no Nx `envFile` seam to lean on — the Expo
 build isn't an `nx build` running a bundler in `process.env`. **We don't use EAS**
 — there is no `eas.json` and none is needed; builds are local (`npx expo
 prebuild` + Xcode / Gradle, or `expo export`). So a staging build is made by
@@ -126,24 +126,24 @@ precedence over `.env.production`; `.env.staging` is committed as the single
 source of that URL to paste from. `.env.development` and `.env.production` are
 the two that work by auto-selection today.
 
-Files in `apps/brace-expo/` (committed except `.env.local`):
+Files in `apps/bracemark-expo/` (committed except `.env.local`):
 
-| file               | used by                                       | loaded by   |
-| ------------------ | --------------------------------------------- | ----------- |
-| `.env.development` | `nx dev @stxapps/brace-expo`, `expo prebuild` | Expo (auto) |
-| `.env.production`  | release build / `expo export`                 | Expo (auto) |
-| `.env.staging`     | a staging build (var supplied inline)         | you         |
-| `.env.local`       | every mode — signing creds (gitignored)       | Expo (auto) |
+| file               | used by                                           | loaded by   |
+| ------------------ | ------------------------------------------------- | ----------- |
+| `.env.development` | `nx dev @stxapps/bracemark-expo`, `expo prebuild` | Expo (auto) |
+| `.env.production`  | release build / `expo export`                     | Expo (auto) |
+| `.env.staging`     | a staging build (var supplied inline)             | you         |
+| `.env.local`       | every mode — signing creds (gitignored)           | Expo (auto) |
 
-Current public var: `EXPO_PUBLIC_API_URL` → the matching brace-api URL. It's read
-once in `src/lib/api-client.ts`, which throws if unset (mirroring brace-web's and
+Current public var: `EXPO_PUBLIC_API_URL` → the matching bracemark-api URL. It's read
+once in `src/lib/api-client.ts`, which throws if unset (mirroring bracemark-web's and
 the extension's missing-URL guards) and binds it into `@stxapps/expo-react`'s
 `createAuthApiClient`. Adding a new var = add the line to all three files, same
 deliberate symmetry as the other frontends.
 
 **The non-`EXPO_PUBLIC_` vars are the native signing credentials**, all in
 `.env.local` and all read at config-evaluation time by `expo prebuild` rather
-than at runtime: `APPLE_TEAM_ID` (iOS, below) and the four `BRACE_UPLOAD_*` vars
+than at runtime: `APPLE_TEAM_ID` (iOS, below) and the four `BRACEMARK_UPLOAD_*` vars
 that carry the Android Play upload key into `signingConfigs.release` (see
 [expo-build.md](./expo-build.md) — _android release signing_). The three bullets below
 apply to both groups verbatim — same file, same mode-agnostic reason, same
@@ -170,9 +170,9 @@ Xcode after each regenerate of `ios/`. Three things follow:
 Unset is safe: `withDevelopmentTeam` skips a falsy id and leaves the pbxproj
 alone, so a fresh clone still prebuilds — you just pick the team in Xcode.
 
-### brace-api — Hono on Cloudflare Workers
+### bracemark-api — Hono on Cloudflare Workers
 
-Server-side: config is read at **runtime**, never baked. brace-api runs **only**
+Server-side: config is read at **runtime**, never baked. bracemark-api runs **only**
 on Workers (`src/worker.ts`, `export default app`) — there is no Node entry.
 
 **Config read.** `src/app.ts` resolves `CORS_ORIGINS` per-request:
@@ -204,31 +204,31 @@ Local dev is `wrangler dev --env development` (the `dev` target); it uses the
 
 ### wiring the frontends to the backend
 
-Each frontend environment points at the matching brace-api environment, and
-brace-api allows the matching frontend origin back:
+Each frontend environment points at the matching bracemark-api environment, and
+bracemark-api allows the matching frontend origin back:
 
-| environment   | frontend `*_API_URL` →         | brace-api `CORS_ORIGINS` allows                            |
-| ------------- | ------------------------------ | ---------------------------------------------------------- |
-| `development` | `http://localhost:8787`        | `http://localhost:3000`                                    |
-| `staging`     | `https://api.staging.brace.to` | `https://staging.brace.to`, `https://app.staging.brace.to` |
-| `production`  | `https://api.brace.to`         | `https://brace.to`, `https://app.brace.to`                 |
+| environment   | frontend `*_API_URL` →              | bracemark-api `CORS_ORIGINS` allows                                  |
+| ------------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `development` | `http://localhost:8787`             | `http://localhost:3000`                                              |
+| `staging`     | `https://api.staging.bracemark.com` | `https://staging.bracemark.com`, `https://app.staging.bracemark.com` |
+| `production`  | `https://api.bracemark.com`         | `https://bracemark.com`, `https://app.bracemark.com`                 |
 
 CORS is never `*` — each API environment allows only its own frontend
-origin(s). Each tier allows **two** web origins: the `app.*` host (the brace-web
+origin(s). Each tier allows **two** web origins: the `app.*` host (the bracemark-web
 application, this monorepo) and the apex (a separate marketing site in its own
 repo, which also calls the api for public data like stats / health). See
 [deployment.md](./deployment.md#custom-domains) for the host naming scheme.
 
-The `CORS_ORIGINS` column is **web-only**: brace-expo hits the same
+The `CORS_ORIGINS` column is **web-only**: bracemark-expo hits the same
 `*_API_URL` per tier, but a native RN `fetch` sends no `Origin` header and
 isn't subject to browser CORS, so the app needs no entry in the allowlist — it
-points at the matching brace-api URL and that's the whole story. (Only the
-browser frontends — brace-web and the marketing apex — need an allowed origin.)
+points at the matching bracemark-api URL and that's the whole story. (Only the
+browser frontends — bracemark-web and the marketing apex — need an allowed origin.)
 
 ### what's committed vs ignored
 
 - **committed:** `.env.development`, `.env.staging`, `.env.production` for the
   frontends — every value in them is public.
-- **gitignored:** `.env*.local` (frontend personal overrides — and brace-expo's
-  `APPLE_TEAM_ID`, above), `.dev.vars` (brace-api Workers local), and all real
+- **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
+  `APPLE_TEAM_ID`, above), `.dev.vars` (bracemark-api Workers local), and all real
   secrets. These never enter git.

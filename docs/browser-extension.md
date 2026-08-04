@@ -1,7 +1,7 @@
 ## browser extension
 
-Notes on the `brace-extension` (wxt) app and how its UI/logic relates to
-`brace-web`. See [architecture.md](./architecture.md) for the package layering
+Notes on the `bracemark-extension` (wxt) app and how its UI/logic relates to
+`bracemark-web`. See [architecture.md](./architecture.md) for the package layering
 and dependency rules, and [account.md](./account.md) for the
 password-derived account model the auth flows build on.
 
@@ -16,14 +16,14 @@ password-derived account model the auth flows build on.
   recent-list React app; `options/` → account / passphrase / key-management React
   app; `content.ts` → the programmatic content script (active-tab DOM read for the
   active-page extraction tier — see [link-extraction.md](./link-extraction.md)).
-- **`brace-extension/utils/` is a WXT-reserved directory name** — don't rename it
+- **`bracemark-extension/utils/` is a WXT-reserved directory name** — don't rename it
   to `lib/` for consistency with the other apps/packages. WXT (like Nuxt) does
   directory-based auto-imports: it scans `utils/` (alongside `components/`,
   `composables/`, `hooks/`, and `entrypoints/`/`public/`/`assets/`) and
   regenerates `.wxt/types/imports-module.d.ts` + `.wxt/eslint-auto-imports.mjs`
   from it. Renaming the folder stops WXT from registering those modules into the
   `#imports` virtual module. `lib/` is our house style only for folders we
-  organize freely (`brace-api/src/lib`, `web-react/src/lib`, the packages); the
+  organize freely (`bracemark-api/src/lib`, `web-react/src/lib`, the packages); the
   framework-reserved names stay as the framework expects.
 
 ### storage across extension contexts
@@ -42,7 +42,7 @@ context that has to reach the data:
   contexts. It is also where the extension keeps its **non-extractable
   `encryptionKey` `CryptoKey`** (structured-clone storable; `browser.storage`,
   being JSON-serialized, can't hold a `CryptoKey`) — the same `session-store.ts`
-  shape brace-web uses, on the `chrome-extension://` origin. This is consistent
+  shape bracemark-web uses, on the `chrome-extension://` origin. This is consistent
   with the extension deriving and holding its **own** key (see _the extension runs
   its own sign-in_ above). Dexie's reactivity crosses contexts here for free: it
   broadcasts each commit over a `BroadcastChannel`, which exists in the MV3
@@ -62,7 +62,7 @@ context that has to reach the data:
   account that's over the free cap. Don't "fix" that store to `browser.storage`
   without moving the read ahead of `createRoot().render()`. Two things make the
   trade cheap: the cache only gates client-side UX (the server re-checks the cap at
-  `files/sign`), and it's shared code with brace-web, where `browser.*` doesn't
+  `files/sign`), and it's shared code with bracemark-web, where `browser.*` doesn't
   exist at all.
 
   Note the flip side of that sharing: `background.ts` imports from the
@@ -78,7 +78,7 @@ context that has to reach the data:
 ### the extension runs its own sign-in — it does not inherit the web session
 
 The non-extractable `encryptionKey` (AES-256-GCM `CryptoKey`) can't cross the
-web↔extension boundary: it lives in brace-web's IndexedDB on the `app.brace.to`
+web↔extension boundary: it lives in bracemark-web's IndexedDB on the `app.bracemark.com`
 origin, and the extension runs on a separate `chrome-extension://` origin. So
 the extension unlocks **on its own** — its own sign-in, deriving its own keys
 from (username, password) via `@stxapps/web-crypto` — rather than reading the
@@ -88,9 +88,9 @@ inherit the session out of shared storage.)
 ### auth code lives in the packages, not the web app
 
 The auth flows and the rest of the shared local-first stack live in the
-packages, not in `brace-web` — brace-web re-imports from them (single source of
+packages, not in `bracemark-web` — bracemark-web re-imports from them (single source of
 truth), and the extension composes the same packages, importing **nothing** from
-`brace-web` (apps never import apps).
+`bracemark-web` (apps never import apps).
 
 The reusable primitives:
 
@@ -112,6 +112,6 @@ The auth glue + local-first stack:
 The auth submit hooks and the sync engine don't reach for an app-local
 `@/lib/api`. They read the configured client through the `@stxapps/react`
 seam — `useApiClient()` in the hooks, `SyncDeps.api` (threaded from the
-provider) in the engine — so each app binds its own baseUrl. brace-web's
+provider) in the engine — so each app binds its own baseUrl. bracemark-web's
 `lib/api.ts` stays app-local (it owns `NEXT_PUBLIC_API_URL`); the extension's
 `utils/api.ts` is its counterpart (base URL from the build mode).

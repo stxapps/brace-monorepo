@@ -35,7 +35,7 @@ and keeps the identity; **delete account** takes both.
 the three interop serializers are pure functions in `@stxapps/shared`
 (`export/`). Four formats, one deliberate asymmetry:
 
-- **brace** — the complete backup: a zip of `manifest.json` + `items.jsonl`
+- **bracemark** — the complete backup: a zip of `manifest.json` + `items.jsonl`
   (raw `{path, data}` entities) + `files/{id}` (raw decrypted blob bytes). The
   **only format that round-trips**, and the only one that includes Trash — a
   backup that silently drops data isn't one.
@@ -54,7 +54,7 @@ list's _name_ is as sensitive as its contents; the UI warns with the count),
 and a dangling `listId` files under My List, the read layer's reconciliation
 spirit.
 
-### the brace zip is platform-split — and mobile has ceilings web doesn't
+### the bracemark zip is platform-split — and mobile has ceilings web doesn't
 
 Both platforms read and write the same **layout** (`manifest.json` +
 `items.jsonl` + `files/{id}`), so a backup made on either imports on the other.
@@ -65,7 +65,7 @@ per-namespace schema gate, and the referenced-blob walk. It lives in `data/`
 rather than `export/` or `import/` because those two namespaces are the
 **interop** ones (netscape/csv/text) — a round-trip contract belongs to neither
 direction — and because the cross-platform round trip is the whole point:
-a `BRACE_BACKUP_VERSION` bump landing on web alone would produce archives
+a `BRACEMARK_BACKUP_VERSION` bump landing on web alone would produce archives
 expo's importer accepts and misreads. Bump it once, both platforms move.
 
 The zip **container library** differs, and not by preference:
@@ -118,9 +118,9 @@ would fix peak memory and _nothing else_: the zip32 ceilings are a property of
 what fflate emits, not of how it's fed. The move that actually reaches parity is
 native — `react-native-zip-archive` (a TurboModule wrapper over minizip on iOS
 and zip4j on Android; `zip(paths, target)` / `unzip` / progress `subscribe`), or
-a `BraceZip` module in the `BraceCrypto` pod. That also fits this platform
-better than web's: brace-expo already stores blob content **decrypted on disk**,
-and `BraceFileCrypto` already exists precisely so file bytes never enter the JS
+a `BracemarkZip` module in the `BracemarkCrypto` pod. That also fits this platform
+better than web's: bracemark-expo already stores blob content **decrypted on disk**,
+and `BracemarkFileCrypto` already exists precisely so file bytes never enter the JS
 heap — a native zipper is that same path-to-path move one layer up, where
 pushing every byte back through Hermes would undo it. Three things to settle
 before committing:
@@ -144,7 +144,7 @@ mirror: one entry point takes the picked file, detects the format, and writes
 through the normal write edge (`bulkWriteEntities`) — so the pending-ops queue
 carries an import to the server **exactly like any other local edit**, and a crash
 mid-import loses nothing already written. Detection is two-layered
-(`@stxapps/shared` `import/detect.ts`): zip magic first (a brace backup is
+(`@stxapps/shared` `import/detect.ts`): zip magic first (a bracemark backup is
 bytes; a zip _without_ `manifest.json` has its `.html`/`.csv`/`.txt` entries
 parsed and concatenated — Pocket's shutdown export is a zip of `part_*.csv`),
 then a content-first text sniff (filenames only break ties — files get renamed
@@ -156,7 +156,7 @@ The policy, decided once:
 - **Interop imports dedup by canonical URL identity** (`canonicalUrlKey`, the
   same key behind the quick-add duplicate warning) — against the library _and_
   within the file; skips are reported, never errors.
-- **The brace backup merges skip-existing by path** — a path already in the
+- **The bracemark backup merges skip-existing by path** — a path already in the
   local store is never touched, so a restore can't clobber newer local edits.
 - **The plan's link cap is enforced up front**: if the surviving new links
   would pass `maxLinks`, the import fails _before anything is written_
@@ -304,7 +304,7 @@ what it always was — a server-side inconsistency to log and answer opaquely.
   account already log-and-drop in `applyPaddleEvent`.
 
 **The deleting client** (`web-react` `hooks/use-delete-account.ts` +
-brace-web's Account section): door fetch → `unlockAccount` (the wrong-password
+bracemark-web's Account section): door fetch → `unlockAccount` (the wrong-password
 check is the GCM tag, exactly as at sign-in) → sign → POST → `endSession()`,
 which runs the full `clearData` wipe and drops the local session; AuthGuard
 sends the user home. Typed errors keep the form honest:

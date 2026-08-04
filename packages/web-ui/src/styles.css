@@ -59,7 +59,7 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* The brand mark (components/icons/brace-icon.tsx): the body and the four
+  /* The brand mark (components/icons/bracemark-icon.tsx): the body and the four
      knockout dots. These are the ONLY brand-owned colors in the sheet — every
      token above is a shadcn UI token — so they're kept literal rather than
      aliased to `--foreground`/`--background`: the light pair is the mark's

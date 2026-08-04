@@ -3,7 +3,7 @@
 
 Upstream `InterVariable.ttf` reports its family as **"Inter Variable"** (name
 ID 1). The `expo-font` config plugin embeds a font on iOS under its *internal*
-family name and offers no rename override, so without this the brace-expo app
+family name and offers no rename override, so without this the bracemark-expo app
 would have to reference `fontFamily: 'Inter Variable'` on iOS while Android used
 a different name. Rewriting the name records to a plain "Inter" lets both
 platforms resolve `fontFamily: 'Inter'` (and the Uniwind `font-sans` utility)
@@ -11,11 +11,11 @@ after a build-time embed — no runtime `useFonts` load needed.
 
 This modifies the committed TTF in place, so it is a documented, reproducible
 step rather than a mystery binary. Re-run it whenever you download a new Inter
-release into `apps/brace-expo/assets/fonts/`.
+release into `apps/bracemark-expo/assets/fonts/`.
 
 Requires fonttools (`brew install fonttools`, or `pip install fonttools`).
 
-    python3 tools/scripts/rename-inter.py apps/brace-expo/assets/fonts/InterVariable.ttf
+    python3 tools/scripts/rename-inter.py apps/bracemark-expo/assets/fonts/InterVariable.ttf
 """
 
 import sys

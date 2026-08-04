@@ -5,7 +5,7 @@
 // name→id resolution, quota, and the actual writes all happen in the client's
 // import orchestrator (web-react data/import-all-data.ts), so the parsers stay pure
 // `(text) => rows` functions any platform (web today, Expo later) can reuse.
-// The Brace-backup zip does NOT go through this: it round-trips raw entities per
+// The Bracemark-backup zip does NOT go through this: it round-trips raw entities per
 // path (manifest + items.jsonl), not this interop projection.
 
 // One parsed link. `url` is already normalized (url/normalizeUrl) — parsers emit

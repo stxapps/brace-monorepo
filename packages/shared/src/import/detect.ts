@@ -1,5 +1,5 @@
 // Import-format detection — the dispatch in front of the parsers. Two layers,
-// because a Brace backup is BYTES (a zip) while the interop formats are text:
+// because a Bracemark backup is BYTES (a zip) while the interop formats are text:
 // the caller first checks the raw bytes with isZipBytes (a zip is never sniffed
 // as text), then routes decoded text through detectTextImportFormat.
 //

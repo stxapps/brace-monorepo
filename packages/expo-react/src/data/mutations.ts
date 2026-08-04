@@ -128,7 +128,7 @@ export interface RawEntityEntry {
 // Batched raw put — the bulk-import primitive (data/import-all-data.ts), web's
 // bulkWriteEntities in contract: N entities land atomically (rows + pending
 // ops in ONE transaction), createdAt/updatedAt are NOT restamped (a
-// Brace-backup restore round-trips the original timestamps), and callers
+// Bracemark-backup restore round-trips the original timestamps), and callers
 // validate each blob against its namespace schema BEFORE calling. Platform
 // divergence: a `files/` content entry's bytes go to DISK (file-store), not
 // the row — file first, then the row+op transaction, then the `hasDataFile`

@@ -1,6 +1,6 @@
-// The brace-backup archive contract — the ONE definition of the re-importable
-// zip both platforms write (the export orchestrators' `brace` format) and read
-// back (the import orchestrators' Brace-backup branch). Pure: no store, no zip
+// The bracemark-backup archive contract — the ONE definition of the re-importable
+// zip both platforms write (the export orchestrators' `bracemark` format) and read
+// back (the import orchestrators' Bracemark-backup branch). Pure: no store, no zip
 // library, no React — a caller brings its own zip writer/reader (zip.js on web,
 // fflate on expo) and its own store, and uses these to agree on what goes in
 // the archive and what a line of it means.
@@ -8,7 +8,7 @@
 // It lives in `data/` — the data-lifecycle namespace beside endpoints.ts (see
 // docs/data-lifecycle.md), NOT in `export/` or `import/`: those two are the
 // INTEROP namespaces (netscape/csv/text), and both of their bundle.ts headers
-// say in so many words that the Brace-backup zip does not go through them. A
+// say in so many words that the Bracemark-backup zip does not go through them. A
 // round-trip contract is jointly owned by the writer and the reader, so it
 // can't live under either direction's roof — and it must be single-sourced
 // across PLATFORMS above all: a version bump landing on web alone would
@@ -48,8 +48,8 @@ import {
 // `version` (and keep reading old ones) on any breaking change to the zip
 // layout or the items.jsonl line shape, and bump it for BOTH platforms at once
 // — that's what this file being shared buys.
-export const BRACE_BACKUP_FORMAT = 'brace-backup';
-export const BRACE_BACKUP_VERSION = 1;
+export const BRACEMARK_BACKUP_FORMAT = 'bracemark-backup';
+export const BRACEMARK_BACKUP_VERSION = 1;
 
 // The fixed archive entry names. `files/{id}` entries are built with
 // backupFileEntry below.
@@ -87,8 +87,8 @@ export interface BackupManifest {
 // exporters can't drift on the bytes.
 export function serializeBackupManifest(counts: BackupCounts): string {
   const manifest: BackupManifest = {
-    format: BRACE_BACKUP_FORMAT,
-    version: BRACE_BACKUP_VERSION,
+    format: BRACEMARK_BACKUP_FORMAT,
+    version: BRACEMARK_BACKUP_VERSION,
     exportedAt: Date.now(),
     counts,
   };
@@ -103,14 +103,14 @@ export function parseBackupManifest(text: string): BackupManifest {
   try {
     manifest = JSON.parse(text) as typeof manifest;
   } catch {
-    throw new Error('This zip is not a Brace backup (unreadable manifest).');
+    throw new Error('This zip is not a Bracemark backup (unreadable manifest).');
   }
-  if (manifest.format !== BRACE_BACKUP_FORMAT) {
-    throw new Error('This zip is not a Brace backup (unrecognized format).');
+  if (manifest.format !== BRACEMARK_BACKUP_FORMAT) {
+    throw new Error('This zip is not a Bracemark backup (unrecognized format).');
   }
-  if (typeof manifest.version !== 'number' || manifest.version > BRACE_BACKUP_VERSION) {
+  if (typeof manifest.version !== 'number' || manifest.version > BRACEMARK_BACKUP_VERSION) {
     throw new Error(
-      'This backup was created by a newer version of Brace. Update the app and try again.',
+      'This backup was created by a newer version of Bracemark. Update the app and try again.',
     );
   }
   return manifest as BackupManifest;

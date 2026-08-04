@@ -31,7 +31,7 @@ interface NativeFileCrypto {
 // runtime (jest, or a future non-prebuild context, can import the pure parts).
 let native: NativeFileCrypto | undefined;
 function getNative(): NativeFileCrypto {
-  return (native ??= requireNativeModule<NativeFileCrypto>('BraceFileCrypto'));
+  return (native ??= requireNativeModule<NativeFileCrypto>('BracemarkFileCrypto'));
 }
 
 // Paths may be absolute paths or file:// URIs (expo-file-system hands out the

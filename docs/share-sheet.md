@@ -1,4 +1,4 @@
-## share sheet (brace-expo)
+## share sheet (bracemark-expo)
 
 How "share from Safari/Chrome → pick list, add tags → Add → saved locally,
 synced in the background" works on mobile. Living reference like
@@ -17,9 +17,9 @@ One RN share screen, written once, hosted by two very different native shells:
   separate process** with its own JS entry (`index.share.js`, registered as
   `shareExtension`), floating over Safari.
 - **Android** — a translucent native `ShareActivity` in the **same app
-  process** (local Expo module `modules/brace-share`, injected by manifest
+  process** (local Expo module `modules/bracemark-share`, injected by manifest
   merge — no config plugin needed), hosting the same registered RN root
-  (`braceShare`) as a bottom sheet over the caller. The intent payload is
+  (`bracemarkShare`) as a bottom sheet over the caller. The intent payload is
   handed to the root as launch options in `onCreate`, so it can't get lost the
   way expo-share-intent's route-into-the-sleeping-main-activity flow lost it.
 
@@ -34,7 +34,7 @@ from it:
 | session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot to gate the form; the shared-Keychain session mirror arms the upload's api |
 
 **The two shells meet at one `AppRegistry` string.** Each native host mounts
-its RN root by a registered name — `braceShare` (Android, `index.js`) and
+its RN root by a registered name — `bracemarkShare` (Android, `index.js`) and
 `shareExtension` (iOS, `index.share.js`, expo-share-extension's entry
 convention) — and both names resolve to the same `ShareRoot`
 (`src/features/share/share-root.tsx`), which normalizes the host's initial props
@@ -48,14 +48,14 @@ single pixel is drawn.
 
 ### why not share the sqlite DB with the iOS extension
 
-Putting `brace-data.db` in the App Group container so both processes open it
+Putting `bracemark-data.db` in the App Group container so both processes open it
 invites the `0xdead10cc` termination (iOS kills a suspended app holding a file
 lock in a shared container) plus cross-process WAL edge cases. The extension
 instead exchanges **atomic per-item JSON files** — no locks, no contention:
 
 - `<app-group>/share/taxonomy.json` — written by the MAIN APP whenever
   lists/tags change (and on sign-in/out): `{ sessionPresent, lists, tags }`,
-  plaintext by design (brace-expo already stores content decrypted on device —
+  plaintext by design (bracemark-expo already stores content decrypted on device —
   see architecture.md). Lists are the merged system+user set in tree order,
   Trash excluded (saving into the deletion staging area is incoherent); tags in
   rank order. Every row carries its `rank` so the sheet can mint neighbour
@@ -71,7 +71,7 @@ instead exchanges **atomic per-item JSON files** — no locks, no contention:
 
 Both sides reach the container via expo-file-system's
 `Paths.appleSharedContainers`; the App Group id is expo-share-extension's
-default (`group.` + bundle id = `group.to.brace.app`).
+default (`group.` + bundle id = `group.com.bracemark.app`).
 
 ### the draft is idempotent by construction
 
@@ -168,7 +168,7 @@ missed).
 - **Duplicates**: not detected in the sheet (iOS can't see the DB; a stale
   snapshot would lie). Save anyway; dedup is the apply-side's concern.
 - **No session** (cold share before first sign-in): the sheet shows "Open
-  Brace and sign in first" instead of hanging or crashing — snapshot absent /
+  Bracemark and sign in first" instead of hanging or crashing — snapshot absent /
   `sessionPresent: false` on iOS, `getSession() === null` on Android.
 - **Sign-out hygiene**: clearing account data also deletes the snapshot and
   outbox (clear-data.ts), same reasoning as the session-store install
@@ -217,7 +217,7 @@ not by the in-sheet kick landing.
 ### the main app's half — ShareBridge
 
 `ShareBridge` (`@stxapps/expo-react` `contexts/share-bridge.tsx`) is a
-renderless component mounted inside `<SyncProvider>` in brace-expo's
+renderless component mounted inside `<SyncProvider>` in bracemark-expo's
 `(app)/_layout` — the app-side pump for both App Group artifacts:
 
 - **inbound**: `drainShareOutbox()` on mount and on every return to foreground;
@@ -259,7 +259,7 @@ no duplicate.
 device itself_ it buys nothing the next-open drain wouldn't: the phone
 populates its own local store on next open regardless (down-sync pulls back its
 own upload, or the outbox drain writes it). The upload's real payoff is
-**cross-device / web freshness** — your laptop and brace-web see the link
+**cross-device / web freshness** — your laptop and bracemark-web see the link
 without waiting for you to reopen the phone app. It stays contained and
 additive: if the upload path ever misbehaves, deleting the kick reverts to the
 still-correct outbox + next-open story.
@@ -271,15 +271,15 @@ endpoint contract (`@stxapps/shared`), and the api client, instead of forking
 AES framing + HTTP + endpoint types into Swift for zero latency benefit. (The
 upload's language follows the sheet's language: if the sheet were ever forked
 to native SwiftUI for cold-start reasons — see below — the upload would go
-native with it, on CryptoKit + the v1 frame BraceFileCrypto already produces.)
+native with it, on CryptoKit + the v1 frame BracemarkFileCrypto already produces.)
 
 **How the session crosses the process boundary.** expo-secure-store doesn't
-expose Keychain access groups, so the **BraceSharedKeychain** native module
-(`packages/expo-crypto`, in the `BraceCrypto` pod alongside BraceFileCrypto)
+expose Keychain access groups, so the **BracemarkSharedKeychain** native module
+(`packages/expo-crypto`, in the `BracemarkCrypto` pod alongside BracemarkFileCrypto)
 carries a shared-Keychain trio (`set/get/deleteSharedKeychainItem`,
 `lib/shared-keychain.ts` — iOS-only, registered under `apple.modules` with no
 Kotlin counterpart; the wrappers degrade to "item absent" elsewhere). The access group is the **App
-Group id itself** (`group.to.brace.app`): iOS accepts App Group ids as keychain
+Group id itself** (`group.com.bracemark.app`): iOS accepts App Group ids as keychain
 access groups, so the entitlement expo-share-extension already writes into both
 targets covers it — no keychain-sharing entitlement, no team-id prefix.
 session-store **mirrors** the serialized session into that group on every
@@ -309,8 +309,8 @@ retry.
 
 Prebuild verification: confirm `react-native-quick-crypto` links into the
 extension target — if it doesn't, the fallback is **not** "go full Swift" but
-call **BraceFileCrypto** (your own autolinked module — the `BraceCrypto` pod
-links anyway for BraceSharedKeychain) for the AES, staying in the RN path. The entity blobs are
+call **BracemarkFileCrypto** (your own autolinked module — the `BracemarkCrypto` pod
+links anyway for BracemarkSharedKeychain) for the AES, staying in the RN path. The entity blobs are
 KB-sized (no Argon2, key pre-derived, far under the ~120MB cap).
 
 **Invariant that keeps the memory story true: no bytes-heavy work in the
@@ -329,19 +329,19 @@ real lever on RN cold-start latency.
 
 ### file map
 
-| piece                                                                                                            | where                                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| share screen UI + prop normalizing + close() seam                                                                | `apps/brace-expo/src/features/share/`                                                                                               |
-| entries: `index.js` (main, registers `braceShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/brace-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)    |
-| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                   | `@stxapps/expo-react` `data/share-store.ts`                                                                                         |
-| best-effort upload (entities from the draft, sign → PUT → commit)                                                | `@stxapps/expo-react` `data/share-upload.ts`                                                                                        |
-| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                  | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                       |
-| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                       | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BraceSharedKeychain, iOS Swift) |
-| write edge (writeLink/writeTag/writeExtraction)                                                                  | `@stxapps/expo-react` `data/mutations.ts`                                                                                           |
-| iOS extension target, App Group, preprocessing JS                                                                | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`   |
-| Android ShareActivity + close() module                                                                           | `apps/brace-expo/modules/brace-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)          |
+| piece                                                                                                                | where                                                                                                                                   |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| share screen UI + prop normalizing + close() seam                                                                    | `apps/bracemark-expo/src/features/share/`                                                                                               |
+| entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)    |
+| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                       | `@stxapps/expo-react` `data/share-store.ts`                                                                                             |
+| best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                            |
+| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                           |
+| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift) |
+| write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                               |
+| iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`       |
+| Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)      |
 
-Like the other native pieces (the `BraceCrypto` pod's modules, the embedded
+Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded
 font), none of
 this is exercisable in jest/Metro alone — it needs `npx expo prebuild` + a dev
 client on device/simulator.

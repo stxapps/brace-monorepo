@@ -32,7 +32,7 @@
 // app update, which is the skew these once guarded.
 //
 // Everything that lands in the App Group container is PLAINTEXT BY DESIGN —
-// the same trust boundary as the rest of the device store (brace-expo keeps
+// the same trust boundary as the rest of the device store (bracemark-expo keeps
 // content decrypted on device; see architecture.md). clearShareData() is part
 // of the sign-out teardown (clear-data.ts) so none of it outlives the session.
 
@@ -125,7 +125,7 @@ export type ShareTaxonomyList = ShareTaxonomy['lists'][number];
 export type ShareTaxonomyTag = ShareTaxonomy['tags'][number];
 
 // A signed-out / snapshot-missing taxonomy — what the sheet shows its "open
-// Brace and sign in first" state for.
+// Bracemark and sign in first" state for.
 const EMPTY_TAXONOMY: ShareTaxonomy = { sessionPresent: false, lists: [], tags: [] };
 
 // --- pure builders (spec'd in share-store.spec.ts) ------------------------------

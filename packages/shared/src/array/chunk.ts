@@ -9,7 +9,7 @@
 // caller.
 //
 // Lives in `shared` (platform-agnostic — only Array, no web/worker/expo APIs) so
-// brace-web/brace-extension and brace-expo partition the same way.
+// bracemark-web/bracemark-extension and bracemark-expo partition the same way.
 export function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));

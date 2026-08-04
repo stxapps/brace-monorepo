@@ -7,7 +7,7 @@ import { type Facet, LINK_TITLE_MAX } from './entities';
 // make: entities.ts is the plaintext SHAPE contract; this is the BEHAVIOR.
 //
 // Both live in `shared`, not in any client, so the extension, the future Expo app,
-// and `brace-extractor` rank quality and pace retries by identical rules — the
+// and `bracemark-extractor` rank quality and pace retries by identical rules — the
 // reason the docs (link-extraction.md "the extraction entity") put them in `shared`.
 // Neither value is stored on the facet: each is a pure function of a stored input
 // (`extractedBy`, `attempts`/`extractedAt`), so there's no drift-prone second field
@@ -15,7 +15,7 @@ import { type Facet, LINK_TITLE_MAX } from './entities';
 
 // QUALITY rank derived from a facet's `extractedBy` (`platform:env`, e.g.
 // `extension:fg`). Higher = better: active-page (`:fg`, live DOM / WebView) beats
-// bg-fetch (`:bg`, raw HTML) beats `server` (brace-extractor). An UNRECOGNIZED value
+// bg-fetch (`:bg`, raw HTML) beats `server` (bracemark-extractor). An UNRECOGNIZED value
 // ranks 0 — conservatively lowest — so a future platform/env a newer client emits
 // (round-tripped through `looseObject`) can never wrongly out-rank a known active-page
 // result. A client may re-extract (UPGRADE) a `done` facet only when its own tier is
@@ -24,7 +24,7 @@ export function tierOf(extractedBy: string | undefined): number {
   if (!extractedBy) return 0;
   if (extractedBy.endsWith(':fg')) return 3; // active-page — live DOM / WebView
   if (extractedBy.endsWith(':bg')) return 2; // background — raw-HTML fetch
-  if (extractedBy === 'server') return 1; // brace-extractor (deferred)
+  if (extractedBy === 'server') return 1; // bracemark-extractor (deferred)
   return 0; // unknown → conservatively lowest
 }
 
@@ -48,7 +48,7 @@ export function backoff(attempts: number): number {
 // backoff(attempts)`). `done` and `permanent` (404/410, robots) are settled — never eligible,
 // so one device's synced outcome stops every device. Facet-agnostic: the rule is identical for
 // `titleImage`, `screenshot`, etc., so callers pull the facet they care about and pass it in.
-// Shared for the same reason as `backoff`/`tierOf`: every client (brace-web, the future Expo
+// Shared for the same reason as `backoff`/`tierOf`: every client (bracemark-web, the future Expo
 // app) must decide eligibility by identical rules.
 export function isFacetEligible(facet: Facet | undefined, now: number): boolean {
   if (!facet) return true;
@@ -72,7 +72,7 @@ export function cleanTitle(raw: string | undefined): string | undefined {
 
 // Build a facet-state write — the single constructor every extraction WRITER uses to
 // stamp an outcome, so the four base fields are filled the same way by every tier
-// (server `brace-extractor`, `extension:fg`, and any future Expo client) instead of each
+// (server `bracemark-extractor`, `extension:fg`, and any future Expo client) instead of each
 // re-spelling the literal:
 //   - `extractedAt: Date.now()` is ALWAYS set — eligibility is `extractedAt + backoff(attempts)`,
 //     so omitting it would key off epoch 0 (instantly eligible → no cooldown). Centralizing

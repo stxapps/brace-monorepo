@@ -1,17 +1,17 @@
 // Cap a preview image's dimensions and re-encode it before it's stored — the
 // deferred CLIENT thumbnailing step the design assigns to the client, never the
-// server (docs/link-extraction.md "server extraction": `brace-extractor` never
+// server (docs/link-extraction.md "server extraction": `bracemark-extractor` never
 // resizes/transcodes — that would force a full decode and risk the isolate OOMing,
 // and it belongs on the client anyway, to bound the per-user storage quota). It runs
 // at the byte-producing boundary of EVERY capture source so what lands in
-// `files/{id}.enc` is already capped: the brace-web server-extraction path
+// `files/{id}.enc` is already capped: the bracemark-web server-extraction path
 // (`runServerTitleImageBatch`) and — once factored the same way — the extension's
 // active-tab capture.
 //
 // Implemented on `createImageBitmap` + `OffscreenCanvas`, NOT a DOM `<canvas>` /
 // `new Image()` library (e.g. blueimp-load-image): those need DOM APIs that don't
 // exist in the extension's MV3 service worker, whereas these worker-native APIs run
-// in both the SW and the brace-web page (and let the work move off the main thread).
+// in both the SW and the bracemark-web page (and let the work move off the main thread).
 // `imageOrientation: 'from-image'` honors EXIF, the one thing such libraries are
 // otherwise useful for here.
 

@@ -25,7 +25,7 @@ const TAG_BYTES = 16;
 //
 // async to mirror web-crypto's signatures (the quick-crypto calls themselves
 // are synchronous JSI — fine for the small blobs this handles; whole files go
-// through the native BraceFileCrypto module instead, see file-crypto.ts).
+// through the native BracemarkFileCrypto module instead, see file-crypto.ts).
 export async function encrypt(
   key: Uint8Array,
   plaintext: Uint8Array,

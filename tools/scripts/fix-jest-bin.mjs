@@ -6,7 +6,7 @@
 // silently executes jest 29 and fails on untransformed ESM ("Cannot use
 // import statement outside a module" from jest-expo/node_modules/jest-runtime).
 //
-// Every project is fine on the real jest 30 — including brace-expo, whose
+// Every project is fine on the real jest 30 — including bracemark-expo, whose
 // jest-expo PRESET (config) works under it; only jest-expo's BIN is the trap —
 // so deterministically point the bin at the real CLI after every install.
 import { existsSync } from 'node:fs';

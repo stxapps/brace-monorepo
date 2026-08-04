@@ -3,13 +3,13 @@ import { requireNativeModule } from 'expo-modules-core';
 
 // Keychain items under an EXPLICIT access group — the one Keychain capability
 // expo-secure-store doesn't expose (it hardcodes its query and offers no
-// access-group option), so it gets its own BraceSharedKeychain native module in
-// the BraceCrypto pod. This backs the share sheet's upload
+// access-group option), so it gets its own BracemarkSharedKeychain native module in
+// the BracemarkCrypto pod. This backs the share sheet's upload
 // (docs/share-sheet.md): the main app mirrors the session into a group both
 // processes can read, so the iOS share extension can encrypt + PUT without
 // opening the app's sqlite or Keychain.
 //
-// `group` is an App Group id (e.g. `group.to.brace.app`): iOS accepts App Group
+// `group` is an App Group id (e.g. `group.com.bracemark.app`): iOS accepts App Group
 // ids as keychain access groups, so the App Group entitlement the app and the
 // extension already share (expo-share-extension's plugin writes it into both
 // targets) covers this — no keychain-sharing entitlement, no team-id prefix.
@@ -34,7 +34,7 @@ interface NativeSharedKeychain {
 // runtime (same rule as file-crypto.ts).
 let native: NativeSharedKeychain | undefined;
 function getNative(): NativeSharedKeychain {
-  return (native ??= requireNativeModule<NativeSharedKeychain>('BraceSharedKeychain'));
+  return (native ??= requireNativeModule<NativeSharedKeychain>('BracemarkSharedKeychain'));
 }
 
 export async function setSharedKeychainItem(

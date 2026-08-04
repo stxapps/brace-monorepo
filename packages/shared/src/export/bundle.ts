@@ -5,7 +5,7 @@
 // client's export orchestrator (web-react data/export-all-data.ts); by the time
 // a bundle reaches a serializer every policy decision is already made, so the
 // serializers stay pure `(bundle) => string` functions any platform (web today,
-// Expo later) can reuse. The Brace-backup zip does NOT go through this: it
+// Expo later) can reuse. The Bracemark-backup zip does NOT go through this: it
 // round-trips raw entities per path, not this display-resolved projection.
 
 // One link, display-resolved: `title` is the resolved display title

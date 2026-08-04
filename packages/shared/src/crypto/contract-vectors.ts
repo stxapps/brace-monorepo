@@ -15,7 +15,7 @@
 //     src/testing/quick-crypto-node-shim.ts), so what's proven there is OUR
 //     param mapping, derivation order and wire framing — not that quick-crypto's
 //     C++ Argon2id/HKDF/AES-GCM emits these bytes on device. The Swift/Kotlin
-//     BraceFileCrypto framer (see `blob` below) has no test at all. Both gaps
+//     BracemarkFileCrypto framer (see `blob` below) has no test at all. Both gaps
 //     need a device/simulator harness.
 //
 // TEST FIXTURE ONLY — nothing here is a secret and nothing here is used at

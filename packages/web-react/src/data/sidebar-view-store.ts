@@ -16,7 +16,7 @@
 // Every operation is best-effort — the collapse toggle must never throw over a
 // storage hiccup; a failed read just starts everything expanded.
 
-const STORAGE_KEY = 'brace:sidebar-collapsed';
+const STORAGE_KEY = 'bracemark:sidebar-collapsed';
 
 // The device's persisted collapse ids, or [] when none is stored / storage is
 // unavailable or the value is corrupt. Defensive about the stored shape

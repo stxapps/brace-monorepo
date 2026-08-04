@@ -2,7 +2,7 @@
 
 A decision record, not a design doc. It owns **what this app is called**: the
 name Bracemark, the domain estate behind it, the trademark position, and the
-rename work still outstanding in this repo.
+record of the rename that has already landed in this repo.
 
 Its sibling, [legacy-brace-to.md](./legacy-brace-to.md), owns the other half of
 the v1 transition: how the ~100 paying users of the legacy Stacks-based Brace.to
@@ -113,35 +113,56 @@ cluster already noted above (classes 10/44 — legally irrelevant to software).
 **Sequencing:** file US first, classes 9 + 42, narrow identification; defer any
 EUTM until the attorney has read the Hantverksdata specification. The attorney
 review belongs **before store submission** — the bundle ID and listings lock
-the name in (see _the rename is outstanding work_ below) — not after. The
+the name in (see _the rename in this repo_ below) — not after. The
 domain purchases are cheap and safe regardless and need not wait on it.
 
-### the rename is outstanding work in this repo
+### the rename in this repo — done
 
-Not yet done. `brace.to` is currently load-bearing across ~30 source files plus
-the whole of `docs/`. The surfaces, so none are missed:
+Landed in one change. What moved:
 
-- **Domain topology** — [deployment.md](./deployment.md) line ~197 onward: the
-  per-tier host table (`app.brace.to` / `api.brace.to` / `extractor.brace.to`,
-  and the nested `*.staging.brace.to` wildcard), plus the reasoning about apex
-  ownership and cert coverage that is written around those names.
-- **Bundle identifiers** — `apps/brace-expo/app.config.ts:34` (`bundleIdentifier`)
-  and `:45` (`package`), both currently `to.brace.app`. Changing these drags the
-  iOS app group, the keychain access group (`packages/expo-crypto`
-  `shared-keychain.ts`), and the associated-domains entries used by the share
-  extension. Do this **before** any store submission — the bundle ID is
-  immutable once a listing exists.
-- **Client/API wiring** — `packages/web-react` and `packages/expo-react`
-  `auth-api-client.ts`, `packages/shared/src/extract/endpoints.ts`,
-  `apps/brace-web/src/lib/api-client.ts`, `apps/brace-extension/utils/api-client.ts`
-  and `utils/web-app-url.ts`, `apps/brace-extractor` CORS origin lists.
-- **User-visible strings** — `apps/brace-web/src/app/layout.tsx`,
-  `manifest.json`, `page.tsx`, the auth pages, `apps/brace-extension/wxt.config.ts`.
+- **Domain topology** — every host in [deployment.md](./deployment.md) and in
+  the apps: `app.` / `api.` / `extractor.bracemark.com`, and the nested
+  `*.staging.bracemark.com` wildcard. `brace.to` no longer appears in any
+  source file.
+- **Nx project and directory names** — `apps/brace-*` → `apps/bracemark-*`,
+  `@stxapps/brace-*` → `@stxapps/bracemark-*`. Purely internal; no user, store,
+  or DNS record ever saw these. Done in the same pass only to avoid a second
+  disruptive sweep later.
+- **Bundle identifiers** — `apps/bracemark-expo/app.config.ts`,
+  `to.brace.app` → `com.bracemark.app`, dragging the iOS app group
+  (`group.com.bracemark.app`) and the keychain service in
+  `packages/expo-crypto` `shared-keychain.ts`. The expo `name`, `slug`, and
+  `scheme` moved too — the scheme mattered most: it was `bracedotto`, the
+  scheme legacy v1 registers, so both apps installed on one device claimed it.
+- **Native modules** — the local Expo module `bracemark-share` and the
+  `BracemarkCrypto` pod, including Kotlin/Swift class names, the
+  `Name("…")` module ids, and the Kotlin package path (`to.brace.share` →
+  `com.bracemark.share`). The JS `requireNativeModule` call sites moved with
+  them.
+- **User-visible strings** — web `layout.tsx` metadata, `manifest.json`, the
+  landing page, the auth pages, `wxt.config.ts`.
 - **All of `docs/`**, including this file.
 
-Because the rename touches `package.json`-adjacent config on the Expo side, run
-`npm run fix` then `npm run lint` after — and read the diff, per the
-`nx lint --fix` tripwire in `CLAUDE.md`.
+Two classes were deliberately **left alone**:
+
+- **Frozen crypto constants** — `packages/shared/src/crypto/params.ts` holds
+  `APP_SALT` and the HKDF domain-separation labels (`brace-auth-seed`,
+  `brace-encryption-key`, `brace-recovery-kek`). The file says never edit them,
+  and the contract vectors in `crypto/contract-vectors.ts` pin values _derived_
+  from them (`saltHex`, `authSeedHex`, `encryptionKeyHex`, the recovery KEK),
+  asserted by three spec files. They are invisible to users and carry no brand
+  value, so renaming them is pure breakage. Same for the `contract-vectors.ts`
+  blob plaintext, which is paired with a fixed ciphertext.
+- **The legacy spellings in the reserved-username list**
+  (`packages/shared/src/auth/credentials.ts`) — `brace`, `braceto`, `braceapp`
+  stay reserved _alongside_ the new `bracemark*` entries, so neither product's
+  name can be impersonated.
+
+Still outstanding, and all of it external to the repo: registering the three
+domains, provisioning DNS and certs for the new hosts, and filling in the store
+listing URLs — which are `TODO_` placeholders in
+`apps/bracemark-web/src/lib/extension-stores.ts` and its landing page, because
+the values they replaced addressed the legacy listings.
 
 **What the bundle-ID change costs.** Because the identifier changes, v2 gets
 brand-new listings on every store no matter what the app is called — so **no

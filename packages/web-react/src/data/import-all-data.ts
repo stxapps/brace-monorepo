@@ -8,7 +8,7 @@
 // the server exactly like any other local edit — the caller kicks a sync when
 // the run finishes.
 //
-//   brace     — the re-importable backup zip export-all-data.ts produced
+//   bracemark     — the re-importable backup zip export-all-data.ts produced
 //               (manifest.json + items.jsonl + files/{id}): raw entities
 //               restored VERBATIM under their original paths, timestamps
 //               preserved.
@@ -24,7 +24,7 @@
 //     (canonicalUrlKey — the same key behind the quick-add duplicate warning),
 //     both against the library and within the file; skips are reported, never
 //     errors.
-//   - The brace backup merges SKIP-EXISTING by path: a path already in the local
+//   - The bracemark backup merges SKIP-EXISTING by path: a path already in the local
 //     store is never touched, so a restore can't clobber newer local edits.
 //   - The plan's link cap is enforced UP FRONT: if the surviving new links would
 //     push the library past `maxLinks`, the import fails BEFORE anything is
@@ -41,7 +41,7 @@
 //     deleted-pending links is never wanted.
 //
 // What's NOT here, because both platforms need the same answer: the
-// brace-backup archive contract (entry names, manifest, items.jsonl
+// bracemark-backup archive contract (entry names, manifest, items.jsonl
 // classification, referenced blob ids) is @stxapps/shared data/backup.ts — the
 // format is a ROUND TRIP, so a version bump has to land for web and expo at
 // once or a web-written archive is misread on mobile; the outcome/progress
@@ -206,9 +206,9 @@ async function importInterop(
   };
 }
 
-// --- the brace backup -------------------------------------------------------------
+// --- the bracemark backup -------------------------------------------------------------
 
-async function importBraceBackup(
+async function importBracemarkBackup(
   username: string,
   byName: Map<string, FileEntry>,
   maxLinks: number | null,
@@ -220,7 +220,7 @@ async function importBraceBackup(
 
   const manifestEntry = byName.get(BACKUP_MANIFEST_ENTRY);
   if (manifestEntry === undefined) {
-    throw new Error('This zip is not a Brace backup (no manifest.json).');
+    throw new Error('This zip is not a Bracemark backup (no manifest.json).');
   }
   // Format/version gate — throws the user-facing message (shared data/backup.ts).
   parseBackupManifest(await manifestEntry.getData(new TextWriter()));
@@ -326,7 +326,7 @@ async function parseInteropZip(byName: Map<string, FileEntry>): Promise<Imported
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   if (candidates.length === 0) {
     throw new Error(
-      'This zip is neither a Brace backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
+      'This zip is neither a Bracemark backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
     );
   }
 
@@ -337,7 +337,7 @@ async function parseInteropZip(byName: Map<string, FileEntry>): Promise<Imported
   return parsed;
 }
 
-// The zip dispatch: one reader, one entry map. manifest.json marks a Brace
+// The zip dispatch: one reader, one entry map. manifest.json marks a Bracemark
 // backup (restored verbatim); any other zip is treated as a zipped interop
 // export and its text entries become new links.
 async function importZip(
@@ -359,7 +359,7 @@ async function importZip(
     );
 
     if (byName.has(BACKUP_MANIFEST_ENTRY)) {
-      return await importBraceBackup(username, byName, maxLinks, onProgress);
+      return await importBracemarkBackup(username, byName, maxLinks, onProgress);
     }
     const parsed = await parseInteropZip(byName);
     return await importInterop(username, parsed, maxLinks, nestedLists, onProgress);

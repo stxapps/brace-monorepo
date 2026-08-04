@@ -10,7 +10,7 @@ import {
   type SignInValues,
 } from '@stxapps/shared';
 
-// Platform-agnostic form setup so brace-web (and future brace-expo) share one
+// Platform-agnostic form setup so bracemark-web (and future bracemark-expo) share one
 // configured form per flow. These hooks own only validation + form state; the
 // submit sequence (username uniqueness → client KDF → sign → session) is
 // platform-specific and stays in the consuming app's onSubmit handler.

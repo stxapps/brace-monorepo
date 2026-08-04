@@ -163,7 +163,7 @@ export function flattenToPathRows<T extends TreeItem & { name: string }>(
 // --- settings-table row helpers ------------------------------------------------
 // The Lists settings table renders a flat, depth-tagged row list and asks
 // positional questions of it ("who are my siblings?", "where can I move?"). Pure
-// shape, no React — shared verbatim by brace-web and brace-expo's settings.
+// shape, no React — shared verbatim by bracemark-web and bracemark-expo's settings.
 
 // One rendered row: the item plus everything the row's controls need without a
 // second tree walk. `siblings` is the row's ordered sibling group INCLUDING

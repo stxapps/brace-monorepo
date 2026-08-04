@@ -1,9 +1,9 @@
 ## safe area, viewport & insets
 
-How brace apps deal with notches/rounded corners (safe-area insets), scrollbar
+How bracemark apps deal with notches/rounded corners (safe-area insets), scrollbar
 width, and viewport sizing — and the gotchas that make these disagree. The web
 helpers live in `@stxapps/web-ui` (web-only); the last two sections cover the
-brace-expo side (native safe area and the keyboard). See
+bracemark-expo side (native safe area and the keyboard). See
 [architecture.md](./architecture.md) for layering.
 
 ### the core problem: "width" is not one number
@@ -68,7 +68,7 @@ which is exactly why breakpoint logic uses it. See the width table above
 ### prerequisite: `viewport-fit=cover`
 
 `env(safe-area-inset-*)` are **all 0** unless the page opts into edge-to-edge with
-`viewport-fit=cover`. In `brace-web` this is set in `src/app/layout.tsx`:
+`viewport-fit=cover`. In `bracemark-web` this is set in `src/app/layout.tsx`:
 
 ```ts
 export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', … };
@@ -118,7 +118,7 @@ they clear the keyboard. On most mobile browsers the keyboard fires only
 
 ### applying safe area
 
-A blanket `<div className="safe-area">` (as in `brace-web` `inner-layout.tsx`) is
+A blanket `<div className="safe-area">` (as in `bracemark-web` `inner-layout.tsx`) is
 the right default: padding paints _inside_ the box, so a background fills
 edge-to-edge under the notch while content is inset. It does inset **all** children
 uniformly, though — once you add a sticky header or bottom bar that should bleed to
@@ -173,7 +173,7 @@ measurement per event for the whole app. Follow the same rule for any future
 `useSyncExternalStore`, don't let every component subscribe and measure
 independently.
 
-### safe area on native (brace-expo)
+### safe area on native (bracemark-expo)
 
 The same notch/home-indicator problem, but the mechanics differ from web: there
 is no `env()`/CSS cascade — insets come from **react-native-safe-area-context**,
@@ -223,7 +223,7 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     overlay): nothing inherits — apply `useSafeAreaInsets()` offsets yourself,
     the native mirror of web's hand-rolled rule 2.
 
-### keyboard avoidance on native (brace-expo)
+### keyboard avoidance on native (bracemark-expo)
 
 On web the keyboard is a viewport concern (`visualViewport` shrinks — see
 above). On native the keyboard **overlays** the window on both platforms —

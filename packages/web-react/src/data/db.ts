@@ -6,8 +6,8 @@
 // sync engine decrypts blobs with @stxapps/web-crypto before they land here, and
 // the network layer never sees plaintext.
 //
-// Kept in a SEPARATE database ('brace-data') from the raw-IDB session store
-// ('brace-session' in session-store.ts). The session DB holds auth/key material and
+// Kept in a SEPARATE database ('bracemark-data') from the raw-IDB session store
+// ('bracemark-session' in session-store.ts). The session DB holds auth/key material and
 // is hand-rolled; Dexie wants to own its own schema/versioning, so the two don't
 // share a database. Mirrors the auth≠sync split: auth state lives in one place,
 // synced user data in another.
@@ -272,7 +272,7 @@ export interface FaviconRecord {
   fetchedAt: number;
 }
 
-class BraceDb extends Dexie {
+class BracemarkDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
   items!: EntityTable<ItemRecord, 'path'>;
   pendingOps!: Table<PendingOpRecord, [string, string]>;
@@ -281,7 +281,7 @@ class BraceDb extends Dexie {
   favicons!: EntityTable<FaviconRecord, 'host'>;
 
   constructor() {
-    super('brace-data');
+    super('bracemark-data');
     this.version(1).stores({
       // `username` primary key — one bookkeeping row per account.
       syncMeta: 'username',
@@ -327,4 +327,4 @@ class BraceDb extends Dexie {
 // Single app-lifetime instance. Dexie opens lazily on first operation, so merely
 // importing this on the server (where there's no IndexedDB) is inert — only the
 // awaited reads/writes below touch IDB, and those run in client effects.
-export const db = new BraceDb();
+export const db = new BracemarkDb();

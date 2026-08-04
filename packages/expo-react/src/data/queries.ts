@@ -358,7 +358,7 @@ export async function readFileUri(fileId: string): Promise<string | undefined> {
 
 // --- extraction: tallies + the pending drain queue ---------------------------
 //
-// The reads behind brace-expo's on-device extraction (docs/link-extraction.md —
+// The reads behind bracemark-expo's on-device extraction (docs/link-extraction.md —
 // _expo drains in the foreground_): the drain's wake signal, the Settings tally, and
 // the two pending-work queries (whole-library for "Generate all", displayed-scoped for
 // the automatic drain). Ports of web-react's, with ONE deliberate divergence: web

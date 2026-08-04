@@ -92,7 +92,7 @@ export type LinkView = LinkItem & {
 // --- the query grammar -------------------------------------------------------
 
 // The grammar (`Clause`/`ListClause`/`LinkQuery`, `emptyQuery`) moved to
-// `@stxapps/shared` (sync/link-query.ts) when brace-expo grew its own read
+// `@stxapps/shared` (sync/link-query.ts) when bracemark-expo grew its own read
 // layer — it's the cross-platform contract both engines evaluate, like the
 // typed item bundles above. Re-exported here so the web-react data-layer
 // surface (and its barrel) keeps carrying it for app consumers.
@@ -396,7 +396,7 @@ function countTitleImageOutcomes(): Promise<[number, number, number, number]> {
 // `extractions/{id}.enc` whose link was destroyed on another device skews every count
 // here (its token has no link-total entry to cancel), which is why danglings are a
 // deletion problem, not an accounting one: sweepDanglingExtractions removes them
-// (brace-web fires it once per session, after the first completed sync cycle).
+// (bracemark-web fires it once per session, after the first completed sync cycle).
 export async function readRawPendingTitleImageCount(): Promise<number> {
   const [totalLinks, done, failedTransient, permanent] = await countTitleImageOutcomes();
   return Math.max(0, totalLinks - done - failedTransient - permanent);
@@ -588,7 +588,7 @@ export async function readLinksPendingTitleImagePage(
 }
 
 // The pending-titleImage subset of a SPECIFIC set of link paths, in the given order — the
-// read behind brace-web's displayed-driven AUTOMATIC extraction (extraction-provider). Where
+// read behind bracemark-web's displayed-driven AUTOMATIC extraction (extraction-provider). Where
 // `readLinksPendingTitleImagePage` walks the whole library for the conscious "extract all" job,
 // this scopes the automatic drain to what the user is actually looking at: the page of links
 // the main pane has rendered. So a 30k-link bulk import left in an abandoned tab never

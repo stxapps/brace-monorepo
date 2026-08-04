@@ -13,7 +13,7 @@ is the connective tissue between them.
 Code: `app/(app)/links/_contexts/page-provider.tsx` (the grammar + writers +
 projection), `app/(app)/links/_components/search-bar.tsx` (the UI), and
 `packages/web-react/src/data/queries.ts` (`LinkQuery`, the read engine). The
-native port (brace-expo) is `features/links/page-provider.tsx` +
+native port (bracemark-expo) is `features/links/page-provider.tsx` +
 `features/links/search-bar.tsx` — see _on native_ below.
 
 ### the query is the URL
@@ -183,7 +183,7 @@ ladder") and `packages/shared/src/iap/plans.ts` (`searchEditor`).
   fields — so the query grammar and URL contract stay tier-agnostic (a Plus user's
   advanced deep link still _parses_ for a free user; they just can't _build_ one).
 
-### on native (brace-expo)
+### on native (bracemark-expo)
 
 The whole write/route layer above ports **verbatim** to
 `features/links/page-provider.tsx` and `features/links/search-bar.tsx`: the same

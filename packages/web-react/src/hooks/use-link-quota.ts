@@ -1,12 +1,12 @@
 'use client';
 
 // Live read of the plan's saved-link cap against the local library — what the
-// create surfaces (brace-web's quick-add popover, the extension popup's editor)
+// create surfaces (bracemark-web's quick-add popover, the extension popup's editor)
 // gate on before they let a save through.
 //
 // This gate is UX, but not decoration. `maxLinks` is one of the few limits a
 // blind server CAN enforce (it counts `links/` paths at `files/sign` — see
-// brace-api lib/quota.ts), and it answers an over-cap put with 403
+// bracemark-api lib/quota.ts), and it answers an over-cap put with 403
 // `upgrade_required`. A local-first save that ignores the cap therefore SUCCEEDS
 // locally and then fails forever in the sync engine: the pending op can't drain,
 // and every op chunked behind it is stuck too. So the point of checking here is

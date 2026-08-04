@@ -60,7 +60,7 @@ export function useSettings(): Settings {
   const localLinksLayout = local?.linksLayout ?? DEFAULT_LINKS_LAYOUT;
   const linksLayout = linksLayoutSource === 'local' ? localLinksLayout : syncLinksLayout;
   // `serverExtraction` is off by default and round-tripped for the web clients — never
-  // acted on here (expo never calls brace-extractor). `deviceExtractionMode` is expo's
+  // acted on here (expo never calls bracemark-extractor). `deviceExtractionMode` is expo's
   // own, and a three-position ladder rather than an opt-in boolean: absent (never
   // touched) coerces to `saves`, which extracts links saved ON THIS DEVICE and nothing
   // else. See docs/link-extraction.md — _expo drains in the foreground_.

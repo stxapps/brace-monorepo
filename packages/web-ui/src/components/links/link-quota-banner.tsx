@@ -5,7 +5,7 @@
 //
 // It replaces the form rather than sitting above it because at the cap the form
 // is dead — every field in it feeds a save that can't happen. This is also why
-// the cap does NOT route through the paywall dialog (brace-web's
+// the cap does NOT route through the paywall dialog (bracemark-web's
 // PaywallProvider): that's the ACTION-INTERRUPT pattern, for an affordance that
 // stays live and explains itself on click. A full library isn't an action the
 // user took — it's true before they touch anything — so the honest UI states it
@@ -16,7 +16,7 @@
 // useLinkQuota on why the count is trash-inclusive), so "move it to Trash" would
 // be advice that doesn't work.
 //
-// The CTA is a slot: brace-web passes a next/link to /settings/subscription,
+// The CTA is a slot: bracemark-web passes a next/link to /settings/subscription,
 // while the extension (no such route of its own) opens the web app's page in a
 // tab. Everything else — the copy, the count, the shape — lives here so the two
 // surfaces can't drift.

@@ -3,17 +3,17 @@ import { z } from 'zod';
 import { API_V1, defineEndpoint } from '../api/endpoint';
 import { LINK_TITLE_MAX } from '../sync/entities';
 
-// brace-extractor contract — the title/image metadata fetch + the image proxy.
+// bracemark-extractor contract — the title/image metadata fetch + the image proxy.
 //
 // Defined once here in `shared` (the lowest, platform-agnostic layer), exactly
-// like the auth/sync contracts, so the `brace-extractor` Worker validates against
-// the same schema every client (brace-web, the future brace-expo) builds its typed
+// like the auth/sync contracts, so the `bracemark-extractor` Worker validates against
+// the same schema every client (bracemark-web, the future bracemark-expo) builds its typed
 // fetch from. See docs/api-contracts.md and docs/link-extraction.md ("server
 // extraction").
 //
-// brace-extractor is a SEPARATE app on its OWN origin (extractor.brace.to), distinct
-// from the blind sync broker (api.brace.to) — so these endpoints are never mounted
-// on brace-api. They share the `/v1` version prefix (the version is part of the
+// bracemark-extractor is a SEPARATE app on its OWN origin (extractor.bracemark.com), distinct
+// from the blind sync broker (api.bracemark.com) — so these endpoints are never mounted
+// on bracemark-api. They share the `/v1` version prefix (the version is part of the
 // wire contract, not the origin); a long-lived client can stay pinned to /v1.
 //
 // The extractor is a PURE FUNCTION: it returns PLAINTEXT and persists nothing. The

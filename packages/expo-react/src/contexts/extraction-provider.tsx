@@ -7,7 +7,7 @@
 //
 //  - THE GATE IS `deviceExtractionMode`, not `serverExtraction`, and there is no extractor
 //    client to check (docs/link-extraction.md — _expo drains in the foreground_). Expo
-//    never calls `brace-extractor`: native HTTP has no CORS, so the server buys back
+//    never calls `bracemark-extractor`: native HTTP has no CORS, so the server buys back
 //    nothing and would only downgrade the tier, cost a paid request, and disclose the URL.
 //    It's a LADDER, not a boolean (entities.ts DEVICE_EXTRACTION_MODES), and the two ends
 //    land in different places here: `all` is what arms the drain below (`enabled`), while

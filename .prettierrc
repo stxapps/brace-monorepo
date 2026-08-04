@@ -4,15 +4,15 @@
   "plugins": ["prettier-plugin-tailwindcss"],
   "overrides": [
     {
-      "files": ["apps/brace-web/**", "apps/brace-extension/**", "packages/web-ui/**"],
+      "files": ["apps/bracemark-web/**", "apps/bracemark-extension/**", "packages/web-ui/**"],
       "options": {
         "tailwindStylesheet": "packages/web-ui/src/styles.css"
       }
     },
     {
-      "files": ["apps/brace-expo/**", "packages/expo-react/**"],
+      "files": ["apps/bracemark-expo/**", "packages/expo-react/**"],
       "options": {
-        "tailwindStylesheet": "apps/brace-expo/global.css"
+        "tailwindStylesheet": "apps/bracemark-expo/global.css"
       }
     }
   ]

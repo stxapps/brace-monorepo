@@ -4,10 +4,10 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/brace-api"
+      "path": "./apps/bracemark-api"
     },
     {
-      "path": "./apps/brace-web"
+      "path": "./apps/bracemark-web"
     },
     {
       "path": "./packages/shared"
@@ -25,10 +25,10 @@
       "path": "./packages/web-react"
     },
     {
-      "path": "./apps/brace-extractor"
+      "path": "./apps/bracemark-extractor"
     },
     {
-      "path": "./apps/brace-expo"
+      "path": "./apps/bracemark-expo"
     },
     {
       "path": "./packages/expo-crypto"

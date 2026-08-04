@@ -11,7 +11,7 @@ import { ENC_SUFFIX, ID_KEYED_PREFIXES, SETTINGS_PREFIX } from './paths';
 // only ever move metadata: paths, timestamps, and signed URLs.
 //
 // Defined once here in `shared` (the lowest layer), exactly like the auth
-// contracts, so brace-api validates against the same schema every client builds
+// contracts, so bracemark-api validates against the same schema every client builds
 // its typed fetch from. See docs/api-contracts.md.
 
 // A `put` (the object exists/changed) or `delete` (it's gone) op. Same kinds the

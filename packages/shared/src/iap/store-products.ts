@@ -1,8 +1,8 @@
 import type { PaidPlan, Plan } from './plans';
 
 // The store product catalog — the App Store / Play Store product ids for each
-// paid plan, defined once and read by BOTH edges (the plans.ts move): brace-expo
-// fetches and purchases these SKUs (`fetchProducts({ skus })`), and brace-api's
+// paid plan, defined once and read by BOTH edges (the plans.ts move): bracemark-expo
+// fetches and purchases these SKUs (`fetchProducts({ skus })`), and bracemark-api's
 // store verifiers map a verified purchase's productId back to the plan it
 // entitles (the authoritative mapping — never the client's word, same rule as
 // the Paddle price-id branch in services/iap.ts).
@@ -19,8 +19,8 @@ import type { PaidPlan, Plan } from './plans';
 // price env var — putting Pro on sale stays the one-line AVAILABLE_PAID_PLANS
 // change, with the store products created in App Store Connect / Play Console.
 export const STORE_PRODUCT_IDS: Record<PaidPlan, string> = {
-  plus: 'brace.plus.yearly',
-  pro: 'brace.pro.yearly',
+  plus: 'bracemark.plus.yearly',
+  pro: 'bracemark.pro.yearly',
 };
 
 // productId → plan, for the server verifiers (and any client that needs to

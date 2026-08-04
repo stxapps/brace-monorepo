@@ -25,8 +25,8 @@
 # Workspace
 
 Packages `@stxapps/{shared,react,web-ui,web-crypto,web-react,expo-crypto,expo-react}`;
-apps `brace-{web,extension,api,extractor,expo}`. Nx project names carry the
-scope — `@stxapps/brace-web`, never the folder name `brace-web`.
+apps `bracemark-{web,extension,api,extractor,expo}`. Nx project names carry the
+scope — `@stxapps/bracemark-web`, never the folder name `bracemark-web`.
 
 Layering, lowest first: `shared → crypto → react → ui → app`, crossed with a
 platform axis (`agnostic` / `web` / `worker` / `expo`) where a platform may use
@@ -42,7 +42,7 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 - This monorepo uses **npm** (npm/npx), not pnpm or yarn. The lockfile is `package-lock.json`.
 - Run Nx via `npx nx <target>` or `npm exec nx <target>` (the generic Nx guidance above shows a `pnpm` example — ignore that here).
 - Use the root scripts where they exist: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run dev`, `npm run reset`.
-- **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's full Nx name: `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/brace-web`, `npx nx test @stxapps/brace-api`, `npx nx build @stxapps/brace-web` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
+- **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's full Nx name: `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/bracemark-web`, `npx nx test @stxapps/bracemark-api`, `npx nx build @stxapps/bracemark-web` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
 - **After making changes, autofix before checking.** Run the fixer first so `lint`/`typecheck` only report what needs real attention: whole-workspace `npm run fix` (ESLint `--fix` + prettier), or scoped `npx nx lint @stxapps/<project> --fix` for a single project. Then run `npm run lint` and `npm run typecheck` (or their scoped forms).
 
 # Docs
@@ -51,33 +51,33 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 its area, and update it in the same change when the design moves. Each is
 self-contained and cross-links its neighbours.
 
-| working on                                                     | read                   |
-| -------------------------------------------------------------- | ---------------------- |
-| workspace layout, package boundaries, module resolution        | `architecture.md`      |
-| **any dependency version / `package.json` / Expo SDK bump**    | `architecture.md` ⚠    |
-| local store + encrypted file sync (the data path)              | `local-first-sync.md`  |
-| the read edge — indexes, liveQuery, virtual scrolling, paging  | `client-queries.md`    |
-| links-page search (the URL⇄`LinkQuery` grammar, the UI)        | `search.md`            |
-| accounts — key derivation, username/password rules             | `account.md`           |
-| API endpoints (contract-first, typed once in `shared`)         | `api-contracts.md`     |
-| link editors, list/tag trees, bulk edit                        | `editors.md`           |
-| title/image/screenshot/page-copy capture, `brace-extractor`    | `link-extraction.md`   |
-| import/export, delete all data, delete account                 | `data-lifecycle.md`    |
-| subscriptions — Paddle, store IAP, the entitlement fold        | `iap.md`               |
-| tiering, quotas, infra cost, break-even                        | `business-model.md`    |
-| app lock + list locks                                          | `locks.md`             |
-| light/dark theme                                               | `theme.md`             |
-| safe-area insets, viewport sizing, popup positioning           | `safe-area.md`         |
-| `brace-extension` auth flow                                    | `browser-extension.md` |
-| `brace-expo` share sheet (iOS + Android)                       | `share-sheet.md`       |
-| an expo dependency — router, uniwind, expo-image, fonts, IAP   | `expo-native-deps.md`  |
-| prebuild, `app.config.ts`, the npm scripts, R8, signing        | `expo-build.md`        |
-| env vars, per app and per mode                                 | `env-files.md`         |
-| deploy tiers, Cloudflare/AWS infra, CI                         | `deployment.md`        |
-| blocking an abusive IP/ASN at the edge                         | `abuse.md`             |
-| the product name, the domains, the trademark, the rename       | `brand.md`             |
-| moving legacy Brace.to (v1) users onto Bracemark, v1 wind-down | `legacy-brace-to.md`   |
-| how the workspace was originally scaffolded (run-once history) | `setup.md`             |
+| working on                                                      | read                   |
+| --------------------------------------------------------------- | ---------------------- |
+| workspace layout, package boundaries, module resolution         | `architecture.md`      |
+| **any dependency version / `package.json` / Expo SDK bump**     | `architecture.md` ⚠    |
+| local store + encrypted file sync (the data path)               | `local-first-sync.md`  |
+| the read edge — indexes, liveQuery, virtual scrolling, paging   | `client-queries.md`    |
+| links-page search (the URL⇄`LinkQuery` grammar, the UI)         | `search.md`            |
+| accounts — key derivation, username/password rules              | `account.md`           |
+| API endpoints (contract-first, typed once in `shared`)          | `api-contracts.md`     |
+| link editors, list/tag trees, bulk edit                         | `editors.md`           |
+| title/image/screenshot/page-copy capture, `bracemark-extractor` | `link-extraction.md`   |
+| import/export, delete all data, delete account                  | `data-lifecycle.md`    |
+| subscriptions — Paddle, store IAP, the entitlement fold         | `iap.md`               |
+| tiering, quotas, infra cost, break-even                         | `business-model.md`    |
+| app lock + list locks                                           | `locks.md`             |
+| light/dark theme                                                | `theme.md`             |
+| safe-area insets, viewport sizing, popup positioning            | `safe-area.md`         |
+| `bracemark-extension` auth flow                                 | `browser-extension.md` |
+| `bracemark-expo` share sheet (iOS + Android)                    | `share-sheet.md`       |
+| an expo dependency — router, uniwind, expo-image, fonts, IAP    | `expo-native-deps.md`  |
+| prebuild, `app.config.ts`, the npm scripts, R8, signing         | `expo-build.md`        |
+| env vars, per app and per mode                                  | `env-files.md`         |
+| deploy tiers, Cloudflare/AWS infra, CI                          | `deployment.md`        |
+| blocking an abusive IP/ASN at the edge                          | `abuse.md`             |
+| the product name, the domains, the trademark, the rename        | `brand.md`             |
+| moving legacy Brace.to (v1) users onto Bracemark, v1 wind-down  | `legacy-brace-to.md`   |
+| how the workspace was originally scaffolded (run-once history)  | `setup.md`             |
 
 # Tripwires
 
@@ -85,7 +85,7 @@ Rules whose violation is **silent** — no lint error, no type error, no failing
 test. Check the linked doc before acting on any of these.
 
 - **Dependency versions on the Expo side.** Root `package.json` pins the
-  version; `brace-expo` declares `*`; packages declare a peer `*` (a real floor
+  version; `bracemark-expo` declares `*`; packages declare a peer `*` (a real floor
   only where it means something). Never declare `expo-modules-core` anywhere;
   never write `*` in the **root** manifest (it resolves to `latest` — SDK 57, not
   54); pin `react` exactly, no caret, and follow any bump with `npm dedupe`. A
@@ -93,7 +93,7 @@ test. Check the linked doc before acting on any of these.
   is an opaque native crash, not a version error. → `architecture.md`,
   _dependency versions_. Related: `nx lint --fix` will re-add an
   imported-but-undeclared dep to a `package.json`, so read its diff.
-- **`apps/brace-expo/ios/` and `android/` are generated and gitignored.** Every
+- **`apps/bracemark-expo/ios/` and `android/` are generated and gitignored.** Every
   native change belongs in `app.config.ts` or a config plugin. A hand-edit in
   Xcode leaves a _clean_ working tree and is destroyed by the next
   `expo prebuild --clean`. → `expo-build.md`
@@ -105,6 +105,6 @@ test. Check the linked doc before acting on any of these.
   the NodeNext spelling resolves literally and 404s in Turbopack/Metro.
   → `architecture.md`, _module resolution in packages_.
 - **Never write "extension" bare.** Two unrelated things carry the name: the
-  **browser extension** (`brace-extension`) and the iOS **share extension** (a
-  target inside `brace-expo`). Qualify which one on first mention, in code
+  **browser extension** (`bracemark-extension`) and the iOS **share extension** (a
+  target inside `bracemark-expo`). Qualify which one on first mention, in code
   comments and prose alike. → `architecture.md`, _apps_.

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { canonicalizeUsername } from '../crypto/params';
 
 // Credential validation shared by every consumer: the web/extension forms
-// (client-side UX) and brace-api (server-side gate). Keep this schema PURE and
+// (client-side UX) and bracemark-api (server-side gate). Keep this schema PURE and
 // synchronous — no network, no DB. Async concerns like username uniqueness live
 // in the submit handler, not here, so this stays reusable on the server.
 
@@ -54,7 +54,11 @@ export const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   'official',
   'mod',
   'moderator',
-  // brand
+  // brand — the legacy Brace.to spellings stay reserved alongside the current
+  // ones, so nobody can register a name that impersonates either product.
+  'bracemark',
+  'bracemarks',
+  'bracemarkapp',
   'brace',
   'braceapp',
   'braceto',

@@ -42,11 +42,11 @@ export type FaviconRecord = typeof favicons.$inferSelect;
 export const FAVICON_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Icons live beside (not inside) the `files/` content dir — different
-// lifecycle owners: brace-files is the sync engine's materialization,
+// lifecycle owners: bracemark-files is the sync engine's materialization,
 // this is the favicon cache's. Same document-storage choice (survives
 // relaunches; the cache dir's OS purge would silently break the rows'
 // "already fetched" bookkeeping).
-const FAVICON_FILES_DIR = 'brace-favicons';
+const FAVICON_FILES_DIR = 'bracemark-favicons';
 
 function faviconFilesDir(): Directory {
   return new Directory(Paths.document, FAVICON_FILES_DIR);

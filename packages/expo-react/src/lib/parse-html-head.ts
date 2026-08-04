@@ -1,7 +1,7 @@
 import type { CollectedMeta } from '@stxapps/shared';
 
 // Collect a page's title/image/icon CANDIDATES out of its raw HTML — the Hermes-side
-// counterpart of brace-extractor's `HTMLRewriter` pass (apps/brace-extractor/src/lib/
+// counterpart of bracemark-extractor's `HTMLRewriter` pass (apps/bracemark-extractor/src/lib/
 // html.ts). It fills the same `CollectedMeta` bag, and WHICH candidate wins is decided
 // by the shared `selectTitleImage`/`selectFaviconUrl` (shared extract/select.ts), so
 // `expo:fg` and `server` can never disagree about what "the page's title" means — the

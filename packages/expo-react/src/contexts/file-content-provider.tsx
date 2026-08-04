@@ -8,7 +8,7 @@
 //
 // Platform divergences:
 //  - The fetch materializes a DECRYPTED file on disk (engine loadEntityContents
-//    → BraceFileCrypto, file-store.ts) and flags the row's `hasDataFile`, not
+//    → BracemarkFileCrypto, file-store.ts) and flags the row's `hasDataFile`, not
 //    bytes into a Dexie record — the requesting view observes the landing via
 //    useLiveRead over `items` (markItemDataFile touches the row) and re-reads
 //    the plaintext uri (readFileUri).

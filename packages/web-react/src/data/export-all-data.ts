@@ -5,7 +5,7 @@
 // unsynced edits on this device are included), applies the export policy, and
 // produces one downloadable file per format:
 //
-//   brace     — the complete, re-importable backup: a zip of manifest.json +
+//   bracemark     — the complete, re-importable backup: a zip of manifest.json +
 //               items.jsonl (raw {path, data} entities — links, lists, tags,
 //               pins, extractions, settings) + files/{id} (raw decrypted blob
 //               bytes). The only format that round-trips; includes Trash.
@@ -27,7 +27,7 @@
 //     ones especially — is as sensitive as its contents).
 //   - Trash is excluded from the interop formats (importing deleted-pending
 //     links into a browser as live bookmarks is never wanted) but kept in the
-//     brace backup (a backup that silently drops data isn't one).
+//     bracemark backup (a backup that silently drops data isn't one).
 //   - A dangling listId (list deleted on another device) files under My List in
 //     the interop folder tree — same reconciliation spirit as the read layer.
 
@@ -82,10 +82,10 @@ import { db } from './db';
 import { parseBlob } from './projection';
 import { readLists, readSettingsGeneral } from './queries';
 
-export type ExportFormat = 'brace' | 'netscape' | 'csv' | 'text';
+export type ExportFormat = 'bracemark' | 'netscape' | 'csv' | 'text';
 
 // The running phases, in order. `sync` and `assemble` are indeterminate;
-// `gather` counts link records, `files` counts blob downloads (brace only).
+// `gather` counts link records, `files` counts blob downloads (bracemark only).
 export interface ExportProgress {
   step: 'sync' | 'gather' | 'files' | 'assemble';
   done?: number;
@@ -95,7 +95,7 @@ export interface ExportProgress {
 export interface ExportOutcome {
   // Links written to the file (after the lock/Trash policy).
   linkCount: number;
-  // `files/` blobs included in the zip (brace only; 0 otherwise).
+  // `files/` blobs included in the zip (bracemark only; 0 otherwise).
   fileCount: number;
   // Referenced blobs that couldn't be included — deleted server-side or never
   // known locally (dangling refs). Reported, never fatal.
@@ -128,7 +128,7 @@ const GATHER_CHUNK = 500;
 // Decode every record under an id-keyed namespace prefix into (path, entity)
 // pairs, dropping unparseable blobs like the read layer does. Unlike queries'
 // readNamespace this keeps the entity and its path SEPARATE (no WithPath merge):
-// the brace backup writes the plaintext exactly as stored, and `path` is storage
+// the bracemark backup writes the plaintext exactly as stored, and `path` is storage
 // infrastructure that must not leak into the round-tripped `data`.
 async function readRawNamespace<T extends z.ZodTypeAny>(
   prefix: string,
@@ -219,7 +219,7 @@ function buildInteropBundle(links: GatheredLink[], lists: ListItem[], tags: Tag[
   return { folders: tree.map(toFolder), exportedAt: Date.now() };
 }
 
-// --- the brace backup -----------------------------------------------------------
+// --- the bracemark backup -----------------------------------------------------------
 
 // Every `files/{id}.enc` path the included links/extractions reference —
 // referenced-only, so orphaned blobs and locked lists' media never ship.
@@ -234,12 +234,12 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
   return [...ids].map((id) => pathFromId(id, FILES_PREFIX));
 }
 
-// Where the brace zip's bytes go. The stream target (File System Access API) is
+// Where the bracemark zip's bytes go. The stream target (File System Access API) is
 // picked BEFORE the long-running phases — showSaveFilePicker needs the click's
 // transient user activation — and lets zip.js write straight to disk, so a
 // backup bigger than memory never materializes as one Blob. The blob target is
 // the Safari/Firefox fallback (fine for the common sub-GB library).
-type BraceSaveTarget =
+type BracemarkSaveTarget =
   { kind: 'stream'; writable: FileSystemWritableFileStream } | { kind: 'blob' };
 
 // window.showSaveFilePicker is Chromium-only and not yet in lib.dom — typed
@@ -251,7 +251,7 @@ interface SaveFilePickerWindow {
   }) => Promise<FileSystemFileHandle>;
 }
 
-async function pickBraceSaveTarget(filename: string): Promise<BraceSaveTarget> {
+async function pickBracemarkSaveTarget(filename: string): Promise<BracemarkSaveTarget> {
   const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
   if (!picker) return { kind: 'blob' };
   try {
@@ -271,8 +271,8 @@ async function pickBraceSaveTarget(filename: string): Promise<BraceSaveTarget> {
 // underlying WritableStream (preventClose defaults false), and zip64 turns on
 // automatically past the zip32 limits, so Plus/Pro-sized backups (5–20 GiB,
 // >65k entries) stay valid.
-async function assembleBraceZip(
-  target: BraceSaveTarget,
+async function assembleBracemarkZip(
+  target: BracemarkSaveTarget,
   filename: string,
   links: GatheredLink[],
   lists: { path: string; entity: List }[],
@@ -359,14 +359,14 @@ function datePart(date: Date): string {
 export function exportFileName(format: ExportFormat, date = new Date()): string {
   const stamp = datePart(date);
   switch (format) {
-    case 'brace':
-      return `Brace backup ${stamp}.zip`;
+    case 'bracemark':
+      return `Bracemark backup ${stamp}.zip`;
     case 'netscape':
-      return `Brace bookmarks ${stamp}.html`;
+      return `Bracemark bookmarks ${stamp}.html`;
     case 'csv':
-      return `Brace bookmarks ${stamp}.csv`;
+      return `Bracemark bookmarks ${stamp}.csv`;
     case 'text':
-      return `Brace links ${stamp}.txt`;
+      return `Bracemark links ${stamp}.txt`;
   }
 }
 
@@ -384,10 +384,10 @@ export async function exportAllData(options: {
   const onProgress = options.onProgress ?? (() => undefined);
   const filename = exportFileName(format);
 
-  // Brace: claim the save destination first — showSaveFilePicker must run while
+  // Bracemark: claim the save destination first — showSaveFilePicker must run while
   // the click's user activation is still alive, i.e. before sync/gather awaits.
-  const target: BraceSaveTarget | undefined =
-    format === 'brace' ? await pickBraceSaveTarget(filename) : undefined;
+  const target: BracemarkSaveTarget | undefined =
+    format === 'bracemark' ? await pickBracemarkSaveTarget(filename) : undefined;
 
   // Refresh so "all data" means the account, not just this device. Best-effort:
   // a failed cycle downgrades to a warning and we export the local copy.
@@ -404,7 +404,7 @@ export async function exportAllData(options: {
     onProgress({ step: 'gather', done, total }),
   );
 
-  if (format !== 'brace') {
+  if (format !== 'bracemark') {
     onProgress({ step: 'assemble' });
     // readLists merges the system-list defaults, so My List/Archive always
     // exist as folders even when never overridden.
@@ -431,7 +431,7 @@ export async function exportAllData(options: {
     };
   }
 
-  // Brace backup. Raw stored entities only (no synthesized system-list
+  // Bracemark backup. Raw stored entities only (no synthesized system-list
   // defaults — import's merge-on-read reconstructs those, exactly like sync).
   const includedLinkIds = new Set(links.map(({ path }) => idFromPath(path, LINKS_PREFIX)));
   const lists = (await readRawNamespace(LISTS_PREFIX, listSchema)).filter(
@@ -451,8 +451,8 @@ export async function exportAllData(options: {
   );
 
   onProgress({ step: 'assemble' });
-  if (target === undefined) throw new Error('unreachable: brace export without a save target');
-  const { fileCount } = await assembleBraceZip(
+  if (target === undefined) throw new Error('unreachable: bracemark export without a save target');
+  const { fileCount } = await assembleBracemarkZip(
     target,
     filename,
     links,

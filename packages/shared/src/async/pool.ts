@@ -5,8 +5,8 @@
 // queue, so the pool itself never rejects mid-drain.
 //
 // Lives in `shared` (platform-agnostic — only Promise/Array, no web/worker APIs) so every
-// app pools the same way: brace-web/brace-extension's sync engine + server extraction
-// today, and the future brace-expo, instead of each re-spelling the worker loop.
+// app pools the same way: bracemark-web/bracemark-extension's sync engine + server extraction
+// today, and the future bracemark-expo, instead of each re-spelling the worker loop.
 export async function mapLimit<T>(
   items: T[],
   limit: number,

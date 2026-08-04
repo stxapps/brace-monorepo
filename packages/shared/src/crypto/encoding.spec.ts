@@ -23,7 +23,7 @@ describe('bytesToBase64 / base64ToBytes', () => {
   });
 });
 
-// The URL/header-safe pair: brace-api's session tokens and the store JWTs.
+// The URL/header-safe pair: bracemark-api's session tokens and the store JWTs.
 describe('bytesToBase64Url / base64UrlToBytes', () => {
   it('round-trips arbitrary bytes', () => {
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 255, 128, 1]);

@@ -14,7 +14,7 @@ import { type ExtractError } from './endpoints';
 //   isPermanent(error)              — the extract contract's `ExtractError` enum, all the
 //                                     extractor can say about a URL it fetched itself.
 //   verdictForStatus(status, …)     — a raw HTTP status, what a client that did its own
-//                                     fetch has (brace-expo's on-device extraction, and
+//                                     fetch has (bracemark-expo's on-device extraction, and
 //                                     the extractor's `bad_status` code once it's relayed).
 //   verdictForExtractError(…)       — the contract adapter: prefer the status when the
 //                                     result carried one, else fall back to the enum.
@@ -42,7 +42,7 @@ export function isPermanent(error: ExtractError | undefined): boolean {
 // ANY device, so the bar for it is "a later attempt cannot succeed".
 //
 // Synthetic statuses are welcome: a client that couldn't even fetch reports the status the
-// server WOULD have (brace-expo uses `0` for a non-http(s) URL, `415` for a non-HTML
+// server WOULD have (bracemark-expo uses `0` for a non-http(s) URL, `415` for a non-HTML
 // content-type, `204` for an empty body), which lands them on the same rules as the real
 // ones rather than a parallel vocabulary.
 export async function verdictForStatus(
@@ -69,7 +69,7 @@ export async function verdictForStatus(
 
 // One `ExtractResult` failure → the link's verdict, for the server tier. The status is the
 // better signal whenever the extractor relayed one (`bad_status` carries the upstream code),
-// so a 404 through brace-extractor settles exactly as a 404 fetched on-device does; without
+// so a 404 through bracemark-extractor settles exactly as a 404 fetched on-device does; without
 // one, the enum is all there is.
 export async function verdictForExtractError(
   error: ExtractError | undefined,

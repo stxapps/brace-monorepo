@@ -42,7 +42,7 @@ export interface Account {
   // Raw AES-256-GCM key bytes. Unlike web (a non-extractable CryptoKey), native
   // has no unreadable key handle — at-rest protection is expo-secure-store's
   // job (Keychain / Android Keystore); in memory the bytes live here and feed
-  // aes.ts and the BraceFileCrypto native module.
+  // aes.ts and the BracemarkFileCrypto native module.
   encryptionKey: Uint8Array;
   // Signs a payload with the Ed25519 private key. The key is captured in this
   // closure and never leaves the module — callers get signatures, not the key.

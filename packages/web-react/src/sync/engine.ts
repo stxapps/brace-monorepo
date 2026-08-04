@@ -3,7 +3,7 @@
 // Hand-rolled sync engine — layer 2 in docs/local-first-sync.md. Runs at the
 // app/background level, NOT in React (no hooks): it drives the four-endpoint
 // control plane through the shared contract client (`api.call`, which is
-// `callEndpoint` bound to brace-api's baseUrl with the bearer token attached) and
+// `callEndpoint` bound to bracemark-api's baseUrl with the bearer token attached) and
 // moves blob bytes to/from R2 over presigned URLs, doing the crypto boundary
 // (encrypt before PUT / decrypt after GET) with @stxapps/web-crypto. Decrypted
 // results land in the Dexie store (db.ts), which the UI observes reactively.
@@ -53,12 +53,12 @@ export interface SyncDeps {
   // so the engine never reaches for an app-local `api` singleton or `process.env`.
   api: ApiClient;
   // SELECTIVE SYNC. When set, only paths it accepts are materialized into the local
-  // store on a pull — the brace-extension is a selective client that wants just
+  // store on a pull — the bracemark-extension is a selective client that wants just
   // `links/` + `extractions/` (+ lazy `files/`), not `tags/`/`lists/`/`pins/`/
   // `settings/`. It filters DOWNLOADS only: the cursor still advances across ALL ops
   // (so the next pull resumes correctly), deletes still apply to every path, and the
   // PUSH is never filtered (a client may still create a tag it doesn't materialize).
-  // Omitted on brace-web → full sync, every namespace.
+  // Omitted on bracemark-web → full sync, every namespace.
   pathFilter?: (path: string) => boolean;
 }
 
@@ -101,7 +101,7 @@ interface Entry {
   updatedAt: number;
 }
 
-// Every public flow rides a retrying api client: a 429 (brace-api's rate limits are
+// Every public flow rides a retrying api client: a 429 (bracemark-api's rate limits are
 // shared buckets — another tab, another device on the account, a NATed neighbor —
 // so no amount of client pacing can rule one out), a 5xx, or a network blip gets a
 // few backed-off retries (honoring the server's Retry-After) instead of failing the

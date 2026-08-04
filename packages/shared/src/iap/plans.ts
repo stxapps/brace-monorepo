@@ -1,7 +1,7 @@
 // The subscription plans and what each one entitles — the single source of truth
 // both edges read (see docs/business-model.md "tiers"): the CLIENT paywall UI
 // derives feature gates and upsell copy from `entitlementsOf(plan)`, and the
-// SERVER quota gate (brace-api lib/quota.ts, applied at `files/sign`) enforces
+// SERVER quota gate (bracemark-api lib/quota.ts, applied at `files/sign`) enforces
 // the same numbers. Defining the limits once here is the same move as
 // LINK_TITLE_MAX in sync/entities.ts: the place that enforces a limit and the
 // place that displays it can never drift apart.
@@ -89,7 +89,7 @@ export type AiTier = 'none' | 'basic' | 'full';
 // What a plan unlocks. `null` on a numeric limit means unlimited.
 export type Entitlements = {
   // Max `links/` entries (the free-tier keystone: 200 links is a serious trial
-  // but past "free forever"). Server-hard: brace-api counts `links/` paths in
+  // but past "free forever"). Server-hard: bracemark-api counts `links/` paths in
   // the user's size map at `files/sign`. `null` on paid plans.
   maxLinks: number | null;
   // Saved-page-copy meter (Plus keeps the last 50; Pro unlimited) — the count of
@@ -108,7 +108,7 @@ export type Entitlements = {
   // that free stores `files/` blobs. A maxed 200-link free library of client-
   // extracted preview images is ~16 MB, well under the free ceiling.
   maxBytes: number;
-  // Whether the account MAY opt in to `brace-extractor` (the separate synced
+  // Whether the account MAY opt in to `bracemark-extractor` (the separate synced
   // `serverExtraction` preference in settingsGeneralSchema is the user's opt-in;
   // this is the plan gate over it).
   serverExtraction: boolean;
@@ -229,7 +229,7 @@ export function entitlementsOf(plan: Plan): Entitlements {
 // shows; these must match the catalog configured there.
 //
 // CHANGING A NUMBER BELOW IS NOT A PRICE CHANGE. These render straight onto the
-// upgrade cards (brace-web + brace-expo subscription-section.tsx), so a value
+// upgrade cards (bracemark-web + bracemark-expo subscription-section.tsx), so a value
 // that disagrees with the Paddle catalog / App Store product shows the customer
 // one price and charges another. Move the catalog FIRST, then this table.
 export const PLAN_LABELS: Record<Plan, string> = {
@@ -245,8 +245,8 @@ export const PLAN_USD_PER_YEAR: Record<PaidPlan, number> = {
 
 // The upgrade cards' customer-facing copy — the human rendering of the
 // entitlements table above, so it lives HERE rather than in each app: it is plain
-// data with no platform types, and every checkout surface (brace-web's Paddle
-// section, brace-expo's store section, any future one) renders the same words.
+// data with no platform types, and every checkout surface (bracemark-web's Paddle
+// section, bracemark-expo's store section, any future one) renders the same words.
 // It used to be copy-pasted per app under a "keep these VERBATIM in step"
 // comment, which is exactly the drift the rest of this file exists to prevent —
 // the place that defines a tier and the place that sells it can't disagree if

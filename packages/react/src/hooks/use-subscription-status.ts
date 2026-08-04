@@ -7,7 +7,7 @@ import { type ApiClient, iapStatusEndpoint, type SubscriptionStatus } from '@stx
 import { useApiClient } from '../contexts/api-client-provider';
 
 // The account's subscription state, from the one authority: `GET /v1/iap/status`
-// on brace-api. Deliberately NOT a synced entity (the server derives it from
+// on bracemark-api. Deliberately NOT a synced entity (the server derives it from
 // webhook-written purchase rows and can't write into the user's encrypted
 // keyspace) — every device asks and caches instead. This hook is the query
 // layer only; platform wrappers add persistence (web-react's useEntitlements

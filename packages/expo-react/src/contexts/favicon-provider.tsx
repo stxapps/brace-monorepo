@@ -10,7 +10,7 @@
 //  - THE FETCH IS DIRECT — `https://{host}/favicon.ico` by native fetch, no
 //    extractor proxy. Web needs the proxy because a browser can't read
 //    cross-origin image bytes; native HTTP has no CORS, and the design is
-//    clients-do-the-work (docs/link-extraction.md — _favicons_, the brace-expo
+//    clients-do-the-work (docs/link-extraction.md — _favicons_, the bracemark-expo
 //    row: direct native fetch; the `<link rel="icon">` upgrade rides page
 //    extraction when that lands here). The fetch itself — and the byte-sniff
 //    verdict that decides whether what came back is an icon at all — is
@@ -28,7 +28,7 @@
 //    contacted that host — so for a link saved on another device it's a NEW
 //    disclosure of this device's IP to that site, and it must not happen before
 //    the user opts into un-gestured network enrichment at all. The gate is NOT
-//    `serverExtraction`: that one admits a third party (brace-extractor), which
+//    `serverExtraction`: that one admits a third party (bracemark-extractor), which
 //    expo never calls, and honoring it here would tie this device's fetching to
 //    a decision about a server it doesn't use.
 //    The carve-out lives elsewhere: an icon learned WHILE EXTRACTING a page

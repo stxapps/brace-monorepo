@@ -1,6 +1,6 @@
 ## api contracts
 
-How brace-api endpoints are typed and shared across the server and every client.
+How bracemark-api endpoints are typed and shared across the server and every client.
 See [architecture.md](./architecture.md) for the package layering and
 [local-first-sync.md](./local-first-sync.md) for how the background sync engine
 and TanStack Query sit on top of this contract layer.
@@ -10,10 +10,10 @@ and TanStack Query sit on top of this contract layer.
 Every endpoint is described **once** in `@stxapps/shared` as a `defineEndpoint`
 descriptor plus zod request/response schemas. The server reads that descriptor
 to validate requests and type responses; every client reads the same descriptor
-to build a typed call. Nobody imports `brace-api`.
+to build a typed call. Nobody imports `bracemark-api`.
 
-**Why not Hono's `hc<AppType>` RPC client?** It infers types from the brace-api
-app instance, forcing clients to `import type { AppType } from '@stxapps/brace-api'`.
+**Why not Hono's `hc<AppType>` RPC client?** It infers types from the bracemark-api
+app instance, forcing clients to `import type { AppType } from '@stxapps/bracemark-api'`.
 That's an `app → app` edge **and** a `web → node` edge — both forbidden by the
 Nx `type:` / `platform:` boundaries in `eslint.config.mjs` (see
 [architecture.md](./architecture.md)). The hand-written contract keeps every
@@ -63,7 +63,7 @@ sub-apps alongside the bare root routes.
 
 ### assembling the client (the injection seam)
 
-The contract above says how to _call_ brace-api; this is how a running app gets a
+The contract above says how to _call_ bracemark-api; this is how a running app gets a
 _configured_ client into its hooks. It's a dependency-inversion seam — each layer
 adds one concern and refuses to know the next one up, so the only thing that knows
 the runtime URL is the app:
@@ -79,7 +79,7 @@ Why the seam exists: the query/mutation hooks in `@stxapps/react` need _a_ clien
 but importing one would drag an app's env var into a package — forbidden by the
 `type:`/`platform:` boundaries. So the hooks read `useApiClient()` from context and
 the app injects the concrete client via `<ApiClientProvider client={api}>`. Same
-hooks run unchanged in brace-web, brace-extension, and future brace-expo.
+hooks run unchanged in bracemark-web, bracemark-extension, and future bracemark-expo.
 
 Why `baseUrl` stays in the app: auth is shared across the web apps (so it lives in
 `web-react`), but the URL is resolved from a **bundler-inlined** env var that
@@ -99,8 +99,8 @@ session mirror, so the bearer token stays consistent.
 ### transport retry
 
 Layered on the contract client is an optional retry policy in `shared`
-(`api/retry.ts`) — the client-side half of the servers' rate limits (`brace-api`
-and `brace-extractor` both run per-IP/per-user buckets). Those buckets are
+(`api/retry.ts`) — the client-side half of the servers' rate limits (`bracemark-api`
+and `bracemark-extractor` both run per-IP/per-user buckets). Those buckets are
 **shared** (other tabs, other devices, a NATed neighbor), so a client can never
 compute its remaining budget up front; the policy is therefore **reactive**: on a
 `429` (honoring the server's `Retry-After`), a `5xx`, or a network blip, back off
@@ -139,7 +139,7 @@ response })` descriptor — prefix `path` with `` `${API_V1}/…` `` (see _url
    automatically via the barrel — add an `export *` line in `src/index.ts` if the
    file is new.
 
-2. **Server** — in `apps/brace-api/src/routes/<area>.ts`, build a `Hono()`
+2. **Server** — in `apps/bracemark-api/src/routes/<area>.ts`, build a `Hono()`
    sub-app whose route uses the contract's own `endpoint.path`, validates with
    `zValidator('query' | 'json', endpoint.request)`, and types the payload as the
    contract's response type so the handler fails to compile if the shape drifts.
@@ -147,8 +147,8 @@ response })` descriptor — prefix `path` with `` `${API_V1}/…` `` (see _url
    `app.ts` — `CORS_ORIGINS`, default `http://localhost:3000`, the web dev port.)
 
 3. **Client** — call `api.call(endpoint, input)`. `api` is the per-app client
-   from `createAuthApiClient` (`apps/brace-web/src/lib/api.ts` with
-   `NEXT_PUBLIC_API_URL`, `apps/brace-extension/utils/api.ts` with
+   from `createAuthApiClient` (`apps/bracemark-web/src/lib/api.ts` with
+   `NEXT_PUBLIC_API_URL`, `apps/bracemark-extension/utils/api.ts` with
    `WXT_PUBLIC_API_URL`; both default the dev URL to `http://localhost:8787`) —
    see _assembling the client_ above. Components should go through the TanStack
    Query hooks in `@stxapps/react` (which wrap `callEndpoint` via

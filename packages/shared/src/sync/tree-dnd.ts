@@ -11,7 +11,7 @@
 // to what the neighbours allow. The vertical axis (between rows) is plain
 // sortable reordering; the horizontal axis (indent = parent) is this projection.
 //
-// This lived in brace-web's `_lists/dnd-helpers.ts` until brace-expo grew a drag
+// This lived in bracemark-web's `_lists/dnd-helpers.ts` until bracemark-expo grew a drag
 // surface of its own — the same hoist `flattenToRows`/`childrenOf` made into
 // tree.ts, and for the same reason: the forest shape is platform-independent,
 // only the px constants and the gesture plumbing aren't.

@@ -55,7 +55,7 @@ interface PersistedSession {
 // mirror's account (kSecAttrAccount) — so it's named for the thing it
 // identifies, not for either backend. The two must agree; keeping one constant
 // is what makes that structural.
-const SESSION_KEY = 'brace-session';
+const SESSION_KEY = 'bracemark-session';
 
 // iOS ALSO mirrors the serialized session into the shared Keychain access group
 // (the App Group id — expo-crypto's shared-keychain wrappers, no-ops off iOS):
@@ -97,7 +97,7 @@ const SECURE_OPTIONS: SecureStore.SecureStoreOptions = {
 // mutators are markInstalled() and the fresh-install branch of loadSession();
 // deleting it elsewhere would re-arm the Keychain wipe on a device that was
 // never reinstalled.
-const INSTALL_SENTINEL = 'brace-install-sentinel';
+const INSTALL_SENTINEL = 'bracemark-install-sentinel';
 
 function installSentinel(): File {
   return new File(Paths.document, INSTALL_SENTINEL);

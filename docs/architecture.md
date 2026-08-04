@@ -10,30 +10,30 @@ in context from the start of a session instead of at the top of a long file you
 have to already be reading. Sections below link to their neighbours directly;
 the ones that come up most from here are [setup.md](./setup.md) (the one-time
 scaffold commands), [expo-native-deps.md](./expo-native-deps.md) and
-[expo-build.md](./expo-build.md) (how brace-expo's dependencies are wired, and
+[expo-build.md](./expo-build.md) (how bracemark-expo's dependencies are wired, and
 how it's built), and [deployment.md](./deployment.md) (where each app runs).
 
 ### apps
 
 **Naming — never write "extension" bare.** Two unrelated things here are
-extensions: the **browser extension** (`brace-extension`, wxt —
+extensions: the **browser extension** (`bracemark-extension`, wxt —
 [browser-extension.md](./browser-extension.md)) and the iOS **share extension**
-(a target inside `brace-expo` — [share-sheet.md](./share-sheet.md)). Qualify
+(a target inside `bracemark-expo` — [share-sheet.md](./share-sheet.md)). Qualify
 which one on first mention; bare "extension" is fine afterwards inside a doc
 that only discusses one of them (share-sheet.md does exactly this). Say
 **"browser extension"**, never "web extension" — `web` is already taken by
-brace-web, the `web-*` packages, and `platform:web` (which covers
-brace-extension too), and `web/extension` is established shorthand for brace-web
-_vs._ brace-extension.
+bracemark-web, the `web-*` packages, and `platform:web` (which covers
+bracemark-extension too), and `web/extension` is established shorthand for bracemark-web
+_vs._ bracemark-extension.
 
-- **brace-web** — Next.js web app
-- **brace-extension** — browser extension (wxt)
-- **brace-api** — backend API (hand-written, not nx-generated)
-- **brace-extractor** — Cloudflare Workers + hono server that fetches
+- **bracemark-web** — Next.js web app
+- **bracemark-extension** — browser extension (wxt)
+- **bracemark-api** — backend API (hand-written, not nx-generated)
+- **bracemark-extractor** — Cloudflare Workers + hono server that fetches
   link metadata (title/image; read-mode deferred) for clients that can't reach the
-  URL themselves (`brace-web` without the browser extension, bulk imports). Its **own app on
-  its own origin** `extractor.brace.to`, **separate from `brace-api`** (the blind sync
-  broker) so that "`api.brace.to` only ever sees ciphertext" stays code-provable —
+  URL themselves (`bracemark-web` without the browser extension, bulk imports). Its **own app on
+  its own origin** `extractor.bracemark.com`, **separate from `bracemark-api`** (the blind sync
+  broker) so that "`api.bracemark.com` only ever sees ciphertext" stays code-provable —
   the extractor is the one component that fetches arbitrary user URLs. A pure
   function (returns plaintext, holds no key, persists nothing — no D1/R2/DO
   bindings, only CORS config + rate limiters), anonymous, off-by-default and opt-in.
@@ -45,16 +45,16 @@ _vs._ brace-extension.
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
   per-response byte ceiling, timeout, content-type allowlist. See
   [link-extraction.md](./link-extraction.md) — _server extraction_.
-- **brace-expo** — Expo mobile app. The crypto/account layer is
+- **bracemark-expo** — Expo mobile app. The crypto/account layer is
   `@stxapps/expo-crypto` below; the RN-specific React logic — including the
   local-first data layer (write edge, sync engine, and read edge) — lives in
   `@stxapps/expo-react` below.
   The client stack mirrors the web apps with the RN equivalents: **expo-router**
-  for file-based routing (routes in `src/app/`, the analogue of brace-web's
+  for file-based routing (routes in `src/app/`, the analogue of bracemark-web's
   Next.js App Router — the same `(app)`/`(auth)` route groups and
   `layout`→`_layout`, `page`→`index` renames; entry is `expo-router/entry`, not
   a hand-written `registerRootComponent`. One divergence: expo-router has **no**
-  `_`-private-folder convention, so unlike brace-web's colocated
+  `_`-private-folder convention, so unlike bracemark-web's colocated
   `_components`/`_panes`, screen code lives **outside** `src/app/` in
   `src/components`/`src/features` — every file under the app root is a route.
   See expo-native-deps.md — _expo-router_), **Uniwind**
@@ -72,11 +72,11 @@ _vs._ brace-extension.
   browser-only, so `expo-react`'s `useQueryManagers` rewires it to
   NetInfo/AppState). Styling is now **Tailwind v4 across the whole workspace**:
   Uniwind requires Tailwind v4 (unlike NativeWind v4, which pinned Tailwind v3
-  and forced a version split), so every Tailwind consumer — brace-expo plus
-  each web project (`brace-web`, `brace-extension`, `web-ui`) — pins
+  and forced a version split), so every Tailwind consumer — bracemark-expo plus
+  each web project (`bracemark-web`, `bracemark-extension`, `web-ui`) — pins
   `tailwindcss@^4.x` itself; there is no root `overrides` split anymore
   (see expo-native-deps.md — _uniwind_).
-- **brace-docs** (future) — Next.js docs site
+- **bracemark-docs** (future) — Next.js docs site
 
 ### libs
 
@@ -87,19 +87,19 @@ _vs._ brace-extension.
 
 #### @stxapps/react
 
-- used by brace-web, brace-extension, brace-expo, brace-docs
+- used by bracemark-web, bracemark-extension, bracemark-expo, bracemark-docs
 - hooks, contexts, React utilities, no-ui components
 
 #### @stxapps/web-ui
 
-- used by brace-web, brace-extension, brace-docs
+- used by bracemark-web, bracemark-extension, bracemark-docs
 - web-only ui components
 
 #### @stxapps/web-crypto
 
-- used by brace-web, brace-extension, and web-react
+- used by bracemark-web, bracemark-extension, and web-react
 - web-only crypto-global primitives: KDF, AES-256-GCM, and id minting
-  (`newId`, a `crypto.randomUUID()` wrapper; brace-api keeps its own copy since
+  (`newId`, a `crypto.randomUUID()` wrapper; bracemark-api keeps its own copy since
   it's `platform:worker` and can't import this `platform:web` package)
 - also owns the **v1 blob frame** (`blob.ts` — `packBlob`/`unpackBlob` +
   `encryptEntity`/`decryptEntity`): the `[version(1) || iv(12) || ciphertext+tag]`
@@ -111,20 +111,20 @@ _vs._ brace-extension.
 
 #### @stxapps/expo-crypto
 
-- used by brace-expo only
+- used by bracemark-expo only
 - expo-only crypto — the `platform:expo` sibling of `web-crypto`: the same
   account derivation pipeline (docs/account.md) and AES-256-GCM primitives,
   implemented on React Native. Heavy compute runs **native**: Argon2id, HKDF,
   and AES-GCM go through `react-native-quick-crypto` (C++ JSI/Nitro); Ed25519
   stays on the same `@noble/ed25519` as web (signing is microseconds, and
   sharing the library makes credential drift structurally impossible). Also
-  ships the **`BraceCrypto` pod** (`ios/` Swift, `android/` Kotlin, autolinked
-  by `expo prebuild`), which hosts two Expo modules. **`BraceFileCrypto`**
+  ships the **`BracemarkCrypto` pod** (`ios/` Swift, `android/` Kotlin, autolinked
+  by `expo prebuild`), which hosts two Expo modules. **`BracemarkFileCrypto`**
   (Swift CryptoKit / Kotlin `javax.crypto`): whole-file
   encrypt/decrypt path-to-path in the native layer, reading/writing the frozen
   v1 blob frame — file bytes never enter the JS heap; the app stores content
   DECRYPTED on device (the Dexie-`data` analogue) and e.g. `expo-image` renders
-  straight from the plaintext `file://` path. **`BraceSharedKeychain`** is the
+  straight from the plaintext `file://` path. **`BracemarkSharedKeychain`** is the
   pod's second module — iOS-only (registered under `apple.modules`, no Kotlin
   counterpart), it reads/writes generic-password items under an explicit App
   Group access group, the one Keychain capability `expo-secure-store` doesn't
@@ -140,20 +140,20 @@ _vs._ brace-extension.
   identical keys/blobs" is a test rather than a review claim — within two limits
   that file's header states: no CI runs them yet (deployment.md still has to pick
   a provider), and the expo suite shims quick-crypto onto Node, so the on-device
-  primitives and the Swift/Kotlin `BraceFileCrypto` framer are unproven until
+  primitives and the Swift/Kotlin `BracemarkFileCrypto` framer are unproven until
   there's a device/simulator harness. One deliberate divergence: the account's
   `encryptionKey` is raw bytes, not a non-extractable `CryptoKey` (native has
   no such handle) — at-rest protection is `expo-secure-store`'s job.
 
 #### @stxapps/web-react
 
-- used by brace-web, brace-extension, brace-docs, web-ui (auth forms)
+- used by bracemark-web, bracemark-extension, bracemark-docs, web-ui (auth forms)
 - web-only React hooks/contexts/logic — the web-only sibling of `@stxapps/react`
   (same React-logic layer, but free to use browser-only APIs like IndexedDB and
   Web Crypto). Home for things shared across the web apps that aren't components
   (those live in `web-ui`) or pure crypto (that lives in `web-crypto`). In
-  particular it owns the **local-first stack** shared by brace-web and
-  brace-extension: the auth + sync providers (`contexts/`), the Dexie store and
+  particular it owns the **local-first stack** shared by bracemark-web and
+  bracemark-extension: the auth + sync providers (`contexts/`), the Dexie store and
   data layer (`data/`), the hand-rolled sync engine (`sync/`), and the
   editor/auth hooks (`hooks/`). These reach the API through `useApiClient()` /
   `SyncDeps.api` — the `@stxapps/react` seam each app binds to its own baseUrl —
@@ -161,10 +161,10 @@ _vs._ brace-extension.
 
 #### @stxapps/expo-react
 
-- used by brace-expo only
+- used by bracemark-expo only
 - expo-only React hooks/contexts/logic — the `platform:expo` sibling of
   `web-react` (same React-logic layer, but free to use React Native and Expo
-  APIs). Home of the brace-expo local-first stack as it gets built: the
+  APIs). Home of the bracemark-expo local-first stack as it gets built: the
   expo-sqlite + drizzle store and data layer (write edge in `data/mutations.ts`
   - `data/item-store.ts`/`data/projection.ts`, sync engine in `sync/`, and the
     **read edge** — `data/queries.ts`, web-react queries.ts's SQLite port, plus
@@ -172,7 +172,7 @@ _vs._ brace-extension.
     the `useLists`/`useTags`/`useSettings` hooks over it; the shared query
     GRAMMAR — `LinkQuery`, `emptyQuery`, `excludeLists` — was hoisted to
     `@stxapps/shared` `sync/link-query.ts` when this second engine arrived, the
-    same move as `WithPath`/`LinkItem` → `sync/items.ts` and, when brace-expo's
+    same move as `WithPath`/`LinkItem` → `sync/items.ts` and, when bracemark-expo's
     settings tables grew a drag surface, the settings tree's drag projection →
     `sync/tree-dnd.ts` beside the `sync/tree.ts` helpers it builds on — each
     platform keeping only its px calibration and its own gesture layer
@@ -193,7 +193,7 @@ _vs._ brace-extension.
     `@stxapps/shared` `extract/select.ts`, which every extracting client shares so
     a tier upgrade is an improvement rather than a change — driven by
     `contexts/extraction-provider.tsx`, the `platform:expo` sibling of web's; it
-    never calls `brace-extractor` and rides its own `deviceExtractionMode` ladder, see
+    never calls `bracemark-extractor` and rides its own `deviceExtractionMode` ladder, see
     docs/link-extraction.md), and
     `useQueryManagers` (rewires TanStack Query's browser-only
     online/focus managers to NetInfo and AppState). Native modules it builds on
@@ -225,13 +225,13 @@ platform-agnostic `react` can't reach it. `web-crypto` itself depends only on
   `useSignIn` / `useCreateAccount` submit hooks that live in `web-react`.
 - `web-crypto` may import `shared` only.
 - `expo-crypto` is the `platform:expo` sibling of `web-crypto` (same crypto
-  layer): it may import `shared` only. Only `brace-expo` (and future
+  layer): it may import `shared` only. Only `bracemark-expo` (and future
   `platform:expo` React-logic packages) can consume it.
 - `web-react` is the web-only sibling of `react` (same React-logic layer, but
   `platform:web`): it may import `shared`, `react`, and `web-crypto`. Apps and
   `web-ui` (for the auth forms) consume it; it must not import `web-ui`.
 - `expo-react` is the `platform:expo` sibling of `web-react` (same React-logic
-  layer): it may import `shared`, `react`, and `expo-crypto`. Only `brace-expo`
+  layer): it may import `shared`, `react`, and `expo-crypto`. Only `bracemark-expo`
   consumes it.
 - Apps may import any package; **packages must never import an app.**
 - `web-ui`, `web-crypto`, and `web-react` are web-only — do not import them from
@@ -244,20 +244,20 @@ These rules are **enforced at lint time** by `@nx/enforce-module-boundaries`
 Enforcement is driven by two tag dimensions set in each project's
 `package.json` under `nx.tags`:
 
-| project         | type          | platform            |
-| --------------- | ------------- | ------------------- |
-| shared          | `type:shared` | `platform:agnostic` |
-| react           | `type:react`  | `platform:agnostic` |
-| web-ui          | `type:ui`     | `platform:web`      |
-| web-crypto      | `type:crypto` | `platform:web`      |
-| expo-crypto     | `type:crypto` | `platform:expo`     |
-| expo-react      | `type:react`  | `platform:expo`     |
-| web-react       | `type:react`  | `platform:web`      |
-| brace-web       | `type:app`    | `platform:web`      |
-| brace-extension | `type:app`    | `platform:web`      |
-| brace-api       | `type:app`    | `platform:worker`   |
-| brace-extractor | `type:app`    | `platform:worker`   |
-| brace-expo      | `type:app`    | `platform:expo`     |
+| project             | type          | platform            |
+| ------------------- | ------------- | ------------------- |
+| shared              | `type:shared` | `platform:agnostic` |
+| react               | `type:react`  | `platform:agnostic` |
+| web-ui              | `type:ui`     | `platform:web`      |
+| web-crypto          | `type:crypto` | `platform:web`      |
+| expo-crypto         | `type:crypto` | `platform:expo`     |
+| expo-react          | `type:react`  | `platform:expo`     |
+| web-react           | `type:react`  | `platform:web`      |
+| bracemark-web       | `type:app`    | `platform:web`      |
+| bracemark-extension | `type:app`    | `platform:web`      |
+| bracemark-api       | `type:app`    | `platform:worker`   |
+| bracemark-extractor | `type:app`    | `platform:worker`   |
+| bracemark-expo      | `type:app`    | `platform:expo`     |
 
 - **type** enforces the layering: a project may depend only on its own layer
   and lower ones (`app` → `ui` → `react` → `crypto` → `shared`). `crypto` sits
@@ -266,7 +266,7 @@ Enforcement is driven by two tag dimensions set in each project's
 - **platform** enforces portability: `agnostic` may depend only on `agnostic`;
   `web`/`worker`/`expo` may also use `agnostic` but never each other. (`worker`
   is the Cloudflare Workers runtime — web-standards, not Node — see `bundling
-brace-api` below; `expo` is React Native/Hermes — no DOM, no Web Crypto.)
+bracemark-api` below; `expo` is React Native/Hermes — no DOM, no Web Crypto.)
 
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.
@@ -275,7 +275,7 @@ add a matching `type:crypto`-style constraint block if it's a new layer.
 
 Where the previous section governs _what_ a project may import, this one governs
 _which version_ it gets. **This section is about the Expo projects only**
-(`brace-expo`, `expo-crypto`, `expo-react`) — see _the web side is different_ at
+(`bracemark-expo`, `expo-crypto`, `expo-react`) — see _the web side is different_ at
 the end for why it stops there.
 
 Expo is the special case because `react`, `react-native`, `expo-modules-core`, and
@@ -291,7 +291,7 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
 | slot                       | version              | why                                                       |
 | -------------------------- | -------------------- | --------------------------------------------------------- |
 | root `package.json`        | real pin             | single source of truth                                    |
-| app (`brace-expo`)         | `*`                  | never published; a range here can only conflict with root |
+| app (`bracemark-expo`)     | `*`                  | never published; a range here can only conflict with root |
 | package `dependencies`     | real range           | the package's own contract; not singletons                |
 | package `peerDependencies` | real floor, else `*` | the app + root decide the version                         |
 | package `devDependencies`  | **absent**           | nothing needs it — see below                              |
@@ -309,11 +309,11 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
   something reaches Paper, which `react-native-gesture-handler` does eagerly
   (`RNRenderer` ← `GestureDetector/utils.js`). A caret (`^19.1.0`) silently floats to
   19.2.x the next time the tree is re-solved and breaks the drag surfaces on device
-  and the brace-expo suite. `react` is part of the version-locked constellation —
+  and the bracemark-expo suite. `react` is part of the version-locked constellation —
   pin it like `react-native` itself. Note `scheduler` follows react down (0.26.0).
   **Follow any react bump with `npm dedupe`:** every radix package peers on
   `react`, so changing the pin re-solves all of them and npm strands ~185 nested
-  `@radix-ui/*` duplicates (measured: +137 KB in brace-web's bundle). `npm dedupe`
+  `@radix-ui/*` duplicates (measured: +137 KB in bracemark-web's bundle). `npm dedupe`
   collapses them back to one copy each — verify with
   `find node_modules -type d -path '*@radix-ui/react-primitive' | wc -l` (expect 1).
 - **A package's `dependencies` carry real ranges** (`@noble/*`, `drizzle-orm`,
@@ -330,7 +330,7 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
   as the declaration, so `lint --fix` doesn't repopulate. A mirror would therefore
   carry no information the peer line doesn't — while reintroducing exactly the
   drift that nests a duplicate. This leans on npm workspace hoisting and is only
-  sound because these packages are private and consumed as source by `brace-expo`
+  sound because these packages are private and consumed as source by `bracemark-expo`
   alone; publishing them, or moving to a strict store like pnpm, would mean
   bringing real devDeps back.
 
@@ -375,7 +375,7 @@ see a copy nested under `node_modules/expo/`:
 
 Their root declarations exist to keep both **hoisted**, not to pick a version:
 the tilde ranges (`~54.0.16`, `~54.0.9`) sit below expo's exact pins and simply
-admit them. This is also why `apps/brace-expo/metro.config.js` keeps the bare
+admit them. This is also why `apps/bracemark-expo/metro.config.js` keeps the bare
 `require('@expo/metro-config')` and ignores expo-doctor's advice to switch to the
 `expo/metro-config` sub-export — the sub-export works, but the root declaration
 would still be required, so the change buys nothing. A comment at that call site
@@ -386,11 +386,11 @@ So an Expo SDK bump edits **one** file: the root `package.json`.
 
 **Checking alignment.** The authority for "what does this SDK want" is
 `node_modules/expo/bundledNativeModules.json`, and `npx expo-doctor` (run from
-`apps/brace-expo`) diffs the installed tree against it. Three of its checks fail
+`apps/bracemark-expo`) diffs the installed tree against it. Three of its checks fail
 here **by design** — the Metro config `projectRoot`/`watchFolders` mismatch (Nx
 monorepo), `@expo/metro-config` installed directly (the hoisting exception
 above), and the React Native Directory check (no metadata for the local native
-modules `@stxapps/expo-crypto` / `brace-share`, plus "untested on New
+modules `@stxapps/expo-crypto` / `bracemark-share`, plus "untested on New
 Architecture" for `expo-share-extension`). A failure in _Check that packages
 match versions required by installed Expo SDK_ is the real signal. Do **not** read versions off npm's
 `latest` tag: Expo adopted unified versioning at SDK 55, so every `expo-*`
@@ -398,15 +398,15 @@ package renumbered to track the SDK major and `latest` is always the newest
 SDK's — `expo-font` is `14.0.12` on SDK 54 while npm `latest` is `57.x`, and
 `expo-modules-core` is `3.0.30` against a `latest` of `57.x`. Use the `sdk-54`
 dist-tag (`npm view expo-font dist-tags`) or `npx expo install --check`; note the
-latter writes into `apps/brace-expo/package.json`, so move any version it
+latter writes into `apps/bracemark-expo/package.json`, so move any version it
 proposes up to root and leave the app at `*`.
 
 #### the web side is different — don't propagate this
 
-`shared`, `react`, `web-crypto`, `web-ui`, `brace-web`, `brace-extension`, and the
+`shared`, `react`, `web-crypto`, `web-ui`, `bracemark-web`, `bracemark-extension`, and the
 worker apps deliberately do **not** follow the above, and shouldn't be "fixed" to
 match. They use ordinary npm conventions: each manifest is self-describing, with
-real ranges (`brace-web` owns `next: ~16.1.6`; `web-ui` owns its radix/lucide
+real ranges (`bracemark-web` owns `next: ~16.1.6`; `web-ui` owns its radix/lucide
 deps; `react` and `web-ui` keep `react`/`react-dom` peer+devDep mirrors at
 `^19.0.0`). Root pins the RN/Expo constellation for the Expo side; it is not a
 version registry for the web side.
@@ -417,12 +417,12 @@ here:
 - **No autolinking, no native constellation.** Nothing on web is version-locked as
   a set by an SDK, so there's no pin for a second manifest to contradict.
 - **Web ranges intersect by construction.** `^19.0.0` in `web-ui`, `^19.1.0` at
-  root, and `^19.0.0` in `brace-web` all admit the hoisted `19.2.7`, so npm
+  root, and `^19.0.0` in `bracemark-web` all admit the hoisted `19.2.7`, so npm
   dedupes to one copy without anyone deferring to anyone. The Expo problem is
   specifically that `react-native@0.81.5` and `expo-modules-core@3.0.30` are
   **exact**, leaving no room for a range to agree.
 - **The web devDeps do real work.** `web-ui`'s `tailwindcss: ^4.3.0` and
-  `brace-web`'s `@serwist/cli` aren't peer mirrors — they're genuine build-time
+  `bracemark-web`'s `@serwist/cli` aren't peer mirrors — they're genuine build-time
   deps with real ranges that carry real information.
 
 `react` is a singleton on web too (two copies ⇒ "Invalid hook call"), so the
@@ -449,31 +449,31 @@ This requires `moduleResolution: bundler` (with `module: esnext` or
 `preserve`) — which is now the **`tsconfig.base.json` default** (`module:
 esnext`, `moduleResolution: bundler`), so packages and apps inherit it without
 per-project overrides. Only two projects override `module`: `packages/shared`
-uses `module: preserve`, and `brace-api`'s `tsconfig.spec.json` drops to
+uses `module: preserve`, and `bracemark-api`'s `tsconfig.spec.json` drops to
 `commonjs`/`node10` for ts-jest.
 
 The same applies to **apps**: extensionless source only works if a bundler is
-in the path. `brace-web` (Turbopack) and `brace-extension` (Vite/wxt) bundle by
-nature. `brace-api` is bundled at build time too — see below — so it uses
+in the path. `bracemark-web` (Turbopack) and `bracemark-extension` (Vite/wxt) bundle by
+nature. `bracemark-api` is bundled at build time too — see below — so it uses
 `moduleResolution: bundler` and extensionless imports as well. Since every
 current project is bundled, `bundler` is the base default rather than a
 per-project override.
 
-### bundling brace-api
+### bundling bracemark-api
 
-`brace-api` runs on **Cloudflare Workers**, with `src/worker.ts`
+`bracemark-api` runs on **Cloudflare Workers**, with `src/worker.ts`
 (`export default app`) as the entry. **wrangler** bundles it (esbuild under the
 hood), inlining the workspace `@stxapps/*` packages from source — the same way
 the web apps consume them, so the extensionless internal imports resolve.
 Third-party deps (`hono`, `@hono/zod-validator`) are inlined too, since Workers
-has no `node_modules` at runtime. There is **no Node entry** — brace-api does not
+has no `node_modules` at runtime. There is **no Node entry** — bracemark-api does not
 run on Node, so there is no `main.ts` / `@hono/node-server`.
 
-Targets live in `apps/brace-api/package.json` under `nx.targets` (the same place
-brace-web/brace-extension keep theirs). Since no plugin infers `build`/`deploy`
+Targets live in `apps/bracemark-api/package.json` under `nx.targets` (the same place
+bracemark-web/bracemark-extension keep theirs). Since no plugin infers `build`/`deploy`
 for this app, each target declares `"executor": "nx:run-commands"` **explicitly**
 — the bare `options.command` form only resolves when a plugin already provides
-the target to merge onto (as `@nx/next` does for brace-web's `build`):
+the target to merge onto (as `@nx/next` does for bracemark-web's `build`):
 
 - **dev** — `wrangler dev --env development`: runs the Worker in a local runtime
   (workerd/miniflare) with **local emulation** of D1/R2 (state under
@@ -492,8 +492,8 @@ the target to merge onto (as `@nx/next` does for brace-web's `build`):
   inferred target: that inferred target is `tsc --build`-based and auto-disables
   itself into a green-exiting `echo` whenever a referenced tsconfig sets
   `noEmit: true` — which `tsconfig.spec.json` does (you don't emit test files).
-  Left inferred, `npm run typecheck` would silently skip brace-api. An npm script
-  named `typecheck` overrides the inferred target (the same reason brace-web's own
+  Left inferred, `npm run typecheck` would silently skip bracemark-api. An npm script
+  named `typecheck` overrides the inferred target (the same reason bracemark-web's own
   `tsc --noEmit` script works), so nx runs the real `tsc`.
 
   Both passes are **self-contained — no prior build required.** `tsconfig.spec.json`
@@ -501,7 +501,7 @@ the target to merge onto (as `@nx/next` does for brace-web's `build`):
   of pulling app types via a project `reference` to the composite `tsconfig.app.json`.
   A `tsc -p` reference resolves the referenced composite project's types from its
   emitted `dist/*.d.ts` — which this `--noEmit` typecheck never writes — so a
-  reference made `npx nx typecheck @stxapps/brace-api` fail with `TS6305` on a clean
+  reference made `npx nx typecheck @stxapps/bracemark-api` fail with `TS6305` on a clean
   clone or after any add/move/rename/delete under `src` (stale `dist/`). Compiling
   from source removes that `dist/` dependency entirely. The split still pulls its
   weight: the **app pass** (`tsconfig.app.json`, Workers-only types, no `node`) is
@@ -510,4 +510,4 @@ the target to merge onto (as `@nx/next` does for brace-web's `build`):
   `tsconfig.spec.json`** — it reintroduces the prebuilt-`dist/` requirement.
 
 esbuild remains a single workspace-root devDependency for `@serwist/cli`'s
-optional-peer service-worker build in `brace-web` (don't redeclare it per-app).
+optional-peer service-worker build in `bracemark-web` (don't redeclare it per-app).

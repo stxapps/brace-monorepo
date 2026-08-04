@@ -4,7 +4,7 @@
 // entry inside a zipped export). One definition means a fourth interop format
 // is added HERE and every caller gets it.
 //
-// Bytes-vs-text stays the caller's call: a Brace backup is a zip, so callers
+// Bytes-vs-text stays the caller's call: a Bracemark backup is a zip, so callers
 // check isZipBytes (detect.ts) FIRST and only decode to text on the other
 // branch.
 

@@ -26,10 +26,10 @@ export interface SessionRecord {
   encryptionKey: CryptoKey;
 }
 
-// Sibling of Dexie's 'brace-data' (db.ts) — deliberately a SEPARATE database:
+// Sibling of Dexie's 'bracemark-data' (db.ts) — deliberately a SEPARATE database:
 // this one is hand-rolled raw IDB for auth/key material; Dexie owns its own
 // schema/versioning over there.
-const DB_NAME = 'brace-session';
+const DB_NAME = 'bracemark-session';
 const DB_VERSION = 1;
 const STORE = 'session';
 // One active session at a time, stored under a fixed key.

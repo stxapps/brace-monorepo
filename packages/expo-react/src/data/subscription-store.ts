@@ -8,7 +8,7 @@
 // at first render — to seed react-query's placeholderData so a cold/offline
 // start keeps the account's plan instead of flashing free — and IndexedDB can't
 // read synchronously. expo-sqlite can (drizzle's expo driver is a sync driver),
-// so here the cache lives with its sibling stores in brace-data.db (see the
+// so here the cache lives with its sibling stores in bracemark-data.db (see the
 // table note in db.ts) and these functions stay synchronous like web's.
 
 import { eq } from 'drizzle-orm';

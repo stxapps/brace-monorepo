@@ -1,8 +1,8 @@
 import { type ApiClient, ApiError, type CallOptions } from './client';
 
 // Transport-level retry for the contract client — the client half of the servers'
-// per-IP/per-user rate limits (middleware/rate-limit.ts in brace-api and
-// brace-extractor). The limits are shared buckets (tabs, devices, NATed users), so
+// per-IP/per-user rate limits (middleware/rate-limit.ts in bracemark-api and
+// bracemark-extractor). The limits are shared buckets (tabs, devices, NATed users), so
 // a client can never compute its remaining budget up front; reactive
 // 429-check-and-wait is the required half, with the callers' natural pacing
 // (sequential chunks, small pools) as the proactive half. Lives in `shared` beside

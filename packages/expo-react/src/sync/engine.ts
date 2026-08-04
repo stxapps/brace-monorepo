@@ -12,13 +12,13 @@
 //  - Crypto: `encryptionKey` is the account's raw 32-byte key (native has no
 //    non-extractable CryptoKey — see expo-crypto). Entity blobs pack/unpack in
 //    JS (sync/crypto.ts); `files/` CONTENT encrypts/decrypts path-to-path in
-//    the native layer (BraceFileCrypto), so file bytes never enter the JS heap.
+//    the native layer (BracemarkFileCrypto), so file bytes never enter the JS heap.
 //  - `files/` content lives DECRYPTED on disk (file-store.ts), not as bytes in
 //    the row; the row's `hasDataFile` flag is web's "data absent = not yet
 //    lazily downloaded" marker made explicit. loadEntityContent therefore
 //    returns a plaintext File (render straight from its file:// uri), not bytes.
-//  - No `pathFilter` in SyncDeps: selective sync exists for the brace-extension;
-//    brace-expo is a full-sync client and this package has no other consumer.
+//  - No `pathFilter` in SyncDeps: selective sync exists for the bracemark-extension;
+//    bracemark-expo is a full-sync client and this package has no other consumer.
 //    Reintroduce it from web verbatim if a selective expo surface ever appears.
 
 import type { File } from 'expo-file-system';
@@ -122,7 +122,7 @@ interface Entry {
   updatedAt: number;
 }
 
-// Every public flow rides a retrying api client: a 429 (brace-api's rate limits
+// Every public flow rides a retrying api client: a 429 (bracemark-api's rate limits
 // are shared buckets — another device on the account, a NATed neighbor — so no
 // amount of client pacing can rule one out), a 5xx, or a network blip gets a few
 // backed-off retries (honoring the server's Retry-After) instead of failing the
@@ -230,7 +230,7 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<void> {
 // Lazy content fetch (docs "data model — metadata vs. content"): pull one
 // `files/{id}.enc` blob on demand (open/scroll) and materialize it. The
 // platform's shape of web's decrypt-and-cache-in-Dexie: the ciphertext downloads
-// straight to a temp file, BraceFileCrypto decrypts it path-to-path into the
+// straight to a temp file, BracemarkFileCrypto decrypts it path-to-path into the
 // file-store location (bytes never enter the JS heap), and the row's
 // `hasDataFile` flag records the cache so re-views are instant and offline.
 // Returns the plaintext File (e.g. expo-image renders its file:// uri directly),

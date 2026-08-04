@@ -1,6 +1,6 @@
 ## local-first sync
 
-How brace keeps data on the device as the source of truth and syncs end-to-end
+How bracemark keeps data on the device as the source of truth and syncs end-to-end
 encrypted files to the server. See [architecture.md](./architecture.md) for the
 package layering, [api-contracts.md](./api-contracts.md) for the contract-first
 endpoint pattern this builds on, and [account.md](./account.md) for the
@@ -9,7 +9,7 @@ described here.
 
 ### the shape of the problem
 
-brace is **local-first**, with **one entity per encrypted file** and
+bracemark is **local-first**, with **one entity per encrypted file** and
 **end-to-end encryption**:
 
 - an entity (a bookmark's metadata, its content/page-copy, a tag, a list, the
@@ -116,7 +116,7 @@ first-sync push of thousands of files is a handful of round trips, and a request
 over the cap `400`s at the contract before any work runs (the abuse gate). The
 batch caps for the two writes are the same number (`1000`).
 
-All four live in `apps/brace-api/src/routes/sync.ts` (each behind `requireAuth`).
+All four live in `apps/bracemark-api/src/routes/sync.ts` (each behind `requireAuth`).
 (One data-plane endpoint sits deliberately OUTSIDE this control plane:
 `POST /v1/data/delete-all` wipes the whole namespace — op log, quota map, R2
 prefix — in one authed call; other devices then converge through the wiped-log
@@ -148,7 +148,7 @@ That vocabulary — the `StoreStatus` / `BgSyncStatus` / `SyncPhase` types,
 `getSyncPhase`, the default `SYNC_PHASE_LABELS`, and `formatSyncedAt` — lives in
 **`@stxapps/shared` (`sync/status.ts`)**, not in the platform-web layer. It's pure
 data + pure derivation with no React and no browser API, so a client that
-re-implements the engine on a non-IndexedDB store (brace-expo, on expo-sqlite)
+re-implements the engine on a non-IndexedDB store (bracemark-expo, on expo-sqlite)
 still speaks the same status language and collapses phases identically. The
 concrete providers are the platform layer's job: `web-react`'s `SyncProvider`
 drives the web engine and produces the two fields; `ExternalSyncProvider` takes
@@ -209,7 +209,7 @@ rewrites the user's file (see [link-extraction.md](./link-extraction.md)):
 
 **Per-user op log** lives in a **Cloudflare Durable Object** (one DO per user,
 addressed by `idFromName(userId)`), backed by the DO's SQLite. See
-`apps/brace-api/src/do/user-data.ts` and `do/repositories/op-logs.ts`. Each row is
+`apps/bracemark-api/src/do/user-data.ts` and `do/repositories/op-logs.ts`. Each row is
 `{ seq, op: 'put' | 'delete', path, updated_at }`, where **`updated_at` is
 R2's `LastModified`** for that path (read via a `HEAD` at commit — see _push_),
 and the **client's sync cursor is that timestamp**, never `seq`.
@@ -284,8 +284,8 @@ tag/list names.
   inside `extractions/` are between two extraction writes only — idempotent,
   self-healing. The UI joins the two blobs to render a row (`customTitle ??
 extraction.title ?? host(url)`). Written by client extractors (the browser
-  extension, brace-expo, the web app orchestrating `brace-extractor` or an
-  import), never by `brace-api`, which stays a blind sync broker. The work loop
+  extension, bracemark-expo, the web app orchestrating `bracemark-extractor` or an
+  import), never by `bracemark-api`, which stays a blind sync broker. The work loop
   is a **query**, not
   a queue object: a link with no `done` `titleImage` facet (no `extractions/` file,
   or one not yet extracted) is pending. See
@@ -744,7 +744,7 @@ AES-256-GCM primitive it wraps; the sync engine is the caller). The constants
 (`BLOB_FORMAT_V1`, `AES_GCM_IV_BYTES`) live in `@stxapps/shared`
 (`crypto/params.ts`) because they are a **cross-platform contract** like the
 key-derivation parameters: a blob packed on web must unpack on the browser
-extension and brace-expo, forever. Raw bytes, deliberately not a JSON
+extension and bracemark-expo, forever. Raw bytes, deliberately not a JSON
 envelope — base64 would inflate every blob ~33% (worst on the heavy content
 files that count against the quota), and any plaintext field beside the
 ciphertext (a content type, say) would leak to the server. What a blob
@@ -804,7 +804,7 @@ state and devtools. Those hooks live in `@stxapps/react` and call the injected
 client via **`useApiClient().call(endpoint, …)`** (the contract client from the
 provider — see _assembling the client_ in [api-contracts.md](./api-contracts.md)),
 so the shared contract stays the single source of truth and the hooks stay
-reusable on brace-extension and (future) brace-expo.
+reusable on bracemark-extension and (future) bracemark-expo.
 
 **Don't use it for the local-first data path.** The Dexie `liveQuery` store is
 already the read cache for bookmarks — adding TanStack Query there just creates a

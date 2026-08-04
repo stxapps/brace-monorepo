@@ -4,7 +4,7 @@
 // path is `{namespace}{id}.enc` — except `settings/`, keyed by concern name
 // rather than an id (`settings/<concern>.enc`).
 //
-// These live in `shared` so the server (brace-api), the web read layer, and a
+// These live in `shared` so the server (bracemark-api), the web read layer, and a
 // future native client all reference ONE definition instead of hardcoding
 // 'links/' / 'files/' literals that can silently drift apart.
 //
@@ -21,7 +21,7 @@ export const TAGS_PREFIX = 'tags/';
 // Media/content blobs fetched LAZILY — `files/{id}.enc`: the preview image (the
 // one such blob the free tier stores) plus the heavier saved page copy / screenshot.
 // All opaque to the server, so the byte/count quota — not a per-namespace gate —
-// is what bounds them (see apps/brace-api/src/lib/quota.ts, docs/iap.md).
+// is what bounds them (see apps/bracemark-api/src/lib/quota.ts, docs/iap.md).
 export const FILES_PREFIX = 'files/';
 // Pinned-link markers — `pins/{id}.enc`, where `{id}` is the pinned link's id (so
 // `pins/{id}.enc` shadows `links/{id}.enc`). One small file per pinned link.

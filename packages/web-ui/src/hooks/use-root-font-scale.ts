@@ -9,14 +9,14 @@ import { useSyncExternalStore } from 'react';
 //
 // That 16px assumption is a USER PREFERENCE, not a constant: browsers expose a
 // default-font-size setting that moves the rem baseline, and this app pins no
-// root `font-size` (neither brace-web's globals.css nor web-ui's styles.css
+// root `font-size` (neither bracemark-web's globals.css nor web-ui's styles.css
 // declares one), so a rem-built layout really does grow while any raw-pixel
 // number computed in JS does not.
 //
 // Note this is NOT browser zoom, which scales px and rem alike and needs no
 // compensation. It's specifically the default-font-size preference.
 //
-// The native analogue (brace-expo's lib/font-scale.ts) looks similar but is NOT
+// The native analogue (bracemark-expo's lib/font-scale.ts) looks similar but is NOT
 // the same arithmetic: RN has no rem, Uniwind resolves spacing to fixed dp, and
 // the OS font scale multiplies fontSize ALONE — so there a budget splits into
 // scaled-text and unscaled-box parts, while here it scales as a whole.

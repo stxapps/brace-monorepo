@@ -1,6 +1,6 @@
 ## link extraction
 
-How brace fills in a saved link's **title, image, read-mode text, screenshot,
+How bracemark fills in a saved link's **title, image, read-mode text, screenshot,
 and saved page copy** — the metadata a bare URL doesn't carry. (The **favicon**
 is deliberately absent from that list — a device-local, per-host cache, never a
 facet and never synced; see _favicons_ below.) See
@@ -8,7 +8,7 @@ facet and never synced; see _favicons_ below.) See
 this rides on (one entity per `*.enc` blob, file-level LWW), the `pins/`
 precedent for the LWW-isolation move repeated here, and the `links/` vs `files/`
 split; [architecture.md](./architecture.md) for package layering;
-[browser-extension.md](./browser-extension.md) for the brace-extension auth flow
+[browser-extension.md](./browser-extension.md) for the bracemark-extension auth flow
 the privileged client builds on; and [account.md](./account.md) for the data key
 that protects every blob written here.
 
@@ -29,7 +29,7 @@ constraints decide where that can happen:
 
 - **CORS.** A `fetch()` to an arbitrary third-party URL from a web app — main
   thread _or_ a Web Worker, same rules — is blocked for almost every site. The
-  browser tab in `brace-web` simply **cannot** retrieve arbitrary page HTML. A
+  browser tab in `bracemark-web` simply **cannot** retrieve arbitrary page HTML. A
   Web Worker doesn't change this; it only helps with CPU-bound parsing of HTML
   something else already fetched.
 - **Rendering.** Screenshots and full page copies need a real rendering engine
@@ -48,7 +48,7 @@ whoever fetches the URL learns the URL.
 
 ### the stance: privacy-first, off by default, clients do the work
 
-brace is a **privacy-focused** bookmark manager: the sync server only ever sees
+bracemark is a **privacy-focused** bookmark manager: the sync server only ever sees
 ciphertext (see [local-first-sync.md](./local-first-sync.md) — _the server only
 ever sees ciphertext_). Extraction is the one feature that wants to break that,
 so the posture is deliberately conservative:
@@ -78,30 +78,30 @@ so the posture is deliberately conservative:
   push people toward the _broader_ setting), and it is not offered by the first-run
   banner — but it is always one tap away in Settings, and every fetching path
   honors it: the page, the preview image, and both favicon paths.
-- **The clients do the work, never the sync server.** `brace-api` stays a blind
+- **The clients do the work, never the sync server.** `bracemark-api` stays a blind
   sync broker — it never fetches a user's URLs, so it never learns them. All
   extraction runs in clients the user already installed and trusts: the
   **extension** and the (future) **Expo** app — or a client _orchestrating_ the
-  opt-in `brace-extractor` for a web-app save (it holds the key and writes the
-  result back; see _who extracts_). `brace-api` never fetches a URL either way.
+  opt-in `bracemark-extractor` for a web-app save (it holds the key and writes the
+  result back; see _who extracts_). `bracemark-api` never fetches a URL either way.
 - **No third-party extraction service.** A separate blind service can't write
   results back under E2E (it has no key), so it could only offer poll-and-hope;
   and it would leak every URL to a new party. Rejected on both privacy and cost.
 
 The accepted cost of "clients only" is spelled out under _the web-only gap_
-below. This supersedes any earlier sketch of a `brace-api`-assisted title fetch:
+below. This supersedes any earlier sketch of a `bracemark-api`-assisted title fetch:
 weighed against the privacy stance, having the server fetch URLs — even
 transiently, even unstored — is a leak we choose not to take by default.
 
-> **Why not `brace-api` even though Workers _could_ do it?** A Worker `fetch` +
+> **Why not `bracemark-api` even though Workers _could_ do it?** A Worker `fetch` +
 > `HTMLRewriter` would extract title/image cheaply (Workers bill CPU-ms, not
 > wall-clock, so awaiting a slow remote site is mostly un-billed I/O — cost is a
 > non-issue), and "synchronous endpoint" need not block the UI (fire-and-forget
 > after the save, patch the title in when it lands). So the blocker is **not**
 > latency or cost — it's that the server would see the URL. That's why server
-> extraction never lives in `brace-api`: it's its own explicit, second opt-in,
+> extraction never lives in `bracemark-api`: it's its own explicit, second opt-in,
 > distinct from client extraction, in a **separate app on a separate origin**
-> (`brace-extractor`) — never a route in the blind sync broker — because its
+> (`bracemark-extractor`) — never a route in the blind sync broker — because its
 > privacy profile is strictly worse. See _server extraction_.
 
 ### capability tiers — not every client can do every job
@@ -117,12 +117,12 @@ asymmetry drives the whole result/queue design.
 | mobile — **share sheet**               | ⚠️ host-provided   | ❌          | ❌                     | ❌        |
 | mobile — **foreground**                | ✅                 | ✅ WebView  | ✅                     | ✅        |
 | mobile — **background queue**          | ⚠️ best-effort     | ⚠️          | ❌                     | ❌        |
-| `brace-extractor` Worker               | ✅                 | ✅          | ❌ needs Browser Rndr. | ❌        |
+| `bracemark-extractor` Worker           | ✅                 | ✅          | ❌ needs Browser Rndr. | ❌        |
 | import                                 | ⚠️ export-provided | ❌          | ❌                     | ❌        |
 
 The struck row is the **decision below**: the extension _could_ bg-fetch queued
 URLs with an `<all_urls>` host grant, but we **don't** — that capability moves to
-`brace-extractor` / mobile background.
+`bracemark-extractor` / mobile background.
 
 The two mobile rows split a real platform seam. The **share sheet** is a
 memory-constrained, short-lived share _extension_ — it can't reliably stand up a
@@ -140,7 +140,7 @@ The **`import`** row is the same shape one step further out: a bulk import does
 **no fetch of its own** — it seeds a provisional `extraction.title` from the
 export (a title only, never an image, hence `⚠️ export-provided` not
 `best-effort`: nothing is _fetched_, so nothing can be "best effort") and hands
-every link to the queue, later drained by `brace-extractor` / mobile background /
+every link to the queue, later drained by `bracemark-extractor` / mobile background /
 an active-page client on first open (see _imported links_). So the share sheet and
 `import` are both **save contexts that seed a title, never extractors** — the ✅
 rows are the contexts that actually fetch.
@@ -182,11 +182,11 @@ trade:
   install-funnel hit to add the lowest-quality capability.
 - **That capability has a better home.** The background/bg-fetch residual
   (cross-device pickups, bulk-import draining) is what the
-  **`brace-extractor`** server path owns anyway — _"interactive saves justify
-  avoiding `brace-extractor`; imports justify building it"_ (see _imported links_,
+  **`bracemark-extractor`** server path owns anyway — _"interactive saves justify
+  avoiding `bracemark-extractor`; imports justify building it"_ (see _imported links_,
   _server extraction_). Paying `<all_urls>` to build a flaky,
   MV3-ephemeral version of that is the wrong split — and dropping it is part of why
-  `brace-extractor` is now a **necessary** app, not a someday one.
+  `bracemark-extractor` is now a **necessary** app, not a someday one.
 
 So the extension extracts **only from the focused active tab** (`extractedBy:
 'extension:fg'`, active-page tier) and runs **no headless background extraction
@@ -195,10 +195,10 @@ below (`extractedBy`, the facet bookkeeping, the pending-work query) stays
 tier-agnostic and shared; it's the _bg-fetch arm in the extension_ that's dropped,
 not the model. The accepted cost: a link saved on another device isn't silently
 back-filled by a desktop extension in the background — it enriches when opened in
-the extension (active-page upgrade) or via `brace-extractor` (if opted in),
+the extension (active-page upgrade) or via `bracemark-extractor` (if opted in),
 otherwise it stays the _web-only gap_.
 
-**Why this _doesn't_ extend to the mobile app (`brace-expo`).** The instinct is
+**Why this _doesn't_ extend to the mobile app (`bracemark-expo`).** The instinct is
 that the same logic forbids background extraction on mobile too — it doesn't,
 because the reason above is **permission-shaped, and mobile has no equivalent
 cost**. A native app has **no CORS and no host-permission model**: it `fetch`es any
@@ -213,16 +213,16 @@ Android has Doze/WorkManager throttling — and that's a reason to cap it at
 **best-effort**, not to forbid it. Privacy doesn't argue against it either: a
 background mobile fetch is a trusted, key-holding client doing local E2E work, the
 same privacy profile as the extension's _foreground_ capture — no new party learns
-the URL. So `brace-expo` **keeps** background extraction (`expo:bg`, bg-fetch tier),
+the URL. So `bracemark-expo` **keeps** background extraction (`expo:bg`, bg-fetch tier),
 best-effort: the **foreground** (full app) is its active-context tier — the share
 sheet is only a constrained save context that seeds a host-provided provisional
 title — an opportunistic background drain handles the residual, and the
 bulk-import drain still belongs to
-`brace-extractor` (don't promise mobile-background throughput). One-line contrast:
+`bracemark-extractor` (don't promise mobile-background throughput). One-line contrast:
 **the extension's background is dropped for a permission cost mobile doesn't pay;
 mobile's background stays, capped at best-effort for a reliability limit the
 extension's design never turned on.** The shape of expo's drain — foreground
-first, `expo:bg` after, and why it never calls `brace-extractor` at all — is _expo
+first, `expo:bg` after, and why it never calls `bracemark-extractor` at all — is _expo
 drains in the foreground_.
 
 ### who extracts: the client that did the save
@@ -232,18 +232,18 @@ for a given link. The rule is simple and removes almost all cross-client
 coordination: **the client that performs the save extracts that link, at save
 time, from the best context it has.**
 
-| save happens on…            | extracts title+image via                      | tier        | cost / privacy                                                         |
-| --------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| **extension** (address bar) | the live active tab                           | active-page | free, private, best — also gets screenshot/page-copy for free          |
-| **mobile / foreground**     | native fetch (no CORS) / a WebView            | active-page | free, private                                                          |
-| **web app**                 | **calls `brace-extractor`**, then writes back | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
+| save happens on…            | extracts title+image via                          | tier        | cost / privacy                                                         |
+| --------------------------- | ------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
+| **extension** (address bar) | the live active tab                               | active-page | free, private, best — also gets screenshot/page-copy for free          |
+| **mobile / foreground**     | native fetch (no CORS) / a WebView                | active-page | free, private                                                          |
+| **web app**                 | **calls `bracemark-extractor`**, then writes back | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
 
 The third row is the correction to an easy misread of _the stance_: "the web app
-can't extract" is true only of **fetching** — a `brace-web` tab can't `fetch` an
+can't extract" is true only of **fetching** — a `bracemark-web` tab can't `fetch` an
 arbitrary URL (CORS). But the web app **holds the data key**, so it can still
-_orchestrate_ extraction: `POST` the URL to `brace-extractor`, get plaintext
+_orchestrate_ extraction: `POST` the URL to `bracemark-extractor`, get plaintext
 title+image back, encrypt, and write the result into `extractions/`/`files/` itself.
-`brace-extractor` is a pure function (see _server extraction_); the web app is
+`bracemark-extractor` is a pure function (see _server extraction_); the web app is
 the client that drives it. So a web-app save is enriched at save time **if** the
 user has opted into server extraction — otherwise it stays the documented
 _web-only gap_.
@@ -264,16 +264,16 @@ Expo's `deviceExtractionMode` gates the un-gestured residual — links that arri
 by sync or import, and their favicons — at `all`; this row rides the default
 `saves`. Only the bottom position, `off`, stops it.
 
-**Preference order on a web-app save.** `brace-extractor` is the _fallback_, not
+**Preference order on a web-app save.** `bracemark-extractor` is the _fallback_, not
 the first choice. When a capable extension is present in the **same browser**, the
 more private path is to let _it_ extract — locally, so no server ever sees the URL
 — and that result reaches the web app's list through **synced `links/`**, the
 cross-client bus, with no direct handoff. So the order is **same-browser
-extension (local, private) → `brace-extractor` (opted-in, server sees the URL) →
+extension (local, private) → `bracemark-extractor` (opted-in, server sees the URL) →
 web-only gap**. The corollary: when the extension is installed, the _best_ save
 path is the extension itself (its toolbar button / context menu / shortcut) — it
 saves and extracts inline at **active-page** tier, the highest quality and most
-private, with zero cross-client coordination. Treat `brace-web`'s own save UI as
+private, with zero cross-client coordination. Treat `bracemark-web`'s own save UI as
 the path for when no extension is there. Both clients are full participants in the
 bus: the web app syncs its library as the primary, full-sync client; the extension
 as a **selective-sync** client (see _what each client syncs_).
@@ -298,7 +298,7 @@ Two consequences:
   save-channel would be a worse-constrained version of a path we already have. Note
   the extension's privacy advantage holds **only for `title+image`** (and
   read-mode), and only once opened: **screenshot/page-copy have no server path at
-  all** (`brace-extractor` can't render), so those stay extension-active-tab only
+  all** (`bracemark-extractor` can't render), so those stay extension-active-tab only
   regardless of any bridge. What a thin **content-script
   bridge** _is_ for — and what the preference order above needs — is **presence
   detection: is a capable extension installed and signed in?** The web app can't
@@ -357,7 +357,7 @@ and in every device's local store, with no other reclamation path. So it's fixed
 deletion: `sweepDanglingExtractions` (web-react) scans extraction paths against
 their co-keyed links (keys only — blobs are read only when a dangling is actually
 found) and tears each one down content-before-entity through the normal delete
-mutations, queuing the server deletes. **brace-web** fires it once per session,
+mutations, queuing the server deletes. **bracemark-web** fires it once per session,
 after the session's first **completed** sync cycle — never mid-pull, where absence
 proves nothing (the fallback listing walks in path order and `extractions/` sorts
 before `links/`) — and only a **full-sync** client may run it: the test is "link
@@ -388,7 +388,7 @@ only an _input to the fetch_, never persisted. **Who runs that fetch splits by
 client:** an extension/mobile save downloads the og:image directly (native /
 no-CORS); a web-app save **can't** — JS can't read cross-origin image bytes, an
 `<img>` would only _render_ the URL (the per-paint leak this section forbids,
-below) — so the bytes come through `brace-extractor`'s image proxy (see _server
+below) — so the bytes come through `bracemark-extractor`'s image proxy (see _server
 extraction_). Either path ends with the bytes as an encrypted `files/{id}.enc`
 blob, never the remote URL. Three reasons, heaviest first:
 
@@ -476,11 +476,11 @@ decisions, each deliberate:
 **Who fetches, per client — riding each client's existing extraction opt-in,
 never a favicon-specific setting:**
 
-| client              | source                                                                                                                     | gate                                                                          |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **brace-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in                                                 |
-| **brace-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | `deviceExtractionMode` (`all` to guess; `saves` captures declared icons only) |
-| **brace-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network                                                    |
+| client                  | source                                                                                                                     | gate                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **bracemark-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in                                                 |
+| **bracemark-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | `deviceExtractionMode` (`all` to guess; `saves` captures declared icons only) |
+| **bracemark-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network                                                    |
 
 The gates are the same trust decisions the user already made, so "off by
 default" falls out for free — a fresh install fetches no favicons anywhere, per
@@ -534,7 +534,7 @@ _the stance_. Per-client notes:
   an anchor a magic-byte check doesn't: the root tag must be the document's FIRST
   tag, or the HTML error page a misconfigured host serves at `/favicon.ico` would
   pass on an inline `<svg>` somewhere in its body. The renderer has to hold up its
-  end, which is why brace-expo's link media is **expo-image** (expo-native-deps.md —
+  end, which is why bracemark-expo's link media is **expo-image** (expo-native-deps.md —
   _expo-image_).
 
   Both sniffs are `@stxapps/shared` `image/sniff.ts` (`sniffImageMime` +
@@ -564,7 +564,7 @@ _the stance_. Per-client notes:
   monogram; acceptable for decoration.
 
 **The `_favicon` bridge — the one upgrade for the opted-out web user
-(deferred, with the presence bridge).** A brace-web user who declines server
+(deferred, with the presence bridge).** A bracemark-web user who declines server
 extraction has exhausted every network-shaped source (proxy opted out, direct
 fetch rejected below, third parties rejected below, no synced store) — so the
 designed answer is the monogram. The single invariant-respecting upgrade is
@@ -608,7 +608,7 @@ per-paint leak _the preview image is a downloaded blob_ forbids:
   - **"The user already visited that site, so the icon is cached" is false.**
     Browser HTTP caches are **partitioned by top-level site** (Chrome 86+,
     Firefox, Safari): an icon cached while browsing `github.com` lives in a
-    different partition than a request from the app's origin, so brace-web
+    different partition than a request from the app's origin, so bracemark-web
     fetches every host cold, on every device, regardless of browsing history.
     (The intuition itself is sound — and the `_favicon` bridge above is its
     correct realization: it reads the icon that actual visit cached, from the
@@ -619,8 +619,8 @@ per-paint leak _the preview image is a downloaded blob_ forbids:
     re-request indefinitely (404s aren't cached). The `ok`/`none`-with-TTL
     model this section is built on is exactly what this path cannot have.
   - **What each request discloses is more than a visit.** By default it
-    carries `Referer: app.brace.to`, so every saved site learns "this IP saved
-    me in brace and is viewing their library right now", on a recurring cadence
+    carries `Referer: app.bracemark.com`, so every saved site learns "this IP saved
+    me in bracemark and is viewing their library right now", on a recurring cadence
     that maps usage rhythm — a per-host tracking beacon
     (`referrerpolicy="no-referrer"` trims the referer; IP + timing remain).
     The one honest point in its favor — disclosure goes to the saved site
@@ -720,7 +720,7 @@ export const facetSchema = z.looseObject({
   extractedBy: z.string().optional(), // who ran the last attempt — a `platform:env`
   // string (extension:fg | expo:fg | expo:bg | server), NOT a device id. (The extension
   // is active-context only — it emits extension:fg only, never extension:bg; the :bg tier
-  // comes from Expo background / brace-extractor. See "the extension is active-context only".)
+  // comes from Expo background / bracemark-extractor. See "the extension is active-context only".)
   // Quality (the upgrade axis) is DERIVED from it by the shared tierOf() helper —
   // :fg → active-page beats :bg → bg-fetch beats server. No stored `tier` field: it's a
   // pure function of extractedBy (storing it beside its input is the same drift-prone
@@ -831,7 +831,7 @@ Each facet answers the same questions independently:
   links_).
 - **upgrade** → a client whose **derived tier** (`tierOf(extractedBy)`) beats a `done`
   facet's may re-extract it (e.g. you open the real page in the extension —
-  `extension:fg` → active-page — after a `server` extraction by `brace-extractor`,
+  `extension:fg` → active-page — after a `server` extraction by `bracemark-extractor`,
   or an `expo:bg` mobile background fetch, only got title + image).
 
 **Path layout — one flat file per link, facets inside; not one prefix per
@@ -886,8 +886,8 @@ engine. There is no claim step — a rare double-extraction is
 resolved by idempotency + file-level LWW, not prevented by a lease (see _the
 extraction entity_). The **headless background** drain of this loop belongs to the
 clients that can run against a queued URL with no live tab — the **Expo app**
-(an alarm sweep) and, for `brace-web`/desktop, the **`brace-extractor`** server they
-call; **`brace-web` itself drains in-page** (see _the web drains in-page_ below), and
+(an alarm sweep) and, for `bracemark-web`/desktop, the **`bracemark-extractor`** server they
+call; **`bracemark-web` itself drains in-page** (see _the web drains in-page_ below), and
 the **extension does not run a background drain at all** (it's active-context only —
 see _the extension is active-context only_), so its only role in this loop is the
 **active-context** capture on a save / on opening a page. All run against the **same
@@ -910,7 +910,7 @@ changes a few times a day. An empty poll returning "nothing pending" is the
 **intended** steady state, not waste. Pair it with cheap local wake triggers so
 freshness doesn't wait on the long alarm — browser start, popup/icon open, a save
 performed _in_ the extension, and (if wired) the **content-script "sync now"
-nudge** a `brace-web` save can post to a same-browser extension (see _who
+nudge** a `bracemark-web` save can post to a same-browser extension (see _who
 extracts_ — presence bridge). **Don't reach for server push** for title+image:
 nothing is on the critical path for it (the saving client already did it), so
 there's no latency for push to remove. (Push only becomes interesting if the
@@ -919,7 +919,7 @@ active-page facets aren't.)
 
 #### the web drains in-page, scoped to what's on screen
 
-`brace-web` has **no background service worker** — its sync engine already runs
+`bracemark-web` has **no background service worker** — its sync engine already runs
 in-page, and so does its drain: the **`ExtractionProvider`** (web-react), the
 counterpart of the Expo alarm sweep and the extension's active-context role. Because
 it's in-page it isn't alarm-paced; it's **`liveQuery`-reactive** — the pending query
@@ -927,7 +927,7 @@ re-runs on every store change (a save, an import, a cross-device link landing) a
 wakes the drain, no fixed tick.
 
 The cost shape is different enough from the headless clients to call out. Each
-pending link is a **paid `brace-extractor` request** (HTML fetch + maybe an image
+pending link is a **paid `bracemark-extractor` request** (HTML fetch + maybe an image
 proxy), and an open tab can be **abandoned** — so the web drain must never bill the
 server for work no one is watching. Three gates impose that, all of them UX/cost
 **shaping on top of** the extractor's own non-negotiable per-IP caps (see _server
@@ -968,12 +968,12 @@ with its own _mechanism_. The scheduled re-wake is load-bearing for _enrich all_
 failed batch writes no facets, so nothing else re-wakes the loop — the retry timer
 is the only thing that resumes it after a `429`.
 
-#### expo drains in the foreground — and never calls `brace-extractor`
+#### expo drains in the foreground — and never calls `bracemark-extractor`
 
-`brace-expo` runs the same loop as the web drain above, with the platform swapped
+`bracemark-expo` runs the same loop as the web drain above, with the platform swapped
 in three places and one hard exclusion.
 
-**It never calls `brace-extractor`.** Not "not yet" — permanently. The extractor
+**It never calls `bracemark-extractor`.** Not "not yet" — permanently. The extractor
 exists to buy back a capability its caller lacks, and expo lacks nothing here:
 native HTTP has no CORS, so the app fetches the page's HTML and the og:image bytes
 itself. Routing through the server would be a strict **downgrade on every axis** —
@@ -1048,7 +1048,7 @@ billed — it gets a button, a progress readout, and Pause, and says it uses the
 connection), and the per-session auto backstop can sit looser than web's, since
 overshooting spends the user's battery rather than the project's money. The
 _settings section_ shape follows from the same swap: expo gets the section
-brace-web's `_extraction/extraction-section.tsx` header anticipates being dropped —
+bracemark-web's `_extraction/extraction-section.tsx` header anticipates being dropped —
 same "Link previews" surface, but no plan gate and no upsell branch (on-device
 extraction is free on every plan), no two-step confirm, and in place of a toggle it
 renders `deviceExtractionMode` as three radios. The default is also **offered**
@@ -1069,13 +1069,13 @@ above zero — `readRawPendingTitleImageCount`, the over-count, since the exact 
 is gated on the very thing being asked about) and retired by the same device-local
 flag (`previewsPromptDismissed` in each app's `localSettings`, so a second browser
 or phone still gets its one offer). What each banner OFFERS is not the same thing,
-and brace-web's `_components/previews-prompt.tsx` is therefore a sibling of
-brace-expo's, not a port of it:
+and bracemark-web's `_components/previews-prompt.tsx` is therefore a sibling of
+bracemark-expo's, not a port of it:
 
 - **expo** offers `deviceExtractionMode: 'all'` — free, on-device, no new party — so
   the banner flips it in place. One tap resolves the count it just quoted, because
   the foreground drain then works the backlog.
-- **brace-web, Plus/Pro** offers `serverExtraction`, which admits `brace-extractor`
+- **bracemark-web, Plus/Pro** offers `serverExtraction`, which admits `bracemark-extractor`
   to the URLs it fetches. The banner **does not flip it**: the button goes to
   Settings → Link previews. Two reasons, and either alone is sufficient. Consent —
   a list-chrome button is a thinner surface than the toggle that names the service
@@ -1084,7 +1084,7 @@ brace-expo's, not a port of it:
   displayed-scoped auto drain, so the quoted N would barely move; the thing that
   clears it is "Generate all", which is confirm-gated **because each link is a paid
   request**, and that confirm belongs next to the toggle, not in a banner.
-- **brace-web, free** can't take that opt-in at all (`serverExtraction` is a Plus
+- **bracemark-web, free** can't take that opt-in at all (`serverExtraction` is a Plus
   entitlement), and free/web-only is exactly the population with the most
   un-previewed links — so hiding the banner there would hide it where it matters
   most, while making it a bare paywall would turn an honesty affordance into an
@@ -1132,23 +1132,23 @@ overrides_. This is the one case an import writes an
 `extractions/` file up front — the pending signal then is the **absent `titleImage`
 facet**, not an absent file (the queue query already keys on the facet).
 
-**Imports are where `brace-extractor` stops being avoidable.** For a one-off web
+**Imports are where `bracemark-extractor` stops being avoidable.** For a one-off web
 save it's a nicety; for a bulk import, client-only draining is genuinely weak. A
 web-only user gets thousands of bare URLs forever — and the **extension can't help
 here at all**: it's active-context only (no background bg-fetch — see _the extension
 is active-context only_), so it can only enrich an imported link if the user
 manually opens it in a tab, which nobody does for thousands of imports. That leaves
 **mobile background** (an `expo:bg` drain, also throttled and unreliable) or
-`brace-extractor`. A bulk import is also the natural **opt-in moment** ("enrich my
-whole library?" — in `brace-web` this is the explicit _enrich all_ drain, see _the
+`bracemark-extractor`. A bulk import is also the natural **opt-in moment** ("enrich my
+whole library?" — in `bracemark-web` this is the explicit _enrich all_ drain, see _the
 web drains in-page_). So the honest framing: _interactive saves justify **avoiding**
-`brace-extractor`; imports justify **building** it_ — different workloads, different
+`bracemark-extractor`; imports justify **building** it_ — different workloads, different
 answers.
 
 The real concerns for the bulk path are throughput, not latency (enrichment
 back-fills; the library is usable immediately):
 
-- **batch and pace.** `brace-extractor` takes `POST { urls }` (plural) and
+- **batch and pace.** `bracemark-extractor` takes `POST { urls }` (plural) and
   IP-rate-limits — send chunks and respect backoff, never thousands of
   singletons. Same for an Expo background drain: pace per-host so one site isn't
   hammered (and bot-protection isn't tripped).
@@ -1200,7 +1200,7 @@ For an extension whose job is extraction + save, the minimum working set is:
     _extension_ the URL inside `links/{id}.enc` is **not** an extraction input — it's
     active-context only, so it extracts the focused tab's live DOM, never a synced
     URL. The URL-from-blob need is real only for the bg-fetch clients that drain
-    queued URLs headlessly — **Expo background / `brace-extractor`** — not for the
+    queued URLs headlessly — **Expo background / `bracemark-extractor`** — not for the
     extension);
   - the extension popup's **"is this tab already saved?" dedup** (`readLinkByUrl`)
     is an `itemUrl` index hit, and `itemUrl` is **projected only from the decrypted
@@ -1237,32 +1237,32 @@ For an extension whose job is extraction + save, the minimum working set is:
 The cursor still advances across **all** ops (it's the global high-water mark);
 selective sync only changes which blobs get downloaded, not how the cursor moves.
 
-### server extraction: a separate `brace-extractor`, anonymous
+### server extraction: a separate `bracemark-extractor`, anonymous
 
 The escape hatch from _the stance_ — letting a server fetch URLs when no capable
 client is installed — is the **second, explicit opt-in**, never the default. It is
 **necessary, not deferred**: once the extension went active-context only (no
-background bg-fetch — see _the extension is active-context only_), `brace-extractor`
-became the **only** bulk-enrichment path for `brace-web`/desktop users and the
+background bg-fetch — see _the extension is active-context only_), `bracemark-extractor`
+became the **only** bulk-enrichment path for `bracemark-web`/desktop users and the
 realistic one for large imports, so it's a committed app to build, not a someday.
 "Necessary to build" is **not** "on by default", though — server extraction stays
-the second opt-in below. Its clients are the **web/desktop** ones: `brace-expo`
+the second opt-in below. Its clients are the **web/desktop** ones: `bracemark-expo`
 never calls it — that would be a strict downgrade from a client that fetches
 natively (see _expo drains in the foreground_) — so everything here is about the
 browser that can't fetch for itself. It is a **separate app**, not a route in
-`brace-api`:
+`bracemark-api`:
 
-- **A new nx app, `brace-extractor` (`type:app`, `platform:worker`), on its own
-  origin `extractor.brace.to`** — distinct from the blind sync broker on
-  `api.brace.to`. The two have **opposite trust and egress postures**: the broker
+- **A new nx app, `bracemark-extractor` (`type:app`, `platform:worker`), on its own
+  origin `extractor.bracemark.com`** — distinct from the blind sync broker on
+  `api.bracemark.com`. The two have **opposite trust and egress postures**: the broker
   only ever touches D1/R2 and ideally reaches nothing outbound; the extractor must
   `fetch` arbitrary, user-supplied URLs. Separate apps let each hold only the
-  bindings it needs, keep "`api.brace.to` only ever sees ciphertext" a clean,
+  bindings it needs, keep "`api.bracemark.com` only ever sees ciphertext" a clean,
   code-provable claim, and give server extraction an independent kill switch /
   opt-in / jurisdiction. Workers is a _good_ fit precisely because its sandbox
   can't reach your private network or cloud IMDS (`169.254.169.254`), which
   neutralizes the classic server-side-fetch SSRF.
-- **Pure function, never a writer.** `brace-extractor` takes
+- **Pure function, never a writer.** `bracemark-extractor` takes
   `POST { urls } → [{ url, ok, title?, image?, readMode?, error? }]` — a **per-URL
   result array** (partial success, never all-or-nothing, so each link's facet records
   its own `done` / `failed` / `permanent`) — **plaintext**, and returns it to
@@ -1276,11 +1276,11 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   carries the og:image as a **URL string** (`{ title, image: url, readMode }`), not
   bytes. That string is enough for an extension/mobile client (it fetches the image
   itself, no CORS), but **not** for the web app — the same wall that sends it to
-  `brace-extractor` for the HTML also stops JS reading cross-origin image bytes
+  `bracemark-extractor` for the HTML also stops JS reading cross-origin image bytes
   (an `<img>` would _render_ the URL but tainted-canvas / opaque-response block
   reading it into an encryptable blob — and rendering the remote URL _is_ the
   per-paint leak _the preview image is a downloaded blob_ forbids). So
-  `brace-extractor` doubles as a **stateless image proxy**: a single interactive
+  `bracemark-extractor` doubles as a **stateless image proxy**: a single interactive
   save **inlines** the image bytes in the extraction response (one round trip); a
   bulk import gets URLs only and the client pulls each image from `GET /image?url=…`,
   which **streams the remote bytes through and buffers/persists nothing**. The
@@ -1303,8 +1303,8 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   is built to avoid. So v1 is **anonymous**: IP-based rate limiting (already in
   place) plus an SSRF guard and strict size/time caps; the extractor never learns
   _who_ is asking. The abuse-control upgrade that **preserves** anonymity is blind
-  capability tokens (Privacy Pass / VOPRF): `api.brace.to` issues unlinkable
-  tokens to real logged-in users, `extractor.brace.to` verifies validity without
+  capability tokens (Privacy Pass / VOPRF): `api.bracemark.com` issues unlinkable
+  tokens to real logged-in users, `extractor.bracemark.com` verifies validity without
   learning which user — deferred, documented as the direction.
 - **Abuse caps are load-bearing, not a v2 nicety.** An anonymous endpoint that
   fetches any URL and streams bytes is an **open proxy / DDoS reflector / bandwidth
@@ -1334,9 +1334,9 @@ takes the second, explicit opt-in.
 
 ### the web-only gap (a conscious stance)
 
-A user on **`brace-web` only** — no extension, no phone — **and opted out of
+A user on **`bracemark-web` only** — no extension, no phone — **and opted out of
 server extraction** gets **no enrichment**: a saved link stays a bare URL with
-whatever title they typed. (Opted _in_, the web app orchestrates `brace-extractor`
+whatever title they typed. (Opted _in_, the web app orchestrates `bracemark-extractor`
 at save time — see _who extracts_ — and there is no gap; that is the escape hatch
 below, realized.) Opted out, the gap is the direct, intended consequence of
 "clients do the work, the server stays blind." It is **not** a bug to paper over:
@@ -1351,7 +1351,7 @@ below, realized.) Opted out, the gap is the direct, intended consequence of
   doesn't apply to this user — they only ever have the title they entered.
 
 For this user the escape hatch is the **server extraction** path — a separate
-`brace-extractor` app on its own origin (see _server extraction_) — a separate,
+`bracemark-extractor` app on its own origin (see _server extraction_) — a separate,
 explicit opt-in, never the default. The app itself is a committed build (it's how
 web/desktop users get any enrichment at all now that the extension is
 active-context only); the _gap_ is simply what remains for the user who declines
@@ -1364,7 +1364,7 @@ that opt-in.
   on SPAs. Active-tab/WebView extraction (live DOM) is the high-quality path;
   background is best-effort. No fix beyond the tier model — just don't promise
   read-mode parity across tiers.
-- **Non-HTML & JS-rendered targets (`brace-extractor`).** Saved URLs aren't all
+- **Non-HTML & JS-rendered targets (`bracemark-extractor`).** Saved URLs aren't all
   server-rendered HTML: PDFs, a direct image (which _is_ the preview), and
   oEmbed-only sites (YouTube/Twitter) each need their own handling, and a JS-shell
   SPA may carry no server-side og tags at all (the extractor runs no JS — `server`

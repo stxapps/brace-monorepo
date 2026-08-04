@@ -12,7 +12,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //
 // zxcvbn's own 0–4 `score` is deliberately NOT surfaced by this module. It's a
 // 5-bucket label over the same guess estimate, and its top bucket is open-ended
-// ("guesses >= 1e10" ≈ 33 bits) — so score 4 spans `Summer2026Brace!` (~35 bits)
+// ("guesses >= 1e10" ≈ 33 bits) — so score 4 spans `Summer2026Bracemark!` (~35 bits)
 // through a 7-word passphrase (~121 bits). Anything a caller could gate on it is
 // wrong, so it doesn't leave this file; `displayScore` below is ours, derived from
 // the same floors as the gate. See the constant's comment in `shared`

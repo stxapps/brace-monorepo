@@ -2,7 +2,7 @@ import { createApiClient } from '@stxapps/shared';
 
 import { getSession, getToken, notifySessionInvalid } from '../data/session-store';
 
-// The expo binding of the typed API client to brace-api — the `platform:expo`
+// The expo binding of the typed API client to bracemark-api — the `platform:expo`
 // sibling of web-react's `createAuthApiClient`. Same shape and same auth-fetch
 // contract; the only differences are that it reads the expo session-store (raw
 // bytes in secure-store, not IndexedDB) and runs on React Native's global

@@ -33,7 +33,7 @@ export function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
 // NATIVE base64 — on Expo, wire `btoa`/`atob` through `@craftzdog/react-native-buffer`'s
 // Buffer (`Buffer.from(s, 'base64')` / `buf.toString('base64')`), which is C++-fast;
 // prefer it over the pure-JS `base-64` lib, whose per-char loop janks the JS thread
-// on the multi-hundred-KB images below. brace-expo does exactly this in its
+// on the multi-hundred-KB images below. bracemark-expo does exactly this in its
 // bootstrap `src/polyfills.ts` (imported first from the root `_layout.tsx`).
 // We keep the native calls deliberately: they're C++-fast (these carry images) and
 // battle-tested on base64's fiddly padding/tail cases, so the one-line app-level
@@ -62,9 +62,9 @@ export function bytesToBase64(bytes: Uint8Array): string {
 // stripped), which is what anything travelling in a URL, an HTTP header, or a
 // JWS compact serialization uses. Same `atob`/`btoa` runtime requirement as the
 // plain-base64 pair above — including the Hermes caveat, already covered by the
-// polyfill brace-expo installs.
+// polyfill bracemark-expo installs.
 //
-// Today's callers are all brace-api (session tokens, and the App Store / Play
+// Today's callers are all bracemark-api (session tokens, and the App Store / Play
 // Store JWTs in `lib/jwt.ts`), but the encoding itself is neither
 // server-specific nor tied to our crypto contract — it's the same class of pure
 // byte rendering as the hex and base64 pairs, so it lives beside them rather
