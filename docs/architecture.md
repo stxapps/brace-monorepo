@@ -40,8 +40,8 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   is a bare redirect (`/links` or `/sign-in`, whichever the session says); the
   public landing that used to live there is now bracemark-site's.
 - **bracemark-site** — Next.js marketing site, served at the apex
-  `bracemark.com`: the landing page, `/about`, `/docs`, `/blog`, `/terms`,
-  `/privacy`, `/support`, `/contact`. Static export like bracemark-web, and
+  `bracemark.com`: the landing page, `/pricing`, `/about`, `/docs`, `/blog`,
+  `/terms`, `/privacy`, `/support`, `/contact`. Static export like bracemark-web, and
   deliberately **thin** — it depends on `@stxapps/shared` and `@stxapps/web-ui`
   and nothing else, so no auth stack, no Dexie, no crypto ships to the apex. It
   links to bracemark-web across origins (`NEXT_PUBLIC_APP_URL`) rather than

@@ -1490,6 +1490,48 @@ describe('iap', () => {
       return (row?.n ?? 0) > 0;
     }
 
+    // The other half of the double-subscription guard. `already_subscribed`
+    // can only see a subscription that EXISTS, so it is blind to two checkouts
+    // created before either is paid — and two live txn_… is two payable
+    // checkouts on one account.
+    it('reuses a fresh pending checkout instead of minting a second payable one', async () => {
+      const { auth } = await authFor('iap-checkout-reuse-1');
+      await postCheckout(auth, 'txn_reuse_1');
+
+      // No /transactions stub is scripted for this second call: reuse must
+      // answer from the pending row without asking Paddle at all. (An unstubbed
+      // outbound call falls through to the real fetch, which cannot mint
+      // `txn_reuse_1`, so returning it is proof no second transaction exists.)
+      const res = await app.request(
+        iapCheckoutEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({ plan: 'plus' }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ transactionId: 'txn_reuse_1' });
+    });
+
+    it('mints a new checkout once the old one is past the reuse window', async () => {
+      const { auth } = await authFor('iap-checkout-reuse-2');
+      await postCheckout(auth, 'txn_reuse_old');
+      // Past CHECKOUT_REUSE_MS: an abandoned checkout must not pin a stale
+      // transaction to the account for the row's 3-day TTL. `last_synced_at` is
+      // stamped NOW rather than zeroed (what ageCheckout does), so the row is
+      // too old to reuse but still inside its resolve debounce — this test is
+      // about the reuse window, not about reconciliation's Paddle round-trip.
+      await env.DIRECTORY_DB.prepare(
+        `UPDATE paddle_checkouts SET created_at = ?, last_synced_at = ? WHERE transaction_id = ?`,
+      )
+        .bind(Date.now() - 31 * 60 * 1000, Date.now(), 'txn_reuse_old')
+        .run();
+
+      await postCheckout(auth, 'txn_reuse_new');
+    });
+
     it('recovers a first purchase whose webhook never arrived', async () => {
       const { userId, auth } = await authFor('iap-checkout-1');
       await postCheckout(auth, 'txn_recover_1');

@@ -14,6 +14,11 @@ export const SITE_URL = 'https://bracemark.com';
 /** Deep links into bracemark-web. The site never renders auth UI itself. */
 export const SIGN_IN_URL = `${APP_URL}/sign-in`;
 export const CREATE_ACCOUNT_URL = `${APP_URL}/create-account`;
+// Checkout lives in the app, not here: a Paddle transaction is minted per ACCOUNT
+// (POST /v1/iap/checkout stamps the account binding), so there is nothing this
+// origin — which has no session — can start. /pricing therefore sends new visitors
+// to create-account and returning ones to the settings section that owns the flow.
+export const UPGRADE_URL = `${APP_URL}/settings/subscription`;
 
 // The published support address, and the contact of record for App Store, Play,
 // and Paddle review. The domain is registered; the mailbox (Namecheap Private
@@ -22,6 +27,7 @@ export const CREATE_ACCOUNT_URL = `${APP_URL}/create-account`;
 export const SUPPORT_EMAIL = 'support@bracemark.com';
 
 export const HEADER_LINKS = [
+  { href: '/pricing', label: 'Pricing' },
   { href: '/docs', label: 'Docs' },
   { href: '/blog', label: 'Blog' },
   { href: '/about', label: 'About' },
@@ -32,6 +38,7 @@ export const FOOTER_LINKS = [
   {
     heading: 'Product',
     links: [
+      { href: '/pricing', label: 'Pricing' },
       { href: '/docs', label: 'Docs' },
       { href: '/blog', label: 'Blog' },
     ],

@@ -34,6 +34,20 @@ overrides). Create collects a strict subset of edit's fields.
 | bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
 | bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
+**Every create surface gates on the plan's link cap — except the one that
+can't.** Free's 200-link wall is server-enforced at `files/sign`
+([iap.md](./iap.md)), and a local-first save that ignores it succeeds locally and
+then **wedges the pending queue**: the op can't drain, and every op chunked behind
+it is stuck too. So the three **in-process** create surfaces read `useLinkQuota`
+and render `LinkQuotaBanner` + an upgrade CTA **instead of** the form — web
+quick-add, the browser extension's popup, bracemark-expo's add screen (that
+hook's header is the canonical rationale; it counts trash-inclusive, because
+Trash is a listId and the server counts those blobs too). The full-edit surfaces
+need no gate — they write no new `links/` path — and import has its own check
+([data-lifecycle.md](./data-lifecycle.md)). The **share sheet** is the one
+exception, on iOS-process grounds rather than principle
+([share-sheet.md](./share-sheet.md)). A new create surface inherits the rule.
+
 The two bracemark-expo in-app editors are the web pair's behavioral twins (same
 validation, same quota banner on create, same dirty close guard — swipe-down /
 Android-back swallowed via `usePreventRemove`) presented phone-shaped: both

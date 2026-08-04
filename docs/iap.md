@@ -66,9 +66,22 @@ money-adjacent (Tier-0 backup set).
    before it's returned — the only account→Paddle key that exists before a
    subscription does, and what makes a lost first webhook recoverable
    (_reconciliation_ below). Client opens `Paddle.Checkout.open({ transactionId })`.
-   Guard: an already-subscribed account 409s (`already_subscribed`) — a second
+   Two guards, because the double-subscription hole has two doors. An
+   already-subscribed account **409s** (`already_subscribed`) — a second
    checkout would mint a second live subscription; Plus→Pro is a subscription
-   _update_ (proration), a separate flow, not yet built.
+   _update_ (proration), a separate flow, not yet built. That check can only see
+   a subscription that EXISTS, so it is blind to two checkouts created **before
+   either is paid** (double-click, two tabs, a retry) — and two live `txn_…` is
+   two payable checkouts on one account. So the endpoint is also **idempotent
+   within a checkout window** (`CHECKOUT_REUSE_MS`, 30 min): a repeat call for
+   the same plan hands back the account's existing pending `txn_…` instead of
+   minting another, and one transaction cannot be paid twice. Past the window a
+   new one is minted, so an abandoned checkout doesn't pin a stale transaction
+   for the row's 3-day TTL. A pending row for a DIFFERENT plan falls through to
+   a new transaction (refusing it would strand someone who abandoned a Plus
+   checkout and came back for Pro) — that leaves both payable, which is the same
+   gap the plan-change flow has to close, and is unreachable while one plan is
+   on sale.
 2. **Webhook** — Paddle → `POST /v1/iap/paddle/webhook`. Signature = HMAC-SHA256
    over `${ts}:${rawBody}` against the per-destination secret, ±5 min replay
    window. Past the signature everything is **log-and-ACK** (a signed event we
@@ -473,13 +486,56 @@ deep-links to it); a Paddle purchase seen from the app gets a
 
 ### open follow-ups
 
+Three of these are one family — **plan change**, **cadence change**, and **the
+store crossgrade** below: every change to a live subscription is unbuilt. They
+share a cause (a subscription that already exists can only be _updated_, never
+re-bought) and a stopgap (upgrade cards render only on free, and
+`POST /iap/checkout` 409s + dedupes — see _checkout_ above), so whichever ships
+first should land the flow the other two reuse.
+
 - **Plan change (Plus→Pro)** — a Paddle subscription _update_ with proration;
   until then upgrade cards show only on free and the server 409s a second
-  checkout.
-- **Save-time link-cap UX** — the 200-link wall is server-enforced at sync, but
-  the create editors don't pre-check it yet; a local count check + upsell dialog
-  beats a silent sync failure. Same for surfacing `upgrade_required` from the
-  sync engine.
+  checkout. Deferred deliberately: Pro is not on sale (`AVAILABLE_PAID_PLANS`),
+  so at launch there is exactly one paid plan and nothing to change to.
+- **Cadence change (monthly↔annual)** — the SAME subscription-update flow, not a
+  lighter case: on Paddle it is an item swap to the other `pri_…` with
+  proration, and on the stores it is a crossgrade inside one subscription group.
+  This is why `AVAILABLE_CADENCES` is `['yearly']` at launch — selling monthly
+  first would ship a one-way door, where a monthly customer who wants annual has
+  no path but cancel, wait out the period, and re-subscribe.
+- **Selling the monthly cadence at all** — beyond the switch flow, the catalog
+  is single-cadence in two places that fail differently. `services/iap.ts` maps
+  price id → plan against exactly ONE `pri_…` per plan, so a monthly
+  subscriber's webhook would fail `unknown_price` — and that is the log-and-ACK
+  permanent drop (they pay, and never get entitled). `STORE_PRODUCT_IDS` is
+  `Record<PaidPlan, string>` (one SKU, `…​.yearly`), so it needs the cadence axis
+  and both stores need the products created. Prices are already constants
+  (`PLAN_USD_PER_MONTH`); nothing else is.
+- **Lifetime ($149, the capped launch lever)** — a one-time Paddle transaction,
+  and `applyPaddleEvent` returns early on anything that isn't `subscription.*`
+  (`transaction.completed` is deliberately ignored), so today a lifetime payment
+  would be accepted and dropped on the floor. Needs that branch, writing a
+  purchase row with `expires_at: null` — the fold's non-expiring case, which
+  already works for manual grants. `LIFETIME_ON_SALE` in `iap/plans.ts` is the
+  single flag every surface reads; it stays `false` until this exists, and the
+  pricing page renders nothing at all rather than a "coming soon" strip.
+- **The trial is catalog config, not code** — `TRIAL_DAYS` (14) is the copy's
+  source, but the trial period itself is configured on the **yearly `pri_…`** in
+  the Paddle catalog, and the fold already treats `trialing` as entitled. So the
+  checklist item is: configure the trial on the annual price before launch, and
+  never on a monthly one (`TRIAL_CADENCES`) — the marketing site already says
+  "14 days free" (`/pricing`), so a catalog that doesn't carry it is a promise
+  the checkout breaks.
+- **Surfacing `upgrade_required` client-side** — the code exists only at the
+  server gate. Nothing in the sync engine inspects the 403, so an over-cap put
+  lands as an ordinary rejected cycle (`bgSyncStatus: 'error'`) with no route to
+  the paywall: what the enforcement table above calls "client maps to the paywall"
+  is the design, not yet the code. It stays mostly unreachable because the save
+  surfaces refuse first — the link cap is pre-checked on every create surface but
+  one ([editors.md](./editors.md), the create family's quota gate), and the
+  exception is the bracemark-expo share sheet
+  ([share-sheet.md](./share-sheet.md)), which is therefore the one path that can
+  still wedge a queue.
 - **Extraction gating beyond the settings toggle** — free stores the preview
   image, but the HEAVY blob facets (read-mode / screenshot / page copy) are
   client-gated: since the server no longer refuses any `files/` put (it can't

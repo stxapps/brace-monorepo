@@ -24,6 +24,7 @@ import { Check, ExternalLink, RefreshCw } from 'lucide-react-native';
 import { useEntitlements } from '@stxapps/expo-react';
 import {
   type AvailablePaidPlan,
+  entitlementsOf,
   PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
@@ -212,7 +213,10 @@ export function SubscriptionSection() {
             </View>
             <Text className="text-sm text-muted-foreground">
               {plan === 'free'
-                ? 'Encrypted saving, sync, lists and tags — up to 200 links, without previews.'
+                ? // "with previews" — this app extracts them itself, on-device and for
+                  // free (it never calls bracemark-extractor; see docs/link-extraction.md).
+                  // The cap comes from the entitlements table rather than the string.
+                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews for what you save here.`
                 : expiresAt === null
                   ? 'Never expires.'
                   : willRenew

@@ -292,6 +292,15 @@ once read-mode and page copy ship. The grandfathered cohort then has a standing
 reason not to churn — which, per _the thing the table hides_, is worth more than
 the price increase itself.
 
+**Monthly is not on sale at launch.** The price row above is the CATALOG; the
+storefront at launch is annual only (`AVAILABLE_CADENCES` in `iap/plans.ts`).
+The economics below are half the reason — a monthly sub only out-earns annual if
+it survives twelve months, which at 30–50% churn most won't — but the blocker is
+mechanical: switching cadence is the same unbuilt subscription-update flow as
+Plus→Pro (docs/iap.md, _open follow-ups_), so selling monthly first would ship a
+one-way door, where a monthly customer who wants annual has no path but cancel,
+wait out the period, and re-subscribe. Add it with that flow, not before.
+
 **The trial goes on the annual plan only.** The monthly option exists to remove
 the "$48 up front" objection, not to be the default: putting the trial solely on
 annual funnels conversions into the plan that pays ~$48 at once instead of ~$6,

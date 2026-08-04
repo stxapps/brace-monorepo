@@ -20,6 +20,7 @@ import { Check, ExternalLink, RefreshCw } from 'lucide-react';
 import { useApiClient } from '@stxapps/react';
 import {
   type AvailablePaidPlan,
+  entitlementsOf,
   iapCheckoutEndpoint,
   iapPortalEndpoint,
   type Plan,
@@ -167,7 +168,12 @@ export function SubscriptionSection() {
             </span>
             <span className="text-sm text-muted-foreground">
               {plan === 'free'
-                ? 'Encrypted saving, sync, lists and tags — up to 200 links, without previews.'
+                ? // NOT "without previews": free stores preview images like every
+                  // plan, it just needs a client to extract them — and in a web tab
+                  // CORS means that client is the browser extension. What Plus buys
+                  // is `serverExtraction`, i.e. previews for links no device fetched
+                  // (see docs/link-extraction.md, _the web-only gap_).
+                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews from the browser extension.`
                 : expiresAt === null
                   ? 'Never expires.'
                   : willRenew

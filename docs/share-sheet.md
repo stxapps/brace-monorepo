@@ -167,6 +167,16 @@ missed).
   it, and selecting another list discards the pending create.
 - **Duplicates**: not detected in the sheet (iOS can't see the DB; a stale
   snapshot would lie). Save anyway; dedup is the apply-side's concern.
+- **The plan's link cap**: not pre-checked either, and for the same reason — the
+  count lives in the sqlite the extension must not open, and the snapshot carries
+  `{ sessionPresent, lists, tags }` only. Every OTHER create surface refuses the
+  save at the cap and shows the upgrade banner instead of the form
+  ([editors.md](./editors.md)); here a free account at 200 writes an outbox draft
+  whose put the server then refuses at `files/sign` (`upgrade_required`), wedging
+  the pending queue behind it. This makes the share sheet the one save path that
+  can reach that state. Closing it means carrying the link count + the cap on the
+  snapshot — a **stale soft gate**, since the snapshot is a cache — which is why
+  it wasn't just copied across; unbuilt.
 - **No session** (cold share before first sign-in): the sheet shows "Open
   Bracemark and sign in first" instead of hanging or crashing — snapshot absent /
   `sessionPresent: false` on iOS, `getSession() === null` on Android.

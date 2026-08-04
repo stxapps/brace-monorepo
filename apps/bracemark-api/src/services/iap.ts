@@ -322,6 +322,22 @@ const CHECKOUT_ABANDONED_MS = 12 * 60 * 60 * 1000;
 // user is most likely waiting on.
 const MAX_CHECKOUT_RESOLVE_PER_READ = 2;
 
+// How long a pending checkout is REUSED instead of minting a second one — the
+// window in which a repeat `POST /iap/checkout` for the same plan is treated as
+// the same checkout attempt (see createPaddleTransaction).
+//
+// The `already_subscribed` guard below only sees subscriptions that EXIST, so it
+// cannot stop two calls that both land before either is paid — a double-click,
+// two tabs, a retry after a flaky response — and two live `txn_…` for one
+// account is two payable checkouts, i.e. the double-subscription hole via a
+// different door. Handing back the same transaction makes them unpayable twice.
+//
+// Sized as "one checkout session, generously": long enough to cover leaving the
+// overlay to find a card, short enough that an abandoned checkout doesn't pin a
+// stale transaction to the account for the 3-day row TTL. A transaction paid
+// inside the window turns into a subscription, and the guard takes over.
+const CHECKOUT_REUSE_MS = 30 * 60 * 1000;
+
 // Whether a pending checkout is due for a resolve attempt.
 export function needsCheckoutResolve(c: PaddleCheckoutEntity, now: number): boolean {
   const age = now - c.createdAt;
@@ -673,14 +689,40 @@ export async function createPaddleTransaction(
   // Guard the double-subscription hole: a second checkout from an already-
   // entitled account would mint a SECOND live Paddle subscription (double
   // billing) — a plan change is a subscription UPDATE (proration), a separate
-  // flow. Best-effort (two concurrent checkouts can still race past it), but it
-  // closes the ordinary path; the UI hides upgrade cards on paid plans too.
+  // flow. The UI hides upgrade cards on paid plans too.
   // Refreshes: this is the one read where a stale row costs the USER money (a
   // subscriber whose renewal event was lost would be waved through to a second
   // subscription), and the path is already outbound + tight-rate-limited.
   const current = await getSubscriptionStatus(env, userId, { refresh: true });
   if (current.plan !== 'free') {
     throw new HttpError(409, 'already_subscribed', 'This account already has a subscription');
+  }
+
+  const repo = paddleCheckoutsRepo(env.DIRECTORY_DB);
+  const now = Date.now();
+
+  // The guard above can only see subscriptions that EXIST, so it is blind to the
+  // other half of the hole: two checkouts created before either is paid. Reuse
+  // this account's own fresh transaction for the same plan instead of minting a
+  // second payable one (CHECKOUT_REUSE_MS). This is what makes the endpoint
+  // idempotent across a double-click, two tabs, or a retry — the client gets one
+  // `txn_…`, and one transaction cannot be paid twice.
+  //
+  // A row for a DIFFERENT plan falls through to a new transaction: refusing it
+  // would strand someone who abandoned a Plus checkout and came back for Pro.
+  // That leaves both payable, which is the same gap the plan-change flow has to
+  // close — and it is unreachable while one plan is on sale (docs/iap.md).
+  //
+  // Best-effort, like the record below: if the table can't be read we mint,
+  // which is exactly the old behaviour. Failing a paying customer's checkout
+  // because a dedupe read blipped would trade a rare double-charge for a certain
+  // lost sale.
+  try {
+    const pending = await repo.listPendingByUserId(userId);
+    const reusable = pending.find((c) => c.plan === plan && now - c.createdAt < CHECKOUT_REUSE_MS);
+    if (reusable) return reusable.transactionId;
+  } catch (e) {
+    console.error(`createPaddleTransaction: could not read pending checkouts for ${userId}`, e);
   }
 
   const priceId = plan === 'pro' ? env.PADDLE_PRICE_ID_PRO : env.PADDLE_PRICE_ID_PLUS;
@@ -715,9 +757,8 @@ export async function createPaddleTransaction(
   // trade a rare recovery for a certain outage. The stale sweep rides along on
   // the write we're already doing.
   try {
-    const repo = paddleCheckoutsRepo(env.DIRECTORY_DB);
-    await repo.create({ transactionId, userId, plan });
-    await repo.deleteStale(userId, Date.now() - CHECKOUT_TTL_MS);
+    await repo.create({ transactionId, userId, plan, createdAt: now });
+    await repo.deleteStale(userId, now - CHECKOUT_TTL_MS);
   } catch (e) {
     console.error(`createPaddleTransaction: could not record checkout ${transactionId}`, e);
   }

@@ -53,17 +53,21 @@
 // (free:false, plus:true, pro:true — mirroring nestedLists) and the table and
 // the data reconverge.
 //
-// The same doc's PRICING section is likewise ahead of this file in two ways, and
-// neither is an entitlement, which is why nothing is stubbed here yet:
-//   - a MONTHLY price ($5.99/mo beside $48/yr). This file models one price per
-//     plan per YEAR; a monthly option is a second billing CADENCE, so it belongs
-//     in the checkout contract (iap/endpoints.ts) + the Paddle catalog, with
-//     PLAN_USD_PER_YEAR gaining a PLAN_USD_PER_MONTH sibling for card copy.
-//   - a free TRIAL (14 days, annual plan only). A trial is a subscription STATE,
-//     not a capability: a trialing account is entitled to exactly `plus`, so
-//     entitlementsOf() is already correct for it. What has to learn about trials
-//     is the subscription status/fold (trial end, converted-vs-lapsed) — see
-//     docs/iap.md — never this table.
+// The same doc's PRICING section describes three things that are NOT
+// entitlements — a monthly cadence, a free trial, and the lifetime launch lever.
+// All three now have constants below, and all three follow the same rule as Pro:
+// the CATALOG is fully specified here, the STOREFRONT is a separate, smaller
+// list. None of them changes this table, because none of them changes what a
+// plan unlocks:
+//   - MONTHLY is a second billing CADENCE of the same plan, not a plan. It lives
+//     in PLAN_USD_PER_MONTH + AVAILABLE_CADENCES, and shipping it is checkout-
+//     contract + catalog work (a second `pri_…` per plan, a second store SKU) —
+//     see docs/iap.md, _open follow-ups_.
+//   - a TRIAL is a subscription STATE: a trialing account is entitled to exactly
+//     `plus`, so entitlementsOf() is already correct for it and the fold already
+//     treats `trialing` as entitled. Only its LENGTH is data (TRIAL_DAYS).
+//   - LIFETIME is a one-time purchase of the `plus` entitlement with no expiry —
+//     the fold's `expiresAt: null` case. It is a PRICE and a policy, not a tier.
 
 export const PLANS = ['free', 'plus', 'pro'] as const;
 export type Plan = (typeof PLANS)[number];
@@ -238,10 +242,86 @@ export const PLAN_LABELS: Record<Plan, string> = {
   pro: 'Pro',
 };
 
+// --- billing cadence ------------------------------------------------------
+// A cadence is HOW OFTEN the same entitlement is billed, never what it unlocks —
+// so it is deliberately not part of `Plan`, and nothing in ENTITLEMENTS branches
+// on it. Same catalog/storefront split as PAID_PLANS vs AVAILABLE_PAID_PLANS.
+
+export const BILLING_CADENCES = ['yearly', 'monthly'] as const;
+export type BillingCadence = (typeof BILLING_CADENCES)[number];
+
+// The cadences actually ON SALE. Yearly only at launch, and that is a decision,
+// not a stub (docs/business-model.md, _pricing_): a monthly sub pays twelve
+// processor charges instead of one and only out-earns annual if it survives
+// twelve months, which at 30–50% churn most don't. The harder blocker is that
+// switching cadence is the SAME unbuilt subscription-update flow as Plus→Pro
+// (docs/iap.md, _open follow-ups_) — so selling monthly before that lands would
+// ship a one-way door: monthly→annual with no path but cancel-and-wait.
+export const AVAILABLE_CADENCES = ['yearly'] as const;
+export type AvailableCadence = (typeof AVAILABLE_CADENCES)[number];
+
 export const PLAN_USD_PER_YEAR: Record<PaidPlan, number> = {
   plus: 48,
   pro: 96,
 };
+
+// The monthly list price, for card copy — the same "must match the catalog"
+// warning as PLAN_USD_PER_YEAR above. $5.99 against $48/yr makes annual a 33%
+// saving, which reads as a real discount; $4.99 would make annual only 20% off
+// and the annual plan pointless. Pro's is spec-in-waiting at the same ratio.
+export const PLAN_USD_PER_MONTH: Record<PaidPlan, number> = {
+  plus: 5.99,
+  pro: 11.99,
+};
+
+// --- free trial -----------------------------------------------------------
+// 14 days, and the length is load-bearing (docs/business-model.md, _pricing_):
+// Bracemark's value is cumulative, so a trial has to span at least one full
+// weekly usage cycle plus the browser-extension install — a 3-day trial expires
+// before the habit that justifies paying has formed. Not a refund strategy: the
+// EU/UK statutory withdrawal window runs from the CHARGE date, so a trial that
+// converts on day 14 opens a fresh 14-day window then.
+export const TRIAL_DAYS = 14;
+
+// The trial rides on the ANNUAL plan only — it funnels conversions into the
+// plan that pays ~$48 at once rather than ~$6. Enforced by the Paddle catalog
+// (the trial period is configured on the yearly `pri_…`, not in code), so this
+// constant is the marketing copy's source, and the checklist item that keeps the
+// two in step lives in docs/iap.md.
+export const TRIAL_CADENCES = ['yearly'] as const;
+
+// --- lifetime (launch lever) ----------------------------------------------
+// $149 once, for `plus` forever. The economics work: at ~$53.6/yr contribution
+// and 40% churn an annual subscriber's expected LTV is ~$134, so $149 paid today
+// beats it — and it pays when cash is scarcest. What it costs is that lifetime
+// buyers are the LOWEST-churn cohort, permanently excluded from every future
+// price increase, which is why it is capped and retired rather than standing
+// (docs/business-model.md, _tiers_).
+//
+// Attached to Plus, never Pro: Plus is the only plan on sale at launch, and
+// $149 against $48/yr is a ~3.1-year payback, which reads as a real deal.
+// "Lifetime" therefore means Plus's entitlements as they grow — NOT an
+// automatic upgrade to Pro, and not Pro's quota.
+export const LIFETIME_PLAN = 'plus' satisfies PaidPlan;
+export const LIFETIME_USD = 149;
+
+// The cap that makes it urgent — stated on the pricing page, enforced by
+// retiring the Paddle product. A standing lifetime offer is the long-tail
+// liability; a capped one is a launch lever.
+export const LIFETIME_SEATS = 500;
+
+// Off until the checkout can actually take the money. Lifetime is a ONE-TIME
+// Paddle transaction, and `applyPaddleEvent` returns early on anything that
+// isn't `subscription.*` — `transaction.completed` is deliberately ignored — so
+// today a lifetime payment would be accepted and dropped. Flipping this to
+// `true` is the last step, after that webhook branch and the Paddle product
+// exist; every surface reads this flag rather than deciding for itself, so the
+// offer appears everywhere at once or nowhere. See docs/iap.md, _open
+// follow-ups_.
+// Typed `boolean`, not inferred as the literal `false`: a literal type would let
+// every consumer's dead-branch analysis delete the on-sale UI at compile time,
+// which turns "flip one flag" into "flip one flag and rediscover what it broke".
+export const LIFETIME_ON_SALE = false;
 
 // The upgrade cards' customer-facing copy — the human rendering of the
 // entitlements table above, so it lives HERE rather than in each app: it is plain
@@ -254,7 +334,18 @@ export const PLAN_USD_PER_YEAR: Record<PaidPlan, number> = {
 //   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
 //     are gated in ENTITLEMENTS above but not yet built, so they are NOT promised
 //     here — re-add each line as it lands. At launch Plus is unlimited links +
-//     preview images + app lock/hidden lists + the structured search editor.
+//     server-side link previews + app lock/hidden lists + the structured search
+//     editor.
+//   - Never sell the preview IMAGE. It is free for everyone (a client extracts it
+//     at zero cost to us), and this list said "Preview images" for a while from
+//     back when it was a paid lever — which read as "free users get no
+//     thumbnails", the opposite of the tiers table. What Plus actually gates is
+//     `serverExtraction`, and the honest claim is COVERAGE, not quality: the
+//     server is the WORST extractor (`extractedBy: 'server'` is the floor of
+//     `tierOf` — see docs/link-extraction.md, _who extracts_), but it is the only
+//     one that can preview a link no device fetched — a save made in the web app,
+//     where CORS blocks the tab, and the back-fill of imported links. Free gets
+//     the BEST extractor, on the device doing the saving.
 //   - Pro's copy is kept as spec-in-waiting even though Pro isn't sold: only
 //     AVAILABLE_PAID_PLANS get a card, so putting Pro on sale stays the one-line
 //     change described above.
@@ -263,7 +354,7 @@ export const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[
     blurb: 'The full visual library',
     features: [
       'Unlimited saved links',
-      'Preview images',
+      'Link previews for web saves & imports',
       'App lock & hidden lists',
       'Advanced search',
     ],
