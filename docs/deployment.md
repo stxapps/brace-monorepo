@@ -217,7 +217,7 @@ what keeps "`api.bracemark.com` only ever sees ciphertext" code-provable.
   the rate-limit bindings are the only bindings — no `d1_databases`, no
   `r2_buckets`.
 - **Custom domain** — Workers custom domain per tier
-  (`extractor.staging.bracemark.com` / `extractor.bracemark.com`), auto-provisioned
+  (`extractor.bracemark-staging.com` / `extractor.bracemark.com`), auto-provisioned
   per-host cert like the api.
 
 ```bash
@@ -252,17 +252,18 @@ hosts; [dns](#dns) covers the zones, records, and certs that make them resolve.
 
 | tier         | site (CloudFront)       | web (CloudFront)            | api (Worker)                | extractor (Worker)                |
 | ------------ | ----------------------- | --------------------------- | --------------------------- | --------------------------------- |
-| `staging`    | `staging.bracemark.com` | `app.staging.bracemark.com` | `api.staging.bracemark.com` | `extractor.staging.bracemark.com` |
+| `staging`    | `bracemark-staging.com` | `app.bracemark-staging.com` | `api.bracemark-staging.com` | `extractor.bracemark-staging.com` |
 | `production` | `bracemark.com`         | `app.bracemark.com`         | `api.bracemark.com`         | `extractor.bracemark.com`         |
 
-Staging nests under a `staging.bracemark.com` subdomain (`<role>.staging.bracemark.com`)
-rather than going flat (`staging-<role>.bracemark.com`) — see
-[why nested staging](#why-nested-staging) below. The site is the exception that
-proves the rule: it has no `<role>.` label because it **is** the zone apex, which
-is why staging's site host is the bare `staging.bracemark.com`.
+The two tiers sit on **two different registrable domains**, not one domain split
+by subdomain — see
+[why staging is a separate domain](#why-staging-is-a-separate-domain) below.
+Within each, the pattern is identical (`<role>.<domain>`), and the site is the
+exception that proves the rule: it has no `<role>.` label because it **is** the
+zone apex.
 
 **Two web origins per tier, both real API clients.** `app.*` is the application
-(bracemark-web); the **apex** (`bracemark.com`, `staging.bracemark.com`) is the
+(bracemark-web); the **apex** (`bracemark.com`, `bracemark-staging.com`) is the
 marketing site (bracemark-site), which also calls the api for public data (stats,
 health check). Both therefore appear in `CORS_ORIGINS` — neither is a
 redirect-only host.
@@ -321,7 +322,6 @@ own record, which is correct and not optional.
 | `app`                 | CNAME   | `<prod-web-dist>.cloudfront.net`              | DNS only            |
 | `api`                 | —       | created by the Worker custom domain           | proxied (automatic) |
 | `extractor`           | —       | created by the Worker custom domain           | proxied (automatic) |
-| `staging`             | NS      | the staging account's two nameservers         | n/a                 |
 | `_<hash>`             | CNAME   | `…acm-validations.aws` (one per cert SAN)     | DNS only            |
 | `@` / `_dmarc` / DKIM | MX, TXT | Namecheap Private Email (see [email](#email)) | n/a                 |
 
@@ -332,13 +332,13 @@ reasoning that puts docs and blog on apex _paths_ rather than subdomains
 domain name on the distribution and a SAN on the cert, or the redirect is a TLS
 error instead of a redirect.
 
-#### staging zone — `staging.bracemark.com` (staging Cloudflare account)
+#### staging zone — a separate registrable domain (staging Cloudflare account)
 
-Added to the **second** Cloudflare account as its own zone. Cloudflare assigns a
-different nameserver pair per zone, so this one gets its own, and the `staging`
-`NS` record in the production zone above is what delegates to it. **Nothing about
-staging is configured at Namecheap** — the registrar only ever knows the
-production pair.
+**Staging does not nest under `bracemark.com`.** It gets its own domain, added as
+a normal apex zone in the second Cloudflare account — see
+[why staging is a separate domain](#why-staging-is-a-separate-domain) for the
+constraint that forces this. Proposed name: **`bracemark-staging.com`** (not yet
+registered).
 
 | name        | type  | value                               | proxy               |
 | ----------- | ----- | ----------------------------------- | ------------------- |
@@ -348,15 +348,10 @@ production pair.
 | `extractor` | —     | created by the Worker custom domain | proxied (automatic) |
 | `_<hash>`   | CNAME | `…acm-validations.aws`              | DNS only            |
 
-> **Confirm subdomain zones are available on your plan before relying on this.**
-> The whole nested-staging design ([why nested staging](#why-nested-staging))
-> rests on Cloudflare accepting `staging.bracemark.com` as a zone in a second
-> account. Cloudflare supports subdomain zones, but it was an Enterprise-only
-> feature for years — check that "Add a site" takes a subdomain on the free plan
-> before wiring anything to it. If it doesn't, the fallback is a **separate
-> domain** for staging (e.g. `bracemark.dev`), **not** folding staging into the
-> production account — that would discard the per-tier blast-radius isolation the
-> entire [topology](#topology) is built on.
+Its nameservers are set at **its own** registrar entry, pointing at the staging
+Cloudflare account. The production zone gets no `NS` delegation record and
+`bracemark.com` never learns staging exists — which is a cleaner separation than
+the delegation would have been.
 
 #### certificates
 
@@ -366,9 +361,10 @@ production pair.
 - Production cert: `bracemark.com` + `www.bracemark.com` + `app.bracemark.com`.
   A `*.bracemark.com` wildcard covers `app.` and `www.` but **not** the apex, so
   name the apex explicitly.
-- Staging cert: `staging.bracemark.com` + `*.staging.bracemark.com` — one label
-  deeper than a `*.bracemark.com` wildcard reaches, which is the trade-off
-  [why nested staging](#why-nested-staging) already flags.
+- Staging cert: the staging apex + a plain `*.<staging-domain>` wildcard. Because
+  staging is now its own registrable domain rather than a nested subdomain, a
+  one-label wildcard covers `app.`, `api.` and `extractor.` — the awkward
+  two-label wildcard the nested design needed is gone.
 - The Worker hosts need no ACM work at all: a Workers custom domain
   auto-provisions its own per-host certificate.
 
@@ -451,10 +447,10 @@ glance tells you the tier:
 | Extractor Worker  | `bracemark-extractor-staging` / `staging`                                                            | `bracemark-extractor-production` / `production`                                                               |
 | D1 databases      | `bracemark-directory-db-staging`, `bracemark-accounts-db-1-staging`, `bracemark-sessions-db-staging` | `bracemark-directory-db-production`, `bracemark-accounts-db-1-production`, `bracemark-sessions-db-production` |
 | R2 bucket         | `bracemark-user-files-staging`                                                                       | `bracemark-user-files-production`                                                                             |
-| site domain       | `staging.bracemark.com`                                                                              | `bracemark.com`                                                                                               |
-| web domain        | `app.staging.bracemark.com`                                                                          | `app.bracemark.com`                                                                                           |
-| api domain        | `api.staging.bracemark.com`                                                                          | `api.bracemark.com`                                                                                           |
-| extractor domain  | `extractor.staging.bracemark.com`                                                                    | `extractor.bracemark.com`                                                                                     |
+| site domain       | `bracemark-staging.com`                                                                              | `bracemark.com`                                                                                               |
+| web domain        | `app.bracemark-staging.com`                                                                          | `app.bracemark.com`                                                                                           |
+| api domain        | `api.bracemark-staging.com`                                                                          | `api.bracemark.com`                                                                                           |
+| extractor domain  | `extractor.bracemark-staging.com`                                                                    | `extractor.bracemark.com`                                                                                     |
 
 `bracemark-<resource>-<tier>` throughout — the Worker auto-suffixes its `name`
 (`bracemark-api` → `bracemark-api-staging` / `bracemark-api-production`), so the env name
@@ -464,23 +460,45 @@ _is_ the tier with no separate `-prod` shorthand. The `*-dev` peers
 provisioned); CloudFront distributions are addressed by generated ID, so the
 name lives in the distribution **comment**.
 
-#### why nested staging
+#### why staging is a separate domain
 
-Staging hosts nest (`app.staging.bracemark.com`) instead of going flat
-(`staging-app.bracemark.com`) for one structural reason: **each tier is its own
-Cloudflare account** (see [topology](#topology)). A zone lives in exactly one
-account, so `bracemark.com` sits in the production account. Nesting lets you delegate
-the whole `staging.bracemark.com` subdomain (its own NS records → a separate zone) to
-the staging account, keeping the two tiers genuinely isolated. A flat
-`staging-app.bracemark.com` is a direct child of `bracemark.com` and would have to live in
-the production account's zone — breaking that isolation.
+Staging lives on its own registrable domain (`bracemark-staging.com`) rather than
+under `bracemark.com` at all. The reason is a hard Cloudflare constraint meeting
+the [topology](#topology):
 
-Trade-off: Cloudflare Universal SSL and an ACM `*.bracemark.com` wildcard only cover
-one label deep, so they don't match `app.staging.bracemark.com`. Cloudflare Workers
-custom domains auto-provision a per-host cert (no action needed for the api),
-but the staging **web** (CloudFront + ACM) needs a `*.staging.bracemark.com` wildcard
-cert. Production stays on the clean apex hosts (`app.bracemark.com`, `api.bracemark.com`),
-which is what end users see.
+- **Each tier is its own Cloudflare account**, and **a zone lives in exactly one
+  account.** `bracemark.com` is in the production account.
+- **A Workers custom domain requires its zone to be in the same account as the
+  Worker** (see [dns](#dns)), so the staging api and extractor need a zone the
+  _staging_ account owns.
+- Therefore staging hosts cannot be children of `bracemark.com` — flat
+  (`staging-app.bracemark.com`) or nested (`app.staging.bracemark.com`) alike —
+  because both resolve out of the production account's zone.
+
+> **This supersedes an earlier design.** Staging used to nest under
+> `staging.bracemark.com`, delegated to the staging account as its own zone via
+> `NS` records. **That does not work on a non-Enterprise plan:** Cloudflare only
+> accepts an apex domain when adding a site, and treating a subdomain as an
+> independent zone ("Subdomain support") is
+> [an Enterprise-only feature](https://developers.cloudflare.com/dns/manage-dns-records/how-to/create-subdomain/).
+> On every other plan a subdomain is just a DNS record inside the parent zone —
+> which puts it in the production account, defeating the isolation.
+
+The alternative — folding staging into the production account — was rejected: it
+would put staging D1/R2 and production D1/R2 under one set of credentials and one
+blast radius, which is the single thing the two-account split exists to prevent.
+A second domain costs ~$10–15/year; that isolation is worth more than that.
+
+It also turns out **cleaner** than the nested design it replaces. Staging is now
+a plain apex zone, so a one-label `*.bracemark-staging.com` wildcard covers
+`app.`, `api.` and `extractor.` — no two-label wildcard, no delegation records,
+and `bracemark.com` never references staging at all. Production keeps the clean
+apex hosts (`app.bracemark.com`, `api.bracemark.com`) that end users see.
+
+Pick a name that is **obviously internal**. Don't reuse a defensive domain from
+[brand.md](./brand.md#domains) (`braceto.com`, `bracemarks.com`): those are
+user-facing 301 sources aimed at real visitors, and pointing one at the staging
+app means a mistyped URL lands a stranger on unreleased code.
 
 ### status & setup checklist
 
@@ -494,11 +512,19 @@ Current reality and the work to make this doc true:
       `-c production`); `CORS_ORIGINS` reads `c.env`. (Fill the wrangler `TODO`s
       and provision D1/R2 before a real deploy.)
 - [x] `bracemark.com` registered at Namecheap (2026-08-04).
-- [ ] DNS: add `bracemark.com` to the **production** Cloudflare account and point
-      Namecheap's nameservers at the pair it assigns; add
-      `staging.bracemark.com` as a zone in the **staging** account and delegate to
-      it with an `NS` record in the production zone. Confirm subdomain zones are
-      available on the plan first — see [dns](#dns).
+- [ ] Register the staging domain (`bracemark-staging.com` proposed). Required,
+      not optional — a subdomain of `bracemark.com` cannot be a zone in the
+      staging Cloudflare account on a non-Enterprise plan, see
+      [why staging is a separate domain](#why-staging-is-a-separate-domain).
+- [ ] DNS: add `bracemark.com` to the **production** Cloudflare account and the
+      staging domain to the **staging** account, pointing each registrar entry at
+      the nameserver pair Cloudflare assigns that zone — see [dns](#dns).
+- [ ] Propagate the chosen staging domain over the now-dead
+      `*.staging.bracemark.com` hosts still in: `docs/env-files.md`,
+      `apps/bracemark-api/wrangler.jsonc`, `apps/bracemark-extractor/wrangler.jsonc`,
+      `apps/bracemark-{web,site,expo,extension}/.env.staging`,
+      `apps/bracemark-{web,site}/src/lib/site.ts`,
+      `apps/bracemark-extension/utils/web-app-url.ts`.
 - [ ] Email: Namecheap Private Email mailbox for `support@bracemark.com`, with
       its MX / SPF / DKIM records added **by hand** in the Cloudflare zone
       (Namecheap's automatic setup doesn't apply once DNS moves). Don't enable

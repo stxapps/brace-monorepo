@@ -123,9 +123,10 @@ domain purchases are cheap and safe regardless and need not wait on it.
 Landed in one change. What moved:
 
 - **Domain topology** — every host in [deployment.md](./deployment.md) and in
-  the apps: `app.` / `api.` / `extractor.bracemark.com`, and the nested
-  `*.staging.bracemark.com` wildcard. `brace.to` no longer appears in any
-  source file.
+  the apps: `app.` / `api.` / `extractor.bracemark.com`, plus the staging hosts.
+  `brace.to` no longer appears in any source file. (The staging hosts have since
+  moved off `*.staging.bracemark.com` onto a separate registrable domain — see
+  [why staging is a separate domain](./deployment.md#why-staging-is-a-separate-domain).)
 - **Nx project and directory names** — `apps/brace-*` → `apps/bracemark-*`,
   `@stxapps/brace-*` → `@stxapps/bracemark-*`. Purely internal; no user, store,
   or DNS record ever saw these. Done in the same pass only to avoid a second
