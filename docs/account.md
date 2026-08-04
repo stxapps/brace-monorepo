@@ -239,6 +239,15 @@ web, extension, and the Expo client must all use the exact same
 rule, or a door fails to unwrap the DEK and the user is locked out. **They can
 never change once real users exist.** (The DEK is random, so it is _not_ part of
 the frozen contract — only the machinery that derives KEKs and unwraps it is.)
+
+**Until launch, "never" has an exception — and it expires.** The rule protects
+_existing users' keys_, and there are none yet, so these constants were in fact
+rewritten during the rename (`bracemark.app-salt.v1.…`, `bracemark-auth-seed`,
+`bracemark-encryption-key`, `bracemark-recovery-kek`) at the cost of
+regenerating every golden vector below. That is a greenfield licence, not a
+standing one: **once real accounts exist, rotating a constant means minting a
+`.v2.` label beside it, never editing this one.** See
+[brand.md](./brand.md#the-rename-in-this-repo--done).
 The contract is pinned by **golden vectors** (`crypto/contract-vectors.ts` in
 `@stxapps/shared` — salt, KEK, wrapped password door, **recovery-KEK + wrapped
 recovery door**, derived keys, signature, packed blob, and a **passphrase
@@ -266,6 +275,12 @@ would buy no security. The **reserved-name blocklist** _is_ the meaningful
 username hardening: exact-match (so `admin123` is fine) against the CANONICAL
 form, so casing can't smuggle a reserved handle past. It lives in `usernameSchema`
 and therefore holds on the **server** too (every auth endpoint validates it).
+
+The set covers **two products, deliberately**: the legacy spellings `brace`,
+`braceto`, and `braceapp` stay reserved alongside the `bracemark*` entries, so
+neither this app's name nor its predecessor's can be impersonated by an account
+handle while the two coexist ([brand.md](./brand.md), [legacy-brace-to.md](./legacy-brace-to.md)).
+They were not cleaned up during the rename and should not be.
 
 The username does double duty: it is the **public handle** (the server's
 case-insensitive `UNIQUE` key) _and_ the **password door's salt input**. Because

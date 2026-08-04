@@ -75,6 +75,15 @@ redirect source and the legacy web app still serves from it during the
 transition (see _phasing_ in
 [legacy-brace-to.md](./legacy-brace-to.md#phasing--keep-legacy-work-off-the-launch-critical-path)).
 
+**The apex is a real property, not a redirect to the app.** `bracemark.com`
+serves the marketing site (`apps/bracemark-site`) while the app keeps
+`app.bracemark.com`. Docs and blog are **paths** on the apex (`/docs`, `/blog`),
+not subdomains, and `www` 301s to it — so a single hostname accrues the
+authority, which is the point of consolidating onto one name at all. What the
+site is and what it may depend on is
+[architecture.md](./architecture.md#apps), _apps_; its origins, buckets, and
+hosts are [deployment.md](./deployment.md#custom-domains).
+
 ### trademark knockout — run 2026-08-03
 
 A knockout search via TMview (aggregates USPTO, EUIPO, WIPO, UK IPO and ~70
@@ -120,81 +129,32 @@ domain purchases are cheap and safe regardless and need not wait on it.
 
 ### the rename in this repo — done
 
-Landed in one change. What moved:
+Landed in one change, with a follow-up pass for the crypto constants. What
+moved: the **domain topology** (every host in
+[deployment.md](./deployment.md) and in the apps, so `brace.to` no longer
+appears in any source file); **Nx project and directory names**
+(`apps/brace-*` → `apps/bracemark-*`, `@stxapps/brace-*` →
+`@stxapps/bracemark-*` — purely internal, no user, store, or DNS record ever saw
+them, done in the same pass only to avoid a second disruptive sweep later);
+**bundle identifiers** (`to.brace.app` → `com.bracemark.app`, dragging the iOS
+app group and the `packages/expo-crypto` keychain service with them); the
+**native module and pod names**, down to the Kotlin package path; **user-visible
+strings**; **all of `docs/`**; and the **frozen crypto constants** in
+`packages/shared/src/crypto/params.ts`, with everything they derive in
+`crypto/contract-vectors.ts` regenerated through the real web-crypto pipeline.
+The file-level inventory is in git; what the rename still _constrains_ is below.
 
-- **Domain topology** — every host in [deployment.md](./deployment.md) and in
-  the apps: `app.` / `api.` / `extractor.bracemark.com`, plus the staging hosts.
-  `brace.to` no longer appears in any source file. (The staging hosts have since
-  moved off `*.staging.bracemark.com` onto a separate registrable domain — see
-  [why staging is a separate domain](./deployment.md#why-staging-is-a-separate-domain).)
-- **Nx project and directory names** — `apps/brace-*` → `apps/bracemark-*`,
-  `@stxapps/brace-*` → `@stxapps/bracemark-*`. Purely internal; no user, store,
-  or DNS record ever saw these. Done in the same pass only to avoid a second
-  disruptive sweep later.
-- **Bundle identifiers** — `apps/bracemark-expo/app.config.ts`,
-  `to.brace.app` → `com.bracemark.app`, dragging the iOS app group
-  (`group.com.bracemark.app`) and the keychain service in
-  `packages/expo-crypto` `shared-keychain.ts`. The expo `name`, `slug`, and
-  `scheme` moved too — the scheme mattered most: it was `bracedotto`, the
-  scheme legacy v1 registers, so both apps installed on one device claimed it.
-- **Native modules** — the local Expo module `bracemark-share` and the
-  `BracemarkCrypto` pod, including Kotlin/Swift class names, the
-  `Name("…")` module ids, and the Kotlin package path (`to.brace.share` →
-  `com.bracemark.share`). The JS `requireNativeModule` call sites moved with
-  them.
-- **User-visible strings** — web `layout.tsx` metadata, `manifest.json`, the
-  landing page, the auth pages, `wxt.config.ts`. (The landing page has since
-  moved off bracemark-web entirely — see _the apex_ below.)
-- **All of `docs/`**, including this file.
-- **Frozen crypto constants** — `packages/shared/src/crypto/params.ts` holds
-  `APP_SALT` and the HKDF domain-separation labels, now `bracemark.app-salt.v1.…`,
-  `bracemark-auth-seed`, `bracemark-encryption-key`, `bracemark-recovery-kek`.
-  These were skipped in the first pass and renamed in a follow-up, on the
-  greenfield argument: the file's "never edit them" rule protects _existing
-  users' keys_, and there are none, so the only cost was recomputing what they
-  derive. Everything downstream in `crypto/contract-vectors.ts` was regenerated
-  through the real web-crypto pipeline and moved with them — `saltHex`, `kekHex`,
-  `authSeedHex`, `encryptionKeyHex`, `publicKeyHex`, `signatureHex`, both wrapped
-  DEKs, the recovery KEK, and the packed blob (whose `plaintext` also changed,
-  so its fixed ciphertext changed with it). `signPayload` is now
-  `bracemark-contract-test-payload`. The `@stxapps/web-crypto` and
-  `@stxapps/expo-crypto` contract specs both re-assert the new values.
-  **This window is closed once real accounts exist**: after launch these
-  constants are frozen for good, and rotating one means minting a `.v2.`
-  constant, not editing this one.
+**The expo `scheme` was the sharp edge**, more than the bundle ID. It was
+`bracedotto` — the scheme legacy v1 registers — so with both apps installed on
+one device, both claimed it. It moved with the identifier, as did the expo
+`name` and `slug`.
 
-One class was deliberately **left alone**:
-
-- **The legacy spellings in the reserved-username list**
-  (`packages/shared/src/auth/credentials.ts`) — `brace`, `braceto`, `braceapp`
-  stay reserved _alongside_ the new `bracemark*` entries, so neither product's
-  name can be impersonated.
-
-Still outstanding, and all of it external to the repo: registering the two
-defensive domains (`bracemark.com` itself is done — see _domains_ above),
-provisioning DNS and certs for the new hosts
-([deployment.md](./deployment.md#dns)), and filling in the store listing URLs —
-which are `TODO_` placeholders in `packages/shared/src/stores/listings.ts`,
-because the values they replaced addressed the legacy listings.
-
-### the apex — bracemark-site
-
-`bracemark.com` is a real property with real pages, not a redirect to the app.
-It is served by **`apps/bracemark-site`**, a Next.js static export in this
-monorepo, while the app keeps `app.bracemark.com`
-([deployment.md](./deployment.md#custom-domains)). Docs and blog are **paths**
-on the apex (`/docs`, `/blog`), not subdomains, so one domain accrues the SEO
-authority — which is the point of having consolidated onto one name at all.
-
-This reverses an earlier decision that the marketing site would live in its own
-repository; the reasoning for the reversal, and what the site is allowed to
-depend on, are in [architecture.md](./architecture.md#apps).
-
-The name is `bracemark-site`, not `bracemark-marketing` or `bracemark-www`:
-"marketing" names a department rather than a property, and `-www` is one
-character from `-web` in a project list. The `web` / `site` pair does need saying
-out loud, which architecture.md's _apps_ section does — `web`/`expo`/`extension`
-are three platform builds of one product; `site` is a different property.
+**The crypto constants were renamed on a greenfield argument, and that window is
+closing.** `params.ts` says never edit these; the rule protects _existing users'
+keys_, and there are none yet, so the only cost was recomputing what they derive.
+Once real accounts exist they are frozen for good, and rotating one means minting
+a `.v2.` constant rather than editing this one — see
+[account.md](./account.md#the-derivation-pipeline).
 
 **What the bundle-ID change costs.** Because the identifier changes, v2 gets
 brand-new listings on every store no matter what the app is called — so **no
@@ -205,8 +165,17 @@ from the v1 listings; that is the real inherited asset. The listing mechanics on
 the legacy side are in
 [legacy-brace-to.md](./legacy-brace-to.md#stores-and-extensions--what-actually-needs-a-build).
 
+Everything still outstanding is external to the repo and tracked where it gets
+done: the two defensive domains under _domains_ above, DNS and certs for the new
+hosts in [deployment.md](./deployment.md#status--setup-checklist), and the store
+listing URLs under _open decisions_ below.
+
 ### open decisions
 
 - Attorney review of the two senior `BRACE` marks (see _trademark knockout_) —
   the knockout search itself is done and clean; the EUTM goods specification
   still needs to be pulled and read.
+- The store listing URLs in `packages/shared/src/stores/listings.ts` are still
+  `TODO_` placeholders: the values they replaced addressed the legacy listings,
+  and the real ones don't exist until v2 is submitted. They block store
+  submission and the marketing site's download links, not the domain work.

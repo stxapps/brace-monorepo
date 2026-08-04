@@ -328,7 +328,7 @@ own record, which is correct and not optional.
 `www` resolves to the same distribution as the apex and **301s to the apex** in
 the shared clean-URL CloudFront Function, so one host accrues the SEO — the same
 reasoning that puts docs and blog on apex _paths_ rather than subdomains
-([brand.md](./brand.md#the-apex--bracemark-site)). It still needs to be an alternate
+([brand.md](./brand.md#domains)). It still needs to be an alternate
 domain name on the distribution and a SAN on the cert, or the redirect is a TLS
 error instead of a redirect.
 
