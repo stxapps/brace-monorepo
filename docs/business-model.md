@@ -116,7 +116,7 @@ The two paid tiers then have a spine, not just a longer list:
 | Free trial                                | —                              | 14 days, **annual plan only** | 14 days, annual only         |
 | Lifetime _(launch lever, then retired)_   | —                              | $149                          | —                            |
 | Saved links                               | 200                            | Unlimited                     | Unlimited                    |
-| Storage quota (blobs)                     | preview imgs only (≤200)       | 5 GB                          | 20 GB                        |
+| Storage quota (blobs) — _not published_   | preview imgs only (≤200)       | 5 GB                          | 20 GB                        |
 | E2E encryption                            | ✅                             | ✅                            | ✅                           |
 | Sync across devices                       | ✅ (habit-builder — don't cap) | ✅                            | ✅                           |
 | Browser extension (save)                  | ✅                             | ✅                            | ✅                           |
@@ -247,6 +247,26 @@ Why these cuts:
   ceiling, the same one `bracemark-extractor`'s `safeFetch` enforces); every _heavier_
   blob (screenshot / read-mode / page copy) is still absent, so there is nothing to
   surface in a quota UI.
+- **The storage quota is not published — on free or on Plus.** The row above is
+  the plan; the pricing page, the upgrade cards, and the store listings say
+  **links only**. Three reasons, and they compound. (1) **Nothing can reach it
+  yet.** Every heavy blob is ▹ planned, so the only thing a library stores is the
+  preview image — a maxed 200-link free account is ~16 MB against 100 MiB, and a
+  Plus user would need tens of thousands of links to approach 5 GiB. The 200-link
+  cap binds first on free and nothing binds on Plus, so the byte number can't
+  inform a decision anyone is making. Publishing a limit on features that don't
+  exist is the mirror image of _never promise in the paywall what isn't built_.
+  (2) **It picks the wrong fight.** "100 MB" read next to Drive/Dropbox/iCloud
+  makes free look stingy and frames Bracemark as a storage product, when the
+  wedge is privacy, structure and locks — none of which a GB row helps. (3) **It
+  would convert a backstop into a contract.** `maxBytes` is the cost ceiling we
+  most need to retune once page copies teach us what a snapshot really costs;
+  unpublished it is a config change, published it is a price change with a
+  grandfathering problem. The quota stays **server-hard** throughout
+  (`bracemark-api` `lib/quota.ts`) and an account that somehow reaches it is told
+  in-app by the existing "storage full" surfaces — an error explaining a wall you
+  hit is not the same object as a promise on a pricing page. Put the row back
+  when read-mode / page copy ship and the number finally differentiates something.
 - **Lifetime ($149)** front-loads cash and suits the privacy/PKM crowd, but is a
   long-tail liability under E2E — offer as a launch lever, then retire. It's
   attached to **Plus**, not Pro: Plus is the only paid plan on sale at launch

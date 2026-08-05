@@ -27,11 +27,24 @@ export const metadata: Metadata = {
 };
 
 // The public pricing page. Every NUMBER on it — the prices, the link caps, the
-// storage quotas, the trial length — and the paid tiers' feature copy are read
-// from `iap/plans.ts` in @stxapps/shared, never retyped here: "a marketing
-// pricing page that hand-copies quotas is the classic drift"
-// (docs/architecture.md, _apps_), and that file is the same source the paywall UI
-// and the server quota gate read.
+// trial length — and the paid tiers' feature copy are read from `iap/plans.ts`
+// in @stxapps/shared, never retyped here: "a marketing pricing page that
+// hand-copies quotas is the classic drift" (docs/architecture.md, _apps_), and
+// that file is the same source the paywall UI and the server quota gate read.
+//
+// The one entitlement deliberately NOT published: the byte/file storage quota
+// (`maxBytes` / `maxFiles`). It is a server-hard cost backstop, not a product
+// gate, and until the heavy-blob features ship (read-mode, screenshot, page
+// copy — all ▹ planned) nothing can reach it: the only blob a library stores is
+// the client-extracted preview image, so a maxed 200-link free account is ~16 MB
+// against 100 MiB. Publishing a limit for a feature that does not exist yet is
+// the inverse of the never-promise-what-isn't-built rule, invites the
+// Drive/Dropbox comparison on an axis Bracemark doesn't compete on, and turns a
+// number we still need to retune into a contract we'd have to grandfather. Put
+// the row back when the heavy blobs land and the number is finally load-bearing.
+// A user who somehow reaches the ceiling still gets told, in-app, by the "storage
+// full" surfaces the quota gate already drives. Argued in
+// docs/business-model.md, _the storage quota is not published_.
 //
 // Which plans appear is likewise data, in both directions: the cards and the
 // comparison COLUMNS are `AVAILABLE_PAID_PLANS`, so putting Pro on sale stays the
@@ -70,26 +83,17 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
-const MIB = 1024 * 1024;
-const GIB = 1024 * MIB;
-
-// Marketing rounding, deliberately: `maxBytes` is binary (5 GiB), and "5 GB" is
-// what a buyer reads. The authoritative number stays the one the server enforces.
-function formatStorage(bytes: number): string {
-  return bytes >= GIB ? `${Math.round(bytes / GIB)} GB` : `${Math.round(bytes / MIB)} MB`;
-}
-
 function formatLinks(plan: Plan): string {
   const { maxLinks } = entitlementsOf(plan);
   return maxLinks === null ? 'Unlimited' : `${maxLinks}`;
 }
 
 // The one line of hard limits under each card, straight from the entitlements
-// table — the numbers a buyer would otherwise have to take on faith.
+// table — the number a buyer would otherwise have to take on faith. Links are
+// the whole line on purpose: the storage quota is unpublished (see the header),
+// and the link cap is the only limit that actually binds a library today.
 function limitsLine(plan: Plan): string {
-  const links =
-    entitlementsOf(plan).maxLinks === null ? 'Unlimited links' : `${formatLinks(plan)} links`;
-  return `${links} · ${formatStorage(entitlementsOf(plan).maxBytes)} encrypted storage`;
+  return entitlementsOf(plan).maxLinks === null ? 'Unlimited links' : `${formatLinks(plan)} links`;
 }
 
 // $48/yr shown the way the buyer evaluates it. Derived from the same number, so
@@ -175,8 +179,9 @@ const COLUMNS: Plan[] = ['free', ...AVAILABLE_PAID_PLANS];
 type Cell = string | boolean;
 
 const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
+  // Saved links is the only numeric row, and the only limit a buyer has to
+  // weigh — the storage quota is deliberately absent (see the header note).
   { label: 'Saved links', cell: formatLinks },
-  { label: 'Encrypted storage', cell: (p) => formatStorage(entitlementsOf(p).maxBytes) },
   { label: 'End-to-end encryption', cell: () => true },
   { label: 'Sync across devices', cell: () => true },
   { label: 'Browser extension & mobile share sheet', cell: () => true },

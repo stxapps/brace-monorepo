@@ -158,6 +158,20 @@ The trade is that the two gates were never defending the same thing:
   walks through it. That cost is accepted, deliberately, in exchange for the
   machinery above — see business-model.md, which owns the conversion argument.
 
+**Visibility inverts enforcement, and that is not a mistake.** The limit we
+enforce hardest is the one we never advertise, and the one anyone can walk
+through is printed on the pricing page. `maxBytes` / `maxFiles` are a **cost
+backstop, not a product gate** — no plan's copy names a byte figure, on the
+marketing site or in either upgrade card — because until the heavy blobs ship
+nothing can reach them (a maxed free library is ~16 MB against 100 MiB), and an
+advertised ceiling is a promise we'd have to grandfather rather than a number we
+can retune. `maxLinks` is the opposite: it exists **to be seen**, since a
+conversion gate nobody knows about converts nobody. An account that does hit the
+byte ceiling learns it from the `quota_exceeded` → "storage full" surfaces, which
+is where a capacity refusal belongs. Full argument, and when the byte row goes
+back on the pricing page: business-model.md, _the storage quota is not
+published_.
+
 The **downgraded** account still lands where it always did. `useLinkQuota` reads
 `count >= max`, so an over-cap library is refused new links by the same gate that
 refuses a full one; every link they already own was uploaded while entitled, and
