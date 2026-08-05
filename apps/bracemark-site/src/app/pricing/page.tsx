@@ -347,7 +347,7 @@ export default function Page() {
         <h2 className={cn('text-center text-2xl font-bold text-gray-900')}>Compare plans</h2>
         {/* Narrow screens scroll the table itself; the page never scrolls sideways. */}
         <div className={cn('mt-6 overflow-x-auto')}>
-          <table className={cn('w-full min-w-[30rem] border-collapse text-left text-sm')}>
+          <table className={cn('w-full min-w-120 border-collapse text-left text-sm')}>
             <thead>
               <tr className={cn('border-b border-gray-200')}>
                 <th scope="col" className={cn('py-3 pr-4 font-semibold text-gray-900')}>
