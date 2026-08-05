@@ -203,9 +203,39 @@ const subscriptionV2Schema = z.looseObject({
       productId: z.string(),
       expiryTime: z.string().optional(), // RFC 3339
       autoRenewingPlan: z.looseObject({ autoRenewEnabled: z.boolean().optional() }).nullish(),
+      // Present while a non-base-plan OFFER applies to this line — the only
+      // place a free trial is visible on Play (see PLAY_FREE_TRIAL_OFFER_TAG).
+      offerDetails: z
+        .looseObject({
+          offerId: z.string().optional(),
+          offerTags: z.array(z.string()).optional(),
+        })
+        .nullish(),
     }),
   ),
 });
+
+// The Play Console OFFER TAG that marks our free-trial offer.
+//
+// Play has no trial STATUS: a subscription inside its trial phase reads
+// SUBSCRIPTION_STATE_ACTIVE like any other, and v1's `paymentState: 2` ("free
+// trial") did not survive into subscriptionsv2. The offer applied to the line
+// item is the only signal — and `offerId` alone won't do, since a paid
+// introductory offer carries one too (Apple's PAY_AS_YOU_GO/PAY_UP_FRONT
+// problem, same shape). A TAG rather than an id also means regional or
+// campaign-specific trial offers all share one marker, so adding an offer in
+// Play Console never needs a deploy here.
+//
+// TAG THE OFFER, NEVER THE BASE PLAN. `offerTags` includes tags INHERITED from
+// the base plan, so a base-plan tag would mark every Android subscriber
+// `trialing` forever — and nothing would ever clear it. Play is the only
+// provider where that's possible: Paddle's own status flips trialing→active,
+// and Apple mints a FRESH transaction for the first paid period (dropping
+// offerDiscountType with it), but Play carries ONE line item across the
+// trial→paid boundary. So the launch checklist item is to watch a license
+// tester — whose trial and renewal periods are compressed to minutes — cross
+// that boundary and confirm the tag is gone (docs/iap.md, the trial).
+export const PLAY_FREE_TRIAL_OFFER_TAG = 'free-trial';
 
 // Play's subscriptionState → our vocabulary. Explicit map like
 // PADDLE_STATUS_MAP: an unknown/new state comes back null (→ log + drop).
@@ -287,6 +317,17 @@ export async function fetchPlaystoreSubscription(
     (status === 'active' || status === 'past_due') &&
     line.autoRenewingPlan?.autoRenewEnabled === true;
 
+  // 'trialing' is a display distinction only (the fold treats it as active) —
+  // the sibling of lib/appstore.ts's effectiveStatus, keyed on Play's offer tag
+  // instead of Apple's offerDiscountType. Gated on 'active' for the same reason
+  // it is there: the offer is still on the line item while a lapsed trial
+  // dunning in IN_GRACE_PERIOD, and that user is owed the past_due sentence
+  // ("your payment didn't go through"), not the trial one.
+  const effectiveStatus: PurchaseStatus =
+    status === 'active' && line.offerDetails?.offerTags?.includes(PLAY_FREE_TRIAL_OFFER_TAG)
+      ? 'trialing'
+      : status;
+
   return {
     // The purchase token is the stable identity of one subscription instance —
     // the Play analogue of Paddle's sub_… id. Note "instance", not
@@ -294,7 +335,7 @@ export async function fetchPlaystoreSubscription(
     // which survive a plan change, Play RE-KEYS on one (see linkedExternalId).
     externalId: purchaseToken,
     productId: line.productId,
-    status,
+    status: effectiveStatus,
     expiresAt,
     canceledAt: willRenew ? null : expiresAt,
     // The token this purchase REPLACED, when it replaced one. Play mints a new

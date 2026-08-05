@@ -4,16 +4,19 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   acknowledgePlaystorePurchase,
   fetchPlaystoreSubscription,
+  PLAY_FREE_TRIAL_OFFER_TAG,
   playAccessToken,
   resetPlayAccessTokenCache,
 } from './playstore';
 
-// The service-account access-token cache and its 401 retry. The Play FLOWS are
-// covered end-to-end in routes/iap.spec.ts (which now scripts exactly one token
-// exchange per test, pinning "a verify that also acknowledges mints one token,
-// not two"); this file pins the edges no route test can reach: the expiry
-// window, the refusal to cache a lifetime Google didn't state, and recovery
-// from a token that dies before that window is up.
+// The service-account access-token cache and its 401 retry, plus the free-trial
+// normalization. The Play FLOWS are covered end-to-end in routes/iap.spec.ts
+// (which now scripts exactly one token exchange per test, pinning "a verify that
+// also acknowledges mints one token, not two"); this file pins the edges no
+// route test can reach: the expiry window, the refusal to cache a lifetime
+// Google didn't state, recovery from a token that dies before that window is up,
+// and the offer-tag rules that decide `trialing` (which have no status of their
+// own to fold, so a route test could only observe them indirectly).
 //
 // The JWT signing is real (the test pool provides a throwaway RSA key, see
 // vitest.config.ts) — only Google's endpoints are stubbed.
@@ -27,17 +30,28 @@ let ackStatuses: number[] = [204];
 let ackCalls: string[] = [];
 const realFetch = globalThis.fetch;
 
-const SUBSCRIPTION_BODY = {
-  subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
-  acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
-  lineItems: [
-    {
-      productId: 'plus',
-      expiryTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      autoRenewingPlan: { autoRenewEnabled: true },
-    },
-  ],
-};
+// The subscriptionsv2 answer the stub returns. A function, not a constant: the
+// offer-tag tests below rewrite it per case (and `expiryTime` should be
+// relative to the test, not to module load).
+function subscriptionBody(
+  overrides: { state?: string; offerTags?: string[]; autoRenewEnabled?: boolean } = {},
+) {
+  return {
+    subscriptionState: overrides.state ?? 'SUBSCRIPTION_STATE_ACTIVE',
+    acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
+    lineItems: [
+      {
+        productId: 'plus',
+        expiryTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        autoRenewingPlan: { autoRenewEnabled: overrides.autoRenewEnabled ?? true },
+        ...(overrides.offerTags ? { offerDetails: { offerTags: overrides.offerTags } } : undefined),
+      },
+    ],
+  };
+}
+
+// What the stub answers a 200 lookup with; reset in each afterEach.
+let apiBody: unknown = subscriptionBody();
 
 function stubGoogle() {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -53,7 +67,7 @@ function stubGoogle() {
       const auth = new Headers(init?.headers).get('Authorization') ?? '';
       apiCalls.push(auth);
       const status = apiStatuses[Math.min(apiCalls.length - 1, apiStatuses.length - 1)];
-      return new Response(JSON.stringify(status === 200 ? SUBSCRIPTION_BODY : {}), {
+      return new Response(JSON.stringify(status === 200 ? apiBody : {}), {
         status,
         headers: { 'content-type': 'application/json' },
       });
@@ -77,6 +91,7 @@ describe('playAccessToken', () => {
     tokenCalls = 0;
     tokenBody = { access_token: 'tok-1', expires_in: 3600 };
     apiStatuses = [200];
+    apiBody = subscriptionBody();
     apiCalls = [];
     ackStatuses = [204];
     ackCalls = [];
@@ -142,6 +157,7 @@ describe('playApiFetch (via fetchPlaystoreSubscription)', () => {
     tokenCalls = 0;
     tokenBody = { access_token: 'tok-1', expires_in: 3600 };
     apiStatuses = [200];
+    apiBody = subscriptionBody();
     apiCalls = [];
     ackStatuses = [204];
     ackCalls = [];
@@ -197,6 +213,87 @@ describe('playApiFetch (via fetchPlaystoreSubscription)', () => {
   });
 });
 
+// The free-trial normalization. Play has no trial STATE — a trialing
+// subscription reads SUBSCRIPTION_STATE_ACTIVE — so the offer tag is the whole
+// signal, and these pin both directions of it: marking a trial, and (the
+// expensive mistake) NOT marking anything else.
+describe('fetchPlaystoreSubscription — trialing', () => {
+  beforeAll(stubGoogle);
+  afterEach(() => {
+    resetPlayAccessTokenCache();
+    tokenCalls = 0;
+    tokenBody = { access_token: 'tok-1', expires_in: 3600 };
+    apiStatuses = [200];
+    apiBody = subscriptionBody();
+    apiCalls = [];
+    ackStatuses = [204];
+    ackCalls = [];
+    vi.restoreAllMocks();
+  });
+
+  it('marks an active line carrying the free-trial offer tag', async () => {
+    apiBody = subscriptionBody({ offerTags: [PLAY_FREE_TRIAL_OFFER_TAG] });
+    const snapshot = await fetchPlaystoreSubscription(env, 'play-token-1');
+    expect(snapshot?.status).toBe('trialing');
+    // Entitlement-bearing fields are untouched — 'trialing' is a display
+    // distinction, and the fold treats it exactly like 'active'.
+    expect(snapshot?.expiresAt).toBeGreaterThan(Date.now());
+    expect(snapshot?.canceledAt).toBeNull();
+  });
+
+  it('leaves a plain active subscription alone', async () => {
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
+  });
+
+  it('ignores an offer that is not the free trial', async () => {
+    // A discounted introductory offer is still a PAID period — the user has
+    // been charged, so "renews on" is the honest sentence. This is the case
+    // `offerId`-based detection would get wrong.
+    apiBody = subscriptionBody({ offerTags: ['launch-discount'] });
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
+  });
+
+  it('finds the tag among several', async () => {
+    apiBody = subscriptionBody({ offerTags: ['launch-discount', PLAY_FREE_TRIAL_OFFER_TAG] });
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('trialing');
+  });
+
+  it('does not mark a lapsed trial in dunning — that user is owed past_due', async () => {
+    // The offer tag is still on the line item while Google retries the FIRST
+    // charge, so an ungated check would tell someone whose payment just failed
+    // that they are on a free trial.
+    apiBody = subscriptionBody({
+      state: 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+      offerTags: [PLAY_FREE_TRIAL_OFFER_TAG],
+    });
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('past_due');
+  });
+
+  it('keeps trialing when the user cancels mid-trial', async () => {
+    // Auto-renew off during the trial: still trialing (still entitled, still
+    // never charged), but canceledAt stamps the end so willRenew folds false —
+    // the two together are what pick "you won't be charged" over "your first
+    // payment is on …" in the subscription sections.
+    apiBody = subscriptionBody({
+      offerTags: [PLAY_FREE_TRIAL_OFFER_TAG],
+      autoRenewEnabled: false,
+    });
+    const snapshot = await fetchPlaystoreSubscription(env, 'play-token-1');
+    expect(snapshot?.status).toBe('trialing');
+    expect(snapshot?.canceledAt).toBe(snapshot?.expiresAt);
+  });
+
+  it('tolerates a line item with no offerDetails at all', async () => {
+    // Base-plan purchases omit the field entirely; a missing offer is not a
+    // parse failure.
+    apiBody = {
+      subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
+      lineItems: [{ productId: 'plus', expiryTime: new Date(Date.now() + 1000).toISOString() }],
+    };
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
+  });
+});
+
 // The acknowledge's 4xx handling. Every 4xx returns false either way — the
 // client's finishTransaction is the primary path — so what's pinned here is the
 // LOG LEVEL, which is the whole point of the split: an unhealable credential
@@ -208,6 +305,7 @@ describe('acknowledgePlaystorePurchase', () => {
     tokenCalls = 0;
     tokenBody = { access_token: 'tok-1', expires_in: 3600 };
     apiStatuses = [200];
+    apiBody = subscriptionBody();
     apiCalls = [];
     ackStatuses = [204];
     ackCalls = [];

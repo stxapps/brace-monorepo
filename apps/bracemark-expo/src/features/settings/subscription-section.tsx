@@ -245,10 +245,14 @@ export function SubscriptionSection() {
                   ? 'Never expires.'
                   : // A trial's period end is the FIRST CHARGE, not a renewal —
                     // say that, rather than letting "Renews on" imply they have
-                    // already paid. A canceled trial still falls through to the
-                    // "won't renew" line below, which is accurate either way.
-                    status === 'trialing' && willRenew
-                    ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
+                    // already paid. Canceling mid-trial gets its own sentence
+                    // too: the generic "it won't renew" is accurate but leaves
+                    // the question they actually cancelled over — am I being
+                    // charged? — unanswered.
+                    status === 'trialing'
+                    ? willRenew
+                      ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
+                      : `Free trial ends on ${formatDate(expiresAt)} — you won't be charged.`
                     : willRenew
                       ? `Renews on ${formatDate(expiresAt)}.`
                       : `Ends on ${formatDate(expiresAt)} — it won't renew.`}

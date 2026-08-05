@@ -241,7 +241,17 @@ export async function fetchAppstoreSubscription(
           ? (renewal?.success ? renewal.data.autoRenewStatus : undefined) === 1
           : false;
       // 'trialing' is a display distinction only (the fold treats it as
-      // active); Apple flags it on the transaction's offer type.
+      // active); Apple's status codes have no trial value — code 1 is plain
+      // "active" whether or not an intro offer applies — so the signal is the
+      // transaction's offer type. FREE_TRIAL exactly: PAY_AS_YOU_GO and
+      // PAY_UP_FRONT are DISCOUNTED intro offers, where the user has already
+      // been charged and "renews on" is the truthful sentence.
+      //
+      // Nothing has to un-set this: Apple mints a NEW transaction for the first
+      // paid period and `lastTransactions` returns the latest, so the offer
+      // fields simply aren't there once the trial converts. Play needs a
+      // deliberate guard for the same transition (lib/playstore.ts,
+      // PLAY_FREE_TRIAL_OFFER_TAG) because it reuses one line item across it.
       const effectiveStatus: PurchaseStatus =
         status === 'active' && info.data.offerDiscountType === 'FREE_TRIAL' ? 'trialing' : status;
 

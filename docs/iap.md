@@ -590,23 +590,53 @@ a crossgrade inside the existing subscription rather than a second purchase.
   already works for manual grants. `LIFETIME_ON_SALE` in `iap/plans.ts` is the
   single flag every surface reads; it stays `false` until this exists, and the
   pricing page renders nothing at all rather than a "coming soon" strip.
-- **The trial is catalog config, not code** — `TRIAL_DAYS` (14) is the copy's
-  source, but the trial period itself is configured on the **yearly `pri_…`** in
-  the Paddle catalog, and the fold already treats `trialing` as entitled. The
-  client now SEES it: `subscriptionStatusSchema.status` carries `'trialing'`
-  alongside `'active'`, so both subscription sections say "Free trial — your
-  first payment is on <date>" instead of "Renews on <date>". The two are
-  identical in entitlement (a trialing account gets exactly `plan`, which is why
+- **The trial is catalog config, plus one detection rule per provider** —
+  `TRIAL_DAYS` (14) is the copy's source, but the trial period itself is
+  configured in each provider's catalog, never in code: a trial period on the
+  **yearly `pri_…`** in Paddle, an introductory offer on the yearly SKU in App
+  Store Connect, and an offer on the yearly base plan in Play Console. The fold
+  already treats `trialing` as entitled, and the client SEES it:
+  `subscriptionStatusSchema.status` carries `'trialing'` alongside `'active'`,
+  so both subscription sections say "Free trial — your first payment is on
+  <date>" instead of "Renews on <date>" (and "Free trial ends on <date> — you
+  won't be charged" once it's been cancelled mid-trial, which the generic "it
+  won't renew" leaves unanswered). Trialing and active are identical in
+  entitlement (a trialing account gets exactly `plan`, which is why
   `entitlementsOf` takes only the plan) and different in what they owe the user
   — reading "Renews on" mid-trial implies a payment that hasn't happened, which
   is both dishonest and the opposite of what EU/UK distance-selling assumes was
-  disclosed. **Worth testing in sandbox specifically**: this depends on Paddle
-  stamping a trialing subscription's `current_billing_period`, since a provider
-  row with a null period deliberately does not entitle (see `isEntitled`). So the
-  checklist item is: configure the trial on the annual price before launch, and
-  never on a monthly one (`TRIAL_CADENCES`) — the marketing site already says
-  "14 days free" (`/pricing`), so a catalog that doesn't carry it is a promise
-  the checkout breaks.
+  disclosed.
+
+  **Only one of the three providers reports the trial as a status.** Paddle has
+  `trialing` in `status` and flips it to `active` itself. Apple's status codes
+  don't — code 1 is plain "active" whether or not an offer applies — so
+  `lib/appstore.ts` keys on the transaction's `offerDiscountType === 'FREE_TRIAL'`,
+  that value exactly: `PAY_AS_YOU_GO`/`PAY_UP_FRONT` are _discounted_ intro
+  offers whose buyer has already been charged. Play has neither (v1's
+  `paymentState: 2` did not survive into subscriptionsv2), so `lib/playstore.ts`
+  keys on the line item's `offerDetails.offerTags` containing
+  `PLAY_FREE_TRIAL_OFFER_TAG` — a tag rather than an offer id, so regional or
+  campaign trial offers all share one marker and adding one needs no deploy. All
+  three are gated on the normalized status being `active`, so a lapsed trial in
+  dunning keeps the `past_due` sentence rather than being told it's still free.
+
+  **The Play trap: tag the OFFER, never the base plan.** `offerTags` includes
+  tags INHERITED from the base plan, and Play is the only provider that carries
+  one line item across the trial→paid boundary (Paddle's status flips; Apple
+  mints a fresh transaction for the first paid period and drops the offer fields
+  with it). A base-plan tag would therefore mark every Android subscriber
+  `trialing` forever, with nothing to ever clear it.
+
+  **Launch checklist**: configure the trial on the annual price/SKU/base plan in
+  all three catalogs and never on a monthly one (`TRIAL_CADENCES`) — the
+  marketing site already says "14 days free" (`/pricing`), so a catalog that
+  doesn't carry it is a promise the checkout breaks. Then verify the two things
+  no unit test can reach: that Paddle stamps a trialing subscription's
+  `current_billing_period` (a provider row with a null period deliberately does
+  not entitle — see `isEntitled`), and that Play's trial tag is GONE once the
+  trial converts. Both stores compress subscription periods for sandbox/license
+  testers, so that transition runs in minutes rather than 14 days.
+
 - **Surfacing `quota_exceeded` client-side** — DONE.
 
   The sync engine inspects the 403 (`signPushable`, in both
