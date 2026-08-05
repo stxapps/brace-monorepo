@@ -42,7 +42,12 @@ import {
   usePendingChangesCount,
   useSync,
 } from '@stxapps/expo-react';
-import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared';
+import {
+  formatSyncedAt,
+  getSyncPhase,
+  SYNC_PHASE_LABELS,
+  syncBlockedDetail,
+} from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -60,7 +65,7 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // Retry). Sync is status-based, not a percentage, so there's no progress bar;
 // the pending-changes line is the "how much is left" signal instead.
 function SyncStatus() {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, requestSync } = useSync();
   const pendingCount = usePendingChangesCount();
   const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
@@ -69,9 +74,12 @@ function SyncStatus() {
   const isError = phase === 'cycle-error';
   // The plan/quota gate refused part of the push. Deliberately NOT styled as an
   // error: everything else synced and the local library is intact — what's
-  // needed is an upgrade, not a retry (which is also why it gets no Retry
-  // button; pressing one would change nothing).
-  const isBlocked = phase === 'quota-blocked';
+  // needed is an upgrade or some freed space, not a retry (which is also why it
+  // gets no Retry button; pressing one would change nothing). The two reasons
+  // want opposite advice, so the sentence AND the "See plans" button below come
+  // from the phase, never from one shared "blocked" wording.
+  const isPlanBlocked = phase === 'plan-blocked';
+  const isBlocked = isPlanBlocked || phase === 'capacity-blocked';
 
   const icon = isError ? (
     <Icon as={CircleAlert} className="size-4 text-destructive" />
@@ -107,21 +115,24 @@ function SyncStatus() {
           {detail && <Text className="text-sm text-destructive">{detail}</Text>}
           {/* The one place a blocked sync is explained. Inline rather than the
               hoisted paywall dialog: this is a STATUS the user came to read,
-              not an action being interrupted (paywall-provider's header). */}
+              not an action being interrupted (paywall-provider's header). The
+              "See plans" button is PLAN-only — sending someone who is out of
+              bytes to the pricing page is advice that can't help them. */}
           {isBlocked && (
             <>
               <Text className="text-sm text-muted-foreground">
-                Your plan&apos;s limit is reached, so new links stay on this device. Everything
-                already saved is safe, and syncing resumes as soon as you upgrade or free up space.
+                {syncBlockedDetail(phase, blockedCount)} Everything already saved is safe.
               </Text>
-              <Button
-                variant="link"
-                size="sm"
-                className="mt-1 self-start px-0"
-                onPress={() => router.push('/settings/subscription')}
-              >
-                <Text>See plans</Text>
-              </Button>
+              {isPlanBlocked && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="mt-1 self-start px-0"
+                  onPress={() => router.push('/settings/subscription')}
+                >
+                  <Text>See plans</Text>
+                </Button>
+              )}
             </>
           )}
           {pendingCount > 0 && (

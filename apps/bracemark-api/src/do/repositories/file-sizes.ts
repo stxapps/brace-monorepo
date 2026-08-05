@@ -20,6 +20,13 @@ export type FileUsage = {
 
 type SizeRow = { size: number };
 
+// Bound parameters per `existingPaths` statement. A sign batch carries up to
+// MAX_SIGN_PATHS (1000) paths, which is more than a single SQLite statement's
+// bound-parameter budget is guaranteed to take, so the lookup is chunked. Small
+// enough to be safe everywhere, large enough that even a full batch is ~10
+// statements against a local, per-user table.
+const EXISTS_CHUNK = 100;
+
 export function fileSizesRepo(sql: SqlStorage) {
   return {
     // Record (or overwrite) a path's size — called on every committed `put` with
@@ -80,6 +87,30 @@ export function fileSizesRepo(sql: SqlStorage) {
         )
         .one();
       return { fileCount: row.count, totalBytes: row.total, linkCount: row.links };
+    },
+
+    // Which of `paths` this user ALREADY has an object for — the fact that lets
+    // the put gate tell a CREATE from an in-place UPDATE (lib/quota.ts). A re-PUT
+    // of an existing path adds no object, no bytes-worth-of-object, and no link,
+    // so counting it as new is what made an account AT its cap unable to edit the
+    // links it already owns — including moving one to Trash, which is a `links/`
+    // put, and which is the very action that gets a downgraded account back under
+    // the cap. Presence in this map is the right existence check (rather than a
+    // HEAD against R2): it is the same durable record the quota totals are summed
+    // from, so the gate can never disagree with itself.
+    existingPaths(paths: string[]): string[] {
+      const found: string[] = [];
+      for (let i = 0; i < paths.length; i += EXISTS_CHUNK) {
+        const batch = paths.slice(i, i + EXISTS_CHUNK);
+        const rows = sql
+          .exec<{ path: string }>(
+            `SELECT path FROM file_sizes WHERE path IN (${batch.map(() => '?').join(',')})`,
+            ...batch,
+          )
+          .toArray();
+        for (const row of rows) found.push(row.path);
+      }
+      return found;
     },
   };
 }

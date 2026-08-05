@@ -182,9 +182,13 @@ missed).
   snapshot carries `{ sessionPresent, lists, tags }` only. So a free iOS account
   at 200 still writes an outbox draft, the drain still applies it locally (the
   draft is often the only copy — never dropped), and the put is refused at
-  `files/sign` (`upgrade_required`). That refusal no longer wedges the queue:
-  the sync engine treats it as a partial push and reports the cycle as
-  `'blocked'` rather than failing it (docs/iap.md, _open follow-ups_). Closing
+  `files/sign` (`upgrade_required`). This is now the MAIN way that refusal is
+  reached at all, since the server gates creates rather than writes (an edit or a
+  trash-move of an existing link is never refused — docs/iap.md, _enforcement_).
+  It no longer wedges the queue: the sync engine treats it as a partial push and
+  reports the cycle as `'blocked-plan'` rather than failing it, with the refused
+  count on the status surfaces, and the drafts push by themselves the moment the
+  user upgrades (docs/iap.md, _open follow-ups_). Closing
   the gap properly still means carrying the link count on the snapshot — a
   **stale soft gate**, since the snapshot is a cache, and a rewrite per save
   rather than per taxonomy change — which is why it isn't copied across yet.

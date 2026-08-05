@@ -55,13 +55,25 @@ export async function signUserFileUrls(
   if (op === 'put') {
     // The put gate is PLAN-AWARE: limits come from the account's entitlements
     // (services/iap.ts → the shared entitlementsOf), enforced by checkPutQuota
-    // (lib/quota.ts — free tier: no `files/` blobs, capped `links/`; paid tiers:
-    // byte/count ceilings). The two reads are independent — fetch in parallel.
-    const [usage, entitlements] = await Promise.all([
-      userDataStub(env, userId).usage(),
+    // (lib/quota.ts — free tier: capped `links/`; every tier: byte/count
+    // ceilings). Three independent reads — fetch in parallel.
+    //
+    // `existingPaths` is what separates a CREATE from an in-place UPDATE: only
+    // paths the user does not already own are charged against the caps, so an
+    // account at (or, after a downgrade, over) its link cap can still edit and
+    // trash the links it already has. See lib/quota.ts.
+    const stub = userDataStub(env, userId);
+    const [usage, existing, entitlements] = await Promise.all([
+      stub.usage(),
+      stub.existingPaths(paths),
       getEntitlements(env, userId),
     ]);
-    checkPutQuota(entitlements, usage, paths);
+    const existingSet = new Set(existing);
+    checkPutQuota(
+      entitlements,
+      usage,
+      paths.filter((p) => !existingSet.has(p)),
+    );
   }
 
   const method = op === 'put' ? 'PUT' : 'GET';

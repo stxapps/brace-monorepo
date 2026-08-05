@@ -21,7 +21,7 @@ import { View } from 'react-native';
 import type { ProductSubscription } from 'expo-iap';
 import { Check, ExternalLink, RefreshCw } from 'lucide-react-native';
 
-import { useEntitlements } from '@stxapps/expo-react';
+import { useEntitlements, useSync } from '@stxapps/expo-react';
 import {
   type AvailablePaidPlan,
   entitlementsOf,
@@ -55,6 +55,8 @@ function formatDate(epochMs: number): string {
 
 export function SubscriptionSection() {
   const { subscription, isLoading, refetch } = useEntitlements();
+  // Kicked the moment the plan actually widens — see startCheckout / restore.
+  const { requestSync } = useSync();
 
   // One busy flag drives every control: 'checkout:<plan>' while the store
   // sheet/verify is in flight, 'restore' during restore, 'manage' while the
@@ -113,6 +115,14 @@ export function SubscriptionSection() {
           // The verify response already IS the new fold; refetch just syncs
           // the shared query cache + the device's last-known copy.
           void refetch().catch(() => undefined);
+          // The widened entitlement is the ONLY thing that unblocks a queue the
+          // plan gate refused (engine signPushable / BgSyncStatus
+          // 'blocked-plan') — and on iOS that queue is exactly what a share at
+          // the cap leaves behind, since the share extension can't pre-check
+          // (docs/share-sheet.md). Nothing else would kick a cycle: the engine
+          // syncs on mount and on local edits. Safe to fire eagerly — cycles
+          // single-flight per account.
+          requestSync();
           setBusy(null);
           setNotice(`You're on ${PLAN_LABELS[status.plan]} now — thank you!`);
         },
@@ -141,6 +151,9 @@ export function SubscriptionSection() {
       if (unmounted.current) return;
       if (status && status.plan !== 'free') {
         void refetch().catch(() => undefined);
+        // Same reason as the checkout path: a restore widens the entitlement on
+        // THIS device, so anything the plan gate refused here can push now.
+        requestSync();
         setNotice(`Restored — you're on ${PLAN_LABELS[status.plan]}.`);
       } else {
         setNotice('No purchases to restore on this store account.');

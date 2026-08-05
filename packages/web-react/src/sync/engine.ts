@@ -18,6 +18,7 @@ import {
   apiErrorCode,
   chunk,
   type CommitResult,
+  emptySyncOutcome,
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
@@ -30,6 +31,7 @@ import {
   opsCommitEndpoint,
   opsListEndpoint,
   type OpsListResponse,
+  recordBlocked,
   type SignOp,
   type SyncOutcome,
   withRetry,
@@ -167,7 +169,8 @@ export async function awaitInflightSync(username: string): Promise<void> {
 // RESOLVES with a SyncOutcome, because "it worked" is no longer the only good
 // answer: a cycle can complete with part of the push refused by the plan/quota
 // gate (signPushable, below). Callers that only care about failure can ignore
-// the value; the providers use it to show 'blocked' rather than a false 'idle'.
+// the value; the providers map it through shared's `bgStatusForOutcome` to show
+// a `blocked-*` status (with the refused count) rather than a false 'idle'.
 export function runIncrementalSync(deps: SyncDeps): Promise<SyncOutcome> {
   const key = deps.username;
   const inflight = inflightSyncs.get(key);
@@ -197,7 +200,7 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
   // Collected DOWN the call chain (the cycles → pushPending → pushPuts) and
   // returned UP, so the provider can tell a clean cycle from one the quota gate
   // clipped without either of them inspecting an error.
-  const outcome: SyncOutcome = { quotaBlocked: false };
+  const outcome = emptySyncOutcome();
   const meta = await getSyncMeta(deps.username);
   // The cursor is the compound key (updatedAt, path); both halves go over the wire
   // as opsListEndpoint's `since` + `sincePath`. `since` is always sent (even 0, for
@@ -533,11 +536,18 @@ async function pushPuts(
 // both of them "read-only-plus-delete, never data loss"; a wedged queue is not
 // that.
 //
-// So: a quota refusal is recorded on the outcome and the chunk is retried
-// WITHOUT its `links/` paths, which is the precise cut — `upgrade_required` is
-// the link cap and nothing else, so everything that isn't a link is still
-// pushable and must not be held hostage. `quota_exceeded` gets no such retry:
-// it means the account is out of bytes or objects, which no subset fixes.
+// So: a quota refusal is recorded on the outcome — WITH which gate refused and
+// how many ops it cost, since the two codes want opposite advice from the UI
+// (shared sync/status.ts) — and the chunk is retried WITHOUT its `links/` paths,
+// which is the precise cut: `upgrade_required` is the link cap and nothing else,
+// so everything that isn't a link is still pushable and must not be held
+// hostage. `quota_exceeded` gets no such retry: it means the account is out of
+// bytes or objects, which no subset fixes.
+//
+// NOTE the server counts only paths the account does not already own
+// (bracemark-api lib/quota.ts), so an in-place UPDATE — including moving a link
+// to Trash — is never refused. What reaches here is a genuine create: a free
+// account's 201st link, or a downgraded account's new one.
 //
 // Blocked ops stay QUEUED, deliberately — they are the user's data, and they
 // must upload the moment the account is upgraded or back under its limits. The
@@ -566,10 +576,16 @@ async function signPushable(
   } catch (e) {
     const code = apiErrorCode(e);
     if (code !== 'upgrade_required' && code !== 'quota_exceeded') throw e;
-    outcome.quotaBlocked = true;
-    if (code === 'quota_exceeded') return null;
+    if (code === 'quota_exceeded') {
+      // Out of bytes/objects: the WHOLE chunk is refused, so that's the count.
+      recordBlocked(outcome, 'capacity', batch.length);
+      return null;
+    }
 
+    // The link cap refused the chunk. Only the `links/` paths are actually
+    // blocked — count those, not the chunk — and retry with the rest.
     const rest = batch.filter((o) => !o.path.startsWith(LINKS_PREFIX));
+    recordBlocked(outcome, 'plan', batch.length - rest.length);
     if (rest.length === 0) return null;
     try {
       return await sign(rest);
@@ -577,6 +593,7 @@ async function signPushable(
       // The non-link remainder can still hit the byte/object backstop.
       const code2 = apiErrorCode(e2);
       if (code2 !== 'upgrade_required' && code2 !== 'quota_exceeded') throw e2;
+      recordBlocked(outcome, code2 === 'quota_exceeded' ? 'capacity' : 'plan', rest.length);
       return null;
     }
   }

@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 
 import {
+  entitlementsOf,
   filesListEndpoint,
   filesSignEndpoint,
   opsCommitEndpoint,
@@ -10,6 +11,7 @@ import {
 
 import { app } from '../app';
 import { purchasesRepo } from '../db/repositories/purchases';
+import { userDataStub } from '../do/user-data';
 import { newId } from '../lib/ids';
 import { userFileKey } from '../r2/keys';
 import { issueSession } from '../services/session';
@@ -344,6 +346,83 @@ describe('sync control plane', () => {
         env,
       );
       expect(get.status).toBe(200);
+    });
+
+    // The free cap gates CREATES only. Proven end-to-end rather than in
+    // lib/quota.spec.ts because the create/update split is not the gate's own
+    // doing — it comes from the DO's size map (services/sync.ts subtracts the
+    // paths the account already owns before calling the gate), so a unit test of
+    // the pure function cannot catch a regression in the subtraction.
+    async function seedLinksAtFreeCap(userId: string): Promise<string[]> {
+      const cap = entitlementsOf('free').maxLinks ?? 0;
+      const paths = Array.from({ length: cap }, (_, i) => `links/seed-${i}.enc`);
+      // Straight to the DO: this seeds the quota map without needing `cap` real
+      // R2 objects (the route's HEAD is covered by the commit tests above).
+      await userDataStub(env, userId).commitOps(
+        paths.map((path, i) => ({ op: 'put' as const, path, updatedAt: 1000 + i, size: 1 })),
+      );
+      return paths;
+    }
+
+    it('free plan at the link cap: refuses a NEW link (upgrade_required)', async () => {
+      const { userId, auth } = await authFor('sync-sign-cap-new');
+      await seedLinksAtFreeCap(userId);
+
+      const res = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['links/brand-new.enc'] }),
+        env,
+      );
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: string }).error).toBe('upgrade_required');
+    });
+
+    it('free plan at the link cap: still signs an UPDATE to a link it owns', async () => {
+      const { userId, auth } = await authFor('sync-sign-cap-update');
+      const seeded = await seedLinksAtFreeCap(userId);
+
+      // Re-PUTting an existing path adds no link, so it must pass. This is the
+      // case that keeps an at-cap account able to retitle, retag and — the one
+      // that matters most — move a link to Trash, which is a `links/` put and is
+      // how a downgraded account gets back under the cap.
+      const res = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: [seeded[0]] }),
+        env,
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it('free plan OVER the cap (post-downgrade): updates pass, creates do not', async () => {
+      const { userId, auth } = await authFor('sync-sign-over-cap');
+      const seeded = await seedLinksAtFreeCap(userId);
+      // Push them well past the cap, the way a downgrade does.
+      await userDataStub(env, userId).commitOps(
+        Array.from({ length: 50 }, (_, i) => ({
+          op: 'put' as const,
+          path: `links/extra-${i}.enc`,
+          updatedAt: 900_000 + i,
+          size: 1,
+        })),
+      );
+
+      // A batch of pure updates — the whole thing signs.
+      const updates = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: [seeded[0], seeded[1], 'links/extra-0.enc'] }),
+        env,
+      );
+      expect(updates.status).toBe(200);
+
+      // Mixing in one genuinely new link refuses the batch — which is exactly
+      // what the engine's signPushable retries without its `links/` paths.
+      const mixed = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: [seeded[0], 'links/new-one.enc'] }),
+        env,
+      );
+      expect(mixed.status).toBe(403);
+      expect(((await mixed.json()) as { error: string }).error).toBe('upgrade_required');
     });
 
     it('mints GET URLs in batch', async () => {

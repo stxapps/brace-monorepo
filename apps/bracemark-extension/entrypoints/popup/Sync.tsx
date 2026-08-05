@@ -1,4 +1,10 @@
-import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS, type SyncPhase } from '@stxapps/shared';
+import {
+  formatSyncedAt,
+  getSyncPhase,
+  SYNC_PHASE_LABELS,
+  syncBlockedDetail,
+  type SyncPhase,
+} from '@stxapps/shared';
 import { usePendingChangesCount, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
@@ -19,10 +25,12 @@ const PILL_LABELS: Record<SyncPhase, string> = {
   'initial-error': 'Error',
   syncing: 'Syncing…',
   'cycle-error': 'Error',
-  // Not 'Error': the cycle worked, the plan's limit is what stopped the rest.
+  // Neither is 'Error': the cycle worked, a limit is what stopped the rest.
   // Saying "Error" here would point the user at a connection problem instead of
-  // the paywall (see @stxapps/shared sync/status.ts, BgSyncStatus 'blocked').
-  'quota-blocked': 'Limit reached',
+  // the fix (see @stxapps/shared sync/status.ts, the `blocked-*` statuses) — and
+  // the two fixes differ, which is why these are two words and not one.
+  'plan-blocked': 'Limit reached',
+  'capacity-blocked': 'Storage full',
   idle: 'Synced ✓',
 };
 
@@ -43,12 +51,15 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
 }
 
 export function SyncDetail({ onBack }: { onBack: () => void }) {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, requestSync } = useSync();
   // Queued local edits the next cycle will push — live from the shared Dexie
   // store, not the background's mirror.
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   const lastSync = lastSyncAt ? formatSyncedAt(lastSyncAt) : 'never';
+  // The blocked explanation + its fix, worded per reason in shared so this
+  // surface, both Data cards, and any future one can't drift.
+  const blockedDetail = syncBlockedDetail(phase, blockedCount);
 
   // The one action of this screen. `requestSync` (KICK_SYNC → background runSync)
   // covers every actionable phase: it re-runs the initial pull when it hasn't
@@ -92,6 +103,12 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
           </div>
         )}
       </section>
+
+      {/* Not styled as an error and given no Retry: the cycle completed, and
+          only upgrading / freeing space clears this. */}
+      {blockedDetail && (
+        <p className="wrap-break-words text-sm text-muted-foreground">{blockedDetail}</p>
+      )}
 
       {actionLabel && (
         <Button variant="outline" size="sm" onClick={() => requestSync()}>

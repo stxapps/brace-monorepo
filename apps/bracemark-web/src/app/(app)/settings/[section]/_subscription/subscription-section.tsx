@@ -28,7 +28,7 @@ import {
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
 } from '@stxapps/shared';
-import { useEntitlements } from '@stxapps/web-react';
+import { useEntitlements, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import { openPaddleCheckout } from '@/lib/paddle';
@@ -53,6 +53,8 @@ function formatDate(epochMs: number): string {
 export function SubscriptionSection() {
   const api = useApiClient();
   const { subscription, isLoading, refetch } = useEntitlements();
+  // Kicked the moment the plan actually widens — see pollActivation.
+  const { requestSync } = useSync();
 
   // One busy flag drives every control: 'checkout:<plan>' while a checkout is
   // being created/open, 'activating' while polling for the webhook, 'portal'
@@ -80,6 +82,13 @@ export function SubscriptionSection() {
       if (unmounted.current) return;
       if (data && data.plan !== fromPlan) {
         setBusy(null);
+        // The widened entitlement is the ONLY thing that unblocks a queue the
+        // plan gate refused (engine signPushable / BgSyncStatus 'blocked-plan'),
+        // and nothing else would kick a cycle: the engine syncs on mount and on
+        // local edits, so without this the user upgrades, comes back, and still
+        // reads "Some changes aren't syncing" until they reload or make an edit.
+        // Safe to fire eagerly — cycles single-flight per account.
+        requestSync();
         setNotice(`You're on ${PLAN_LABELS[data.plan]} now — thank you!`);
         return;
       }

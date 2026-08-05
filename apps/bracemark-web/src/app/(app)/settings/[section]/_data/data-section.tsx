@@ -36,7 +36,12 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared';
+import {
+  formatSyncedAt,
+  getSyncPhase,
+  SYNC_PHASE_LABELS,
+  syncBlockedDetail,
+} from '@stxapps/shared';
 import {
   type DeleteAllState,
   type ExportFormat,
@@ -62,7 +67,7 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // Retry). Sync is status-based, not a percentage, so there's no progress bar;
 // the pending-changes line is the "how much is left" signal instead.
 function SyncStatus() {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, requestSync } = useSync();
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
@@ -70,9 +75,13 @@ function SyncStatus() {
   const isError = phase === 'cycle-error';
   // The plan/quota gate refused part of the push. Deliberately NOT styled as an
   // error: everything else synced and the local library is intact — what's
-  // needed is an upgrade, not a retry (which is also why it gets no Retry
-  // button; pressing one would change nothing).
-  const isBlocked = phase === 'quota-blocked';
+  // needed is an upgrade or some freed space, not a retry (which is also why it
+  // gets no Retry button; pressing one would change nothing). The two reasons
+  // want opposite advice, so the sentence AND the link below come from the
+  // phase, never from one shared "blocked" wording.
+  const isPlanBlocked = phase === 'plan-blocked';
+  const isCapacityBlocked = phase === 'capacity-blocked';
+  const isBlocked = isPlanBlocked || isCapacityBlocked;
 
   const icon = isError ? (
     <CircleAlert className="size-4 text-destructive" />
@@ -108,14 +117,17 @@ function SyncStatus() {
           {detail && <span className="wrap-break-words text-sm text-destructive">{detail}</span>}
           {/* The one place a blocked sync is explained. Inline rather than the
               hoisted paywall dialog: this is a STATUS the user came to read,
-              not an action being interrupted (paywall-provider's header). */}
+              not an action being interrupted (paywall-provider's header). The
+              "See plans" link is PLAN-only — sending someone who is out of
+              bytes to the pricing page is advice that can't help them. */}
           {isBlocked && (
             <span className="text-sm text-muted-foreground">
-              Your plan&apos;s limit is reached, so new links stay on this device. Everything
-              already saved is safe, and syncing resumes as soon as you upgrade or free up space.{' '}
-              <Link className="underline hover:text-foreground" href="/settings/subscription">
-                See plans
-              </Link>
+              {syncBlockedDetail(phase, blockedCount)} Everything already saved is safe.{' '}
+              {isPlanBlocked && (
+                <Link className="underline hover:text-foreground" href="/settings/subscription">
+                  See plans
+                </Link>
+              )}
             </span>
           )}
           {pendingCount > 0 && (

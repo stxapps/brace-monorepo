@@ -74,6 +74,39 @@ describe('UserDataDO op log', () => {
     });
   });
 
+  // existingPaths is what lets the put gate charge only genuine creates
+  // (lib/quota.ts). It reads the same durable size map the totals are summed
+  // from, so a path is "existing" exactly while it counts toward the quota.
+  it('reports which paths already have a recorded object', async () => {
+    const stub = userDataStub(env, 'user-existing');
+    await stub.commitOps([
+      { op: 'put', path: 'links/kept.enc', updatedAt: 1000, size: 1 },
+      { op: 'put', path: 'links/gone.enc', updatedAt: 2000, size: 1 },
+      { op: 'delete', path: 'links/gone.enc', updatedAt: 3000, size: 0 },
+    ]);
+
+    const existing = await stub.existingPaths([
+      'links/kept.enc', // live → charged as an UPDATE
+      'links/gone.enc', // deleted → its quota entry is freed, so it's a CREATE again
+      'links/never.enc',
+    ]);
+    expect(existing).toEqual(['links/kept.enc']);
+  });
+
+  it('reports existing paths across the statement chunk boundary', async () => {
+    // The lookup chunks its bound parameters (EXISTS_CHUNK = 100), so a batch
+    // larger than one chunk must still find matches in every chunk — including
+    // the last, partial one.
+    const stub = userDataStub(env, 'user-existing-chunked');
+    const paths = Array.from({ length: 250 }, (_, i) => `links/${i}.enc`);
+    await stub.commitOps(
+      paths.map((path, i) => ({ op: 'put' as const, path, updatedAt: 1000 + i, size: 1 })),
+    );
+
+    const existing = await stub.existingPaths([...paths, 'links/absent.enc']);
+    expect(existing.sort()).toEqual([...paths].sort());
+  });
+
   it('isolates each user log in its own DO instance', async () => {
     // Distinct userIds map to distinct DO instances (idFromName), so logs don't
     // bleed across users — the per-user isolation the DO model buys us.

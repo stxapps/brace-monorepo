@@ -27,7 +27,7 @@ export function Providers({ children }: { children: ReactNode }) {
   // One QueryClient per popup session, created lazily so it isn't shared across
   // renders. ApiClientProvider hands the shared hooks the mode-configured client.
   const [queryClient] = useState(() => new QueryClient());
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError } = useMirroredSyncState();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount } = useMirroredSyncState();
 
   // Stable identity: `sendMessage` is a module import, so this closes over nothing
   // that changes. Providers re-renders whenever the mirrored sync state updates
@@ -49,6 +49,7 @@ export function Providers({ children }: { children: ReactNode }) {
             bgSyncStatus={bgSyncStatus}
             lastSyncAt={lastSyncAt}
             lastError={lastError}
+            blockedCount={blockedCount}
             requestSync={requestSync}
           >
             <ThemeProvider>{children}</ThemeProvider>

@@ -160,6 +160,15 @@ export class UserDataDO extends DurableObject<Bindings> {
     return fileSizesRepo(this.sql).usage();
   }
 
+  // RPC: which of `paths` already have a recorded object, so the `files/sign` put
+  // gate can charge only the GENUINELY NEW ones against the plan's caps (see
+  // repositories/file-sizes.ts `existingPaths` for why re-PUTs must not count).
+  // Returned as the path list rather than a count so the gate keeps owning the
+  // namespace policy — this RPC reports facts, lib/quota.ts decides.
+  existingPaths(paths: string[]): string[] {
+    return fileSizesRepo(this.sql).existingPaths(paths);
+  }
+
   // RPC: delete-all-data — clear the op log AND the quota map in one serialized
   // call (POST /v1/data/delete-all; also the first step of account deletion).
   // This runs BEFORE the R2 objects are deleted, which is the op-without-object

@@ -1,4 +1,5 @@
 import {
+  bgStatusForOutcome,
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
   LINKS_PREFIX,
@@ -103,15 +104,26 @@ export function runSync(): Promise<void> {
         }
 
         await setState({ bgSyncStatus: 'syncing' });
+        // A cycle that COMPLETES can still have had part of its push refused by
+        // the plan/quota gate — the engine resolves with that rather than
+        // throwing (SyncOutcome, shared sync/status.ts). Reporting a flat 'idle'
+        // here would tell the popup everything synced while the user's links sit
+        // queued, and would leave the pill's "Limit reached" wording unreachable.
+        // The initial sync never pushes, so it has no outcome to report.
+        let bgSyncStatus: MirroredSyncState['bgSyncStatus'] = 'idle';
+        let blockedCount = 0;
         if (await isFirstSyncDone(deps.username)) {
-          await runIncrementalSync(deps);
+          const outcome = await runIncrementalSync(deps);
+          bgSyncStatus = bgStatusForOutcome(outcome);
+          blockedCount = outcome.blockedCount;
         } else {
           await setState({ storeStatus: 'syncing-initial' });
           await runInitialSync(deps);
         }
         await setState({
           storeStatus: 'ready',
-          bgSyncStatus: 'idle',
+          bgSyncStatus,
+          blockedCount,
           lastSyncAt: Date.now(),
           lastError: null,
         });
@@ -119,6 +131,7 @@ export function runSync(): Promise<void> {
     } catch (err) {
       await setState({
         bgSyncStatus: 'error',
+        blockedCount: 0,
         lastSyncAt: Date.now(),
         lastError: err instanceof Error ? err.message : String(err),
       });

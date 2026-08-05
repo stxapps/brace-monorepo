@@ -125,7 +125,7 @@ walls exactly where the cost is):
 | limit                                     | enforced                                                                                                                                                                                                                      |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap + the 200-link cap)                                                                                                 |
-| free: 200 `links/`                        | **server-hard** (namespace count in the DO size map) + client UX                                                                                                                                                              |
+| free: 200 `links/` **creates**            | **server-hard** (namespace count in the DO size map, charging only paths the account doesn't already own — an in-place edit is never gated) + client UX                                                                       |
 | free: preview-image `files/` blobs        | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
 | Plus page-copy meter (last 50)            | client-only — a page copy is indistinguishable from any other `files/` blob server-side; bytes backstop                                                                                                                       |
 | read-mode / screenshot / AI gates         | client-only (they run on-device), backstopped by the blob rules                                                                                                                                                               |
@@ -139,11 +139,24 @@ data loss**.
 
 That degradation is the sync engine's job as much as the gate's, and the
 DOWNGRADED account is the case that proves it: their links already exist, so no
-create-surface pre-check can keep them under the cap, and every `links/` put
-they make — including a re-put of a link they merely edited — is refused. The
-engine therefore treats a quota refusal as a partial push rather than a failed
-cycle (see _open follow-ups_, surfacing `upgrade_required`); before that it was
-a permanently wedged queue, which is not "read-only-plus-delete".
+create-surface pre-check can keep them under the cap. Two things make their
+account genuinely usable rather than nominally so:
+
+- **The gate charges creates, not writes.** It subtracts the paths the account
+  already owns before counting (`existingPaths` over the DO size map — see
+  local-first-sync.md, _authorization & quota_). Otherwise every `links/` put
+  they make is refused, including a re-put of a link they merely edited — and
+  including **moving one to Trash**, which is a `links/` put and is the first
+  half of the only route back under the cap. "Read-only-plus-delete" would have
+  meant read-only-plus-_permanent_-delete, with the Trash step itself blocked.
+- **A refusal is a partial push, not a failed cycle.** The engine records it and
+  drops only the offending `links/` paths (see _open follow-ups_, surfacing
+  `upgrade_required`); before that it was a permanently wedged queue, which is
+  not "read-only-plus-delete" either.
+
+What still legitimately reaches the gate after both is a genuine **create** on a
+full account — a free user's 201st link, or an iOS share the extension could not
+pre-check (share-sheet.md).
 
 ### the purchase flow (store IAP — bracemark-expo)
 
@@ -602,12 +615,36 @@ a crossgrade inside the existing subscription rather than a second purchase.
   bytes. Blocked ops stay QUEUED, so they upload by themselves once the account
   is upgraded or back under its limits.
 
-  The state is then visible rather than silent: `BgSyncStatus` gained
-  `'blocked'` and `SyncPhase` `'quota-blocked'` (`shared/sync/status.ts`),
-  deliberately NOT `'error'` — the cycle completed and no retry can help, so
-  "Sync failed" would send the user hunting for a network problem instead of the
-  paywall. The Data card on both apps explains it and links to
-  `/settings/subscription`; the extension popup pill reads "Limit reached".
+  `SyncOutcome` carries **which** gate refused and **how many** ops it cost
+  (`blockedBy: 'plan' | 'capacity'`, `blockedCount`), collected as a mutable
+  accumulator threaded down the push chain — the refusal is learned four frames
+  below the only caller that reports it, so an accumulator costs one write at the
+  bottom where bubbling it through return types would widen every frame between.
+  `shared/sync/status.ts` owns the accumulation rule (`recordBlocked`, where
+  **capacity outranks plan** — being out of bytes blocks every namespace, and its
+  advice survives an upgrade) and the outcome→status mapping
+  (`bgStatusForOutcome`), so the two sibling engines and their providers cannot
+  drift on either.
+
+  The state is then visible rather than silent, and visible as the RIGHT state:
+  `BgSyncStatus` gained `'blocked-plan'` / `'blocked-capacity'` and `SyncPhase`
+  `'plan-blocked'` / `'capacity-blocked'`, deliberately NOT `'error'` — the cycle
+  completed and no retry can help, so "Sync failed" would send the user hunting
+  for a network problem instead of the fix. **Two statuses rather than one**
+  because the two codes want opposite advice: a single `'blocked'` sent a paying
+  customer who was out of BYTES to `/settings/subscription`, which cannot help
+  them. So the Data card on both apps links to the subscription page only on
+  `plan-blocked`, and the extension popup pill reads "Limit reached" vs "Storage
+  full". `syncBlockedDetail` (shared) words the sentence per reason with the
+  count, so all three surfaces say the same thing.
+
+  **Upgrading kicks a cycle.** Nothing else would: the engines sync on provider
+  mount and on `requestSync` (a local edit), so without an explicit kick a user
+  upgraded, came back, and still read "Some changes aren't syncing" until they
+  reloaded or made an unrelated edit. Both subscription sections call
+  `requestSync()` at the moment the plan actually widens — web when
+  `pollActivation` sees the webhook land, expo on a completed store purchase AND
+  on a successful restore.
 
   The **bracemark-expo share sheet** — the one create surface with no cap
   pre-check, and so the path that could queue the refused put in the first place

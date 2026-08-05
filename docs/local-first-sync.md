@@ -792,6 +792,20 @@ is persisted; the op-log row is just `{ seq, op, path, updated_at }`. The limits
 themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the DO's
 `usage()` before any `put` URL is minted.
 
+**The gate charges only paths the account does not already own.** The same size
+map answers "does this path exist?" (`existingPaths`), and `services/sign` sub­
+tracts those before calling `checkPutQuota`, so a **create** is gated and an
+**in-place update** never is. This is not an optimization — it is what makes the
+"read-only-plus-**delete**" promise above true. Every link write is a put on
+`links/{id}.enc`, **including moving a link to Trash** (`update({ listId:
+TRASH_ID })`, docs/editors.md), so counting re-PUTs as new would leave an at-cap
+or downgraded account unable to retitle, retag, or trash anything — and trashing
+is the first half of the only route back under the cap. Counting a re-PUT as new
+also had no upside: it adds no object and no link, so nothing it protects against
+exists. The byte check stays deliberately conservative in the other direction (a
+new object's size is unknown until uploaded, so an update that GROWS a file is
+charged on the next batch, not this one).
+
 ### where TanStack Query fits
 
 The dividing line is **React-component calls vs. the background sync engine**,

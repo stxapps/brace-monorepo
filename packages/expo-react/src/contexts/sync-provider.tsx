@@ -10,7 +10,7 @@ import {
 } from 'react';
 
 import { useApiClient } from '@stxapps/react';
-import type { BgSyncStatus, StoreStatus } from '@stxapps/shared';
+import { bgStatusForOutcome, type BgSyncStatus, type StoreStatus } from '@stxapps/shared';
 
 import { getSession } from '../data/session-store';
 import { isFirstSyncDone } from '../data/sync-store';
@@ -56,6 +56,10 @@ interface SyncContextValue {
   // cycle's error message, or null when it succeeded.
   lastSyncAt: number | null;
   lastError: string | null;
+  // How many pending ops the plan/quota gate refused on the last cycle — the
+  // detail line for a `blocked-*` status, exactly as `lastError` is the detail
+  // for 'error'. 0 whenever nothing was refused.
+  blockedCount: number;
   // Bumped each time requestSync() runs — i.e. on every local edit on THIS
   // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
   // read edge (useLinks) keys on it to apply the user's own change immediately
@@ -82,6 +86,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [bgSyncStatus, setBgSyncStatus] = useState<BgSyncStatus>('idle');
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [blockedCount, setBlockedCount] = useState(0);
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
@@ -123,6 +128,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setBgSyncStatus('idle');
     setLastSyncAt(null);
     setLastError(null);
+    setBlockedCount(0);
 
     // Returning visit → render local data now, refresh in the background. The
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
@@ -135,16 +141,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
           // of the push — that resolves rather than rejects (the rest of the
           // cycle succeeded), so it would otherwise read as a clean sync while
-          // the user's links sit unpushed. 'blocked' is a settled state, not a
-          // failure: it clears on the next cycle once the account is upgraded
-          // or back under its limits.
-          setBgSyncStatus(outcome.quotaBlocked ? 'blocked' : 'idle');
+          // the user's links sit unpushed. The `blocked-*` statuses are settled
+          // states, not failures: they clear on the next cycle once the account
+          // is upgraded or back under its limits. Which one (and the count) is
+          // the engine's answer, mapped in shared so both platforms agree.
+          setBgSyncStatus(bgStatusForOutcome(outcome));
+          setBlockedCount(outcome.blockedCount);
           setLastSyncAt(Date.now());
           setLastError(null);
         },
         (err: unknown) => {
           if (!activeRef.current) return;
           setBgSyncStatus('error');
+          setBlockedCount(0);
           setLastSyncAt(Date.now());
           setLastError(err instanceof Error ? err.message : String(err));
         },
@@ -195,6 +204,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       bgSyncStatus,
       lastSyncAt,
       lastError,
+      blockedCount,
       localWriteNonce,
       retryInitialSync,
       requestSync,
@@ -204,6 +214,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       bgSyncStatus,
       lastSyncAt,
       lastError,
+      blockedCount,
       localWriteNonce,
       retryInitialSync,
       requestSync,

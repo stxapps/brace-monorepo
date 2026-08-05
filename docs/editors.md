@@ -37,13 +37,22 @@ overrides). Create collects a strict subset of edit's fields.
 **Every create surface gates on the plan's link cap — except the one that
 can't.** Free's 200-link wall is server-enforced at `files/sign`
 ([iap.md](./iap.md)), and a local-first save that ignores it succeeds locally and
-then **wedges the pending queue**: the op can't drain, and every op chunked behind
-it is stuck too. So the three **in-process** create surfaces read `useLinkQuota`
+then sits unsynced until the user upgrades. It no longer **wedges** the queue —
+the engine drops just the refused `links/` paths and reports the cycle
+`blocked-plan` (iap.md, _surfacing `upgrade_required`_) — but an unsynced save the
+user was never warned about is still the wrong experience, and refusing up front
+is far better than explaining afterwards. So the three **in-process** create
+surfaces read `useLinkQuota`
 and render `LinkQuotaBanner` + an upgrade CTA **instead of** the form — web
 quick-add, the browser extension's popup, bracemark-expo's add screen (that
 hook's header is the canonical rationale; it counts trash-inclusive, because
 Trash is a listId and the server counts those blobs too). The full-edit surfaces
-need no gate — they write no new `links/` path — and import has its own check
+need no gate — they write no new `links/` path, and the server gate charges only
+paths the account doesn't already own, so an in-place edit is never refused even
+at (or over) the cap (local-first-sync.md, _authorization & quota_). That is the
+same rule that keeps **Remove** working over the cap: trashing is
+`update({ listId: TRASH_ID })`, a re-put of an existing path, and it is the first
+half of the only route back under the limit. Import has its own check
 ([data-lifecycle.md](./data-lifecycle.md)). The **share sheet** is the one
 exception, on iOS-process grounds rather than principle
 ([share-sheet.md](./share-sheet.md)). A new create surface inherits the rule.

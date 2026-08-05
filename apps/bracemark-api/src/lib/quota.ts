@@ -29,12 +29,23 @@ import { type Entitlements, LINKS_PREFIX } from '@stxapps/shared';
 import type { FileUsage } from '../do/user-data';
 import { HttpError } from './errors';
 
-// Gate one `files/sign` put batch. Conservative on counts: a new object's size
-// is unknown until uploaded, so the byte check is on CURRENT usage, and a re-PUT
-// of an existing path counts as new (harmless over-count near a ceiling).
-export function checkPutQuota(ent: Entitlements, usage: FileUsage, paths: string[]): void {
+// Gate one `files/sign` put batch.
+//
+// `newPaths` is the batch MINUS every path the user already has an object for
+// (services/sync.ts resolves it against the DO's size map). Counting only the new
+// ones is what makes the cap mean "you may not add a 201st link" rather than "you
+// may not touch links": an in-place update — retitle, add a tag, move list, and
+// above all move to Trash — re-PUTs an EXISTING `links/` path, adds nothing to any
+// total, and must stay allowed at and over the cap. It is also the only way the
+// promise in this file's header holds, since Trash-then-delete is how a downgraded
+// account gets back under its cap, and the Trash step is a put.
+//
+// Still conservative on bytes: a new object's size is unknown until it is
+// uploaded, so the byte check is on CURRENT usage and an in-place update that
+// GROWS a file is charged only on the next batch.
+export function checkPutQuota(ent: Entitlements, usage: FileUsage, newPaths: string[]): void {
   if (ent.maxLinks !== null) {
-    const newLinks = paths.filter((p) => p.startsWith(LINKS_PREFIX)).length;
+    const newLinks = newPaths.filter((p) => p.startsWith(LINKS_PREFIX)).length;
     if (newLinks > 0 && usage.linkCount + newLinks > ent.maxLinks) {
       throw new HttpError(
         403,
@@ -44,7 +55,7 @@ export function checkPutQuota(ent: Entitlements, usage: FileUsage, paths: string
     }
   }
 
-  if (usage.fileCount + paths.length > ent.maxFiles) {
+  if (usage.fileCount + newPaths.length > ent.maxFiles) {
     throw new HttpError(403, 'quota_exceeded', 'File-count quota exceeded');
   }
   if (usage.totalBytes >= ent.maxBytes) {

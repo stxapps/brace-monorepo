@@ -277,9 +277,11 @@ export type ShareSaveResult =
 // sqlite (see this file's header), so it can read neither the link count nor
 // the cached plan — it has only the taxonomy snapshot. An iOS share therefore
 // still queues, the main app's drain still applies it locally (the user's data
-// is never silently dropped), and the engine reports the sync as 'blocked'
-// rather than wedging. Closing the gap on iOS means carrying the count in the
-// snapshot; not worth a per-save snapshot rewrite until it's asked for.
+// is never silently dropped), and the engine reports the sync as 'blocked-plan'
+// rather than wedging — with the refused count on the Data card, and an
+// automatic push the moment the user upgrades. Closing the gap on iOS means
+// carrying the count in the snapshot; not worth a per-save snapshot rewrite
+// until it's asked for.
 export function isAtLinkCap(): boolean {
   const status = readCachedStatus();
   if (!status) return false;
