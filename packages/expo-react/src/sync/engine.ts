@@ -26,11 +26,13 @@ import type { File } from 'expo-file-system';
 import { decryptEntity, decryptFile, encryptEntity, encryptFile } from '@stxapps/expo-crypto';
 import {
   type ApiClient,
+  apiErrorCode,
   chunk,
   type CommitResult,
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
+  LINKS_PREFIX,
   mapLimit,
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
@@ -40,6 +42,7 @@ import {
   opsListEndpoint,
   type OpsListResponse,
   type SignOp,
+  type SyncOutcome,
   withRetry,
 } from '@stxapps/shared';
 
@@ -157,7 +160,7 @@ export async function runInitialSync(deps: SyncDeps): Promise<void> {
 // after that run's snapshot. Serializing cycles keeps two drains from
 // double-committing the same pending ops and keeps cursor writes ordered
 // (advanceCursor's forward-only guard covers out-of-order stragglers).
-const inflightSyncs = new Map<string, Promise<void>>();
+const inflightSyncs = new Map<string, Promise<SyncOutcome>>();
 const rerunRequests = new Set<string>();
 
 // Wait for an in-flight cycle (if any) to settle WITHOUT starting one — unlike
@@ -180,7 +183,12 @@ export async function awaitInflightSync(username: string): Promise<void> {
 // against (the sync provider's rejection branch sets its error status).
 // Coalesced callers share the in-flight promise, so they share its rejection
 // too — all of them handle it.
-export function runIncrementalSync(deps: SyncDeps): Promise<void> {
+//
+// RESOLVES with a SyncOutcome, because "it worked" is no longer the only good
+// answer: a cycle can complete with part of the push refused by the plan/quota
+// gate (signPushable, below). Callers that only care about failure can ignore
+// the value; the provider uses it to show 'blocked' rather than a false 'idle'.
+export function runIncrementalSync(deps: SyncDeps): Promise<SyncOutcome> {
   const key = deps.username;
   const inflight = inflightSyncs.get(key);
   if (inflight) {
@@ -189,8 +197,12 @@ export function runIncrementalSync(deps: SyncDeps): Promise<void> {
   }
   const run = (async () => {
     try {
-      await incrementalSyncOnce(deps);
-      while (rerunRequests.delete(key)) await incrementalSyncOnce(deps);
+      // The LAST run's outcome is the answer, not the union: a trailing rerun
+      // re-reads the same pending queue, so if it pushed cleanly the block is
+      // genuinely gone (the user upgraded, or freed space mid-cycle).
+      let outcome = await incrementalSyncOnce(deps);
+      while (rerunRequests.delete(key)) outcome = await incrementalSyncOnce(deps);
+      return outcome;
     } finally {
       inflightSyncs.delete(key);
       rerunRequests.delete(key);
@@ -200,8 +212,12 @@ export function runIncrementalSync(deps: SyncDeps): Promise<void> {
   return run;
 }
 
-async function incrementalSyncOnce(deps: SyncDeps): Promise<void> {
+async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
   deps = withRetryDeps(deps);
+  // Collected DOWN the call chain (the cycles → pushPending → pushPuts) and
+  // returned UP, so the provider can tell a clean cycle from one the quota gate
+  // clipped without either of them inspecting an error.
+  const outcome: SyncOutcome = { quotaBlocked: false };
   const meta = await getSyncMeta(deps.username);
   // The cursor is the compound key (updatedAt, path); both halves go over the
   // wire as opsListEndpoint's `since` + `sincePath`. `since` is always sent
@@ -221,10 +237,11 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<void> {
   });
 
   if (needsFallback(since, first)) {
-    await fallbackCycle(deps, pending);
+    await fallbackCycle(deps, pending, outcome);
   } else {
-    await incrementalCycle(deps, since, sincePath, first, pending);
+    await incrementalCycle(deps, since, sincePath, first, pending, outcome);
   }
+  return outcome;
 }
 
 // Lazy content fetch (docs "data model — metadata vs. content"): pull one
@@ -349,6 +366,7 @@ async function incrementalCycle(
   sincePath: string,
   first: OpsListResponse,
   pending: PendingOpRecord[],
+  outcome: SyncOutcome,
 ): Promise<void> {
   // 1. Pull: page the op log via keyset, coalescing to the latest op per path.
   const serverOps = new Map<string, OpEntry>();
@@ -387,7 +405,7 @@ async function incrementalCycle(
 
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
-  const committed = await pushPending(deps, pending);
+  const committed = await pushPending(deps, pending, outcome);
   await storeDownloads(deps, downloads);
   await applyDeletes(localDeletes);
 
@@ -414,7 +432,11 @@ async function incrementalCycle(
 // silently flips a conflict to server-wins: a pending edit is pushed over the
 // server copy, and a pending delete is pushed rather than resurrected by the
 // listing.
-async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promise<void> {
+async function fallbackCycle(
+  deps: SyncDeps,
+  pending: PendingOpRecord[],
+  outcome: SyncOutcome,
+): Promise<void> {
   const files = await listAllFiles(deps.api);
   const serverPaths = new Set(files.map((f) => f.path));
   const pendingPaths = new Set(pending.map((p) => p.path));
@@ -449,7 +471,7 @@ async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promis
   // learn of the deletion) and frees the path's file_sizes quota entry. Commit
   // is idempotent on both stores, so pushing unconditionally is always safe;
   // dropping the op would leak the quota entry forever.
-  const committed = await pushPending(deps, pending);
+  const committed = await pushPending(deps, pending, outcome);
   await storeDownloads(deps, downloads);
   await applyDeletes(localDeletes);
 
@@ -479,7 +501,11 @@ async function fallbackCycle(deps: SyncDeps, pending: PendingOpRecord[]): Promis
 // window, and a push too large to finish inside one 5-min TTL still makes
 // monotonic progress instead of livelocking on an all-up-front sign whose tail
 // expires before it can be uploaded.
-async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<CommitResult[]> {
+async function pushPending(
+  deps: SyncDeps,
+  ops: PendingOpRecord[],
+  outcome: SyncOutcome,
+): Promise<CommitResult[]> {
   if (ops.length === 0) return [];
 
   const puts = ops.filter((o) => o.op === 'put');
@@ -510,12 +536,14 @@ async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Comm
     ...(await pushPuts(
       deps,
       puts.filter((o) => isContentPath(o.path)),
+      outcome,
     )),
   );
   committed.push(
     ...(await pushPuts(
       deps,
       puts.filter((o) => !isContentPath(o.path)),
+      outcome,
     )),
   );
 
@@ -527,18 +555,84 @@ async function pushPending(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Comm
 // so each chunk's PUT URLs are minted immediately before that chunk's upload and
 // the chunk commits before the next is signed. PUT_BATCH fits one sign and one
 // commit call, so each stays a single round trip.
-async function pushPuts(deps: SyncDeps, puts: PendingOpRecord[]): Promise<CommitResult[]> {
+async function pushPuts(
+  deps: SyncDeps,
+  puts: PendingOpRecord[],
+  outcome: SyncOutcome,
+): Promise<CommitResult[]> {
   const committed: CommitResult[] = [];
   for (const batch of chunk(puts, PUT_BATCH)) {
-    const urls = await signPaths(
-      deps.api,
-      'put',
-      batch.map((o) => o.path),
-    );
-    await uploadBlobs(deps, batch, urls);
-    committed.push(...(await commitBatched(deps, batch)));
+    const signed = await signPushable(deps, batch, outcome);
+    if (signed === null) continue;
+    await uploadBlobs(deps, signed.ops, signed.urls);
+    committed.push(...(await commitBatched(deps, signed.ops)));
   }
   return committed;
+}
+
+// Sign one put chunk, surviving the server's plan/quota gate instead of failing
+// the cycle on it.
+//
+// Why this is not just `signPaths`: `files/sign` answers 403 `upgrade_required`
+// when a `links/` put would exceed the plan's link cap, and 403 `quota_exceeded`
+// on the byte/object backstop (bracemark-api lib/quota.ts). Letting either throw
+// made the whole cycle fail, left the chunk queued, and re-failed it on every
+// subsequent cycle — a PERMANENT wedge, and not confined to the offending link:
+// `links/` is metadata (not `files/` content), so it shares its chunk with list,
+// tag, pin and settings puts, which were stuck behind it. The two accounts that
+// actually reach this are the free user at their link cap and the DOWNGRADED
+// user whose library is now over it — the second of which no create-surface
+// pre-check can prevent, since their links already exist. docs/iap.md promises
+// both of them "read-only-plus-delete, never data loss"; a wedged queue is not
+// that.
+//
+// So: a quota refusal is recorded on the outcome and the chunk is retried
+// WITHOUT its `links/` paths, which is the precise cut — `upgrade_required` is
+// the link cap and nothing else, so everything that isn't a link is still
+// pushable and must not be held hostage. `quota_exceeded` gets no such retry:
+// it means the account is out of bytes or objects, which no subset fixes.
+//
+// Blocked ops stay QUEUED, deliberately — they are the user's data, and they
+// must upload the moment the account is upgraded or back under its limits. The
+// cost is one refused sign call per blocked chunk per cycle, bounded by the
+// pending queue and the rate limiter, and it is what makes recovery automatic
+// rather than something the user has to know to trigger.
+//
+// Any OTHER error still throws: an auth 403, a 5xx that outlived its retries,
+// a network failure. Those are real cycle failures.
+async function signPushable(
+  deps: SyncDeps,
+  batch: PendingOpRecord[],
+  outcome: SyncOutcome,
+): Promise<{ ops: PendingOpRecord[]; urls: Map<string, string> } | null> {
+  const sign = async (ops: PendingOpRecord[]) => ({
+    ops,
+    urls: await signPaths(
+      deps.api,
+      'put',
+      ops.map((o) => o.path),
+    ),
+  });
+
+  try {
+    return await sign(batch);
+  } catch (e) {
+    const code = apiErrorCode(e);
+    if (code !== 'upgrade_required' && code !== 'quota_exceeded') throw e;
+    outcome.quotaBlocked = true;
+    if (code === 'quota_exceeded') return null;
+
+    const rest = batch.filter((o) => !o.path.startsWith(LINKS_PREFIX));
+    if (rest.length === 0) return null;
+    try {
+      return await sign(rest);
+    } catch (e2) {
+      // The non-link remainder can still hit the byte/object backstop.
+      const code2 = apiErrorCode(e2);
+      if (code2 !== 'upgrade_required' && code2 !== 'quota_exceeded') throw e2;
+      return null;
+    }
+  }
 }
 
 // Commit a sequence of ops in input order, chunked under the commit cap —

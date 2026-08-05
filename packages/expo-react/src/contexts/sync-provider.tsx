@@ -130,9 +130,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     const backgroundSync = () => {
       setBgSyncStatus('syncing');
       void runIncrementalSync(deps).then(
-        () => {
+        (outcome) => {
           if (!activeRef.current) return;
-          setBgSyncStatus('idle');
+          // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
+          // of the push — that resolves rather than rejects (the rest of the
+          // cycle succeeded), so it would otherwise read as a clean sync while
+          // the user's links sit unpushed. 'blocked' is a settled state, not a
+          // failure: it clears on the next cycle once the account is upgraded
+          // or back under its limits.
+          setBgSyncStatus(outcome.quotaBlocked ? 'blocked' : 'idle');
           setLastSyncAt(Date.now());
           setLastError(null);
         },

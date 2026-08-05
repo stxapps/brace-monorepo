@@ -97,7 +97,14 @@ export function foldSubscriptionStatus(
   }
   return {
     plan: best.plan,
-    status: best.status === 'past_due' ? 'grace' : 'active',
+    // The purchase row's lifecycle state, narrowed to what a CLIENT needs:
+    // past_due surfaces as 'grace' (entitled, but tell them to fix the card),
+    // trialing passes through (entitled, and not yet charged — the UI owes them
+    // "first charge on" rather than "renews on"), and everything still entitled
+    // at this point is plain 'active'. `paused`/`canceled` can't reach here —
+    // isEntitled already excluded them.
+    status:
+      best.status === 'past_due' ? 'grace' : best.status === 'trialing' ? 'trialing' : 'active',
     source: best.source,
     expiresAt: best.expiresAt,
     // Renews whenever the provider will try to collect again: good standing,
@@ -537,6 +544,55 @@ export type PaddleApplyResult = { applied: true } | { applied: false; reason: Pa
 // become routine rather than a config bug you fix once. See docs/iap.md.
 const IAP_DROP = 'IAP_DROP_UNRECOVERABLE';
 
+// The second greppable alert token: one account paying two providers at once.
+// Unlike IAP_DROP this costs the CUSTOMER money rather than costing them their
+// entitlement, and nothing in the system self-heals it — the fold takes the best
+// entitled row, so a double-charged account looks perfectly healthy to itself
+// and to us. An operator has to refund one side, which is why the line carries
+// both sources. See verifyStorePurchase for why this is a log and not a refusal.
+const IAP_DOUBLE_SUB = 'IAP_DOUBLE_SUBSCRIPTION';
+
+// --- the price → plan map ----------------------------------------------------
+
+// One plan's configured Paddle prices, newest-first. Each PADDLE_PRICE_ID_* var
+// is a COMMA-SEPARATED LIST rather than a single id, and that shape is the point:
+// the price map is the ONE place where adding to the catalog is not a pure
+// addition. `unknown_price` is a log-and-ACK permanent drop (see
+// PaddleApplyFailure), so the moment a plan can be billed at a price this env
+// doesn't name — a second cadence, a grandfathered launch price, a currency
+// variant — those subscribers pay and are never entitled, and Paddle never
+// redelivers the event that would have fixed it. A list makes "the catalog grew"
+// a config edit rather than a code change, and lets a price stay RECOGNIZED long
+// after it stops being SOLD.
+//
+// Which is the other half: this is the same catalog/storefront split as
+// PAID_PLANS vs AVAILABLE_PAID_PLANS in iap/plans.ts, applied to prices. The
+// READ side (applyPaddleSubscription, below) accepts every id in the list —
+// every price the catalog has ever charged, forever, because a subscriber on a
+// retired price is still a subscriber. The WRITE side (createPaddleTransaction)
+// sells exactly the FIRST one. So retiring a price is: move the new id to the
+// front, keep the old id in the list. Never delete an id that anyone might still
+// be billed at.
+export function paddlePriceIds(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+}
+
+// The authoritative price → plan lookup. Pro is checked first so that a
+// subscription somehow carrying prices from both plans resolves to the higher
+// one — the same "best plan wins" bias as the fold, and never the cheaper one.
+function planOfPaddlePrices(env: Bindings, priceIds: string[]): PaidPlan | null {
+  const carries = (configured: string | undefined): boolean => {
+    const ids = paddlePriceIds(configured);
+    return priceIds.some((id) => ids.includes(id));
+  };
+  if (carries(env.PADDLE_PRICE_ID_PRO)) return 'pro';
+  if (carries(env.PADDLE_PRICE_ID_PLUS)) return 'plus';
+  return null;
+}
+
 // Apply one Paddle subscription snapshot — the shared core of BOTH directions:
 // a pushed `subscription.*` webhook event (applyPaddleEvent) and a pulled
 // refetch (refreshPurchase). Paddle's webhook `data` and its
@@ -587,11 +643,7 @@ async function applyPaddleSubscription(
   // custom_data, which any client could set). Configured per env since sandbox
   // and live Paddle mint different pri_… ids.
   const priceIds = (data.items ?? []).map((i) => i.price?.id).filter((id) => id != null);
-  const plan = priceIds.includes(env.PADDLE_PRICE_ID_PRO)
-    ? 'pro'
-    : priceIds.includes(env.PADDLE_PRICE_ID_PLUS)
-      ? 'plus'
-      : null;
+  const plan = planOfPaddlePrices(env, priceIds);
   if (!plan) return fail('unknown_price', `no known price in [${priceIds}] for ${data.id}`);
 
   // Bind the subscription to an account: the STORED binding wins (first sight is
@@ -725,7 +777,20 @@ export async function createPaddleTransaction(
     console.error(`createPaddleTransaction: could not read pending checkouts for ${userId}`, e);
   }
 
-  const priceId = plan === 'pro' ? env.PADDLE_PRICE_ID_PRO : env.PADDLE_PRICE_ID_PLUS;
+  // The STOREFRONT side of the price list: sell the first configured id. The
+  // read side accepts every id in the list (see paddlePriceIds); exactly one of
+  // them is on sale, and it is the front of the list.
+  //
+  // A missing var used to reach Paddle as `price_id: undefined` and fail there
+  // as an opaque 502; naming it here turns a config gap into a log line that
+  // says which var is empty in which env.
+  const [priceId] = paddlePriceIds(
+    plan === 'pro' ? env.PADDLE_PRICE_ID_PRO : env.PADDLE_PRICE_ID_PLUS,
+  );
+  if (!priceId) {
+    console.error(`createPaddleTransaction: no price configured for plan "${plan}"`);
+    throw new HttpError(500, 'not_configured', 'This plan is not available for purchase');
+  }
 
   const res = await fetch(`${env.PADDLE_API_BASE}/transactions`, {
     method: 'POST',
@@ -921,6 +986,39 @@ export async function verifyStorePurchase(
       'purchase_bound',
       'This store subscription is already linked to another Bracemark account',
     );
+  }
+
+  // The store-side half of the double-subscription guard — deliberately a
+  // DETECTOR, not the 409 createPaddleTransaction throws. The asymmetry is real,
+  // not an oversight: checkout can refuse because it runs BEFORE any money
+  // moves, while a store purchase is already CHARGED by the time verify hears
+  // about it. Refusing here would leave the customer paid-for-nothing — the app
+  // never reaches finishTransaction, so Apple replays the transaction forever
+  // with nothing refunded, and Play's 3-day fuse revokes a purchase we could
+  // simply have honored. Recording it is strictly better for them (the fold
+  // takes the best row, so they stay entitled either way); what was missing is
+  // that the fold also makes the second charge INVISIBLE. This line is the
+  // visibility, and the refund is an operator action.
+  //
+  // Scoped to OTHER sources on purpose. A same-source pair is either impossible
+  // (both stores allow one live subscription per subscription group per store
+  // account) or legitimate: Play RE-KEYS on a plan change, so the replacement
+  // token's verify necessarily sees the superseded row still entitled — that one
+  // is retired a few lines below by supersedeLinkedPlayPurchase, and flagging it
+  // here would make the alert fire on every Play upgrade. Only a cross-provider
+  // pair is a genuine second charge.
+  //
+  // Gated on `!existing`, so it fires at the moment the second subscription
+  // BINDS rather than on every restore and renewal re-verify afterwards.
+  if (!existing) {
+    const others = (await repo.listByUserId(userId)).filter((p) => p.source !== req.source);
+    const otherFold = foldSubscriptionStatus(others);
+    if (otherFold.plan !== 'free') {
+      console.error(
+        `verifyStorePurchase: ${userId} bought ${req.source} ${snapshot.externalId} while ` +
+          `already entitled to ${otherFold.plan} via ${otherFold.source} — ${IAP_DOUBLE_SUB}`,
+      );
+    }
   }
 
   await repo.upsertFromProvider({

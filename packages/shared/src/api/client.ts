@@ -21,6 +21,25 @@ export class ApiError extends Error {
   }
 }
 
+// bracemark-api's stable, client-parseable error code (`{ "error": "<code>" }` —
+// see its lib/errors.ts) off a thrown ApiError. Null for anything that isn't one
+// of ours, so a caller branching on a code can never mistake a proxy's HTML 403
+// or a network failure for a server verdict.
+//
+// This exists so callers branch on the CODE rather than the status: the quota
+// gate answers 403 with two different meanings — `upgrade_required` (a plan
+// gate) and `quota_exceeded` (a capacity gate) — and the sync engine has to tell
+// them apart from an ordinary authorization 403 it must still fail on.
+export function apiErrorCode(e: unknown): string | null {
+  if (!(e instanceof ApiError)) return null;
+  try {
+    const body = JSON.parse(e.body) as { error?: unknown };
+    return typeof body.error === 'string' ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
 // `Retry-After` from an error response, in seconds. Handles both header forms
 // (delta-seconds and HTTP-date); undefined when absent or unparseable.
 export function parseRetryAfterSeconds(res: Response): number | undefined {

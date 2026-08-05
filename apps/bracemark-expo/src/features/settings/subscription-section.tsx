@@ -186,8 +186,16 @@ export function SubscriptionSection() {
   const { status, source, expiresAt, willRenew } = subscription;
   // Upgrade cards only from FREE — a paid user buying again would double-
   // subscribe; a Plus→Pro switch is a store subscription UPDATE (its own flow,
-  // not yet built). The server enforces the same guard by binding one store
-  // subscription per account (and the web's checkout 409s).
+  // not yet built).
+  //
+  // On THIS path that client gate is the only PRE-payment one, which is the
+  // difference from the web section: `POST /iap/checkout` can 409
+  // `already_subscribed` because it runs before any money moves, whereas a store
+  // purchase is charged before the server ever hears of it — so `iap/verify`
+  // records it and raises IAP_DOUBLE_SUBSCRIPTION instead of refusing a purchase
+  // the customer has already paid for (services/iap.ts). Not to be confused with
+  // `purchase_bound`, which is the other direction: one ACCOUNT per store
+  // subscription, not one subscription per account.
   const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
 
   return (
@@ -207,6 +215,9 @@ export function SubscriptionSection() {
           <View className="min-w-0 flex-1 gap-0.5">
             <View className="flex-row items-baseline gap-2">
               <Text className="font-medium">{PLAN_LABELS[plan]}</Text>
+              {plan !== 'free' && status === 'trialing' && (
+                <Text className="text-sm text-muted-foreground">free trial</Text>
+              )}
               {plan !== 'free' && status === 'grace' && (
                 <Text className="text-sm text-destructive">payment issue</Text>
               )}
@@ -219,9 +230,15 @@ export function SubscriptionSection() {
                   `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews for what you save here.`
                 : expiresAt === null
                   ? 'Never expires.'
-                  : willRenew
-                    ? `Renews on ${formatDate(expiresAt)}.`
-                    : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
+                  : // A trial's period end is the FIRST CHARGE, not a renewal —
+                    // say that, rather than letting "Renews on" imply they have
+                    // already paid. A canceled trial still falls through to the
+                    // "won't renew" line below, which is accurate either way.
+                    status === 'trialing' && willRenew
+                    ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
+                    : willRenew
+                      ? `Renews on ${formatDate(expiresAt)}.`
+                      : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
             </Text>
           </View>
           <Button

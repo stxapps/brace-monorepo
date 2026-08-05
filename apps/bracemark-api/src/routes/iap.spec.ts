@@ -638,6 +638,59 @@ describe('iap', () => {
       expect((await getStatus(second.auth)).plan).toBe('free');
     });
 
+    it('records a store purchase made while a Paddle sub is live, and alerts on it', async () => {
+      // The store side has no pre-payment refusal to give: unlike
+      // `POST /iap/checkout`, by the time verify is called the customer has
+      // ALREADY been charged. 409-ing would leave them paid-for-nothing — the
+      // app never reaches finishTransaction, so Apple replays the transaction
+      // forever with nothing refunded and Play's 3-day fuse revokes it. So the
+      // purchase is honored; what the alert buys is VISIBILITY, since the fold
+      // takes the best row and would otherwise make the second charge invisible.
+      const { userId, auth } = await authFor('iap-verify-double-1');
+      expect(
+        (await postWebhook(subscriptionEvent({ subscriptionId: 'sub_double_1', userId }))).status,
+      ).toBe(200);
+      expect((await getStatus(auth)).plan).toBe('plus');
+
+      const logs = captureConsole();
+      mockAppstoreStatuses({ originalTransactionId: 'otid-double-1' });
+      const res = await postVerify(auth, { source: 'appstore', token: '4000000000000001' });
+
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as SubscriptionStatus).plan).toBe('plus');
+      // Names both sides, because the fix is an operator refunding one of them.
+      expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('IAP_DOUBLE_SUBSCRIPTION'));
+      expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('via paddle'));
+    });
+
+    it('stays quiet when the same store re-keys a subscription (a plan change is not two)', async () => {
+      // The scoping that makes the alert usable: Play mints a NEW token on a
+      // plan change, so the replacement's verify necessarily sees the
+      // superseded row still entitled. Firing there would put the alert on
+      // every single Play upgrade and drown the case it exists for.
+      const { auth } = await authFor('iap-verify-double-2');
+      mockPlaySubscription({});
+      mockPlayAcknowledge();
+      expect(
+        (await postVerify(auth, { source: 'playstore', token: 'play-double-old' })).status,
+      ).toBe(200);
+
+      const logs = captureConsole();
+      mockPlaySubscription({
+        productId: STORE_PRODUCT_IDS.pro,
+        linkedPurchaseToken: 'play-double-old',
+      });
+      mockPlayAcknowledge();
+      expect(
+        (await postVerify(auth, { source: 'playstore', token: 'play-double-new' })).status,
+      ).toBe(200);
+
+      expect((await getStatus(auth)).plan).toBe('pro');
+      expect(logs.error).not.toHaveBeenCalledWith(
+        expect.stringContaining('IAP_DOUBLE_SUBSCRIPTION'),
+      );
+    });
+
     // --- Play's linkedPurchaseToken supersession (lib/playstore.ts) ----------
     // Play RE-KEYS a subscription on an upgrade/downgrade/re-signup: the new
     // purchase token is a new identity, so a new row, and the old token goes on
@@ -1108,7 +1161,7 @@ describe('iap', () => {
       expect(status.expiresAt).toBe(endsAt);
     });
 
-    it('folds a trialing subscription (real trial-end expiry) to active + renewing', async () => {
+    it('folds a trialing subscription to trialing + entitled + renewing', async () => {
       const { userId, auth } = await authFor('iap-hook-trial-1');
       const endsAt = Date.now() + 14 * DAY_MS; // trial end
 
@@ -1117,8 +1170,13 @@ describe('iap', () => {
       );
 
       const status = await getStatus(auth);
+      // Fully entitled — a trialing account gets exactly its plan.
       expect(status.plan).toBe('plus');
-      expect(status.status).toBe('active'); // trialing folds to the client-facing 'active'
+      // But NOT reported as 'active'. The two are identical in entitlement and
+      // different in what the UI owes the user: `expiresAt` here is the FIRST
+      // CHARGE, so a section rendering "Renews on <date>" off an 'active' would
+      // imply they had already paid.
+      expect(status.status).toBe('trialing');
       expect(status.willRenew).toBe(true);
       expect(status.expiresAt).toBe(endsAt);
     });
@@ -1257,6 +1315,49 @@ describe('iap', () => {
         expect.stringContaining('no known price in [pri_unknown] for sub_hook_unknown'),
       );
       expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('IAP_DROP_UNRECOVERABLE'));
+    });
+
+    it('applies every price in a plan’s list, not just the one on sale', async () => {
+      // PADDLE_PRICE_ID_* is a comma-separated LIST because the read side has to
+      // recognize every price the catalog has ever charged: an unrecognized
+      // pri_… is `unknown_price`, which is log-and-ACK, which is permanent —
+      // the subscriber pays and is never entitled. So a price that has been
+      // retired from the storefront (or a second cadence added to it) must keep
+      // folding, and only the FRONT of the list is what checkout sells.
+      const onSale = env.PADDLE_PRICE_ID_PLUS;
+      const retired = 'pri_plus_retired_launch_price';
+      env.PADDLE_PRICE_ID_PLUS = `${onSale},${retired}`;
+      try {
+        const stillOnSale = await authFor('iap-price-list-1');
+        expect(
+          (
+            await postWebhook(
+              subscriptionEvent({
+                subscriptionId: 'sub_price_list_1',
+                userId: stillOnSale.userId,
+                priceId: onSale,
+              }),
+            )
+          ).status,
+        ).toBe(200);
+        expect((await getStatus(stillOnSale.auth)).plan).toBe('plus');
+
+        const grandfathered = await authFor('iap-price-list-2');
+        expect(
+          (
+            await postWebhook(
+              subscriptionEvent({
+                subscriptionId: 'sub_price_list_2',
+                userId: grandfathered.userId,
+                priceId: retired,
+              }),
+            )
+          ).status,
+        ).toBe(200);
+        expect((await getStatus(grandfathered.auth)).plan).toBe('plus');
+      } finally {
+        env.PADDLE_PRICE_ID_PLUS = onSale;
+      }
     });
   });
 

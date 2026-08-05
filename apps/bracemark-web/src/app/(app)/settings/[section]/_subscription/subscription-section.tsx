@@ -162,6 +162,9 @@ export function SubscriptionSection() {
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="font-medium">
               {PLAN_LABELS[plan]}
+              {plan !== 'free' && status === 'trialing' && (
+                <span className="ml-2 text-sm font-normal text-muted-foreground">free trial</span>
+              )}
               {plan !== 'free' && status === 'grace' && (
                 <span className="ml-2 text-sm font-normal text-destructive">payment issue</span>
               )}
@@ -176,9 +179,15 @@ export function SubscriptionSection() {
                   `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews from the browser extension.`
                 : expiresAt === null
                   ? 'Never expires.'
-                  : willRenew
-                    ? `Renews on ${formatDate(expiresAt)}.`
-                    : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
+                  : // A trial's period end is the FIRST CHARGE, not a renewal —
+                    // say that, rather than letting "Renews on" imply they have
+                    // already paid. A canceled trial still falls through to the
+                    // "won't renew" line below, which is accurate either way.
+                    status === 'trialing' && willRenew
+                    ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
+                    : willRenew
+                      ? `Renews on ${formatDate(expiresAt)}.`
+                      : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
             </span>
           </div>
           <Button variant="ghost" size="sm" disabled={busy !== null} onClick={refreshStatus}>

@@ -46,6 +46,7 @@ import {
   cleanTitle,
   compareRank,
   DEFAULT_LIST_ID,
+  entitlementsOf,
   flattenTree,
   LINKS_PREFIX,
   type List,
@@ -59,11 +60,12 @@ import {
 
 import { runIncrementalSync } from '../sync/engine';
 import { appGroupDir } from './app-group';
-import { getItem } from './item-store';
+import { getItem, namespaceRows } from './item-store';
 import { writeExtraction, writeLink, writeList, writeTag } from './mutations';
 import { readLists, readTags } from './queries';
 import { getSession, loadSession, loadSharedSession } from './session-store';
 import { uploadShareDraft } from './share-upload';
+import { readCachedStatus } from './subscription-store';
 
 // --- shapes -------------------------------------------------------------------
 
@@ -246,7 +248,45 @@ export type ShareSaveResult =
   | 'saved'
   // iOS: parked in the App Group outbox; the main app drains it on next
   // launch/foreground.
-  | 'queued';
+  | 'queued'
+  // Android only: the account is at its plan's link cap, so nothing was
+  // written. The same refusal every other create surface makes (the quick-add
+  // popover, the expo add screen, the extension popup all render
+  // LinkQuotaBanner instead of the form) — this was the one save path that
+  // didn't, which is what let a free user at the cap queue a put the server
+  // would refuse. See isAtLinkCap for why iOS can't answer this.
+  | 'quota';
+
+// Whether a new link would exceed the plan's cap — the share sheet's copy of
+// the useLinkQuota gate the other create surfaces run.
+//
+// Counted the SERVER's way: every `links/` row, trashed ones included (trash is
+// a listId, not a deletion, so the blob still exists and bracemark-api still
+// counts it). Counting only what the UI shows would put this under the server's
+// number and re-open the hole.
+//
+// Fails OPEN in both unknowable cases — no cached status (fresh install that
+// hasn't fetched `iap/status` yet) reads as "allowed", never as free. This is a
+// UX pre-check, not the enforcement: the server decides at `files/sign`
+// regardless, and the sync engine now degrades a refusal gracefully
+// (signPushable), so a false ALLOW costs a blocked-sync notice while a false
+// REFUSE would tell a paying customer their library is full.
+//
+// ANDROID ONLY, and that asymmetry is structural rather than an omission: the
+// iOS share extension is a separate process that must never open the app's
+// sqlite (see this file's header), so it can read neither the link count nor
+// the cached plan — it has only the taxonomy snapshot. An iOS share therefore
+// still queues, the main app's drain still applies it locally (the user's data
+// is never silently dropped), and the engine reports the sync as 'blocked'
+// rather than wedging. Closing the gap on iOS means carrying the count in the
+// snapshot; not worth a per-save snapshot rewrite until it's asked for.
+export function isAtLinkCap(): boolean {
+  const status = readCachedStatus();
+  if (!status) return false;
+  const { maxLinks } = entitlementsOf(status.plan);
+  if (maxLinks === null) return false;
+  return namespaceRows(LINKS_PREFIX).length >= maxLinks;
+}
 
 // One Add. The sheet checks `sessionPresent` before offering the form, so a
 // missing session here is a programming error, not a user state. `api` is the
@@ -272,6 +312,7 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
   }
   const session = getSession();
   if (!session) throw new Error('saveSharedDraft: no session');
+  if (isAtLinkCap()) return 'quota';
   await applyShareDraft(session.username, draft);
   // Inline sync kick: the pending op usually lands server-side while the share
   // activity's process is still alive (one entity, sub-second). Un-awaited JS

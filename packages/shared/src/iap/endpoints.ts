@@ -25,12 +25,21 @@ export type SubscriptionSource = (typeof SUBSCRIPTION_SOURCES)[number];
 // display state for the subscription settings UI.
 //
 // `status`: 'none' = no live subscription (plan is then 'free'); 'active' = paid
-// and in good standing; 'grace' = payment trouble (past_due) but still entitled
+// and in good standing; 'trialing' = inside the free trial, fully entitled but
+// NOT yet charged; 'grace' = payment trouble (past_due) but still entitled
 // while the provider retries — the UI should surface "update your payment
 // method" without yanking features mid-dunning.
+//
+// 'trialing' is carried separately from 'active' because the two owe the user
+// different sentences. Entitlement-wise they are identical (a trialing account
+// gets exactly `plan`, which is why entitlementsOf takes only the plan), so it
+// would be easy to collapse them — but then a user 3 days into a 14-day trial
+// reads "Renews on <date>" with no hint that the date is their FIRST charge.
+// Saying so is both the honest thing and the thing EU/UK distance-selling rules
+// assume was said (docs/business-model.md, _pricing_).
 export const subscriptionStatusSchema = z.object({
   plan: z.enum(PLANS),
-  status: z.enum(['none', 'active', 'grace']),
+  status: z.enum(['none', 'active', 'trialing', 'grace']),
   source: z.enum(SUBSCRIPTION_SOURCES).nullable(),
   // Epoch ms the current paid period runs to; null when free or non-expiring
   // (a lifetime/manual grant).
@@ -85,7 +94,9 @@ export const iapCheckoutEndpoint = defineEndpoint({
 // purchases are client-side events the server only learns about from a receipt
 // the app submits (unlike Paddle, where checkout carries our userId straight to
 // the webhook). bracemark-api verifies the token against the store's API and
-// records the purchase. Until the Expo app exists the server answers 501.
+// records the purchase, bound to the session's account (first sight is for
+// life). The response is the fresh fold, so there is no post-purchase polling
+// on this path — unlike the web's webhook wait. See docs/iap.md.
 export const iapVerifyRequestSchema = z.object({
   source: z.enum(['appstore', 'playstore']),
   // The store product identifier of the purchased subscription.

@@ -21,16 +21,19 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
+import { namespaceRows } from './item-store';
 import {
   buildShareLists,
   buildShareTags,
   clearShareData,
   drainShareOutbox,
+  isAtLinkCap,
   parseShareDraft,
   parseShareTaxonomy,
   type ShareDraft,
   type ShareTaxonomy,
 } from './share-store';
+import { readCachedStatus } from './subscription-store';
 
 // The in-memory filesystem behind the expo-file-system stand-in: uri → contents
 // for files, a bare uri set for directories. Declared outside the factory
@@ -163,7 +166,13 @@ jest.mock('./queries', () => ({
   readLists: jest.fn(async () => []),
   readTags: jest.fn(async () => []),
 }));
-jest.mock('./item-store', () => ({ getItem: jest.fn(async () => null) }));
+jest.mock('./item-store', () => ({
+  getItem: jest.fn(async () => null),
+  // isAtLinkCap counts through this — the same trash-INCLUSIVE namespace read
+  // the server's own count matches.
+  namespaceRows: jest.fn(() => []),
+}));
+jest.mock('./subscription-store', () => ({ readCachedStatus: jest.fn(() => null) }));
 jest.mock('./mutations', () => ({
   writeLink: jest.fn(async () => undefined),
   writeList: jest.fn(async () => undefined),
@@ -372,5 +381,69 @@ describe('drainShareOutbox', () => {
 
     expect([...mockFiles.keys()]).toEqual([]);
     expect([...mockDirs]).toEqual([]);
+  });
+});
+
+// The share sheet's copy of the create-surface link-cap gate. Before this, the
+// sheet was the ONE save path with no cap check: a free user at 200 links could
+// queue a `links/` put the server refuses, and the refusal wedged the whole
+// pending queue (see the engine's signPushable). These pin the three decisions
+// that make the gate safe to run on a stale, device-local cache.
+describe('isAtLinkCap', () => {
+  const rows = namespaceRows as jest.Mock;
+  const cached = readCachedStatus as jest.Mock;
+
+  beforeEach(() => {
+    rows.mockReset().mockReturnValue([]);
+    cached.mockReset().mockReturnValue(null);
+  });
+
+  function atCount(n: number) {
+    rows.mockReturnValue(Array.from({ length: n }, (_, i) => ({ path: `links/${i}.enc` })));
+  }
+
+  it('refuses a free account at its cap', () => {
+    cached.mockReturnValue({
+      plan: 'free',
+      status: 'none',
+      source: null,
+      expiresAt: null,
+      willRenew: false,
+    });
+    atCount(200);
+    expect(isAtLinkCap()).toBe(true);
+  });
+
+  it('allows a free account under its cap', () => {
+    cached.mockReturnValue({
+      plan: 'free',
+      status: 'none',
+      source: null,
+      expiresAt: null,
+      willRenew: false,
+    });
+    atCount(199);
+    expect(isAtLinkCap()).toBe(false);
+  });
+
+  it('never refuses a paid account (maxLinks is unlimited)', () => {
+    cached.mockReturnValue({
+      plan: 'plus',
+      status: 'active',
+      source: 'paddle',
+      expiresAt: Date.now() + 1000,
+      willRenew: true,
+    });
+    atCount(5000);
+    expect(isAtLinkCap()).toBe(false);
+  });
+
+  it('fails OPEN with no cached status, rather than assuming free', () => {
+    // A fresh install that has not fetched `iap/status` yet. Guessing 'free'
+    // here would tell a PAYING customer their library is full; the server still
+    // enforces, and a wrong ALLOW now only costs a blocked-sync notice.
+    cached.mockReturnValue(null);
+    atCount(5000);
+    expect(isAtLinkCap()).toBe(false);
   });
 });

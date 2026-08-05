@@ -34,6 +34,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import Link from 'next/link';
 
 import { formatSyncedAt, getSyncPhase, SYNC_PHASE_LABELS } from '@stxapps/shared';
 import {
@@ -67,9 +68,16 @@ function SyncStatus() {
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const isError = phase === 'cycle-error';
+  // The plan/quota gate refused part of the push. Deliberately NOT styled as an
+  // error: everything else synced and the local library is intact — what's
+  // needed is an upgrade, not a retry (which is also why it gets no Retry
+  // button; pressing one would change nothing).
+  const isBlocked = phase === 'quota-blocked';
 
   const icon = isError ? (
     <CircleAlert className="size-4 text-destructive" />
+  ) : isBlocked ? (
+    <CircleAlert className="size-4 text-muted-foreground" />
   ) : phase === 'idle' ? (
     <CircleCheck className="size-4 text-muted-foreground" />
   ) : (
@@ -98,6 +106,18 @@ function SyncStatus() {
             {text}
           </span>
           {detail && <span className="wrap-break-words text-sm text-destructive">{detail}</span>}
+          {/* The one place a blocked sync is explained. Inline rather than the
+              hoisted paywall dialog: this is a STATUS the user came to read,
+              not an action being interrupted (paywall-provider's header). */}
+          {isBlocked && (
+            <span className="text-sm text-muted-foreground">
+              Your plan&apos;s limit is reached, so new links stay on this device. Everything
+              already saved is safe, and syncing resumes as soon as you upgrade or free up space.{' '}
+              <Link className="underline hover:text-foreground" href="/settings/subscription">
+                See plans
+              </Link>
+            </span>
+          )}
           {pendingCount > 0 && (
             <span className="text-sm text-muted-foreground">
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
@@ -108,7 +128,7 @@ function SyncStatus() {
               — but content (`files/`) downloads lazily on open (docs
               local-first-sync.md — metadata vs. content). Suppressed on an error,
               where a standing fact only competes with the failure message. */}
-          {!isError && (
+          {!isError && !isBlocked && (
             <span className="mt-1 text-xs text-muted-foreground">
               Saved page copies and images download when you open them.
             </span>

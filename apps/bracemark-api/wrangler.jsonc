@@ -75,6 +75,10 @@
         // put them in .dev.vars locally:
         //   PADDLE_WEBHOOK_SECRET=pdl_ntfset_…   PADDLE_API_KEY=pdl_sdbx_apikey_…
         "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
+        // COMMA-SEPARATED lists: every price a plan may be billed at, the one
+        // on sale FIRST. The read side accepts them all (an unrecognized price
+        // is a permanent drop — the subscriber pays and is never entitled), the
+        // checkout sells the first. Add, never replace.
         "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
         // Store IAP (routes/iap.ts verify + notify; lib/appstore.ts,
@@ -183,6 +187,10 @@
         // Register the webhook in the sandbox dashboard pointing at
         // https://api.staging.bracemark.com/v1/iap/paddle/webhook.
         "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
+        // COMMA-SEPARATED lists: every price a plan may be billed at, the one
+        // on sale FIRST. The read side accepts them all (an unrecognized price
+        // is a permanent drop — the subscriber pays and is never entitled), the
+        // checkout sells the first. Add, never replace.
         "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
         // Store IAP — staging verifies against the App Store SANDBOX. Secrets,
@@ -286,6 +294,7 @@
         // Register the webhook in the live dashboard pointing at
         // https://api.bracemark.com/v1/iap/paddle/webhook.
         "PADDLE_API_BASE": "https://api.paddle.com",
+        // COMMA-SEPARATED lists, on sale FIRST — see the development env.
         "PADDLE_PRICE_ID_PLUS": "TODO: live pri_… id for Plus (yearly)",
         "PADDLE_PRICE_ID_PRO": "TODO: live pri_… id for Pro (yearly)",
         // Store IAP — production verifies against the PRODUCTION App Store host

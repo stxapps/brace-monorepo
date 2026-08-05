@@ -25,7 +25,28 @@ export type StoreStatus =
 export type BgSyncStatus =
   | 'idle' // no cycle in flight; the last one (if any) succeeded
   | 'syncing' // a background cycle is in flight
+  // The cycle COMPLETED, but the server refused part of the push on plan/quota
+  // grounds (`upgrade_required` / `quota_exceeded` at files/sign — see
+  // bracemark-api lib/quota.ts). Deliberately NOT 'error': everything else
+  // pulled, pushed and committed, the local store is correct, and nothing is
+  // retryable by pressing a button — only upgrading or freeing space clears it.
+  // Calling that "Sync failed" would send a user hunting for a network problem
+  // they don't have, at the exact moment they should be seeing the paywall.
+  | 'blocked'
   | 'error'; // the last cycle failed; requestSync retries (flips back to 'syncing')
+
+// What a completed cycle learned beyond "it worked" — the engines' return value,
+// read by each platform's SyncProvider to pick between 'idle' and 'blocked'.
+// Shared so the two sibling engines (web-react, expo-react) and their providers
+// can't drift on the meaning.
+export interface SyncOutcome {
+  // The plan/quota gate refused part of the push (bracemark-api lib/quota.ts).
+  // The cycle still completed: pulls landed, deletes committed, and every put
+  // the gate didn't refuse was uploaded — so this is a state to SURFACE, not a
+  // failure to retry. It clears by itself on the next cycle once the account is
+  // upgraded or under its limits again.
+  quotaBlocked: boolean;
+}
 
 // The collapsed one-dimensional phase, in priority order: the gate (store)
 // outranks the indicator (bg) — while the store is still checking/pulling/failed
@@ -36,6 +57,7 @@ export type SyncPhase =
   | 'initial-error' // initial pull failed → retryInitialSync
   | 'syncing' // a background cycle is in flight
   | 'cycle-error' // the last background cycle failed → requestSync retries
+  | 'quota-blocked' // cycle fine, but the plan/quota gate refused part of the push
   | 'idle'; // settled; the last cycle (if any) succeeded
 
 // Shared derivation of the user-facing sync status. Every status surface —
@@ -49,6 +71,9 @@ export function getSyncPhase(store: StoreStatus, bg: BgSyncStatus): SyncPhase {
   if (store === 'error') return 'initial-error';
   if (bg === 'syncing') return 'syncing';
   if (bg === 'error') return 'cycle-error';
+  // After 'error': a cycle that both failed AND hit the quota gate is reported
+  // as failed, since the failure is the part a retry can still fix.
+  if (bg === 'blocked') return 'quota-blocked';
   return 'idle';
 }
 
@@ -61,6 +86,10 @@ export const SYNC_PHASE_LABELS: Record<SyncPhase, string> = {
   'initial-error': 'Initial sync failed',
   syncing: 'Syncing…',
   'cycle-error': 'Sync failed',
+  // Names the effect, not the cause: the user's library is fine and their other
+  // changes did sync, so this must not read as breakage. The surfaces add the
+  // "upgrade to keep syncing" call to action on top.
+  'quota-blocked': 'Some changes aren’t syncing',
   idle: 'Up to date',
 };
 

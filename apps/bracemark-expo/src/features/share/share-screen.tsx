@@ -243,7 +243,15 @@ export function ShareScreen({ url, title }: SharePayload) {
       // The api client powers saveSharedDraft's un-awaited post-write kick
       // (Android inline sync / iOS upload); Add itself only waits on
       // the durable local write.
-      await saveSharedDraft(draft, apiClient);
+      const result = await saveSharedDraft(draft, apiClient);
+      // At the plan's link cap — nothing was written, so this is a refusal, not
+      // a failure: say what happened and where to fix it rather than inviting a
+      // retry that would refuse again. (Android only; see isAtLinkCap.)
+      if (result === 'quota') {
+        setPhase('ready');
+        setError('You have reached your plan’s link limit. Upgrade in Bracemark to save more.');
+        return;
+      }
       setPhase('saved');
     } catch {
       setPhase('ready');

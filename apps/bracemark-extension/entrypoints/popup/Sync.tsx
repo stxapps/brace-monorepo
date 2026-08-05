@@ -19,6 +19,10 @@ const PILL_LABELS: Record<SyncPhase, string> = {
   'initial-error': 'Error',
   syncing: 'Syncing…',
   'cycle-error': 'Error',
+  // Not 'Error': the cycle worked, the plan's limit is what stopped the rest.
+  // Saying "Error" here would point the user at a connection problem instead of
+  // the paywall (see @stxapps/shared sync/status.ts, BgSyncStatus 'blocked').
+  'quota-blocked': 'Limit reached',
   idle: 'Synced ✓',
 };
 

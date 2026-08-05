@@ -137,6 +137,14 @@ the paywall) vs `quota_exceeded` (a **capacity** gate on an entitled plan —
 over-quota or downgraded account degrades to **read-only-plus-delete, never
 data loss**.
 
+That degradation is the sync engine's job as much as the gate's, and the
+DOWNGRADED account is the case that proves it: their links already exist, so no
+create-surface pre-check can keep them under the cap, and every `links/` put
+they make — including a re-put of a link they merely edited — is refused. The
+engine therefore treats a quota refusal as a partial push rather than a failed
+cycle (see _open follow-ups_, surfacing `upgrade_required`); before that it was
+a permanently wedged queue, which is not "read-only-plus-delete".
+
 ### the purchase flow (store IAP — bracemark-expo)
 
 The client library is **expo-iap** (the OpenIAP successor to the deprecated
@@ -177,6 +185,25 @@ the server only learns about from the receipt the app submits.
    replayed token 409s (`purchase_bound`). The response is the fresh fold — no
    post-checkout polling (the webhook lag that polling covers on web doesn't
    exist here).
+
+   **Why this one can't 409 on a double subscription.** The web's
+   `already_subscribed` guard has no sibling here, and the asymmetry is
+   deliberate: `POST /iap/checkout` runs **before** any money moves, whereas by
+   the time verify is called the store has **already charged** the customer.
+   Refusing would leave them paid-for-nothing — the app never reaches
+   `finishTransaction`, so Apple replays the transaction forever with nothing
+   refunded and Play's 3-day fuse revokes a purchase we could have honored. So
+   verify **records and alerts**: an account that binds a store purchase while
+   already entitled through a _different_ source logs
+   `IAP_DOUBLE_SUBSCRIPTION` (the second alert token beside `IAP_DROP`), and the
+   refund is an operator action. What that buys is visibility, not prevention —
+   the fold takes the best entitled row, so a double-charged account otherwise
+   looks perfectly healthy to itself and to us. Cross-provider only:
+   a same-source pair is either impossible (one live subscription per
+   subscription group per store account) or the legitimate Play re-key below,
+   which would otherwise fire the alert on every Play upgrade. Prevention on this
+   path stays a **client** gate — upgrade cards render only on `free`.
+
 3. **Finish** — only after the server has recorded it does the app
    `finishTransaction`. A failed verify leaves the transaction unfinished, so
    the store REPLAYS it on the next connection — the built-in retry;
@@ -282,6 +309,18 @@ Row three is the sharp one and it's self-inflicted: log-and-ACK is required (or
 the provider redelivers forever), so every drop is permanent by construction.
 Adding a `pri_…` and forgetting `PADDLE_PRICE_ID_PRO` in one env silently drops
 every event for those subscribers.
+
+That one is blunted at the source: **each `PADDLE_PRICE_ID_*` is a
+comma-separated LIST, not a single id** (`paddlePriceIds` in `services/iap.ts`),
+and it carries the same catalog/storefront split as `PAID_PLANS` vs
+`AVAILABLE_PAID_PLANS` one level down. The **read** side recognizes every id in
+the list — every price the catalog has ever charged, kept forever, because a
+subscriber on a retired price is still a subscriber — while **checkout sells the
+first**. Retiring a price is therefore "move the new id to the front, keep the
+old one behind it", and the drop above needs someone to actively _delete_ an id
+rather than merely forget to add one. It also means the monthly cadence, the
+grandfathered launch price, and any currency variant land as config edits on a
+path that is otherwise a permanent, silent revenue loss.
 
 So there is a **pull** side: `services/iap.ts` re-fetches a row's authoritative
 state and applies it through the same code path a push takes. Three properties
@@ -457,7 +496,9 @@ deep-links to it); a Paddle purchase seen from the app gets a
 
 - **bracemark-api** (`wrangler.jsonc`): `PADDLE_API_BASE` (sandbox for
   development/staging, live for production), `PADDLE_PRICE_ID_PLUS/_PRO`
-  (per-env — sandbox and live mint different `pri_…` ids); secrets
+  (per-env — sandbox and live mint different `pri_…` ids — and each a
+  **comma-separated list**, the price on sale first; see _reconciliation_);
+  secrets
   `PADDLE_WEBHOOK_SECRET` + `PADDLE_API_KEY` via `wrangler secret put`
   (`.dev.vars` locally). Register the webhook destination per env at
   `…/v1/iap/paddle/webhook`, subscribed to `subscription.*` events.
@@ -493,6 +534,14 @@ re-bought) and a stopgap (upgrade cards render only on free, and
 `POST /iap/checkout` 409s + dedupes — see _checkout_ above), so whichever ships
 first should land the flow the other two reuse.
 
+Note what that stopgap does **not** cover, since the flow inherits it: the store
+side has no pre-payment refusal to add (see _the purchase flow (store IAP)_,
+step 2), so on stores the client gate is the whole of the prevention. Today that
+holds because the cards render only on `free`; the plan-change flow's entire
+purpose is rendering them to **paid** users, so it has to bring its own answer —
+a crossgrade inside the existing subscription rather than a second purchase.
+`IAP_DOUBLE_SUBSCRIPTION` is the detector either way, not a substitute for it.
+
 - **Plan change (Plus→Pro)** — a Paddle subscription _update_ with proration;
   until then upgrade cards show only on free and the server 409s a second
   checkout. Deferred deliberately: Pro is not on sale (`AVAILABLE_PAID_PLANS`),
@@ -504,12 +553,15 @@ first should land the flow the other two reuse.
   first would ship a one-way door, where a monthly customer who wants annual has
   no path but cancel, wait out the period, and re-subscribe.
 - **Selling the monthly cadence at all** — beyond the switch flow, the catalog
-  is single-cadence in two places that fail differently. `services/iap.ts` maps
-  price id → plan against exactly ONE `pri_…` per plan, so a monthly
-  subscriber's webhook would fail `unknown_price` — and that is the log-and-ACK
-  permanent drop (they pay, and never get entitled). `STORE_PRODUCT_IDS` is
+  is still single-cadence on the store side. `STORE_PRODUCT_IDS` is
   `Record<PaidPlan, string>` (one SKU, `…​.yearly`), so it needs the cadence axis
-  and both stores need the products created. Prices are already constants
+  and both stores need the products created. Paddle's half is now config, not
+  code: the price map takes a **list** per plan (see _reconciliation_), so adding
+  the monthly `pri_…` to `PADDLE_PRICE_ID_PLUS` is what stops a monthly
+  subscriber's webhook failing `unknown_price` — the log-and-ACK permanent drop
+  where they pay and never get entitled. What is NOT yet built is letting the
+  buyer pick: checkout sells the first id in the list, so a cadence choice needs
+  a cadence on `iap/checkout`'s request. Prices are already constants
   (`PLAN_USD_PER_MONTH`); nothing else is.
 - **Lifetime ($149, the capped launch lever)** — a one-time Paddle transaction,
   and `applyPaddleEvent` returns early on anything that isn't `subscription.*`
@@ -521,21 +573,58 @@ first should land the flow the other two reuse.
   pricing page renders nothing at all rather than a "coming soon" strip.
 - **The trial is catalog config, not code** — `TRIAL_DAYS` (14) is the copy's
   source, but the trial period itself is configured on the **yearly `pri_…`** in
-  the Paddle catalog, and the fold already treats `trialing` as entitled. So the
+  the Paddle catalog, and the fold already treats `trialing` as entitled. The
+  client now SEES it: `subscriptionStatusSchema.status` carries `'trialing'`
+  alongside `'active'`, so both subscription sections say "Free trial — your
+  first payment is on <date>" instead of "Renews on <date>". The two are
+  identical in entitlement (a trialing account gets exactly `plan`, which is why
+  `entitlementsOf` takes only the plan) and different in what they owe the user
+  — reading "Renews on" mid-trial implies a payment that hasn't happened, which
+  is both dishonest and the opposite of what EU/UK distance-selling assumes was
+  disclosed. **Worth testing in sandbox specifically**: this depends on Paddle
+  stamping a trialing subscription's `current_billing_period`, since a provider
+  row with a null period deliberately does not entitle (see `isEntitled`). So the
   checklist item is: configure the trial on the annual price before launch, and
   never on a monthly one (`TRIAL_CADENCES`) — the marketing site already says
   "14 days free" (`/pricing`), so a catalog that doesn't carry it is a promise
   the checkout breaks.
-- **Surfacing `upgrade_required` client-side** — the code exists only at the
-  server gate. Nothing in the sync engine inspects the 403, so an over-cap put
-  lands as an ordinary rejected cycle (`bgSyncStatus: 'error'`) with no route to
-  the paywall: what the enforcement table above calls "client maps to the paywall"
-  is the design, not yet the code. It stays mostly unreachable because the save
-  surfaces refuse first — the link cap is pre-checked on every create surface but
-  one ([editors.md](./editors.md), the create family's quota gate), and the
-  exception is the bracemark-expo share sheet
-  ([share-sheet.md](./share-sheet.md)), which is therefore the one path that can
-  still wedge a queue.
+- **Surfacing `upgrade_required` client-side** — DONE, in the two places it
+  matters; what remains is noted at the end.
+
+  The sync engine now inspects the 403 (`signPushable`, in both
+  `web-react`/`expo-react` `sync/engine.ts`). It used to throw, which failed the
+  cycle, left the chunk queued, and re-failed it on every subsequent cycle — a
+  permanent wedge, and not confined to the offending link, since `links/` is
+  METADATA and shared its chunk with list/tag/pin/settings puts. Now a quota
+  refusal is recorded on the cycle's `SyncOutcome` and the chunk is retried
+  without its `links/` paths, so everything the gate didn't refuse still
+  uploads. `quota_exceeded` gets no such retry — no subset fixes being out of
+  bytes. Blocked ops stay QUEUED, so they upload by themselves once the account
+  is upgraded or back under its limits.
+
+  The state is then visible rather than silent: `BgSyncStatus` gained
+  `'blocked'` and `SyncPhase` `'quota-blocked'` (`shared/sync/status.ts`),
+  deliberately NOT `'error'` — the cycle completed and no retry can help, so
+  "Sync failed" would send the user hunting for a network problem instead of the
+  paywall. The Data card on both apps explains it and links to
+  `/settings/subscription`; the extension popup pill reads "Limit reached".
+
+  The **bracemark-expo share sheet** — the one create surface with no cap
+  pre-check, and so the path that could queue the refused put in the first place
+  — now runs the same gate on **Android** (`isAtLinkCap` in expo-react's
+  `data/share-store.ts`; the sheet reports `'quota'` and refuses, matching every
+  other create surface). **iOS cannot**: its share extension is a separate
+  process barred from the app's sqlite ([share-sheet.md](./share-sheet.md)), so
+  it can read neither the link count nor the cached plan. An iOS share therefore
+  still queues and the drain still applies it locally — the user's data is never
+  dropped — and the engine reports the sync as blocked rather than wedging.
+  Closing that means carrying the count in the App Group taxonomy snapshot,
+  which is not worth a per-save snapshot rewrite until asked for.
+
+  Still open: the **action-interrupt** paywall for this code (the hoisted
+  `usePaywall` dialog) is not wired to sync — the blocked state is reported on
+  the Data card, which is a status surface, not an interrupt.
+
 - **Extraction gating beyond the settings toggle** — free stores the preview
   image, but the HEAVY blob facets (read-mode / screenshot / page copy) are
   client-gated: since the server no longer refuses any `files/` put (it can't

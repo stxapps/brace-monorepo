@@ -75,6 +75,12 @@ export type Bindings = {
   // Paddle mint different pri_… ids, so they're per-env); the webhook secret
   // and API key are SECRETS (`wrangler secret put PADDLE_WEBHOOK_SECRET /
   // PADDLE_API_KEY --env …`; locally in .dev.vars).
+  //
+  // Each PADDLE_PRICE_ID_* is a COMMA-SEPARATED LIST, not one id — a plan may
+  // carry several prices at once (a second billing cadence, a grandfathered
+  // launch price), and the READ side must recognize every price the catalog has
+  // ever charged or the webhook drops that subscriber permanently. The FIRST
+  // entry is the one checkout sells. See services/iap.ts, paddlePriceIds.
   PADDLE_API_BASE: string;
   PADDLE_PRICE_ID_PLUS: string;
   PADDLE_PRICE_ID_PRO: string;

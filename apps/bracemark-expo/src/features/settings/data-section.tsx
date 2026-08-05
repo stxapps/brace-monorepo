@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import {
   CircleAlert,
@@ -61,13 +62,21 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 function SyncStatus() {
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError, requestSync } = useSync();
   const pendingCount = usePendingChangesCount();
+  const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const isError = phase === 'cycle-error';
+  // The plan/quota gate refused part of the push. Deliberately NOT styled as an
+  // error: everything else synced and the local library is intact — what's
+  // needed is an upgrade, not a retry (which is also why it gets no Retry
+  // button; pressing one would change nothing).
+  const isBlocked = phase === 'quota-blocked';
 
   const icon = isError ? (
     <Icon as={CircleAlert} className="size-4 text-destructive" />
+  ) : isBlocked ? (
+    <Icon as={CircleAlert} className="size-4 text-muted-foreground" />
   ) : phase === 'idle' ? (
     <Icon as={CircleCheck} className="size-4 text-muted-foreground" />
   ) : (
@@ -96,6 +105,25 @@ function SyncStatus() {
             {text}
           </Text>
           {detail && <Text className="text-sm text-destructive">{detail}</Text>}
+          {/* The one place a blocked sync is explained. Inline rather than the
+              hoisted paywall dialog: this is a STATUS the user came to read,
+              not an action being interrupted (paywall-provider's header). */}
+          {isBlocked && (
+            <>
+              <Text className="text-sm text-muted-foreground">
+                Your plan&apos;s limit is reached, so new links stay on this device. Everything
+                already saved is safe, and syncing resumes as soon as you upgrade or free up space.
+              </Text>
+              <Button
+                variant="link"
+                size="sm"
+                className="mt-1 self-start px-0"
+                onPress={() => router.push('/settings/subscription')}
+              >
+                <Text>See plans</Text>
+              </Button>
+            </>
+          )}
           {pendingCount > 0 && (
             <Text className="text-sm text-muted-foreground">
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
@@ -104,7 +132,7 @@ function SyncStatus() {
           {/* Qualifies what a settled sync means: the INDEX is what syncs, so
               content downloads lazily on open (docs/local-first-sync.md).
               Suppressed on an error, where it only competes with the failure. */}
-          {!isError && (
+          {!isError && !isBlocked && (
             <Text className="mt-1 text-xs text-muted-foreground">
               Saved page copies and images download when you open them.
             </Text>
