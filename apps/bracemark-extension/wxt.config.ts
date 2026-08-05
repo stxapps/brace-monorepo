@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'wxt';
 
-import { themeInitScript } from '@stxapps/shared';
+import { BROWSER_EXTENSION_LISTING, themeInitScript } from '@stxapps/shared';
 
 // The shared pre-paint FOUC script. The theme's `.dark` class must be set
 // SYNCHRONOUSLY before first paint, which a deferred module `main.tsx` can't do — so
@@ -112,9 +112,15 @@ export default defineConfig({
     // host_permissions needs a match pattern (origin + `/*`), not a bare origin.
     const apiHost = `${new URL(apiUrl).origin}/*`;
     return {
-      name: 'Bracemark - Bookmark Manager',
-      description:
-        'Save links to visit later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
+      // BOTH stores build the listing's title and summary from these manifest
+      // fields, so this is store copy, not config — it lives with the rest of it
+      // in shared's stores/listing-copy.ts (and is length-checked there against
+      // the smaller of Chrome's and Firefox's budgets). The strings these replaced
+      // were Brace.to v1's, still selling "technology that empowers you to truly
+      // own your account and data" — the decentralised-identity pitch this version
+      // dropped — a year after the rename, because nothing pointed here.
+      name: BROWSER_EXTENSION_LISTING.name,
+      description: BROWSER_EXTENSION_LISTING.description,
       // ONLY the api host — NO `<all_urls>`. A broad host grant is the one thing
       // that would unlock BACKGROUND bg-fetch extraction (the service worker
       // `fetch`ing arbitrary saved third-party URLs for their OpenGraph tags, which

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Bricolage_Grotesque, IBM_Plex_Mono, Inter } from 'next/font/google';
 
+import { BRAND } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { SiteFooter } from '../components/site-footer';
@@ -33,10 +34,19 @@ export const viewport = {
   themeColor: '#ffffff',
 };
 
+// Kept as a full sentence rather than assembled from BRAND: a meta description is
+// its own form (~155 characters, mechanism first, no call to action), and this one
+// is the only place the whole argument gets to be prose. Google truncates past
+// roughly 160, so the room is already spent.
 const DESCRIPTION =
   'Bracemark is an end-to-end encrypted bookmark manager. Every link is encrypted on your device before it syncs, so the server holds ciphertext and nothing else.';
 
-const TITLE = 'Bracemark — the bookmark manager that can’t read your bookmarks';
+// The tagline itself, verbatim from shared's stores/listing-copy.ts, so the OG
+// title, the hero, and every store listing say one sentence rather than four
+// versions of it. 63 characters — past where Google truncates a title in results,
+// which is accepted here: the tagline IS the pitch, and the brand name and the
+// category both land inside the first 40.
+const TITLE = `${BRAND.name} — ${BRAND.tagline}`;
 
 export const metadata: Metadata = {
   // This app serves the APEX (docs/deployment.md) — bracemark-web serves `app.` and

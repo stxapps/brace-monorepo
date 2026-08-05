@@ -94,11 +94,11 @@ Flag notes:
 - (generate a keystore for uploading)
 - npm run prebuild
 - open Bracemark.xcworkspace on Xcode
-  + targets: Bracemark, on General: update Version, App Category: Productivity, Display Name: Bracemark
-  + targets: SavetoBracemark, on Signing & Capabilities, select team
-  + targets: SavetoBracemark, on General: update Version, Miminum iOS, Display Name: Save to Bracemark
+  - targets: Bracemark, on General: update Version, App Category: Productivity, Display Name: Bracemark
+  - targets: SavetoBracemark, on Signing & Capabilities, select team
+  - targets: SavetoBracemark, on General: update Version, Miminum iOS, Display Name: Save to Bracemark
 - cd android
-  + ./gradlew bundleRelease
+  - ./gradlew bundleRelease
 
 #### bracemark-site (the marketing apex)
 

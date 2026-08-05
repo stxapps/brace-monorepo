@@ -36,6 +36,7 @@ export * from './import/netscape';
 export * from './import/parse';
 export * from './import/resolve';
 export * from './import/text';
+export * from './stores/listing-copy';
 export * from './stores/listings';
 export * from './sync/decode-cache';
 export * from './sync/endpoints';

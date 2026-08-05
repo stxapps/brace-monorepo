@@ -185,6 +185,60 @@ done: the two defensive domains under _domains_ above, DNS and certs for the new
 hosts in [deployment.md](./deployment.md#status--setup-checklist), and the store
 listing URLs under _open decisions_ below.
 
+### the brand lines, and the store listings
+
+The name settles what the product is _called_. This settles what it _says_ — one
+question down from the name, and the place the name's weakness gets compensated
+for, since "Bracemark" alone does not tell anyone what it does.
+
+**Three lines, three jobs, never substituted for each other.** They live in
+`packages/shared/src/stores/listing-copy.ts`, next to the listing URLs, because
+five consoles and three apps have to agree and nothing else enforces that.
+
+| line           | text                                                   | for                                           |
+| -------------- | ------------------------------------------------------ | --------------------------------------------- |
+| **descriptor** | End-to-end encrypted bookmark manager                  | directories, categories, anywhere with no wit |
+| **tagline**    | The bookmark manager that can't read your bookmarks    | hero, OG title, X bio, press                  |
+| **slogan**     | We don't promise not to look. We built it so we can't. | sign-offs, ads, the inverted band             |
+
+The tagline is the asset. It names the category and the mechanism in one clause
+and states the mechanism as an **inability rather than an intention**, which is
+the entire positioning — and it is one no competitor holding plaintext can copy.
+Its one weakness is that "can't read" can momentarily parse as _broken_ rather
+than _blind_, which is why it is safest where supporting copy resolves it
+immediately and why the ~30-character store fields get a fourth line instead:
+**"Bookmarks only you can read"**, the same claim inverted to a positive.
+
+**Adjectives are the failure mode here, not a missing feature.** "Privacy-focused",
+"private & secure" and the rest are claims about intent, in a product whose whole
+argument is that intent is worthless — putting them next to "we don't promise not
+to look" contradicts it out loud. Prose says the mechanism ("a path, a size, and
+bytes we hold no key for"). The adjectives go in Apple's **keyword field**, which
+is invisible, indexed, and where the people searching them actually are.
+
+**The two stores index different fields, so the copy is shaped differently.**
+Apple indexes name + subtitle + the keyword field and **not** the description;
+Google indexes title + short description + full description and has **no** keyword
+field. Hence one long description written to carry its search terms in ordinary
+prose, plus a bare comma-list that only Apple ever reads. Every field's character
+budget is data in `listing-copy.ts` and asserted in its spec — these are silent
+constraints that otherwise surface as a rejected field on submission day.
+
+**The listing name is not the app name.** App Store Connect's listing name is
+`Bracemark: Private Bookmarks` — the bare word would spend 21 of 30 indexed
+characters on a brand nobody searches yet, against the SEO drag noted above. The
+home-screen label in `apps/bracemark-expo/app.config.ts` stays **`Bracemark`**. A
+home screen has no search to be found by and no room, so wiring the two together
+looks like removing a duplicate and puts the descriptor under the icon on every
+device. Same trap on the Play side.
+
+The **browser extension** is the exception that is genuinely wired: both stores
+build that listing's title and summary out of `manifest.json`, so `wxt.config.ts`
+imports them. It had to be — those two strings carried Brace.to v1's
+decentralised-identity pitch ("technology that empowers you to truly own your
+account and data") straight through the rename, because nothing pointed at that
+file.
+
 ### open decisions
 
 - Attorney review of the two senior `BRACE` marks (see _trademark knockout_) —
@@ -193,4 +247,12 @@ listing URLs under _open decisions_ below.
 - The store listing URLs in `packages/shared/src/stores/listings.ts` are still
   `TODO_` placeholders: the values they replaced addressed the legacy listings,
   and the real ones don't exist until v2 is submitted. They block store
-  submission and the marketing site's download links, not the domain work.
+  submission and the marketing site's download links, not the domain work. The
+  listing _copy_ beside them (`listing-copy.ts`) is written and unblocked — it is
+  paste-ready for the consoles, and only the browser extension's share of it is
+  wired into a build.
+- **No X handle yet.** `@bracedotto` is the legacy one, and `twitter:site` in the
+  marketing site's root layout is deliberately unset until a Bracemark handle
+  exists — a wrong handle credits someone else's account on every share. The bio
+  to put on it is the tagline plus the slogan; registering the handle and setting
+  that one field are the same task.

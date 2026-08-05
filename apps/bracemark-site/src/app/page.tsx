@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import {
   APP_STORE_URL,
+  BRAND,
   CHROME_WEB_STORE_URL,
   entitlementsOf,
   FIREFOX_ADDONS_URL,
@@ -239,7 +240,7 @@ export default function Page() {
                 'font-display mt-5 text-[2.75rem] leading-[0.98] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4.25rem]',
               )}
             >
-              The bookmark manager that can’t read your bookmarks.
+              {BRAND.tagline}.
             </h1>
             <p className={cn('text-muted-foreground mt-6 max-w-xl text-lg leading-8')}>
               Save anything worth coming back to — articles, docs, threads, products, videos.
