@@ -10,7 +10,7 @@
 > app config, the npm scripts, R8, signing). For libs & dependency rules, see
 > [architecture.md](./architecture.md).
 
-#### existing
+#### init
 
 - npx create-nx-workspace@latest
 - npx nx add @nx/next
@@ -88,6 +88,17 @@ Flag notes:
   `postinstall` (`tools/scripts/fix-jest-bin.mjs`) re-points the bin at the
   real jest 30 deterministically (every project, including bracemark-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
+
+###### build
+
+- (generate a keystore for uploading)
+- npm run prebuild
+- open Bracemark.xcworkspace on Xcode
+  + targets: Bracemark, on General: update Version, App Category: Productivity, Display Name: Bracemark
+  + targets: SavetoBracemark, on Signing & Capabilities, select team
+  + targets: SavetoBracemark, on General: update Version, Miminum iOS, Display Name: Save to Bracemark
+- cd android
+  + ./gradlew bundleRelease
 
 #### bracemark-site (the marketing apex)
 
