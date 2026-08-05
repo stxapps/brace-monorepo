@@ -26,11 +26,39 @@ export const UPGRADE_URL = `${APP_URL}/settings/subscription`;
 // tracked in docs/deployment.md — _email_.
 export const SUPPORT_EMAIL = 'support@bracemark.com';
 
+// The inbound-only alias for vulnerability reports — an alias on the same Private
+// Email plan, not a second mailbox (docs/deployment.md — _email_). Published
+// separately from support@ so a security report doesn't queue behind "how do I
+// import from Raindrop".
+export const SECURITY_EMAIL = 'security@bracemark.com';
+
+// The legal entity behind Bracemark, and the postal address of record.
+//
+// Named here once because three surfaces need the identical string — /terms,
+// /privacy, and the footer's copyright line — and a company name that disagrees
+// with itself across a store submission is a review rejection. This is the same
+// entity that published Brace.to; the app was renamed (docs/brand.md), the
+// company was not.
+//
+// TODO before publishing: confirm the postal address is still current. It is
+// carried forward from the legacy Brace.to policies, and Apple, Google and Paddle
+// all check that a published address resolves.
+export const COMPANY = {
+  legalName: 'STX Apps Co., Ltd.',
+  shortName: 'STX Apps',
+  attn: 'Bracemark Team',
+  addressLines: ['247 Chan 31 Sathon', 'Bangkok 10120', 'Thailand'],
+} as const;
+
+// The "last updated" line each policy carries. Dates live here rather than inline
+// so the two documents can never claim different vintages of the same rewrite —
+// and so bumping one after an edit is a deliberate act, not a forgotten one.
+export const TERMS_UPDATED = '5 August 2026';
+export const PRIVACY_UPDATED = '5 August 2026';
+
 export const HEADER_LINKS = [
   { href: '/pricing', label: 'Pricing' },
-  { href: '/docs', label: 'Docs' },
-  { href: '/blog', label: 'Blog' },
-  { href: '/about', label: 'About' },
+  { href: '/faq', label: 'FAQ' },
   { href: '/support', label: 'Support' },
 ] as const;
 
@@ -39,15 +67,13 @@ export const FOOTER_LINKS = [
     heading: 'Product',
     links: [
       { href: '/pricing', label: 'Pricing' },
-      { href: '/docs', label: 'Docs' },
-      { href: '/blog', label: 'Blog' },
+      { href: '/faq', label: 'FAQ' },
     ],
   },
   {
     heading: 'Company',
     links: [
       { href: '/about', label: 'About' },
-      { href: '/contact', label: 'Contact' },
       { href: '/support', label: 'Support' },
     ],
   },

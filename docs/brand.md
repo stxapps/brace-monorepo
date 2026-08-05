@@ -84,6 +84,21 @@ site is and what it may depend on is
 [architecture.md](./architecture.md#apps), _apps_; its origins, buckets, and
 hosts are [deployment.md](./deployment.md#custom-domains).
 
+**`/docs` and `/blog` are deferred past launch, and their routes are gone.** The
+path-not-subdomain decision above stands — it is what the URLs will be — but both
+routes existed only as placeholders awaiting a content-pipeline decision (MDX vs.
+a `[slug]` route), and a placeholder that prerenders to the apex is a "TODO" page
+Google can index. They were deleted rather than noindexed, so re-adding them is a
+deliberate act taken together with the pipeline choice; the reasoning that was in
+their `page.tsx` headers is in git. The nav that pointed at them
+(`HEADER_LINKS`/`FOOTER_LINKS` in `apps/bracemark-site/src/lib/site.ts`) lost the
+entries at the same time.
+
+**What the apex actually ships at launch:** `/`, `/about`, `/pricing`, `/faq`,
+`/support`, `/terms`, `/privacy`. The last two are store-submission blockers and
+now carry real content — they name `COMPANY` from `lib/site.ts`, whose postal
+address is carried over from the Brace.to policies and still wants verifying.
+
 ### trademark knockout — run 2026-08-03
 
 A knockout search via TMview (aggregates USPTO, EUIPO, WIPO, UK IPO and ~70
