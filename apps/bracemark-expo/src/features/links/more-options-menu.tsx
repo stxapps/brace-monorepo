@@ -5,8 +5,12 @@
 // same phase-adaptive Sync entry and the error dot on the trigger — still the
 // links screen's only always-visible sync-error surface (pull-to-refresh gives
 // the gesture but no error affordance; the full status card lives in Settings →
-// Data). Only errors get the dot: a spinner there would flicker
-// on every edit's sub-second cycle. Divergences here:
+// Data). Only STANDING states get the dot: a spinner there would flicker
+// on every edit's sub-second cycle — and the blocked dot is muted, never
+// destructive, since the cycle completed and the library is intact. Web's
+// "Storage full" row is here too, same reasoning (the Sync item keeps its plain
+// label because a press still can't clear a full account; the row LINKS to the
+// Data card rather than repeating its sentence). Divergences here:
 //
 //  - Selecting Sync CLOSES the menu (web keeps it open so the Syncing… → settled
 //    transition is the click's feedback) — holding a native dropdown open works
@@ -47,6 +51,7 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { cn } from '../../lib/utils';
 import { useLinksViewState } from './view-state-provider';
 
 const siteUrl = process.env.EXPO_PUBLIC_SITE_URL;
@@ -62,19 +67,29 @@ export function MoreOptionsMenu() {
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const syncError = phase === 'cycle-error';
+  const blocked = phase === 'capacity-blocked';
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Pressable
-          aria-label={syncError ? 'More options (sync failed)' : 'More options'}
+          aria-label={
+            syncError
+              ? 'More options (sync failed)'
+              : blocked
+                ? 'More options (storage full)'
+                : 'More options'
+          }
           className="relative size-10 items-center justify-center rounded-md"
         >
           <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
-          {syncError && (
+          {(syncError || blocked) && (
             <View
               aria-hidden
-              className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-destructive"
+              className={cn(
+                'absolute top-1.5 right-1.5 size-1.5 rounded-full',
+                syncError ? 'bg-destructive' : 'bg-muted-foreground',
+              )}
             />
           )}
         </Pressable>
@@ -93,6 +108,18 @@ export function MoreOptionsMenu() {
             </>
           )}
         </DropdownMenuItem>
+        {/* Only while blocked. Reports, never interrupts (the hoisted paywall
+            dialog is for actions being refused) — tapping it goes where the
+            count and the fix are spelled out. */}
+        {blocked && (
+          <DropdownMenuItem className="items-start" onPress={() => router.push('/settings/data')}>
+            <Icon as={CircleAlert} className="mt-0.5 size-4 text-muted-foreground" />
+            <View className="min-w-0 flex-1">
+              <Text>Storage full</Text>
+              <Text className="text-xs text-muted-foreground">Some changes aren’t syncing</Text>
+            </View>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onPress={enterBulkEdit}>
           <Icon as={SquareCheckBig} className="size-4" />
           <Text>Select links</Text>

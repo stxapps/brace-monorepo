@@ -661,8 +661,18 @@ a crossgrade inside the existing subscription rather than a second purchase.
   deliberately NOT `'error'` — the cycle completed and no retry can help, so
   "Sync failed" would send the user hunting for a network problem instead of the
   fix. `syncBlockedDetail` (shared) words the sentence with the count, so all
-  three surfaces (both Data cards, the extension popup pill's "Storage full")
-  say the same thing.
+  three surfaces that EXPLAIN the state (both Data cards, the extension popup
+  pill's "Storage full") say the same thing.
+
+  Both links-page **⋯ menus** report it too — the only always-visible sync
+  surface that app has — but they do not repeat the sentence. The Sync item
+  keeps its plain label there: its other two variants ("Syncing…", "Sync failed
+  — Retry") re-label one action by what pressing it will do, and blocked is the
+  phase where pressing changes nothing. The state gets its own row instead,
+  "Storage full / Some changes aren't syncing", which LINKS to Settings → Data
+  where the count and the fix are. The menu also grows the trigger dot for it,
+  in `muted-foreground` rather than the error dot's `destructive` — a standing
+  state worth noticing, not breakage.
 
   There used to be a second pair, `'blocked-plan'` / `'plan-blocked'`, for the
   free tier's link cap, with its own wording and a "See plans" link — the two

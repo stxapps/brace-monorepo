@@ -8,8 +8,21 @@
 //
 // The Sync item adapts to the sync phase, and a failed cycle also surfaces as a
 // dot on the trigger — the topbar is the links page's only always-visible sync
-// error surface (the full status card lives in Settings → Data). Only errors get
-// the dot: a spinner there would flicker on every edit's sub-second cycle.
+// error surface (the full status card lives in Settings → Data). Only STANDING
+// states get the dot: a spinner there would flicker on every edit's sub-second
+// cycle.
+//
+// 'capacity-blocked' is the one phase the Sync ITEM doesn't absorb. Its two
+// variants re-label the same action by what pressing it will do (Syncing… = in
+// flight, Retry = press to fix); blocked is the phase where pressing changes
+// nothing, so it stays the plain "Sync" it always was (still the right action
+// once space is freed) and the state gets its own row instead — a LINK to
+// Settings → Data, not a copy of what that card says. This menu is a launcher,
+// not a status readout: it names the state and the fact that changes are
+// stuck, and the sentence with the count (syncBlockedDetail) stays in the one
+// place a user goes to read status. Its dot and its icon are muted, never
+// destructive — the cycle completed and the local library is intact
+// (@stxapps/shared sync/status.ts, `blocked-capacity`).
 
 import {
   CircleAlert,
@@ -45,6 +58,7 @@ export function MoreOptionsMenu() {
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const syncError = phase === 'cycle-error';
+  const blocked = phase === 'capacity-blocked';
 
   return (
     <DropdownMenu>
@@ -53,18 +67,26 @@ export function MoreOptionsMenu() {
           variant="ghost"
           size="icon-sm"
           className="relative"
-          aria-label={syncError ? 'More options (sync failed)' : 'More options'}
+          aria-label={
+            syncError
+              ? 'More options (sync failed)'
+              : blocked
+                ? 'More options (storage full)'
+                : 'More options'
+          }
         >
           <MoreHorizontal className="size-4" />
-          {syncError && (
+          {(syncError || blocked) && (
             <span
               aria-hidden="true"
-              className="absolute top-1 right-1 size-1.5 rounded-full bg-destructive"
+              className={`absolute top-1 right-1 size-1.5 rounded-full ${
+                syncError ? 'bg-destructive' : 'bg-muted-foreground'
+              }`}
             />
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem
           onSelect={(e) => {
             // Keep the menu open: the Syncing… → settled transition on this item
@@ -90,6 +112,21 @@ export function MoreOptionsMenu() {
             </>
           )}
         </DropdownMenuItem>
+        {/* Only while blocked. Deliberately below Sync and not styled as an
+            error: it reports, it doesn't interrupt (the hoisted paywall dialog
+            is for actions being refused). Tapping it goes where the count and
+            the fix are spelled out. */}
+        {blocked && (
+          <DropdownMenuItem asChild>
+            <Link href="/settings/data" className="items-start">
+              <CircleAlert className="mt-0.5 size-4 text-muted-foreground" />
+              <span className="flex min-w-0 flex-col">
+                Storage full
+                <span className="text-xs text-muted-foreground">Some changes aren’t syncing</span>
+              </span>
+            </Link>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem asChild>
           <Link href={`/settings/${DEFAULT_SECTION_ID}`}>
             <Settings className="size-4" />
