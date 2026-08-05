@@ -1,5 +1,3 @@
-import { LINKS_PREFIX } from '@stxapps/shared';
-
 // File-size repository — the durable per-path size map that backs the per-user
 // quota, in the same per-user DO SQLite as the op log (../user-data.ts). Quota is
 // NOT summed from the op log: the log is compactable and disposable, so it would
@@ -9,23 +7,15 @@ import { LINKS_PREFIX } from '@stxapps/shared';
 // docs/local-first-sync.md "authorization & quota".
 
 // Aggregate usage the `files/sign` quota check reads before minting upload URLs.
-// `linkCount` counts only the `links/` namespace — the free tier's saved-link cap
-// (see lib/quota.ts / the shared entitlementsOf). Content is opaque but paths are
-// not, so counting a namespace is the one per-feature signal the server has.
+// Namespace-blind: the gate is a byte/object cost backstop and counts every path
+// alike. It used to carry a `linkCount` for the free tier's saved-link cap, which
+// moved to the client (lib/quota.ts has the argument).
 export type FileUsage = {
   fileCount: number;
   totalBytes: number;
-  linkCount: number;
 };
 
 type SizeRow = { size: number };
-
-// Bound parameters per `existingPaths` statement. A sign batch carries up to
-// MAX_SIGN_PATHS (1000) paths, which is more than a single SQLite statement's
-// bound-parameter budget is guaranteed to take, so the lookup is chunked. Small
-// enough to be safe everywhere, large enough that even a full batch is ~10
-// statements against a local, per-user table.
-const EXISTS_CHUNK = 100;
 
 export function fileSizesRepo(sql: SqlStorage) {
   return {
@@ -61,56 +51,24 @@ export function fileSizesRepo(sql: SqlStorage) {
       sql.exec(`DELETE FROM file_sizes`);
     },
 
-    // Current file count + byte total + `links/` count for this user, the quota
-    // the `put` sign check compares against (once per files/sign put batch, in the
-    // user's local DO SQLite). COALESCE so an empty map reports 0, not null. This is
-    // a FULL aggregate scan: COUNT(*)/SUM(size) visit every row, so the `links` term
-    // is just a cheap per-row prefix compare on rows already being scanned — NOT an
-    // index range scan (the prefix has no leading wildcard, but the surrounding
-    // aggregate touches the whole table regardless). Fine at current scale: the map
-    // is per-user and small, and the scan is local + sub-ms. If a single user's map
-    // ever grows large (~100k+ rows) or this shows in DO CPU time, switch to a
-    // maintained running total (a one-row usage table incremented in commitOps) so
-    // this becomes an O(1) read — deferred to avoid standing derived state that can
-    // drift on re-commit.
+    // Current file count + byte total for this user, the quota the `put` sign
+    // check compares against (once per files/sign put batch, in the user's local
+    // DO SQLite). COALESCE so an empty map reports 0, not null. A full aggregate
+    // scan — COUNT(*)/SUM(size) visit every row — which is fine at current scale:
+    // the map is per-user and small, and the scan is local + sub-ms. If a single
+    // user's map ever grows large (~100k+ rows) or this shows in DO CPU time,
+    // switch to a maintained running total (a one-row usage table incremented in
+    // commitOps) so this becomes an O(1) read; now that the namespace term is
+    // gone, that total is two plain counters. Deferred to avoid standing derived
+    // state that can drift on re-commit.
     usage(): FileUsage {
       const row = sql
         .exec<{
           count: number;
           total: number;
-          links: number;
-        }>(
-          `SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS total,
-                  COALESCE(SUM(CASE WHEN path LIKE ? THEN 1 ELSE 0 END), 0) AS links
-             FROM file_sizes`,
-          `${LINKS_PREFIX}%`,
-        )
+        }>(`SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS total FROM file_sizes`)
         .one();
-      return { fileCount: row.count, totalBytes: row.total, linkCount: row.links };
-    },
-
-    // Which of `paths` this user ALREADY has an object for — the fact that lets
-    // the put gate tell a CREATE from an in-place UPDATE (lib/quota.ts). A re-PUT
-    // of an existing path adds no object, no bytes-worth-of-object, and no link,
-    // so counting it as new is what made an account AT its cap unable to edit the
-    // links it already owns — including moving one to Trash, which is a `links/`
-    // put, and which is the very action that gets a downgraded account back under
-    // the cap. Presence in this map is the right existence check (rather than a
-    // HEAD against R2): it is the same durable record the quota totals are summed
-    // from, so the gate can never disagree with itself.
-    existingPaths(paths: string[]): string[] {
-      const found: string[] = [];
-      for (let i = 0; i < paths.length; i += EXISTS_CHUNK) {
-        const batch = paths.slice(i, i + EXISTS_CHUNK);
-        const rows = sql
-          .exec<{ path: string }>(
-            `SELECT path FROM file_sizes WHERE path IN (${batch.map(() => '?').join(',')})`,
-            ...batch,
-          )
-          .toArray();
-        for (const row of rows) found.push(row.path);
-      }
-      return found;
+      return { fileCount: row.count, totalBytes: row.total };
     },
   };
 }

@@ -4,21 +4,28 @@
 // create surfaces (bracemark-web's quick-add popover, the extension popup's editor)
 // gate on before they let a save through.
 //
-// This gate is UX, but not decoration. `maxLinks` is one of the few limits a
-// blind server CAN enforce (it counts `links/` paths at `files/sign` — see
-// bracemark-api lib/quota.ts), and it answers an over-cap put with 403
-// `upgrade_required`. A local-first save that ignores the cap therefore SUCCEEDS
-// locally and then fails forever in the sync engine: the pending op can't drain,
-// and every op chunked behind it is stuck too. So the point of checking here is
-// to keep the pending queue drainable — not to defend the limit, which the
-// server already does.
+// THIS IS THE ENFORCEMENT of the free tier's 200-link wall. Nothing behind it
+// counts links: bracemark-api's `files/sign` gate keeps only the byte/object
+// backstop (lib/quota.ts), so a save that gets past here syncs and stays. That
+// was a deliberate trade — see docs/business-model.md. The cap is the one
+// COST-DEFENSIVE limit whose bypass costs ~nothing to serve (200 links of
+// metadata is a few hundred KB, and maxBytes still bounds it server-side),
+// while enforcing it blind cost a create-vs-update existence check on every
+// sign batch, a partial-push retry in the sync engine, and a whole sync state
+// for "some of your changes are refused". Honor-system here buys all of that
+// back. What it costs is real and accepted: devtools, or a patched extension
+// build, walks through it.
 //
-// `count` matches the server's counting rule EXACTLY, which is the one detail
-// worth care: every `links/` record, INCLUDING trashed ones. Trash is a listId,
-// not a deletion — a trashed link still has its `links/{id}.enc` blob, so the
-// server counts it. Counting only what the UI shows would put this number under
-// the server's and re-open the wedged-queue hole. (Same rule as
-// readExistingLinks in data/import-all-data.ts, the import path's cap check.)
+// So a stale or missing entitlement fails OPEN (useEntitlements serves the
+// device-local last-known copy), which is the right direction — telling a
+// paying customer their library is full is worse than one link over the cap.
+//
+// `count` is trash-INCLUSIVE: every `links/` record, including trashed ones.
+// Trash is a listId, not a deletion — a trashed link still has its
+// `links/{id}.enc` blob. That rule is shared with readExistingLinks
+// (data/import-all-data.ts) and the share sheet's isAtLinkCap (expo-react
+// data/share-store.ts); all three must agree, or the surfaces disagree with
+// each other about when the library is full.
 //
 // The querier is a single direct Dexie call (no async helper hops), so
 // liveQuery's dependency tracking is safe.

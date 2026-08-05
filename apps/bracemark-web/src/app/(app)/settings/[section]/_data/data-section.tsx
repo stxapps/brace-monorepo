@@ -34,7 +34,6 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import Link from 'next/link';
 
 import {
   formatSyncedAt,
@@ -73,15 +72,11 @@ function SyncStatus() {
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const isError = phase === 'cycle-error';
-  // The plan/quota gate refused part of the push. Deliberately NOT styled as an
+  // The quota gate refused part of the push. Deliberately NOT styled as an
   // error: everything else synced and the local library is intact — what's
-  // needed is an upgrade or some freed space, not a retry (which is also why it
-  // gets no Retry button; pressing one would change nothing). The two reasons
-  // want opposite advice, so the sentence AND the link below come from the
-  // phase, never from one shared "blocked" wording.
-  const isPlanBlocked = phase === 'plan-blocked';
-  const isCapacityBlocked = phase === 'capacity-blocked';
-  const isBlocked = isPlanBlocked || isCapacityBlocked;
+  // needed is some freed space, not a retry (which is also why it gets no Retry
+  // button; pressing one would change nothing).
+  const isBlocked = phase === 'capacity-blocked';
 
   const icon = isError ? (
     <CircleAlert className="size-4 text-destructive" />
@@ -117,17 +112,13 @@ function SyncStatus() {
           {detail && <span className="wrap-break-words text-sm text-destructive">{detail}</span>}
           {/* The one place a blocked sync is explained. Inline rather than the
               hoisted paywall dialog: this is a STATUS the user came to read,
-              not an action being interrupted (paywall-provider's header). The
-              "See plans" link is PLAN-only — sending someone who is out of
-              bytes to the pricing page is advice that can't help them. */}
+              not an action being interrupted (paywall-provider's header). No
+              "See plans" link — the only refusal left is the storage ceiling,
+              which upgrading a PLAN doesn't clear on a paid account and which
+              the pricing page cannot help with. The fix is in the sentence. */}
           {isBlocked && (
             <span className="text-sm text-muted-foreground">
-              {syncBlockedDetail(phase, blockedCount)} Everything already saved is safe.{' '}
-              {isPlanBlocked && (
-                <Link className="underline hover:text-foreground" href="/settings/subscription">
-                  See plans
-                </Link>
-              )}
+              {syncBlockedDetail(phase, blockedCount)} Everything already saved is safe.
             </span>
           )}
           {pendingCount > 0 && (

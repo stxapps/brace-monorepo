@@ -167,31 +167,34 @@ missed).
   it, and selecting another list discards the pending create.
 - **Duplicates**: not detected in the sheet (iOS can't see the DB; a stale
   snapshot would lie). Save anyway; dedup is the apply-side's concern.
-- **The plan's link cap**: **checked on Android, not on iOS** — and that split
-  is the process boundary, not an oversight. Every other create surface refuses
-  the save at the cap and shows the upgrade banner instead of the form
-  ([editors.md](./editors.md)). Android's share activity has the store, so it
-  runs the same gate (`isAtLinkCap` in expo-react's `data/share-store.ts`,
-  counting `links/` rows the server's trash-INCLUSIVE way against the cached
-  plan's `maxLinks`); `saveSharedDraft` returns `'quota'` and the sheet says so
-  instead of ✓. It **fails open** when no status is cached (a fresh install that
-  hasn't fetched `iap/status`), because guessing `free` would tell a paying
-  customer their library is full — the server enforces regardless.
+- **The plan's link cap**: **checked on both platforms**, off different sources —
+  and that split is the process boundary, not a difference in the rule. Every
+  create surface refuses the save at the cap and shows the upgrade banner instead
+  of the form ([editors.md](./editors.md)), and since the cap is client-enforced
+  (docs/iap.md, _enforcement_) these gates ARE the wall — nothing behind them
+  counts links. `saveSharedDraft` returns `'quota'` and the sheet says so instead
+  of ✓.
 
-  iOS can't: the count lives in the sqlite the extension must not open, and the
-  snapshot carries `{ sessionPresent, lists, tags }` only. So a free iOS account
-  at 200 still writes an outbox draft, the drain still applies it locally (the
-  draft is often the only copy — never dropped), and the put is refused at
-  `files/sign` (`upgrade_required`). This is now the MAIN way that refusal is
-  reached at all, since the server gates creates rather than writes (an edit or a
-  trash-move of an existing link is never refused — docs/iap.md, _enforcement_).
-  It no longer wedges the queue: the sync engine treats it as a partial push and
-  reports the cycle as `'blocked-plan'` rather than failing it, with the refused
-  count on the status surfaces, and the drafts push by themselves the moment the
-  user upgrades (docs/iap.md, _open follow-ups_). Closing
-  the gap properly still means carrying the link count on the snapshot — a
-  **stale soft gate**, since the snapshot is a cache, and a rewrite per save
-  rather than per taxonomy change — which is why it isn't copied across yet.
+  Android's share activity runs in the app's process, so `isAtLinkCap`
+  (expo-react's `data/share-store.ts`) counts `links/` rows the trash-INCLUSIVE
+  way against the cached plan's `maxLinks`, live off sqlite.
+
+  iOS reads both numbers off the **taxonomy snapshot**, which now carries
+  `linkCount` + `maxLinks` beside the pickers' lists and tags. It has to: the
+  count lives in the sqlite the extension must not open, and so does the cached
+  plan (`subscription-store.ts` goes through `getDb()`). The cost is one indexed
+  `countLinks()` per snapshot write, and the write cadence was already right —
+  `ShareBridge` refreshes on `localWriteNonce`, which `requestSync()` bumps on
+  every local write, so the snapshot is rewritten per save rather than per
+  taxonomy change. The refusal happens BEFORE the outbox file is written, which
+  matters because everything downstream of that file is built never to drop it.
+
+  Both fail **OPEN** wherever the answer is unknowable — no cached status on
+  Android, no snapshot or a pre-cap-fields snapshot on iOS. Guessing `free` would
+  tell a paying customer their library is full, and there is no longer a server
+  gate behind the guess to correct it. The residual gap is a RUN of iOS shares
+  taken without reopening the app: they are all judged against the count as of
+  the first one, and the drain + refresh on next foreground re-syncs it.
 
 - **No session** (cold share before first sign-in): the sheet shows "Open
   Bracemark and sign in first" instead of hanging or crashing — snapshot absent /

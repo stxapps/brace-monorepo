@@ -11,6 +11,8 @@
 // in-memory stand-in (the shape session-store.spec.ts established) and the
 // stores behind applyShareDraft are stubbed to no-ops. This file asserts where
 // FILES end up, nothing about the writes.
+import { Platform } from 'react-native';
+
 import {
   ARCHIVE_ID,
   type List,
@@ -165,6 +167,8 @@ jest.mock('./session-store', () => ({
 jest.mock('./queries', () => ({
   readLists: jest.fn(async () => []),
   readTags: jest.fn(async () => []),
+  // readTaxonomyFromDb carries this onto the snapshot for the iOS cap gate.
+  countLinks: jest.fn(async () => 0),
 }));
 jest.mock('./item-store', () => ({
   getItem: jest.fn(async () => null),
@@ -284,6 +288,8 @@ describe('parseShareTaxonomy', () => {
     sessionPresent: true,
     lists: [{ id: MY_LIST_ID, name: 'My List', depth: 0, rank: 'a0' }],
     tags: [{ id: 'tag-1', name: 'alpha', rank: 'a1' }],
+    linkCount: 3,
+    maxLinks: 200,
   };
 
   it('round-trips a valid snapshot', () => {
@@ -300,6 +306,15 @@ describe('parseShareTaxonomy', () => {
       tags: [{ id: 'tag-1', name: 'alpha' }],
     };
     expect(parseShareTaxonomy(JSON.stringify(old))).toBeNull();
+  });
+
+  it('rejects a snapshot predating the cap fields', () => {
+    // Same greenfield rule as `rank` above: the cap fields are REQUIRED rather
+    // than defaulted, so a snapshot without them reads as signed-out and the app
+    // rewrites it — which is strictly safer than defaulting `maxLinks` to null
+    // and letting a stale file silently disable the gate.
+    const { linkCount: _c, maxLinks: _m, ...preCap } = taxonomy;
+    expect(parseShareTaxonomy(JSON.stringify(preCap))).toBeNull();
   });
 
   it('rejects malformed payloads', () => {
@@ -384,66 +399,137 @@ describe('drainShareOutbox', () => {
   });
 });
 
-// The share sheet's copy of the create-surface link-cap gate. Before this, the
-// sheet was the ONE save path with no cap check: a free user at 200 links could
-// queue a `links/` put the server refuses, and the refusal wedged the whole
-// pending queue (see the engine's signPushable). These pin the three decisions
-// that make the gate safe to run on a stale, device-local cache.
+// The share sheet's copy of the create-surface link-cap gate — and, since the
+// free tier's 200-link wall went client-side (docs/business-model.md), the
+// ENFORCEMENT rather than a pre-check: nothing behind it counts links any more.
+// The two platforms answer from different sources because of the process split,
+// so both branches are pinned here, along with the fail-open rule that governs
+// every case where the answer is unknowable.
 describe('isAtLinkCap', () => {
+  const TAXONOMY = 'group/share/taxonomy.json';
   const rows = namespaceRows as jest.Mock;
   const cached = readCachedStatus as jest.Mock;
 
+  const freeStatus = {
+    plan: 'free',
+    status: 'none',
+    source: null,
+    expiresAt: null,
+    willRenew: false,
+  };
+
   beforeEach(() => {
+    mockFiles.clear();
+    mockDirs.clear();
     rows.mockReset().mockReturnValue([]);
     cached.mockReset().mockReturnValue(null);
   });
 
-  function atCount(n: number) {
-    rows.mockReturnValue(Array.from({ length: n }, (_, i) => ({ path: `links/${i}.enc` })));
-  }
+  // jest-expo runs this suite as iOS (jest.config.cts pins the babel caller's
+  // platform), which is the branch that reads the snapshot.
+  describe('iOS — off the App Group snapshot', () => {
+    function snapshot(fields: Partial<ShareTaxonomy>) {
+      mockDirs.add('group/share');
+      mockFiles.set(
+        TAXONOMY,
+        JSON.stringify({
+          sessionPresent: true,
+          lists: [],
+          tags: [],
+          linkCount: 0,
+          maxLinks: null,
+          ...fields,
+        }),
+      );
+    }
 
-  it('refuses a free account at its cap', () => {
-    cached.mockReturnValue({
-      plan: 'free',
-      status: 'none',
-      source: null,
-      expiresAt: null,
-      willRenew: false,
+    it('refuses a free account at its cap', () => {
+      snapshot({ linkCount: 200, maxLinks: 200 });
+      expect(isAtLinkCap()).toBe(true);
     });
-    atCount(200);
-    expect(isAtLinkCap()).toBe(true);
+
+    it('allows a free account under its cap', () => {
+      snapshot({ linkCount: 199, maxLinks: 200 });
+      expect(isAtLinkCap()).toBe(false);
+    });
+
+    it('never refuses a paid account (maxLinks is unlimited)', () => {
+      snapshot({ linkCount: 5000, maxLinks: null });
+      expect(isAtLinkCap()).toBe(false);
+    });
+
+    it('fails OPEN with no snapshot at all', () => {
+      // A share taken before the main app has ever written one. Refusing here
+      // would break the sheet for an account we know nothing about.
+      expect(isAtLinkCap()).toBe(false);
+    });
+
+    it('fails OPEN on a snapshot too old to carry the cap fields', () => {
+      mockDirs.add('group/share');
+      mockFiles.set(TAXONOMY, JSON.stringify({ sessionPresent: true, lists: [], tags: [] }));
+      expect(isAtLinkCap()).toBe(false);
+    });
+
+    it('reads the snapshot, never the store', () => {
+      // The whole reason the fields ride on the snapshot: this process must not
+      // open sqlite (a shared-container file lock invites the 0xdead10cc kill),
+      // so neither the row scan nor the cached-plan read may be reached.
+      snapshot({ linkCount: 200, maxLinks: 200 });
+      isAtLinkCap();
+      expect(rows).not.toHaveBeenCalled();
+      expect(cached).not.toHaveBeenCalled();
+    });
   });
 
-  it('allows a free account under its cap', () => {
-    cached.mockReturnValue({
-      plan: 'free',
-      status: 'none',
-      source: null,
-      expiresAt: null,
-      willRenew: false,
-    });
-    atCount(199);
-    expect(isAtLinkCap()).toBe(false);
-  });
+  describe('Android — live off the store', () => {
+    // Platform.OS is a plain writable field on RN's Platform object, so the
+    // branch is reachable without mocking the module (which would mean spreading
+    // react-native's getter-heavy barrel).
+    const platform = Platform as { OS: string };
+    let original: string;
 
-  it('never refuses a paid account (maxLinks is unlimited)', () => {
-    cached.mockReturnValue({
-      plan: 'plus',
-      status: 'active',
-      source: 'paddle',
-      expiresAt: Date.now() + 1000,
-      willRenew: true,
+    beforeEach(() => {
+      original = platform.OS;
+      platform.OS = 'android';
     });
-    atCount(5000);
-    expect(isAtLinkCap()).toBe(false);
-  });
+    afterEach(() => {
+      platform.OS = original;
+    });
 
-  it('fails OPEN with no cached status, rather than assuming free', () => {
-    // A fresh install that has not fetched `iap/status` yet. Guessing 'free'
-    // here would tell a PAYING customer their library is full; the server still
-    // enforces, and a wrong ALLOW now only costs a blocked-sync notice.
-    cached.mockReturnValue(null);
-    atCount(5000);
-    expect(isAtLinkCap()).toBe(false);
+    function atCount(n: number) {
+      rows.mockReturnValue(Array.from({ length: n }, (_, i) => ({ path: `links/${i}.enc` })));
+    }
+
+    it('refuses a free account at its cap', () => {
+      cached.mockReturnValue(freeStatus);
+      atCount(200);
+      expect(isAtLinkCap()).toBe(true);
+    });
+
+    it('allows a free account under its cap', () => {
+      cached.mockReturnValue(freeStatus);
+      atCount(199);
+      expect(isAtLinkCap()).toBe(false);
+    });
+
+    it('never refuses a paid account (maxLinks is unlimited)', () => {
+      cached.mockReturnValue({
+        plan: 'plus',
+        status: 'active',
+        source: 'paddle',
+        expiresAt: Date.now() + 1000,
+        willRenew: true,
+      });
+      atCount(5000);
+      expect(isAtLinkCap()).toBe(false);
+    });
+
+    it('fails OPEN with no cached status, rather than assuming free', () => {
+      // A fresh install that has not fetched `iap/status` yet. Guessing 'free'
+      // here would tell a PAYING customer their library is full.
+      cached.mockReturnValue(null);
+      atCount(5000);
+      expect(isAtLinkCap()).toBe(false);
+    });
   });
 });

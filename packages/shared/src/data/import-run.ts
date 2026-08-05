@@ -46,8 +46,12 @@ export class ImportQuotaError extends Error {
 }
 
 // The upfront quota gate: `maxLinks` null = unlimited. Throws before any write,
-// because the server hard-enforces the same number at `files/sign` — importing
-// past it would strand local links that can never sync.
+// and it is the ENFORCEMENT rather than a courtesy — the free tier's link cap is
+// client-side (docs/business-model.md), so `files/sign` will happily take an
+// over-cap import. Refusing the whole file up front, rather than importing to
+// the cap and truncating, is the honest reading of what the user asked for: a
+// partial import is indistinguishable from a corrupt one at the far end, and
+// they can always split the file or upgrade.
 export function assertUnderImportQuota(
   newLinkCount: number,
   existingCount: number,

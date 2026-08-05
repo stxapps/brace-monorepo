@@ -74,37 +74,36 @@ describe('UserDataDO op log', () => {
     });
   });
 
-  // existingPaths is what lets the put gate charge only genuine creates
-  // (lib/quota.ts). It reads the same durable size map the totals are summed
-  // from, so a path is "existing" exactly while it counts toward the quota.
-  it('reports which paths already have a recorded object', async () => {
-    const stub = userDataStub(env, 'user-existing');
+  // usage() is what the put gate reads (lib/quota.ts), and it must track the
+  // durable size map rather than the op log: a delete frees its recorded bytes
+  // even though the op that deleted it is still in the log.
+  it('reports usage off the size map, freeing deleted paths', async () => {
+    const stub = userDataStub(env, 'user-usage');
     await stub.commitOps([
-      { op: 'put', path: 'links/kept.enc', updatedAt: 1000, size: 1 },
-      { op: 'put', path: 'links/gone.enc', updatedAt: 2000, size: 1 },
-      { op: 'delete', path: 'links/gone.enc', updatedAt: 3000, size: 0 },
+      { op: 'put', path: 'links/kept.enc', updatedAt: 1000, size: 300 },
+      { op: 'put', path: 'links/gone.enc', updatedAt: 2000, size: 700 },
     ]);
+    expect(await stub.usage()).toEqual({ fileCount: 2, totalBytes: 1000 });
 
-    const existing = await stub.existingPaths([
-      'links/kept.enc', // live → charged as an UPDATE
-      'links/gone.enc', // deleted → its quota entry is freed, so it's a CREATE again
-      'links/never.enc',
-    ]);
-    expect(existing).toEqual(['links/kept.enc']);
+    await stub.commitOps([{ op: 'delete', path: 'links/gone.enc', updatedAt: 3000, size: 0 }]);
+    expect(await stub.usage()).toEqual({ fileCount: 1, totalBytes: 300 });
   });
 
-  it('reports existing paths across the statement chunk boundary', async () => {
-    // The lookup chunks its bound parameters (EXISTS_CHUNK = 100), so a batch
-    // larger than one chunk must still find matches in every chunk — including
-    // the last, partial one.
-    const stub = userDataStub(env, 'user-existing-chunked');
-    const paths = Array.from({ length: 250 }, (_, i) => `links/${i}.enc`);
-    await stub.commitOps(
-      paths.map((path, i) => ({ op: 'put' as const, path, updatedAt: 1000 + i, size: 1 })),
-    );
+  it('counts a re-put once, at its newest size', async () => {
+    // The map is keyed by path (UPSERT), so an in-place update replaces the
+    // recorded size instead of adding a second entry. This is what keeps the
+    // byte total honest without the gate needing to know it was an update.
+    const stub = userDataStub(env, 'user-reput');
+    await stub.commitOps([{ op: 'put', path: 'links/a.enc', updatedAt: 1000, size: 100 }]);
+    await stub.commitOps([{ op: 'put', path: 'links/a.enc', updatedAt: 2000, size: 250 }]);
+    expect(await stub.usage()).toEqual({ fileCount: 1, totalBytes: 250 });
+  });
 
-    const existing = await stub.existingPaths([...paths, 'links/absent.enc']);
-    expect(existing.sort()).toEqual([...paths].sort());
+  it('reports zero usage for a never-written user', async () => {
+    expect(await userDataStub(env, 'user-no-usage').usage()).toEqual({
+      fileCount: 0,
+      totalBytes: 0,
+    });
   });
 
   it('isolates each user log in its own DO instance', async () => {

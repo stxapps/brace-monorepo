@@ -792,19 +792,23 @@ is persisted; the op-log row is just `{ seq, op, path, updated_at }`. The limits
 themselves live in `lib/quota.ts`, checked by `services/sync.ts` against the DO's
 `usage()` before any `put` URL is minted.
 
-**The gate charges only paths the account does not already own.** The same size
-map answers "does this path exist?" (`existingPaths`), and `services/sign` sub­
-tracts those before calling `checkPutQuota`, so a **create** is gated and an
-**in-place update** never is. This is not an optimization — it is what makes the
-"read-only-plus-**delete**" promise above true. Every link write is a put on
-`links/{id}.enc`, **including moving a link to Trash** (`update({ listId:
-TRASH_ID })`, docs/editors.md), so counting re-PUTs as new would leave an at-cap
-or downgraded account unable to retitle, retag, or trash anything — and trashing
-is the first half of the only route back under the cap. Counting a re-PUT as new
-also had no upside: it adds no object and no link, so nothing it protects against
-exists. The byte check stays deliberately conservative in the other direction (a
-new object's size is unknown until uploaded, so an update that GROWS a file is
-charged on the next batch, not this one).
+**The gate is namespace-blind, and reads only CURRENT usage.** It compares
+`fileCount` and `totalBytes` against the plan's ceilings and ignores what the
+batch is about to add — the same conservatism the byte check always had, since a
+new object's size is unknown until it's uploaded, so growth is charged on the next
+batch. One DO RPC (`usage()`) and one D1 read, in parallel, per put batch.
+
+That simplicity is recent and was bought by moving the free tier's **200-link cap
+off the server** (docs/business-model.md). While the gate counted `links/` it also
+had to tell a **create** from an **in-place update** — an account at its cap must
+still be able to retitle, retag and above all move a link to Trash
+(`update({ listId: TRASH_ID })`, docs/editors.md), which is itself a `links/` put
+and the first half of the only route back under the cap. That meant an
+`existingPaths` lookup against the size map on every sign batch, subtracted before
+the check. What remains needs none of it: a ceiling no legitimate account reaches
+does not have to care whether a put is a create, whereas the link cap — a limit
+every free account is _designed_ to sit at — always did. See docs/iap.md,
+_enforcement_, for the full trade.
 
 ### where TanStack Query fits
 

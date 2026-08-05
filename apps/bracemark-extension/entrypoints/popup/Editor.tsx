@@ -23,8 +23,8 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 //
 // A free library at its link cap replaces the whole editor with the shared
 // LinkQuotaBanner (useLinkQuota) — in ~350px of popup there's no room to render a
-// form that can't submit, and the save is genuinely unavailable: writing anyway
-// would wedge the sync queue on the server's 403 (see the hook). Upgrading isn't a
+// form that can't submit, and this gate IS the cap (the server stopped counting
+// links; see the hook), so the banner is the wall itself. Upgrading isn't a
 // flow the extension owns, so the CTA opens the web app's subscription settings in
 // a tab, the same hand-off SignIn makes for account creation.
 //

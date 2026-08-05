@@ -27,9 +27,9 @@ export class ApiError extends Error {
 // or a network failure for a server verdict.
 //
 // This exists so callers branch on the CODE rather than the status: the quota
-// gate answers 403 with two different meanings — `upgrade_required` (a plan
-// gate) and `quota_exceeded` (a capacity gate) — and the sync engine has to tell
-// them apart from an ordinary authorization 403 it must still fail on.
+// gate answers 403 `quota_exceeded` for an account at its storage ceiling, and
+// the sync engine has to tell that apart from an ordinary authorization 403 it
+// must still fail the cycle on — the two are indistinguishable by status alone.
 export function apiErrorCode(e: unknown): string | null {
   if (!(e instanceof ApiError)) return null;
   try {

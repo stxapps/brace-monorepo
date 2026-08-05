@@ -279,12 +279,12 @@ export async function countLinksInList(listId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-// Every link in the local store, counted the server's way: every `links/`
-// record, INCLUDING trashed ones (Trash is a listId, not a deletion — the blob
-// still exists, so the server counts it). The quota gate's count (see
-// use-link-quota, whose header carries the wedged-queue rationale); same rule
-// as readExistingLinks in import-all-data.ts. An indexed COUNT — no blob
-// decode.
+// Every link in the local store, counted trash-INCLUSIVELY: every `links/`
+// record, including trashed ones (Trash is a listId, not a deletion — the blob
+// still exists). The link cap's count (see use-link-quota, whose header carries
+// the rationale for why the cap is client-enforced); the same rule as
+// readExistingLinks in import-all-data.ts and isAtLinkCap in share-store.ts,
+// which all have to agree. An indexed COUNT — no blob decode.
 //
 // Counted off `item_type` rather than a `links/` path range: projection.ts
 // stamps the column from the path prefix BEFORE its early returns, so every

@@ -28,9 +28,9 @@
 //     store is never touched, so a restore can't clobber newer local edits.
 //   - The plan's link cap is enforced UP FRONT: if the surviving new links would
 //     push the library past `maxLinks`, the import fails BEFORE anything is
-//     written (ImportQuotaError). The server hard-enforces the same number at
-//     `files/sign`, so importing past it would strand local links that can never
-//     sync.
+//     written (ImportQuotaError). This is one of the three places that enforce
+//     the cap at all — it is client-side now (docs/business-model.md), so
+//     `files/sign` would take an over-cap import without complaint.
 //   - A file-carried title is PROVISIONAL, not deliberate: it seeds
 //     `extraction.title` (which extraction may later upgrade), never
 //     `customTitle` — see the contract note in @stxapps/shared sync/entities.ts.

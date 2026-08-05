@@ -116,10 +116,10 @@ export function SubscriptionSection() {
           // the shared query cache + the device's last-known copy.
           void refetch().catch(() => undefined);
           // The widened entitlement is the ONLY thing that unblocks a queue the
-          // plan gate refused (engine signPushable / BgSyncStatus
-          // 'blocked-plan') — and on iOS that queue is exactly what a share at
-          // the cap leaves behind, since the share extension can't pre-check
-          // (docs/share-sheet.md). Nothing else would kick a cycle: the engine
+          // quota gate refused (engine signPushable / BgSyncStatus
+          // 'blocked-capacity'): an upgrade raises maxBytes by orders of
+          // magnitude (100 MB → 5 GB), so puts that were over the ceiling a
+          // moment ago now fit. Nothing else would kick a cycle: the engine
           // syncs on mount and on local edits. Safe to fire eagerly — cycles
           // single-flight per account.
           requestSync();

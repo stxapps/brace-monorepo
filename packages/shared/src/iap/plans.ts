@@ -7,19 +7,26 @@
 // place that displays it can never drift apart.
 //
 // What's enforceable where is deliberately asymmetric (the E2E trust model):
-// content is opaque to the server, but PATHS are not — so the server can hard-
-// enforce anything COUNTABLE blind (total bytes, object counts, the `links/`
-// count), while per-feature gates (read-mode, screenshot, the page-copy meter)
-// are client-enforced UX backed by the blob rules. What the server CANNOT do is
-// tell one `files/` blob from another: a preview image, a screenshot, and a page
-// copy are all opaque `files/{id}.enc` under the same namespace, so there is no
-// server-visible signal to allow the free preview image while denying a heavy
-// blob. The free tier therefore stores `files/` blobs (client-extracted preview
-// images — see docs/business-model.md "tiers"), bounded server-hard only by the
-// byte/count backstop (maxBytes, maxFiles) and the 200-link cap; the heavy-blob
-// distinction is client-enforced. That matches the business model on purpose:
-// the hard walls sit exactly where a blind server CAN count the cost, and a
-// client-side bypass can only ever unlock features that cost ~nothing to serve.
+// content is opaque to the server, but PATHS are not — so the server COULD hard-
+// enforce anything countable blind, while per-feature gates (read-mode,
+// screenshot, the page-copy meter) can only ever be client-enforced UX backed by
+// the blob rules. What the server CANNOT do is tell one `files/` blob from
+// another: a preview image, a screenshot, and a page copy are all opaque
+// `files/{id}.enc` under the same namespace, so there is no server-visible signal
+// to allow the free preview image while denying a heavy blob. The free tier
+// therefore stores `files/` blobs (client-extracted preview images — see
+// docs/business-model.md "tiers"), bounded server-hard only by the byte/count
+// backstop (maxBytes, maxFiles); the heavy-blob distinction is client-enforced.
+//
+// Of what the server COULD count, it now counts only what it must: maxBytes and
+// maxFiles, the ceilings whose bypass is an unbounded R2 bill. `maxLinks` is
+// countable and is NOT counted — a link-cap bypass costs a few hundred KB and is
+// bounded by maxBytes anyway, and enforcing it blind dragged in a create-vs-update
+// existence check, a partial-push retry in the sync engine, and a sync state for
+// partial refusals. So the hard walls sit exactly where the COST is, not
+// everywhere the server can see; a client-side bypass unlocks features that cost
+// ~nothing to serve, and one conversion lever we chose to run on the honor system
+// (docs/business-model.md, _the link cap is honor-system_).
 //
 // So the entitlements below split into two kinds of gate (see the same split in
 // docs/business-model.md "tiers"):
@@ -93,8 +100,10 @@ export type AiTier = 'none' | 'basic' | 'full';
 // What a plan unlocks. `null` on a numeric limit means unlimited.
 export type Entitlements = {
   // Max `links/` entries (the free-tier keystone: 200 links is a serious trial
-  // but past "free forever"). Server-hard: bracemark-api counts `links/` paths in
-  // the user's size map at `files/sign`. `null` on paid plans.
+  // but past "free forever"). CLIENT-enforced: every create surface refuses at
+  // the cap (web-react's useLinkQuota, expo-react's isAtLinkCap, the import
+  // gate), and bracemark-api does NOT count links — see the honor-system note in
+  // this file's header. `null` on paid plans.
   maxLinks: number | null;
   // Saved-page-copy meter (Plus keeps the last 50; Pro unlimited) — the count of
   // `pageCopy` extraction blobs, NOT a cap on how many links may sit in the
@@ -107,10 +116,10 @@ export type Entitlements = {
   // at 2-3 files each stays well under it.
   maxFiles: number;
   // Total stored bytes (the storage quota row in the tiers table). The real
-  // server-hard wall on EVERY plan — including free, where it (with maxFiles and
-  // the 200-link cap) is the only backstop on preview-image blob storage now
-  // that free stores `files/` blobs. A maxed 200-link free library of client-
-  // extracted preview images is ~16 MB, well under the free ceiling.
+  // server-hard wall on EVERY plan — and, with maxFiles, now the ONLY one: it is
+  // what bounds preview-image blob storage on free, and what bounds a client
+  // that ignores the honor-system link cap. A maxed 200-link free library of
+  // client-extracted preview images is ~16 MB, well under the free ceiling.
   maxBytes: number;
   // Whether the account MAY opt in to `bracemark-extractor` (the separate synced
   // `serverExtraction` preference in settingsGeneralSchema is the user's opt-in;

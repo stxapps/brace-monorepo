@@ -33,7 +33,6 @@ import {
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
-  LINKS_PREFIX,
   mapLimit,
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
@@ -573,41 +572,34 @@ async function pushPuts(
   return committed;
 }
 
-// Sign one put chunk, surviving the server's plan/quota gate instead of failing
-// the cycle on it.
+// Sign one put chunk, surviving the server's quota gate instead of failing the
+// cycle on it.
 //
-// Why this is not just `signPaths`: `files/sign` answers 403 `upgrade_required`
-// when a `links/` put would exceed the plan's link cap, and 403 `quota_exceeded`
-// on the byte/object backstop (bracemark-api lib/quota.ts). Letting either throw
-// made the whole cycle fail, left the chunk queued, and re-failed it on every
-// subsequent cycle — a PERMANENT wedge, and not confined to the offending link:
-// `links/` is metadata (not `files/` content), so it shares its chunk with list,
-// tag, pin and settings puts, which were stuck behind it. The two accounts that
-// actually reach this are the free user at their link cap and the DOWNGRADED
-// user whose library is now over it — the second of which no create-surface
-// pre-check can prevent, since their links already exist. docs/iap.md promises
-// both of them "read-only-plus-delete, never data loss"; a wedged queue is not
-// that.
+// Why this is not just `signPaths`: `files/sign` answers 403 `quota_exceeded`
+// when the account is at its byte or object ceiling (bracemark-api
+// lib/quota.ts). Letting that throw made the whole cycle fail, left the chunk
+// queued, and re-failed it on every subsequent cycle — a PERMANENT wedge, and
+// not confined to the offending blob: a chunk mixes list, tag, pin and settings
+// puts, which were all stuck behind it. docs/iap.md promises an over-quota
+// account "read-only-plus-delete, never data loss"; a wedged queue is not that.
 //
-// So: a quota refusal is recorded on the outcome — WITH which gate refused and
-// how many ops it cost, since the two codes want opposite advice from the UI
-// (shared sync/status.ts) — and the chunk is retried WITHOUT its `links/` paths,
-// which is the precise cut: `upgrade_required` is the link cap and nothing else,
-// so everything that isn't a link is still pushable and must not be held
-// hostage. `quota_exceeded` gets no such retry: it means the account is out of
-// bytes or objects, which no subset fixes.
+// So a refusal is recorded on the outcome — with how many ops it cost, for the
+// "12 changes aren't syncing" line (shared sync/status.ts) — and the cycle
+// completes. There is no partial retry: being out of bytes or objects is not
+// something a subset of the chunk fixes.
 //
-// NOTE the server counts only paths the account does not already own
-// (bracemark-api lib/quota.ts), so an in-place UPDATE — including moving a link
-// to Trash — is never refused. What reaches here is a genuine create: a free
-// account's 201st link, or a downgraded account's new one (on iOS, typically one
-// the share sheet could not pre-check — docs/share-sheet.md).
+// This used to also handle `upgrade_required`, the free tier's link cap, which
+// DID get a partial retry (drop the `links/` paths, push the rest). That whole
+// branch is gone with the cap itself: it is enforced on the create surfaces now
+// (docs/business-model.md) — including the iOS share sheet, which reads the
+// count off its snapshot rather than the store it can't open
+// (docs/share-sheet.md) — so an over-cap link never becomes a pending op.
 //
 // Blocked ops stay QUEUED, deliberately — they are the user's data, and they
-// must upload the moment the account is upgraded or back under its limits. The
-// cost is one refused sign call per blocked chunk per cycle, bounded by the
-// pending queue and the rate limiter, and it is what makes recovery automatic
-// rather than something the user has to know to trigger.
+// must upload the moment the account is back under its limits. The cost is one
+// refused sign call per blocked chunk per cycle, bounded by the pending queue
+// and the rate limiter, and it is what makes recovery automatic rather than
+// something the user has to know to trigger.
 //
 // Any OTHER error still throws: an auth 403, a 5xx that outlived its retries,
 // a network failure. Those are real cycle failures.
@@ -616,40 +608,20 @@ async function signPushable(
   batch: PendingOpRecord[],
   outcome: SyncOutcome,
 ): Promise<{ ops: PendingOpRecord[]; urls: Map<string, string> } | null> {
-  const sign = async (ops: PendingOpRecord[]) => ({
-    ops,
-    urls: await signPaths(
-      deps.api,
-      'put',
-      ops.map((o) => o.path),
-    ),
-  });
-
   try {
-    return await sign(batch);
+    return {
+      ops: batch,
+      urls: await signPaths(
+        deps.api,
+        'put',
+        batch.map((o) => o.path),
+      ),
+    };
   } catch (e) {
-    const code = apiErrorCode(e);
-    if (code !== 'upgrade_required' && code !== 'quota_exceeded') throw e;
-    if (code === 'quota_exceeded') {
-      // Out of bytes/objects: the WHOLE chunk is refused, so that's the count.
-      recordBlocked(outcome, 'capacity', batch.length);
-      return null;
-    }
-
-    // The link cap refused the chunk. Only the `links/` paths are actually
-    // blocked — count those, not the chunk — and retry with the rest.
-    const rest = batch.filter((o) => !o.path.startsWith(LINKS_PREFIX));
-    recordBlocked(outcome, 'plan', batch.length - rest.length);
-    if (rest.length === 0) return null;
-    try {
-      return await sign(rest);
-    } catch (e2) {
-      // The non-link remainder can still hit the byte/object backstop.
-      const code2 = apiErrorCode(e2);
-      if (code2 !== 'upgrade_required' && code2 !== 'quota_exceeded') throw e2;
-      recordBlocked(outcome, code2 === 'quota_exceeded' ? 'capacity' : 'plan', rest.length);
-      return null;
-    }
+    if (apiErrorCode(e) !== 'quota_exceeded') throw e;
+    // Out of bytes/objects: the WHOLE chunk is refused, so that's the count.
+    recordBlocked(outcome, batch.length);
+    return null;
   }
 }
 

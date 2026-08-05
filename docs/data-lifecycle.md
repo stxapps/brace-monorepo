@@ -160,9 +160,12 @@ The policy, decided once:
   local store is never touched, so a restore can't clobber newer local edits.
 - **The plan's link cap is enforced up front**: if the surviving new links
   would pass `maxLinks`, the import fails _before anything is written_
-  (`ImportQuotaError`) — the server hard-enforces the same number at
-  `files/sign`, so importing past it would strand local links that can never
-  sync.
+  (`ImportQuotaError`). This is one of the places that enforce the cap at all —
+  it is client-side (see [iap.md](./iap.md), _enforcement_), so `files/sign`
+  would accept an over-cap import without complaint. Refusing the whole file
+  rather than importing to the cap and truncating is the honest reading of the
+  request: a partial import is indistinguishable from a corrupt one at the far
+  end, and the user can split the file or upgrade.
 - A file-carried title is **provisional**: it seeds `extraction.title` (which
   extraction may later upgrade), never `customTitle`.
 - Folder paths **find-or-create lists** by case-insensitive name walk; without

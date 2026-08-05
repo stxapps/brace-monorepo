@@ -1,11 +1,11 @@
 // Live read of the plan's saved-link cap against the local library — the expo
-// port of web-react's use-link-quota (that header is canonical: the gate is
-// UX but load-bearing — the server enforces `maxLinks` at `files/sign` with a
-// 403, so an over-cap save would succeed locally and then wedge the pending
-// sync queue forever; and `count` matches the server's counting rule exactly,
-// every `links/` record INCLUDING trashed ones). The count is `countLinks`
-// (queries.ts — the same trash-inclusive rule import-all-data's cap check
-// uses), live over `items` via useLiveRead.
+// port of web-react's use-link-quota (that header is canonical: this gate IS
+// the enforcement of the free tier's 200-link wall, since bracemark-api's
+// `files/sign` keeps only the byte/object backstop; a stale entitlement fails
+// open; and `count` is trash-INCLUSIVE, every `links/` record including trashed
+// ones, a rule shared with import-all-data's cap check and the share sheet's
+// isAtLinkCap). The count is `countLinks` (queries.ts), live over `items` via
+// useLiveRead.
 
 import { useMemo } from 'react';
 

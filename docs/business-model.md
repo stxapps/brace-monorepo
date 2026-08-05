@@ -73,6 +73,10 @@ Two kinds of gate do the work here, and keeping them straight is the whole model
   page-copy count, `serverExtraction`, AI compute. Enforced where the cost is
   (server-hard where countable; see [iap.md](./iap.md) and
   `packages/shared/src/iap/plans.ts`). These are why a free user costs cents.
+  Note the **200-link cap is the one cost-defensive gate that is NOT server-hard**
+  — it is a conversion lever whose bypass costs a few hundred KB, so it is
+  enforced on the create surfaces and backstopped by the byte ceiling; see
+  _the link cap is honor-system_ below.
 - **Value-capture gates** are pure willingness-to-pay for things that cost
   ~nothing to serve — client-enforced UX. This is where the "extra features"
   live, and they carry conversion while on-device AI is still parked. The
@@ -164,6 +168,21 @@ Why these cuts:
   library."
 - **200 free links** is enough to evaluate seriously but past "free forever."
   Tune 100–300 after real usage.
+- **The link cap is honor-system, deliberately.** Every create surface refuses at
+  the cap — the three in-process editors via `useLinkQuota`, the share sheet via
+  `isAtLinkCap`, and import up front — but `files/sign` does not count links, so
+  devtools or a patched extension build walks through it. That was a trade, not
+  an oversight. Enforcing it blind cost a create-vs-update existence check on
+  every sign batch (an account AT its cap must still be able to retitle and
+  **trash** what it owns, and trashing is itself a `links/` put), a partial-push
+  retry in the sync engine, and a whole sync state for "some of your changes were
+  refused" — all to defend a few hundred KB of metadata that the byte ceiling
+  still bounds. The gates that actually cost money (`maxBytes`, `maxFiles`) stay
+  server-hard. The bet is that a user who patches JS to dodge $48/yr was never a
+  conversion, and that the machinery was buying us less than it cost; if
+  free-tier abuse ever shows up in the numbers, the check goes back in
+  server-side and the honest place to put it back is `lib/quota.ts`. Mechanics:
+  [iap.md](./iap.md), _enforcement_.
 - **Don't cap sync/devices on free** — nearly free for us, and the only thing that
   builds a daily habit. Crippling it just guarantees churn before any paywall.
 - **The value-capture layer is deliberately small and honest, and split by a
@@ -442,7 +461,10 @@ How to read it:
   Conversion rests on the load-bearing gates — the 200-link cap (scale), structure
   (nested lists/tags), locks, and the heavy-blob upgrades (read-mode / page copy) —
   **not** on crippling the daily view: free shows client-extracted thumbnails, so the
-  free tier looks alive and forms the habit that retention depends on.
+  free tier looks alive and forms the habit that retention depends on. The cap
+  being client-enforced (above) doesn't change this arithmetic: it is defeatable
+  by someone who goes looking, not by someone who just hits 200 links, and the
+  latter is who the 2% is drawn from.
 - **Pricing leverages the count, and it's the cheapest lever there is.** Every
   halving of price roughly **doubles** every "paid subs" number: a modest salary
   needs ~1,180 subs at $48/$96, ~2,560 at $24/$48, and ~5,000 at the original

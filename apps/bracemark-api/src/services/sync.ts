@@ -53,27 +53,20 @@ export async function signUserFileUrls(
   paths: string[],
 ): Promise<SignedUrl[]> {
   if (op === 'put') {
-    // The put gate is PLAN-AWARE: limits come from the account's entitlements
-    // (services/iap.ts → the shared entitlementsOf), enforced by checkPutQuota
-    // (lib/quota.ts — free tier: capped `links/`; every tier: byte/count
-    // ceilings). Three independent reads — fetch in parallel.
+    // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
+    // the account's entitlements (services/iap.ts → the shared entitlementsOf),
+    // applied by checkPutQuota (lib/quota.ts). It does not count links: the free
+    // tier's cap is client-side now, and lib/quota.ts's header carries why.
     //
-    // `existingPaths` is what separates a CREATE from an in-place UPDATE: only
-    // paths the user does not already own are charged against the caps, so an
-    // account at (or, after a downgrade, over) its link cap can still edit and
-    // trash the links it already has. See lib/quota.ts.
-    const stub = userDataStub(env, userId);
-    const [usage, existing, entitlements] = await Promise.all([
-      stub.usage(),
-      stub.existingPaths(paths),
+    // Two independent reads — one DO RPC and one D1 read — so fetch in parallel.
+    // Note the check needs nothing about `paths` beyond the fact that this is a
+    // put: it compares CURRENT usage against the ceilings, which is what freed
+    // this path from the per-batch existence check it used to make.
+    const [usage, entitlements] = await Promise.all([
+      userDataStub(env, userId).usage(),
       getEntitlements(env, userId),
     ]);
-    const existingSet = new Set(existing);
-    checkPutQuota(
-      entitlements,
-      usage,
-      paths.filter((p) => !existingSet.has(p)),
-    );
+    checkPutQuota(entitlements, usage);
   }
 
   const method = op === 'put' ? 'PUT' : 'GET';

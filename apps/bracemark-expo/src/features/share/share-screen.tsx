@@ -132,7 +132,10 @@ export function ShareScreen({ url, title }: SharePayload) {
       },
       () => {
         if (!alive) return;
-        setTaxonomy({ sessionPresent: false, lists: [], tags: [] });
+        // `maxLinks: null` is the fail-open default the cap gate uses whenever
+        // the answer is unknowable (share-store isAtLinkCap) — though the sheet
+        // never offers the form on a `sessionPresent: false` taxonomy anyway.
+        setTaxonomy({ sessionPresent: false, lists: [], tags: [], linkCount: 0, maxLinks: null });
         setPhase('ready');
       },
     );
@@ -246,7 +249,9 @@ export function ShareScreen({ url, title }: SharePayload) {
       const result = await saveSharedDraft(draft, apiClient);
       // At the plan's link cap — nothing was written, so this is a refusal, not
       // a failure: say what happened and where to fix it rather than inviting a
-      // retry that would refuse again. (Android only; see isAtLinkCap.)
+      // retry that would refuse again. Both platforms, off different sources
+      // (see isAtLinkCap); on iOS this is the only thing standing between a
+      // free account and an over-cap save, since the server no longer counts.
       if (result === 'quota') {
         setPhase('ready');
         setError('You have reached your plan’s link limit. Upgrade in Bracemark to save more.');

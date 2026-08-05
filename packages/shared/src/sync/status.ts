@@ -28,24 +28,20 @@ export type BgSyncStatus =
   // The cycle COMPLETED, but the server refused part of the push at files/sign.
   // Deliberately NOT 'error': everything else pulled, pushed and committed, the
   // local store is correct, and nothing is retryable by pressing a button — only
-  // upgrading or freeing space clears it. Calling that "Sync failed" would send a
-  // user hunting for a network problem they don't have, at the exact moment they
-  // should be seeing the paywall.
+  // freeing space clears it. Calling that "Sync failed" would send a user hunting
+  // for a network problem they don't have.
   //
-  // TWO statuses, not one, because bracemark-api answers with two distinct codes
-  // (lib/quota.ts) that want opposite advice: `upgrade_required` is the free
-  // plan's link cap, whose fix is upgrading; `quota_exceeded` is the byte/object
-  // backstop every plan shares, whose fix is deleting. Collapsing them sent a
-  // paying customer who is out of storage to the subscription page, which cannot
-  // help them.
-  | 'blocked-plan'
+  // ONE blocked status, because bracemark-api now has ONE refusal:
+  // `quota_exceeded`, the byte/object backstop every plan shares (lib/quota.ts).
+  // There used to be a second, `upgrade_required` for the free tier's link cap,
+  // with its own status because the two wanted opposite advice — "upgrade" vs
+  // "delete something", and sending a paying customer who is out of storage to
+  // the subscription page helps nobody. The link cap moved to the create
+  // surfaces (docs/business-model.md), so an over-cap save is now refused BEFORE
+  // it is written and never becomes a pending op at all — there is no partial
+  // push to report, and no plan-blocked state to be in.
   | 'blocked-capacity'
   | 'error'; // the last cycle failed; requestSync retries (flips back to 'syncing')
-
-// Which gate refused the push — the shared vocabulary behind the two `blocked-*`
-// statuses above. 'plan' is `upgrade_required` (the free tier's `maxLinks`);
-// 'capacity' is `quota_exceeded` (maxBytes/maxFiles, on any plan).
-export type SyncBlockReason = 'plan' | 'capacity';
 
 // What a completed cycle learned beyond "it worked" — the engines' return value,
 // read by each platform's SyncProvider to pick its bgSyncStatus. Shared so the
@@ -58,12 +54,17 @@ export type SyncBlockReason = 'plan' | 'capacity';
 // it, and every frame in between already returns something else. Adding a field
 // here costs one write at the bottom instead of a wider tuple in each frame.
 export interface SyncOutcome {
-  // The gate that refused, or null when nothing was refused. The cycle still
+  // Whether the quota gate refused any part of the push. The cycle still
   // completed either way: pulls landed, deletes committed, and every put the
   // gate didn't refuse was uploaded — so this is a state to SURFACE, not a
   // failure to retry. It clears by itself on the next cycle once the account is
-  // upgraded or back under its limits.
-  blockedBy: SyncBlockReason | null;
+  // back under its limits.
+  //
+  // A boolean rather than a reason, because there is only one refusal left to
+  // name (see BgSyncStatus). Kept separate from `blockedCount` rather than
+  // inferred from it so the two stay independently truthful — a surface reading
+  // a restored mirror can know it is blocked without a trustworthy count.
+  blocked: boolean;
   // How many pending ops the gate refused this cycle — the "12 links aren't
   // syncing" detail. NOT the pending-queue length: that also counts ops which
   // simply haven't been reached yet, so it would overstate the problem.
@@ -72,27 +73,21 @@ export interface SyncOutcome {
 
 // A fresh accumulator for one cycle.
 export function emptySyncOutcome(): SyncOutcome {
-  return { blockedBy: null, blockedCount: 0 };
+  return { blocked: false, blockedCount: 0 };
 }
 
-// Record one refusal onto the cycle's accumulator. Owned here, not written out in
-// each engine, so the two siblings can't drift on the precedence rule:
-// 'capacity' OUTRANKS 'plan' when a single cycle hits both, because being out of
-// bytes blocks every namespace (no subset of the push gets through) while the
-// link cap blocks only `links/` — so capacity is both the larger blockage and
-// the one whose advice ("free some space") still applies after an upgrade.
-export function recordBlocked(outcome: SyncOutcome, by: SyncBlockReason, count: number): void {
+// Record one refusal onto the cycle's accumulator. Owned here, not written out
+// in each engine, so the two siblings can't drift on how a cycle that hits the
+// gate more than once accumulates.
+export function recordBlocked(outcome: SyncOutcome, count: number): void {
+  outcome.blocked = true;
   outcome.blockedCount += count;
-  if (outcome.blockedBy === null || by === 'capacity') outcome.blockedBy = by;
 }
 
 // The indicator a COMPLETED cycle settles to. Owned here so both providers turn
-// an outcome into a status identically — the mapping is the whole reason the
-// engines bother to report a reason at all.
+// an outcome into a status identically.
 export function bgStatusForOutcome(outcome: SyncOutcome): BgSyncStatus {
-  if (outcome.blockedBy === 'capacity') return 'blocked-capacity';
-  if (outcome.blockedBy === 'plan') return 'blocked-plan';
-  return 'idle';
+  return outcome.blocked ? 'blocked-capacity' : 'idle';
 }
 
 // The collapsed one-dimensional phase, in priority order: the gate (store)
@@ -104,7 +99,6 @@ export type SyncPhase =
   | 'initial-error' // initial pull failed → retryInitialSync
   | 'syncing' // a background cycle is in flight
   | 'cycle-error' // the last background cycle failed → requestSync retries
-  | 'plan-blocked' // cycle fine, but the plan's link cap refused part of the push
   | 'capacity-blocked' // cycle fine, but the byte/object quota refused part of it
   | 'idle'; // settled; the last cycle (if any) succeeded
 
@@ -122,7 +116,6 @@ export function getSyncPhase(store: StoreStatus, bg: BgSyncStatus): SyncPhase {
   // After 'error': a cycle that both failed AND hit the quota gate is reported
   // as failed, since the failure is the part a retry can still fix.
   if (bg === 'blocked-capacity') return 'capacity-blocked';
-  if (bg === 'blocked-plan') return 'plan-blocked';
   return 'idle';
 }
 
@@ -135,11 +128,9 @@ export const SYNC_PHASE_LABELS: Record<SyncPhase, string> = {
   'initial-error': 'Initial sync failed',
   syncing: 'Syncing…',
   'cycle-error': 'Sync failed',
-  // Both name the effect first, not the cause: the user's library is fine and
-  // their other changes did sync, so neither must read as breakage. The surfaces
-  // add the call to action on top — and it differs, which is the whole reason
-  // these are two phases (see BgSyncStatus).
-  'plan-blocked': 'Some changes aren’t syncing',
+  // Names the effect first, not the cause: the user's library is fine and their
+  // other changes did sync, so this must not read as breakage. The surfaces add
+  // the call to action on top.
   'capacity-blocked': 'Some changes aren’t syncing — storage full',
   idle: 'Up to date',
 };
@@ -152,9 +143,6 @@ export const SYNC_PHASE_LABELS: Record<SyncPhase, string> = {
 // count.
 export function syncBlockedDetail(phase: SyncPhase, count: number): string | null {
   const what = count > 0 ? `${count} ${count === 1 ? 'change' : 'changes'}` : 'Some changes';
-  if (phase === 'plan-blocked') {
-    return `${what} can’t sync because your plan’s link limit is full. Upgrade to sync them.`;
-  }
   if (phase === 'capacity-blocked') {
     return `${what} can’t sync because your storage is full. Free up space to sync them.`;
   }

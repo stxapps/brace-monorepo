@@ -155,18 +155,11 @@ export class UserDataDO extends DurableObject<Bindings> {
   }
 
   // RPC: current storage usage for this user, read by the `files/sign` put-quota
-  // check. Sourced from the durable size map, never the compactable op log.
+  // check. Sourced from the durable size map, never the compactable op log. The
+  // only DO call on the sign path — the companion existence lookup went away
+  // with the link cap (lib/quota.ts).
   usage(): FileUsage {
     return fileSizesRepo(this.sql).usage();
-  }
-
-  // RPC: which of `paths` already have a recorded object, so the `files/sign` put
-  // gate can charge only the GENUINELY NEW ones against the plan's caps (see
-  // repositories/file-sizes.ts `existingPaths` for why re-PUTs must not count).
-  // Returned as the path list rather than a count so the gate keeps owning the
-  // namespace policy — this RPC reports facts, lib/quota.ts decides.
-  existingPaths(paths: string[]): string[] {
-    return fileSizesRepo(this.sql).existingPaths(paths);
   }
 
   // RPC: delete-all-data — clear the op log AND the quota map in one serialized

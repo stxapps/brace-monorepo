@@ -37,7 +37,7 @@
 // One state precedes all of that: a free library at its link cap can't save at
 // all, so the popover renders the shared LinkQuotaBanner INSTEAD of the form
 // (useLinkQuota — which also explains why this gate is load-bearing rather than
-// cosmetic: an over-cap save wedges the sync queue on the server's 403).
+// cosmetic: it IS the cap, since the server no longer counts links).
 
 import { useState } from 'react';
 import { ChevronDown, Plus } from 'lucide-react';

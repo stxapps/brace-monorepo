@@ -62,7 +62,7 @@ import { runIncrementalSync } from '../sync/engine';
 import { appGroupDir } from './app-group';
 import { getItem, namespaceRows } from './item-store';
 import { writeExtraction, writeLink, writeList, writeTag } from './mutations';
-import { readLists, readTags } from './queries';
+import { countLinks, readLists, readTags } from './queries';
 import { getSession, loadSession, loadSharedSession } from './session-store';
 import { uploadShareDraft } from './share-upload';
 import { readCachedStatus } from './subscription-store';
@@ -103,13 +103,22 @@ const shareDraftSchema = z.object({
 });
 export type ShareDraft = z.infer<typeof shareDraftSchema>;
 
-// What the sheet's pickers render. Lists arrive flattened in tree order with
-// their indentation `depth` (the sheet has no tree logic); tags in rank order.
-// `rank` rides along so the sheet can mint the neighbour rank for what it
-// creates — index 0 for both entities (docs/editors.md). Required: the snapshot
-// is rewritten from the store by refreshShareTaxonomy, which always has ranks,
-// so a rank-free row means a corrupt file — and reading THAT as signed-out is
-// the right answer, since it points the user at the app, which rewrites it.
+// What the sheet's pickers render, plus what its link-cap gate decides on.
+// Lists arrive flattened in tree order with their indentation `depth` (the sheet
+// has no tree logic); tags in rank order. `rank` rides along so the sheet can
+// mint the neighbour rank for what it creates — index 0 for both entities
+// (docs/editors.md). Required: the snapshot is rewritten from the store by
+// refreshShareTaxonomy, which always has ranks, so a rank-free row means a
+// corrupt file — and reading THAT as signed-out is the right answer, since it
+// points the user at the app, which rewrites it.
+//
+// `linkCount` + `maxLinks` are the cap gate's inputs, and they are here because
+// the iOS extension can reach NEITHER at first hand: the count lives in the
+// sqlite it must not open, and the cached plan lives in that same database
+// (data/subscription-store.ts reads it through getDb()). Carrying both on the
+// snapshot is what lets iOS refuse at the cap like every other create surface —
+// the free tier's 200-link wall is client-enforced now (docs/business-model.md),
+// so the server no longer backstops a share that slips through. See isAtLinkCap.
 const shareTaxonomySchema = z.object({
   sessionPresent: z.boolean(),
   lists: z.array(
@@ -121,14 +130,26 @@ const shareTaxonomySchema = z.object({
     }),
   ),
   tags: z.array(z.object({ id: z.string(), name: z.string(), rank: z.string() })),
+  // Links in the store, counted the server's trash-INCLUSIVE way (countLinks).
+  linkCount: z.number().int(),
+  // The cached plan's cap; null = unlimited OR unknown, and both fail OPEN.
+  maxLinks: z.number().int().nullable(),
 });
 export type ShareTaxonomy = z.infer<typeof shareTaxonomySchema>;
 export type ShareTaxonomyList = ShareTaxonomy['lists'][number];
 export type ShareTaxonomyTag = ShareTaxonomy['tags'][number];
 
 // A signed-out / snapshot-missing taxonomy — what the sheet shows its "open
-// Bracemark and sign in first" state for.
-const EMPTY_TAXONOMY: ShareTaxonomy = { sessionPresent: false, lists: [], tags: [] };
+// Bracemark and sign in first" state for. `maxLinks: null` keeps the cap gate
+// failing open on this path too, though nothing reaches it: the sheet checks
+// `sessionPresent` before it offers the form at all.
+const EMPTY_TAXONOMY: ShareTaxonomy = {
+  sessionPresent: false,
+  lists: [],
+  tags: [],
+  linkCount: 0,
+  maxLinks: null,
+};
 
 // --- pure builders (spec'd in share-store.spec.ts) ------------------------------
 
@@ -192,11 +213,19 @@ export function parseShareTaxonomy(raw: string): ShareTaxonomy | null {
 // the share surface reads through it like every other consumer. Safe in the
 // iOS extension bundle too: getDb() is lazy (db.ts), so importing the read edge
 // still touches no native sqlite on the snapshot path.
+// The cap gate's two inputs ride along: `countLinks()` is the read edge's
+// indexed, trash-inclusive count (its header is the canonical rule), and the
+// cap comes from the device's cached plan. No cached status — a fresh install
+// that hasn't fetched `iap/status` — writes `maxLinks: null`, i.e. fails OPEN,
+// because guessing `free` would tell a paying customer their library is full.
 async function readTaxonomyFromDb(): Promise<ShareTaxonomy> {
+  const status = readCachedStatus();
   return {
     sessionPresent: true,
     lists: buildShareLists(await readLists()),
     tags: buildShareTags(await readTags()),
+    linkCount: await countLinks(),
+    maxLinks: status ? entitlementsOf(status.plan).maxLinks : null,
   };
 }
 
@@ -249,40 +278,52 @@ export type ShareSaveResult =
   // iOS: parked in the App Group outbox; the main app drains it on next
   // launch/foreground.
   | 'queued'
-  // Android only: the account is at its plan's link cap, so nothing was
-  // written. The same refusal every other create surface makes (the quick-add
-  // popover, the expo add screen, the extension popup all render
-  // LinkQuotaBanner instead of the form) — this was the one save path that
-  // didn't, which is what let a free user at the cap queue a put the server
-  // would refuse. See isAtLinkCap for why iOS can't answer this.
+  // The account is at its plan's link cap, so nothing was written. The same
+  // refusal every other create surface makes (the quick-add popover, the expo
+  // add screen, the extension popup all render LinkQuotaBanner instead of the
+  // form). Both platforms now, off different sources — see isAtLinkCap.
   | 'quota';
 
 // Whether a new link would exceed the plan's cap — the share sheet's copy of
 // the useLinkQuota gate the other create surfaces run.
 //
-// Counted the SERVER's way: every `links/` row, trashed ones included (trash is
-// a listId, not a deletion, so the blob still exists and bracemark-api still
-// counts it). Counting only what the UI shows would put this under the server's
-// number and re-open the hole.
+// THIS IS THE ENFORCEMENT, not a pre-check. The free tier's 200-link wall is
+// client-side (docs/business-model.md): bracemark-api's `files/sign` gate keeps
+// only the byte/object backstop, so a save that gets past here syncs and stays.
+// The trade was deliberate — a bypass costs ~400 KB of R2 and is bounded by
+// maxBytes, while the create-vs-update machinery it bought (`existingPaths`,
+// the engine's partial-push retry, a whole 'blocked-plan' sync state) was the
+// error-prone half of the system.
 //
-// Fails OPEN in both unknowable cases — no cached status (fresh install that
-// hasn't fetched `iap/status` yet) reads as "allowed", never as free. This is a
-// UX pre-check, not the enforcement: the server decides at `files/sign`
-// regardless, and the sync engine now degrades a refusal gracefully
-// (signPushable), so a false ALLOW costs a blocked-sync notice while a false
-// REFUSE would tell a paying customer their library is full.
+// Counted trash-INCLUSIVELY: every `links/` record, trashed ones included
+// (Trash is a listId, not a deletion, so the blob still exists). Same rule in
+// useLinkQuota and readExistingLinks — counting only what the UI shows would
+// put every surface's number under the others'.
 //
-// ANDROID ONLY, and that asymmetry is structural rather than an omission: the
-// iOS share extension is a separate process that must never open the app's
-// sqlite (see this file's header), so it can read neither the link count nor
-// the cached plan — it has only the taxonomy snapshot. An iOS share therefore
-// still queues, the main app's drain still applies it locally (the user's data
-// is never silently dropped), and the engine reports the sync as 'blocked-plan'
-// rather than wedging — with the refused count on the Data card, and an
-// automatic push the moment the user upgrades. Closing the gap on iOS means
-// carrying the count in the snapshot; not worth a per-save snapshot rewrite
-// until it's asked for.
+// Fails OPEN wherever the answer is unknowable — no cached plan, no snapshot,
+// a snapshot too old to carry the fields. A false ALLOW costs a link over the
+// cap; a false REFUSE tells a paying customer their library is full.
+//
+// The two platforms answer from different sources, which is the process split
+// and not an asymmetry in the rule: Android's share activity runs in the app's
+// process and reads sqlite live, while the iOS extension can open neither the
+// store nor the cached plan (this file's header), so it reads the count and the
+// cap off the taxonomy snapshot the main app maintains. That snapshot is
+// rewritten on every local write already — ShareBridge refreshes on
+// `localWriteNonce`, which requestSync() bumps on each one — so the count is
+// current as of the last time the app was open. What it can lag is a RUN of
+// shares taken without reopening the app: those are gated on the count as of
+// the first one, and the drain + refresh on next foreground re-syncs it.
 export function isAtLinkCap(): boolean {
+  if (Platform.OS === 'ios') {
+    const group = appGroupDir();
+    if (!group) return false;
+    const file = taxonomyFile(group);
+    if (!file.exists) return false;
+    const snapshot = parseShareTaxonomy(file.textSync());
+    if (!snapshot || snapshot.maxLinks === null) return false;
+    return snapshot.linkCount >= snapshot.maxLinks;
+  }
   const status = readCachedStatus();
   if (!status) return false;
   const { maxLinks } = entitlementsOf(status.plan);
@@ -300,6 +341,10 @@ export function isAtLinkCap(): boolean {
 // next-open drain, not by the in-flight network work surviving the dismissal.
 export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promise<ShareSaveResult> {
   if (Platform.OS === 'ios') {
+    // Before the outbox write, not after: a draft refused at the cap must not
+    // become a file, because everything downstream of that file is designed to
+    // never drop it (the drain applies it locally, the upload retries it).
+    if (isAtLinkCap()) return 'quota';
     const group = appGroupDir();
     if (!group) throw new Error('saveSharedDraft: no App Group container');
     const dir = outboxDir(group);

@@ -74,10 +74,12 @@ Netscape folders already use.
 Two snags worth deciding up front:
 
 - **Images and the quota gate.** v1 inlines images as base64 data URLs, and the
-  v2 import lands through the write edge behind `maxLinks` and the `files/sign`
-  byte quota (see [data-lifecycle.md](./data-lifecycle.md) — the import fails
-  _before anything is written_ if it would pass the gate). A heavy v1 user can
-  fail on image bytes alone. **Recommended: drop images on v1 import** and let
+  v2 import lands through the write edge behind the client-side `maxLinks` check
+  (see [data-lifecycle.md](./data-lifecycle.md) — the import fails _before
+  anything is written_ if it would pass the cap) and, once the blobs go up, the
+  server's `files/sign` byte quota. Note the two now fail at different moments:
+  the link cap up front, the bytes on the first sync afterwards. A heavy v1 user
+  can fail on image bytes alone. **Recommended: drop images on v1 import** and let
   extraction re-fetch them — the preview image is free for every tier (see
   [business-model.md](./business-model.md)), so nothing is lost but time.
 - **Pins.** v1 has them and they are not part of the shared `ImportedLink` shape

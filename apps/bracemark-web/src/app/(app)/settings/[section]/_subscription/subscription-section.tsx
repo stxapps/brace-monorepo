@@ -83,11 +83,13 @@ export function SubscriptionSection() {
       if (data && data.plan !== fromPlan) {
         setBusy(null);
         // The widened entitlement is the ONLY thing that unblocks a queue the
-        // plan gate refused (engine signPushable / BgSyncStatus 'blocked-plan'),
-        // and nothing else would kick a cycle: the engine syncs on mount and on
-        // local edits, so without this the user upgrades, comes back, and still
-        // reads "Some changes aren't syncing" until they reload or make an edit.
-        // Safe to fire eagerly — cycles single-flight per account.
+        // quota gate refused (engine signPushable / BgSyncStatus
+        // 'blocked-capacity'): an upgrade raises maxBytes by orders of magnitude
+        // (100 MB → 5 GB), so puts that were over the ceiling a moment ago now
+        // fit. Nothing else would kick a cycle — the engine syncs on mount and
+        // on local edits, so without this the user upgrades, comes back, and
+        // still reads "Some changes aren't syncing" until they reload or make an
+        // edit. Safe to fire eagerly — cycles single-flight per account.
         requestSync();
         setNotice(`You're on ${PLAN_LABELS[data.plan]} now — thank you!`);
         return;

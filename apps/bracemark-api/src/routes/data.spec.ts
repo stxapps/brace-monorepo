@@ -72,7 +72,6 @@ describe('data lifecycle routes', () => {
     await expect(userDataStub(env, userId).usage()).resolves.toEqual({
       fileCount: 0,
       totalBytes: 0,
-      linkCount: 0,
     });
   });
 

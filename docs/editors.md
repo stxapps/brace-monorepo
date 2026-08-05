@@ -34,25 +34,21 @@ overrides). Create collects a strict subset of edit's fields.
 | bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
 | bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
-**Every create surface gates on the plan's link cap — except the one that
-can't.** Free's 200-link wall is server-enforced at `files/sign`
-([iap.md](./iap.md)), and a local-first save that ignores it succeeds locally and
-then sits unsynced until the user upgrades. It no longer **wedges** the queue —
-the engine drops just the refused `links/` paths and reports the cycle
-`blocked-plan` (iap.md, _surfacing `upgrade_required`_) — but an unsynced save the
-user was never warned about is still the wrong experience, and refusing up front
-is far better than explaining afterwards. So the three **in-process** create
-surfaces read `useLinkQuota`
-and render `LinkQuotaBanner` + an upgrade CTA **instead of** the form — web
-quick-add, the browser extension's popup, bracemark-expo's add screen (that
-hook's header is the canonical rationale; it counts trash-inclusive, because
-Trash is a listId and the server counts those blobs too). The full-edit surfaces
-need no gate — they write no new `links/` path, and the server gate charges only
-paths the account doesn't already own, so an in-place edit is never refused even
-at (or over) the cap (local-first-sync.md, _authorization & quota_). That is the
-same rule that keeps **Remove** working over the cap: trashing is
-`update({ listId: TRASH_ID })`, a re-put of an existing path, and it is the first
-half of the only route back under the limit. Import has its own check
+**Every create surface gates on the plan's link cap, because nothing behind them
+does.** Free's 200-link wall is enforced HERE and only here: `files/sign` keeps a
+byte/object backstop and no longer counts links ([iap.md](./iap.md),
+_enforcement_), so a save that gets past a create surface syncs and stays. All
+four create surfaces therefore refuse at the cap. The three **in-process** ones
+read `useLinkQuota` and render `LinkQuotaBanner` + an upgrade CTA **instead of**
+the form — web quick-add, the browser extension's popup, bracemark-expo's add
+screen (that hook's header is the canonical rationale; it counts
+trash-inclusive, because Trash is a listId and the blob still exists). The
+bracemark-expo **share sheet** is the fourth, off `isAtLinkCap`
+([share-sheet.md](./share-sheet.md)). The full-edit surfaces need no gate — they
+write no new `links/` path at all, so they cannot move the count. That is also
+what keeps **Remove** working over the cap: trashing is
+`update({ listId: TRASH_ID })`, a re-put of a path that already exists, and it is
+the first half of the only route back under the limit. Import has its own check
 ([data-lifecycle.md](./data-lifecycle.md)). The **share sheet** is the one
 exception, on iOS-process grounds rather than principle
 ([share-sheet.md](./share-sheet.md)). A new create surface inherits the rule.

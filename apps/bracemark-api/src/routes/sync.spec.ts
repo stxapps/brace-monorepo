@@ -331,7 +331,7 @@ describe('sync control plane', () => {
       );
       expect(files.status).toBe(200);
 
-      // Link metadata is writable too (up to the free cap).
+      // Link metadata is writable too — the gate does not count links at all.
       const links = await app.request(
         filesSignEndpoint.path,
         json(auth, { op: 'put', paths: ['links/x.enc'] }),
@@ -348,81 +348,63 @@ describe('sync control plane', () => {
       expect(get.status).toBe(200);
     });
 
-    // The free cap gates CREATES only. Proven end-to-end rather than in
-    // lib/quota.spec.ts because the create/update split is not the gate's own
-    // doing — it comes from the DO's size map (services/sync.ts subtracts the
-    // paths the account already owns before calling the gate), so a unit test of
-    // the pure function cannot catch a regression in the subtraction.
-    async function seedLinksAtFreeCap(userId: string): Promise<string[]> {
+    // The gate is a byte/object backstop and nothing else. These two pin the
+    // trade end-to-end: links are no longer counted at any volume, and the
+    // ceiling that IS still enforced refuses through the real route.
+    it('free plan far past the old 200-link cap: still signs new links', async () => {
+      const { userId, auth } = await authFor('sync-sign-many-links');
       const cap = entitlementsOf('free').maxLinks ?? 0;
-      const paths = Array.from({ length: cap }, (_, i) => `links/seed-${i}.enc`);
-      // Straight to the DO: this seeds the quota map without needing `cap` real
-      // R2 objects (the route's HEAD is covered by the commit tests above).
+      // Seed straight into the DO's size map — well past the cap the free tier
+      // advertises, the way an honor-system bypass or a downgrade leaves it.
       await userDataStub(env, userId).commitOps(
-        paths.map((path, i) => ({ op: 'put' as const, path, updatedAt: 1000 + i, size: 1 })),
+        Array.from({ length: cap * 2 }, (_, i) => ({
+          op: 'put' as const,
+          path: `links/seed-${i}.enc`,
+          updatedAt: 1000 + i,
+          size: 1,
+        })),
       );
-      return paths;
-    }
-
-    it('free plan at the link cap: refuses a NEW link (upgrade_required)', async () => {
-      const { userId, auth } = await authFor('sync-sign-cap-new');
-      await seedLinksAtFreeCap(userId);
 
       const res = await app.request(
         filesSignEndpoint.path,
         json(auth, { op: 'put', paths: ['links/brand-new.enc'] }),
         env,
       );
-      expect(res.status).toBe(403);
-      expect(((await res.json()) as { error: string }).error).toBe('upgrade_required');
-    });
-
-    it('free plan at the link cap: still signs an UPDATE to a link it owns', async () => {
-      const { userId, auth } = await authFor('sync-sign-cap-update');
-      const seeded = await seedLinksAtFreeCap(userId);
-
-      // Re-PUTting an existing path adds no link, so it must pass. This is the
-      // case that keeps an at-cap account able to retitle, retag and — the one
-      // that matters most — move a link to Trash, which is a `links/` put and is
-      // how a downgraded account gets back under the cap.
-      const res = await app.request(
-        filesSignEndpoint.path,
-        json(auth, { op: 'put', paths: [seeded[0]] }),
-        env,
-      );
+      // The 200-link cap lives on the create surfaces now (docs/business-model.md).
+      // A client that ignores it is not stopped here — that is the accepted cost,
+      // and this test exists so the change is deliberate rather than a regression.
       expect(res.status).toBe(200);
     });
 
-    it('free plan OVER the cap (post-downgrade): updates pass, creates do not', async () => {
-      const { userId, auth } = await authFor('sync-sign-over-cap');
-      const seeded = await seedLinksAtFreeCap(userId);
-      // Push them well past the cap, the way a downgrade does.
-      await userDataStub(env, userId).commitOps(
-        Array.from({ length: 50 }, (_, i) => ({
-          op: 'put' as const,
-          path: `links/extra-${i}.enc`,
-          updatedAt: 900_000 + i,
-          size: 1,
-        })),
-      );
+    it('refuses a put once the byte ceiling is reached (quota_exceeded)', async () => {
+      const { userId, auth } = await authFor('sync-sign-bytes-full');
+      // One recorded object as large as the whole free allowance — the cheapest
+      // way to put the account's byte total at its ceiling.
+      await userDataStub(env, userId).commitOps([
+        {
+          op: 'put',
+          path: 'files/huge.enc',
+          updatedAt: 1000,
+          size: entitlementsOf('free').maxBytes,
+        },
+      ]);
 
-      // A batch of pure updates — the whole thing signs.
-      const updates = await app.request(
+      const res = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'put', paths: [seeded[0], seeded[1], 'links/extra-0.enc'] }),
+        json(auth, { op: 'put', paths: ['links/a.enc'] }),
         env,
       );
-      expect(updates.status).toBe(200);
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: string }).error).toBe('quota_exceeded');
 
-      // Mixing in one genuinely new link refuses the batch — which is exactly
-      // what the engine's signPushable retries without its `links/` paths.
-      const mixed = await app.request(
+      // Reading and deleting survive being full — the read-only-plus-delete
+      // promise (lib/quota.ts) is what keeps an over-quota account recoverable.
+      const get = await app.request(
         filesSignEndpoint.path,
-        json(auth, { op: 'put', paths: [seeded[0], 'links/new-one.enc'] }),
+        json(auth, { op: 'get', paths: ['files/huge.enc'] }),
         env,
       );
-      expect(mixed.status).toBe(403);
-      expect(((await mixed.json()) as { error: string }).error).toBe('upgrade_required');
+      expect(get.status).toBe(200);
     });
 
     it('mints GET URLs in batch', async () => {

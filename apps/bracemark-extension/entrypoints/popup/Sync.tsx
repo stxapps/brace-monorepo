@@ -25,11 +25,9 @@ const PILL_LABELS: Record<SyncPhase, string> = {
   'initial-error': 'Error',
   syncing: 'Syncing…',
   'cycle-error': 'Error',
-  // Neither is 'Error': the cycle worked, a limit is what stopped the rest.
-  // Saying "Error" here would point the user at a connection problem instead of
-  // the fix (see @stxapps/shared sync/status.ts, the `blocked-*` statuses) — and
-  // the two fixes differ, which is why these are two words and not one.
-  'plan-blocked': 'Limit reached',
+  // Not 'Error': the cycle worked, a limit is what stopped the rest. Saying
+  // "Error" here would point the user at a connection problem instead of the fix
+  // (see @stxapps/shared sync/status.ts, `blocked-capacity`).
   'capacity-blocked': 'Storage full',
   idle: 'Synced ✓',
 };
