@@ -229,6 +229,22 @@ The two components must not drift. Nothing enforces it — no test compares the
 two `d` strings — so a retouch of the mark is a **two-file** change plus a
 re-render of every raster.
 
+**The 45° fold is also a UI device, and it is spoken for twice.** Neither use
+renders the mark — both cut the same corner off a rectangle with a `clip-path`,
+at a size set against the object rather than against the mark's 29% ratio, which
+only reads as a silhouette on ~40px objects.
+
+| where                                                            | cut     | what it means                                                                                                            |
+| ---------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
+| the browser extension's page tile (`corner-cut`/`corner-square`) | 0.75rem | **state** — square is unsaved, cut is saved; the whole signal, no badge (`browser-extension.md`)                         |
+| bracemark-web's auth card (`(auth)/layout.tsx`)                  | 1.5rem  | **identity** — the two signed-out routes have no sidebar to carry the brand, so the card itself is the Bracemark surface |
+
+Keep that split before adding a third: a fold that means "saved" somewhere and
+nothing in particular elsewhere teaches users it means nothing. On any surface
+big enough to have a border, remember the clip takes the ring and the box shadow
+with it — the auth card draws its hairline as a 1px filled layer underneath and
+its shadow as a `drop-shadow` filter, which is the pattern to copy.
+
 **The raster conventions, which are a rule and not a per-file judgement:**
 
 - **Favicons and toolbar icons** (`logo16/32/48/64`, the extension's
