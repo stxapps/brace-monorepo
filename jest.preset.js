@@ -14,4 +14,14 @@ module.exports = {
     `/node_modules/(?!(?:${esmNodeModules.join('|')})/)`,
     '\\.pnp\\.[^\\/]+$',
   ],
+  // jest-haste-map crawls with its own node crawler instead of asking watchman.
+  // Watchman's watch here is the whole monorepo root, so every `npm run test`
+  // made each project `syncToNow` over the full tree (node_modules included);
+  // once the fsevents queue overflows (`MustScanSubDirs UserDropped`) that sync
+  // never lands and jest burns the full 60s timeout per project before falling
+  // back to this crawler anyway. The crawl is ~1s per package, so watchman was
+  // only ever a liability. Do NOT "fix" this by adding node_modules to
+  // .watchmanconfig's ignore_dirs — Metro needs the symlinked @stxapps/*
+  // packages under there watched for expo HMR.
+  watchman: false,
 };
