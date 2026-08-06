@@ -18,8 +18,26 @@
 @theme {
   /*
    * Three voices, and each has a job:
-   *   - display  Bricolage Grotesque, headlines only. Narrow, slightly engineered
-   *              letterforms that read as built rather than branded.
+   *   - display  Bricolage Grotesque, headlines only. Sculpted, slightly
+   *              engineered letterforms that read as built rather than branded.
+   *              NOT narrow — this said "narrow" for a long time and it was
+   *              simply wrong. At default width Bricolage is WIDER than the
+   *              body face: its B measures 0.83 w/h against Inter's 0.75, on a
+   *              larger x-height (0.80 of cap, against 0.75). What it actually
+   *              has is a deeper waist — 66% of glyph width where Inter stops
+   *              at 71% — so the joins look cut rather than drawn, and that is
+   *              the "engineered" quality, not the width.
+   *
+   *              The `wdth` axis (75..100) is NOT requested, so this stays at
+   *              100. Narrowing it is the one change here that would move the
+   *              logo: the wordmark beside the mark in site-header.tsx is set
+   *              in this face, and at wdth 87 the B goes to 0.66 w/h, which
+   *              means re-cutting the mark against a different letter. A
+   *              display face wider and more sculpted than the body face is
+   *              also the calmer contrast; narrow-over-wide is the magazine
+   *              move and it is not what this site is saying. `opsz` IS
+   *              requested (see layout.tsx) — that sharpens headlines without
+   *              touching the 18px wordmark.
    *   - sans     Inter, inherited from web-ui — all running text, so the site and
    *              the app read as one product.
    *   - mono     IBM Plex Mono, the INSTRUMENT voice: eyebrows, file paths, the

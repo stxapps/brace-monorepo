@@ -59,15 +59,13 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* The brand mark (components/icons/bracemark-icon.tsx): the body and the four
-     knockout dots. These are the ONLY brand-owned colors in the sheet — every
-     token above is a shadcn UI token — so they're kept literal rather than
-     aliased to `--foreground`/`--background`: the light pair is the mark's
-     original artwork (#1A202C on white) and must not drift when a UI token is
-     retuned. The dark pair inverts so the mark stays legible; the dot value
-     matches `.dark`'s `--background` so the dots keep reading as holes. */
-  --brand-mark: #1a202c;
-  --brand-mark-dot: #ffffff;
+  /* No brand colour token here, deliberately. The mark
+     (components/icons/bracemark-icon.tsx) is one path filled with `currentColor`
+     and its counters are evenodd holes, so it takes the text colour of wherever
+     it is placed and needs nothing from the sheet. The `--brand-mark` /
+     `--brand-mark-dot` pair this replaced existed only because the old artwork's
+     counters were opaque white discs, which forced a per-theme value for both
+     the body and the discs. */
 }
 
 .dark {
@@ -103,9 +101,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-
-  --brand-mark: oklch(0.985 0 0);
-  --brand-mark-dot: oklch(0.145 0 0);
 }
 
 @theme inline {
@@ -144,8 +139,6 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --color-brand-mark: var(--brand-mark);
-  --color-brand-mark-dot: var(--brand-mark-dot);
 }
 
 @theme {

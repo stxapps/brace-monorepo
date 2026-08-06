@@ -1,34 +1,46 @@
 import * as React from 'react';
 
-// The brand mark. Both fills are THEME TOKENS rather than literals
-// (`--brand-mark` body, `--brand-mark-dot` for the four knockout dots — declared
-// in styles.css under `:root` and `.dark`), so the mark follows the theme: the
-// near-black body would otherwise vanish into a dark background, leaving four
-// floating dots. Light keeps the original artwork exactly; dark inverts.
+// The brand mark: a solid geometric B whose top-right corner is cut away at 45°,
+// the way a page corner is turned down to keep a place. That cut is the whole
+// job of the shape — "B" alone is a letter, and every bookmark app in the
+// category owns a ribbon; a dog-eared B says letter and bookmark at once, and it
+// is the only feature of the silhouette that is still legible at 16px.
 //
-// Done in CSS on purpose — the fills flip with the `.dark` class the pre-paint
-// script already sets (docs/theme.md), so there's no `useTheme()` subscription,
-// no re-render on a theme switch, and nothing client-only about the component
-// (it still server-renders, and its markup is identical in both themes, so the
-// hydration pass can't disagree).
+// ONE path, ONE colour. The two counters are subpaths of the same `d` and are
+// knocked out by `fill-rule="evenodd"`, so they are genuine holes rather than
+// background-coloured discs. Two consequences worth keeping:
+//
+//   - the mark composes on ANY surface — a card, a coloured tile, the inverted
+//     band on the marketing site — instead of only on `--background`;
+//   - `currentColor` is then enough to theme it. The three call sites (both
+//     sidebars, the site header/footer) render it inside foreground-coloured
+//     text, so light and dark both come out right with no token, no `.dark`
+//     override, and no `useTheme()` subscription. It still server-renders, and
+//     its markup is identical in both themes, so hydration can't disagree.
+//
+// The earlier artwork needed a `--brand-mark`/`--brand-mark-dot` token pair for
+// exactly the reason this one doesn't: its four dots were opaque white, so a
+// near-black body on a dark background left four floating dots. Those tokens are
+// gone from styles.css — don't reintroduce them.
+//
+// Geometry lives on a 38×44 grid: 9-wide stem, 6-wide bars, an 11-unit corner
+// cut. Keep the viewBox if you retouch it — `bracemark-expo`'s port copies these
+// numbers, and the icon PNGs are rendered from this path.
 export function BracemarkIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width="39"
+      width="38"
       height="44"
-      viewBox="0 0 39 44"
+      viewBox="0 0 38 44"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >
       <path
-        d="M32.5 20C38.5 14 36.9039 3.04612 28.4424 1.31243e-05L4 9.7864e-06C1.99998 3.30168e-05 1.39481e-05 1.59523 1.39481e-05 4.00001L0 40C3.05176e-05 42 1.60073 44 4.00001 44H29C42.5576 39 39 23 32.5 20Z"
-        className="fill-brand-mark"
+        d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+        fillRule="evenodd"
+        fill="currentColor"
       />
-      <circle cx="11" cy="17" r="4" className="fill-brand-mark-dot" />
-      <circle cx="23" cy="17" r="4" className="fill-brand-mark-dot" />
-      <circle cx="23" cy="29" r="4" className="fill-brand-mark-dot" />
-      <circle cx="11" cy="29" r="4" className="fill-brand-mark-dot" />
     </svg>
   );
 }
