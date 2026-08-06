@@ -12,6 +12,10 @@ import { Topbar } from './_panes/topbar';
 // gives up, and there is no breakpoint measured in JS to disagree with the one
 // the CSS matched (docs/safe-area.md, _the core problem_).
 //
+// `h-dvh` for the reason the links frame carries the full note for: a
+// single-screen frame measured in `vh` hangs its bottom edge behind a mobile
+// browser's URL bar, and this one has no scroll of its own to bring it back.
+//
 // The active section lives in the URL PATH now (`/settings/lists`, …), not React
 // state — so a section is a real, linkable destination: open `/settings/lists`
 // straight from the links page, manage your lists, and Back returns you to
@@ -23,7 +27,7 @@ import { Topbar } from './_panes/topbar';
 // already gates this behind auth + first sync.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />

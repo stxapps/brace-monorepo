@@ -138,10 +138,21 @@ ladder") and `packages/shared/src/iap/plans.ts` (`searchEditor`).
 
 ### the UI
 
-`SearchBar` (topbar) is a **persistent basic box** plus an **advanced popover**:
+`SearchBar` (topbar) is a **basic box** plus an **advanced popover**:
 
-- **Basic box** — always visible (the free daily-loop feature shouldn't sit behind a
-  click). Type + Enter commits `?text=…`; results reshape the main pane. **Basic
+- **Basic box** — persistent in the topbar from `md` up (the free daily-loop feature
+  shouldn't sit behind a click), and **a row the topbar summons below it** on a
+  narrow viewport, where a title plus four actions leave no room for a box. The
+  same component fills both slots; the topbar owns the measure and the toggle.
+  Visibility below `md` is the derived `searchVisible` in `view-state-provider`
+  (`searchOpen || selection.kind === 'none'`), so the toggle and the row can't
+  disagree, and dismissing the row also **restores the view the search was run
+  from** (`preSearch`, falling back to the default inbox) — with the row gone, a
+  committed `?text=` would otherwise keep filtering the list with nothing on
+  screen left to show or clear it. This is the same shape bracemark-expo settled
+  on; see _on native_ below, which now differs only in that a phone has no wide
+  slot to fall back to. Type + Enter commits `?text=…`; results reshape the main
+  pane. **Basic
   search is GLOBAL by design**: submitting replaces the whole query with just its text,
   so a search spans the library rather than the list you were on. An empty box returns
   home. (Sort isn't part of the committed query — it's the global setting resolved by
@@ -200,14 +211,17 @@ comments — not re-derived here:
   and parses it back inside for an honest dep list, where web gets object
   identity from `useSearchParams`. Navigation is `router.push`; there is **no
   Suspense boundary** (`useLocalSearchParams` has no prerender constraint).
-- **The basic box is a toggle-summoned full-width row**, not persistent topbar
-  chrome — a phone topbar has no room for it, so the Search action reveals a row
-  below the bar (view-state-provider `searchOpen`). Its rendered visibility is
-  the derived `searchVisible` (`searchOpen || selection.kind === 'none'`),
-  centralized in view-state-provider so the topbar toggle and the bar itself
-  can't disagree; the `none` disjunct force-shows the bar for a committed search
-  that has no other on-screen surface (a back-gesture into a `?text=` URL). It's
-  mutually exclusive with the bulk-edit toolbar (same slot).
+- **The basic box is a toggle-summoned full-width row at every width**, where web
+  falls back to a persistent topbar box from `md` up — a phone topbar has no room
+  for one, and a phone has no `md`. The mechanism is otherwise the same on both,
+  and was settled here first: the Search action reveals a row below the bar
+  (view-state-provider `searchOpen`), rendered visibility is the derived
+  `searchVisible` (`searchOpen || selection.kind === 'none'`) so the topbar
+  toggle and the bar itself can't disagree, the `none` disjunct force-shows the
+  bar for a committed search that has no other on-screen surface (a back-gesture
+  into a `?text=` URL), dismissing restores `preSearch`, and the row is mutually
+  exclusive with the bulk-edit toolbar (same slot). Web ports the whole of that
+  for its narrow widths, naming included.
 - **The advanced editor is a full-height page-sheet `Modal`**, not an anchored
   popover — five inputs plus two checklists and a keyboard don't fit a 320px
   panel on a phone. The tri-state box is **hand-rolled** (check/minus), because

@@ -1,7 +1,7 @@
 'use client';
 
-// Full-height left rail: bracemark mark at the top, an optional filter box (shown
-// only once there are enough lists/tags to be worth scanning), then two
+// Full-height left rail: the brand lockup at the top, an optional filter box
+// (shown only once there are enough lists/tags to be worth scanning), then two
 // collapsible sections — Lists (the My List / Archive / Trash system lists plus
 // the user's own) and Tags — as selectable filters. Only the brand and the
 // (count-gated) filter box are pinned; a final utility band — Show All (the
@@ -9,6 +9,20 @@
 // scrolls with the trees rather than pinning, since those are low-frequency and
 // pinning them was squeezing the tree's scroll room. Clicking an entry sets the
 // shared selection (see page-provider); the main pane reacts.
+//
+// HIDDEN BELOW `md`, where it becomes a drawer summoned from the topbar's title
+// (sidebar-drawer.tsx) — the same trade the settings rail makes at the same
+// breakpoint, for the same reason: 15rem of rail on a 390px screen left ~150px
+// for the links themselves. What differs is the SHAPE it takes, because the
+// content differs. Settings' rail is six flat destinations, so it folds into a
+// dropdown; this one is two collapsible trees plus a filter box and per-row lock
+// controls, which no menu can hold — so it keeps its full body and slides in
+// over the pane instead. `SidebarBody` is that body, rendered by both hosts, so
+// there is one nav in one file and the drawer can't drift from the rail.
+//
+// The two hosts are chosen by CSS (`hidden md:flex` here, `md:hidden` on the
+// drawer's trigger), never by a measured width, so nothing can disagree with the
+// breakpoint the stylesheet matched (docs/safe-area.md, _the core problem_).
 //
 // Tree rows collapse: a parent row carries a chevron on the LEFT as a SEPARATE
 // hit target (row click = select filter, chevron = toggle), matching the Lists
@@ -28,7 +42,15 @@
 // Search, which searches saved LINK content. It's count-gated so small accounts
 // never see a box that could be mistaken for link search.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  Fragment,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   Archive,
   ChevronRight,
@@ -71,6 +93,20 @@ import { type Selection, useLinksPage } from '../_contexts/page-provider';
 // collide with a real list/tag id in the shared collapsed set.
 const SECTION_LISTS = 'section:lists';
 const SECTION_TAGS = 'section:tags';
+
+// Fired by any row that COMMITS A NAVIGATION — a filter selection or a Manage
+// link — never by a chevron, which only reveals more of this nav. The rail
+// leaves it undefined (there is nothing to dismiss); the drawer passes its close
+// so picking a list gets you to the links instead of leaving you looking at the
+// panel you picked it from. A context rather than a prop because the rows sit
+// three components deep (Section → NavTree → NavItem) and none of the layers
+// between them has any other use for it.
+const NavigateContext = createContext<(() => void) | undefined>(undefined);
+
+// The shared focus ring for this nav's hand-rolled controls (rows, chevrons,
+// section headers, footer links) — the same one the settings rail uses, so a
+// keyboard walks the two surfaces through identical highlights.
+const FOCUS_RING = 'focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
 
 // The filter box is chrome that only earns its keep past a handful of entries.
 // Below this combined count (lists + tags) the whole tree fits at a glance, so
@@ -191,6 +227,7 @@ function NavItem({
   showSlot?: boolean;
 }) {
   const { selection: current, setSimpleQuery } = useLinksPage();
+  const onNavigate = useContext(NavigateContext);
   const active = isActive(current, selection);
 
   return (
@@ -204,7 +241,10 @@ function NavItem({
           onClick={onToggle}
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse' : 'Expand'}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className={cn(
+            'flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            FOCUS_RING,
+          )}
         >
           <ChevronRight className={cn('size-3.5 transition-transform', expanded && 'rotate-90')} />
         </button>
@@ -213,11 +253,18 @@ function NavItem({
       ) : null}
       <button
         type="button"
-        onClick={() => setSimpleQuery(selection)}
+        // Selecting is a navigation, so it dismisses the drawer when there is
+        // one — the chevron above deliberately does not, since expanding a
+        // subtree is how you find the row you actually want.
+        onClick={() => {
+          setSimpleQuery(selection);
+          onNavigate?.();
+        }}
         aria-current={active ? 'true' : undefined}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
           'hover:bg-muted',
+          FOCUS_RING,
           active ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground',
         )}
       >
@@ -316,7 +363,10 @@ function Section({
         type="button"
         onClick={() => onToggle(id)}
         aria-expanded={!isCollapsed}
-        className="flex w-full items-center gap-1 rounded-md px-2 pt-3 pb-1 text-muted-foreground/70 transition-colors hover:text-foreground"
+        className={cn(
+          'flex w-full items-center gap-1 rounded-md px-2 pt-3 pb-1 text-muted-foreground/70 transition-colors hover:text-foreground',
+          FOCUS_RING,
+        )}
       >
         <ChevronRight className={cn('size-3 transition-transform', !isCollapsed && 'rotate-90')} />
         <span className="text-xs font-semibold tracking-wide uppercase">{label}</span>
@@ -331,12 +381,16 @@ function Section({
 // the nav items above but it's an <a>, so it navigates (and Back returns here to
 // keep organizing) rather than calling setSimpleQuery.
 function FooterLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+  const onNavigate = useContext(NavigateContext);
+
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
         'text-muted-foreground hover:bg-muted',
+        FOCUS_RING,
       )}
     >
       <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>
@@ -345,7 +399,20 @@ function FooterLink({ href, icon, label }: { href: string; icon: React.ReactNode
   );
 }
 
-export function Sidebar() {
+// The rail's whole body — brand, filter box, trees, utility band — rendered by
+// the rail below and by the drawer (sidebar-drawer.tsx) at the same time it is
+// hidden. Both hosts supply their own outer box (a bordered `aside`, a sheet
+// panel); everything inside the box is here.
+export function SidebarBody({
+  onNavigate,
+  action,
+}: {
+  onNavigate?: () => void;
+  // Trailing control for the brand row. The rail has nothing to put there; the
+  // drawer puts its dismiss there, so the panel closes from the same row it
+  // announces itself in rather than from a button floating over the trees.
+  action?: React.ReactNode;
+}) {
   const lists = useLists();
   const tags = useTags();
   const { selection } = useLinksPage();
@@ -380,7 +447,18 @@ export function Sidebar() {
         aria-label="Lock list"
         title="Lock list"
         onClick={() => lockList(id)}
-        className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition group-hover/navitem:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100"
+        // Revealed by hover, by focus — and unconditionally on a COARSE
+        // POINTER, which has no hover to reveal it with. That mattered less
+        // when this rail was desktop-only; now the drawer puts the same rows on
+        // a phone, where an `opacity-0` button is invisible but still tappable,
+        // which is worse than absent. Same "always shown, no hover" resolution
+        // bracemark-expo reached for its drawer (docs/locks.md).
+        className={cn(
+          'flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition',
+          'opacity-0 group-hover/navitem:opacity-100 hover:bg-muted hover:text-foreground',
+          'focus-visible:opacity-100 pointer-coarse:opacity-100',
+          FOCUS_RING,
+        )}
       >
         <LockOpen className="size-3.5" />
       </button>
@@ -413,25 +491,40 @@ export function Sidebar() {
   }, [selection, lists, tags, expand]);
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-background">
-      <div className="flex h-14 items-center gap-2 px-4">
-        <BracemarkIcon className="h-6 w-auto" />
+    <NavigateContext.Provider value={onNavigate}>
+      {/* The lockup, at the same `h-14` as the topbar so the two hairlines meet
+          across the frame — and identical to the settings rail's and the browser
+          extension's options page (mark `h-5`, wordmark `text-[0.9375rem]
+          font-semibold tracking-tight`, `gap-2.5`). Three surfaces, one lockup:
+          it should be the same product wherever you entered it. */}
+      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
+        <BracemarkIcon className="h-5 w-auto shrink-0" aria-hidden="true" />
+        <span className="text-[0.9375rem] leading-none font-semibold tracking-tight">
+          Bracemark
+        </span>
+        {action ? <span className="ml-auto flex items-center">{action}</span> : null}
       </div>
 
       {showFilter && (
-        <div className="relative px-3 pb-1">
-          <ListFilter className="pointer-events-none absolute top-1/2 left-5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter lists & tags"
-            aria-label="Filter lists and tags"
-            className="h-8 pl-7 text-sm"
-          />
+        <div className="shrink-0 px-2 pt-2">
+          {/* Inset to the ROWS, not to the rail: the box's left edge lines up
+              with the rows' hover background and its text with their labels
+              (`pl-8` = the icon slot + `gap-2`), so the filter reads as the head
+              of the list it filters rather than as a floating field. */}
+          <div className="relative">
+            <ListFilter className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter lists & tags"
+              aria-label="Filter lists and tags"
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
         </div>
       )}
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-4">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {/* Lists: one ordered tree of the system three (My List / Archive /
             Trash) and the user's own lists, merged in the read layer and ordered
             by `rank`, nested by `parentId` (see use-lists). The system lists are
@@ -535,6 +628,17 @@ export function Sidebar() {
           </div>
         )}
       </nav>
+    </NavigateContext.Provider>
+  );
+}
+
+// The rail itself: the body in a fixed 15rem column, from `md` up. Below that it
+// is not rendered at all (`hidden` — display:none, so its rows leave the tab
+// order and the a11y tree too) and the drawer carries the same body instead.
+export function Sidebar() {
+  return (
+    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-background md:flex">
+      <SidebarBody />
     </aside>
   );
 }

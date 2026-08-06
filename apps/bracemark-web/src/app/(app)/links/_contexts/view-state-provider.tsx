@@ -35,6 +35,14 @@
 //                 the stable `link.path` row key): the topbar enters the mode, the
 //                 virtualized rows toggle membership, the toolbar acts on it.
 //
+// It also holds the narrow-width search chrome (`searchOpen` / `searchVisible` /
+// `preSearch`), for the same reason the flags above live here: the topbar's
+// toggle and the bar itself are siblings that must not disagree. Below `md` the
+// basic search box is not persistent topbar chrome — there is no room for it
+// beside a title and four actions — so the Search action summons it as a row
+// under the bar, exactly as bracemark-expo does (docs/search.md). Above `md`
+// the box is inline in the topbar and none of this applies.
+//
 // This is deliberately SEPARATE from page-provider (URL/layout state): it's
 // ephemeral interaction state, never persisted, never in the URL. It does WATCH
 // the page query (read-only) for one thing: navigating to another view exits
@@ -53,7 +61,12 @@ import {
 
 import type { LinkView } from '@stxapps/web-react';
 
-import { useLinksPage } from './page-provider';
+import { type Selection, useLinksPage } from './page-provider';
+
+// A selection the sidebar can point at one row for — everything except the
+// no-single-axis 'none' a text search resolves to. What `preSearch` can hold:
+// restoring one can never force the search bar back open.
+export type SimpleSelection = Exclude<Selection, { kind: 'none' }>;
 
 // An open edit-dialog request: the link's row snapshot (the dialog re-resolves
 // freshness at save time — useLinkMutations.update re-reads before merging) and
@@ -74,6 +87,30 @@ interface LinksViewStateValue {
   setScrolled: (scrolled: boolean) => void;
   // A row menu opened (true) or closed (false).
   setMenuOpen: (open: boolean) => void;
+  // The user summoned the search row below the topbar (the topbar's search
+  // toggle, below `md` only). Explicit chrome INTENT, distinct from the
+  // rendered `searchVisible` below — a committed search shows the row with
+  // `searchOpen` false.
+  searchOpen: boolean;
+  setSearchOpen: (open: boolean) => void;
+  // The row's rendered visibility — the single home for `searchOpen ||
+  // selection.kind === 'none'` that both the topbar toggle and the row itself
+  // read, so they can't drift. The `none` disjunct is the one invariant the
+  // query can express: a committed search that resolves `selection` to 'none'
+  // has no other surface below `md` (no rail highlight, generic title), so the
+  // row force-shows even when `searchOpen` is false (a Back into a `?text=`
+  // URL). Only OR the two — the query alone can't decide it, since a
+  // single-list/tag advanced search projects to a SIMPLE selection and the row
+  // must survive that commit. (Bulk-edit suppression is separate: the row and
+  // that toolbar are the same 3rem of a phone screen, so the topbar hides the
+  // row on `bulkEditing` on top of this.)
+  searchVisible: boolean;
+  // Where the user was when the search row was summoned — dismissing a
+  // committed search returns here instead of home. Null when the row has never
+  // been opened, or was opened over a compound deep-link view ('none'
+  // selection), which has no clean single-axis restore target.
+  preSearch: SimpleSelection | null;
+  setPreSearch: (selection: SimpleSelection | null) => void;
   // The link edit dialog: the open request (null = closed) and its controls.
   editing: LinkEditRequest | null;
   openEditor: (link: LinkView, focus?: 'tags' | 'note') => void;
@@ -115,6 +152,8 @@ const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
 export function LinksViewStateProvider({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
   const [openMenus, setOpenMenus] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [preSearch, setPreSearch] = useState<SimpleSelection | null>(null);
   const [editing, setEditing] = useState<LinkEditRequest | null>(null);
   const [destroying, setDestroying] = useState<LinkView[] | null>(null);
   const [retagging, setRetagging] = useState<LinkView[] | null>(null);
@@ -193,8 +232,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
 
   // Navigating to another view (sidebar click, back button, deep link) exits
   // bulk-edit mode — see the header comment. Keyed on the query's identity, the
-  // same stable reference useLinks depends on.
-  const { query } = useLinksPage();
+  // same stable reference useLinks depends on. `selection` (the same hook's
+  // lossy projection) feeds the derived `searchVisible` below.
+  const { query, selection } = useLinksPage();
+  const searchVisible = searchOpen || selection.kind === 'none';
   const prevQueryRef = useRef(query);
   useEffect(() => {
     if (prevQueryRef.current === query) return;
@@ -213,6 +254,11 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
         bulkEditing,
       setScrolled,
       setMenuOpen,
+      searchOpen,
+      setSearchOpen,
+      searchVisible,
+      preSearch,
+      setPreSearch,
       editing,
       openEditor,
       closeEditor,
@@ -235,6 +281,9 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       scrolled,
       openMenus,
       setMenuOpen,
+      searchOpen,
+      searchVisible,
+      preSearch,
       editing,
       openEditor,
       closeEditor,

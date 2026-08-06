@@ -77,7 +77,16 @@ function useDefaultListId(): string {
   return selection.kind === 'list' && selection.id !== TRASH_ID ? selection.id : DEFAULT_LIST_ID;
 }
 
-export function LinkAddPopover() {
+export function LinkAddPopover({
+  // The empty pane renders a second instance of this popover as its call to
+  // action, where the trigger is the only control on screen rather than one of
+  // four in a bar — so it gets full size and keeps its label at every width.
+  // Everything behind the trigger is identical, which is the point: one add
+  // form, wherever it is summoned from.
+  prominent = false,
+}: {
+  prominent?: boolean;
+}) {
   const { create, update } = useLinkMutations();
   const defaultListId = useDefaultListId();
   const { count, max, atLimit } = useLinkQuota();
@@ -208,12 +217,24 @@ export function LinkAddPopover() {
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="default" size="sm">
+        {/* The label goes below `sm`, the button never does: on a phone the
+            topbar's four actions plus a title need the width more than the
+            primary action needs its word, and a filled ＋ is the one control on
+            this page that reads without one. `aria-label` carries the name in
+            both states (and contains the visible text, so the two agree). */}
+        <Button
+          variant="default"
+          size={prominent ? 'default' : 'sm'}
+          aria-label="Add link"
+          className={cn(!prominent && 'px-2.5 sm:px-3')}
+        >
           <Plus className="size-4" />
-          Add
+          <span className={cn(!prominent && 'hidden sm:inline')}>Add</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      {/* Never wider than the viewport it's anchored in — `w-80` is 20rem, which
+          is a 320px phone edge to edge. */}
+      <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))]">
         {atLimit && max !== null ? (
           <LinkQuotaBanner
             count={count}

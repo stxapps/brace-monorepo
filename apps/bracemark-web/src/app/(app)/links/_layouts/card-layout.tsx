@@ -142,7 +142,7 @@ export function CardLayout({
     }
   }, [rows, hasMore, rowCount, links.length, showMore]);
 
-  if (links.length === 0) return <EmptyState isLoading={isLoading} />;
+  if (links.length === 0) return <EmptyState isLoading={isLoading} variant="card" />;
 
   return (
     <div className="relative h-full">

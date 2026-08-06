@@ -398,7 +398,13 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
   **Unarchive** in the Archive view), and **Remove** (a reversible
   `update({ listId: TRASH_ID })`, no confirm). Buttons disable rather than
   disappear when their target set is empty, so the toolbar never reflows
-  mid-multi-select.
+  mid-multi-select. What varies is how much of each button is **shown**, in two
+  tiers keyed off the toolbar's own measured width — never off the selection, so
+  neither can shift under the user: below `COLLAPSE_WIDTH` the secondary actions
+  fold into a ⋯ menu; below `ICON_WIDTH` the three that stay inline (Copy, Move
+  to, Remove) drop their labels for square icon buttons, keeping their names in
+  `aria-label`/`title`. That second tier is what fits the fixed set on a phone
+  without pushing the one irreversible-looking action into a menu.
 - **Non-Trash-view actions skip trashed links.** The All view and tag views can
   hold trashed links, whose own row menu allows only Restore/destroy; the
   toolbar is keyed off the active view, so each action instead filters
@@ -423,7 +429,7 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
 `BulkEditBar` rendered by Main (✕ / count / Select all in its top row, actions
 below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
 at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
-it), Move to is a dialog embedding the native `ListCommand` cousin instead of
+it, as it is below web's icon-only `ICON_WIDTH` tier), Move to is a dialog embedding the native `ListCommand` cousin instead of
 the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
 menu — same `excludeIds`/`disabledIds` wiring, no `onCreate`/`root`; the Lists
 settings reparent dialog embeds the same body with `root`, like web), and the

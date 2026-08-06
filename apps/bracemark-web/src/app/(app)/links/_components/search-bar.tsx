@@ -8,6 +8,12 @@
 // from it, so the box always reflects the committed query and a `?text=…` deep link
 // rehydrates it.
 //
+// It renders in two SLOTS without knowing which: inline in the topbar from `md`
+// up, and in the row that bar summons below `md` (topbar.tsx owns both, and the
+// measure — this component always fills what it's given). The row is where the
+// `autoFocus` prop is used: a box you had to press a button to reveal should be
+// ready to type in.
+//
 // Basic search is GLOBAL by design (docs/business-model.md — "words, all links"):
 // submitting the box replaces the whole query with just its text, so a search spans
 // the library rather than the list you happened to be on. The advanced popover, by
@@ -463,7 +469,7 @@ function AdvancedSearch() {
   );
 }
 
-export function SearchBar() {
+export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const { query, setQuery } = useLinksPage();
 
   // Basic box: a draft synced from the committed text. Navigation clears text → the
@@ -495,7 +501,7 @@ export function SearchBar() {
     <div className="flex min-w-0 flex-1 items-center gap-1">
       <form
         role="search"
-        className="relative max-w-md min-w-0 flex-1"
+        className="relative min-w-0 flex-1"
         onSubmit={(e) => {
           e.preventDefault();
           submitBasic();
@@ -507,6 +513,7 @@ export function SearchBar() {
           onChange={(e) => setText(e.target.value)}
           placeholder="Search links…"
           aria-label="Search links"
+          autoFocus={autoFocus}
           className="h-9 pr-8 pl-8"
         />
         {text.length > 0 && (

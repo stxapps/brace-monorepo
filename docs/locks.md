@@ -267,16 +267,16 @@ enrolled biometry to exercise; jest/Metro can't drive the prompt.
 
 ### UI surfaces
 
-| Surface                                                | Web                                | Expo                                  |
-| ------------------------------------------------------ | ---------------------------------- | ------------------------------------- |
-| Set/remove **app lock**                                | Settings → Misc                    | Settings → Misc                       |
-| Lock/unlock/remove **list lock** (+ `hideList` opt-in) | Settings → Lists (row kebab)       | Settings → Lists (row kebab)          |
-| **Relock a list** ("Lock now")                         | Sidebar row — hover/focus-revealed | Sidebar row — always shown (no hover) |
-| **Relock the app** ("Lock app")                        | Topbar overflow menu               | Topbar overflow menu                  |
-| **Unlock a browsed list**                              | Main-pane `LockPane` swap          | Main-pane `LockPane` swap             |
-| **App lock screen**                                    | `AppLockGate` (content swap)       | `AppLockGate` (content swap)          |
-| **Biometric unlock** (Face ID / Touch ID)              | —                                  | `LockPane` auto-prompt + button       |
-| **Enable/disable biometric**                           | —                                  | Misc (Switch) / Lists row kebab       |
+| Surface                                                | Web                                                                | Expo                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------- |
+| Set/remove **app lock**                                | Settings → Misc                                                    | Settings → Misc                       |
+| Lock/unlock/remove **list lock** (+ `hideList` opt-in) | Settings → Lists (row kebab)                                       | Settings → Lists (row kebab)          |
+| **Relock a list** ("Lock now")                         | Sidebar row — hover/focus-revealed, and always on a coarse pointer | Sidebar row — always shown (no hover) |
+| **Relock the app** ("Lock app")                        | Topbar overflow menu                                               | Topbar overflow menu                  |
+| **Unlock a browsed list**                              | Main-pane `LockPane` swap                                          | Main-pane `LockPane` swap             |
+| **App lock screen**                                    | `AppLockGate` (content swap)                                       | `AppLockGate` (content swap)          |
+| **Biometric unlock** (Face ID / Touch ID)              | —                                                                  | `LockPane` auto-prompt + button       |
+| **Enable/disable biometric**                           | —                                                                  | Misc (Switch) / Lists row kebab       |
 
 The relock affordances split by scope on purpose: a list relock is contextual, so
 it lives on the row; the app lock isn't a list, so its relock lives in the

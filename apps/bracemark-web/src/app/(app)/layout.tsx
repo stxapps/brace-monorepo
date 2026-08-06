@@ -60,7 +60,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <AppLockGate>
                   <InitialSyncGate>
                     <PaywallProvider>
-                      <div className="min-h-screen">{children}</div>
+                      {/* `dvh`, not `vh`: the signed-in surfaces are
+                          single-screen frames that scroll inside themselves, and
+                          `100vh` measures the viewport with a mobile browser's
+                          URL bar retracted — taller than what's showing. A
+                          `min-h-screen` wrapper would re-introduce the overflow
+                          its children just avoided. */}
+                      <div className="min-h-dvh">{children}</div>
                     </PaywallProvider>
                   </InitialSyncGate>
                 </AppLockGate>

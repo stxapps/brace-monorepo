@@ -50,14 +50,26 @@
 //
 // The button set is fixed per view and a button DISABLES when its target set is
 // empty (rather than appearing/disappearing), so the toolbar doesn't reflow
-// under the user mid-multi-select. What DOES vary is where the secondary actions
-// live: on a narrow pane the whole row wouldn't fit, so Edit tags / Pin / Unpin /
-// Archive collapse into a ⋯ overflow menu (COLLAPSE_WIDTH), leaving Copy, Move to,
-// and the destructive Remove inline. That split is driven by the pane WIDTH, not
-// the selection, so it still never shifts mid-multi-select. One bulk action runs
-// at a time (`busy`), and every completed action exits bulk-edit mode.
+// under the user mid-multi-select. What DOES vary is how much of each action is
+// SHOWN, in two tiers keyed off the pane's own width — never off the selection,
+// so neither can shift mid-multi-select:
+//
+//   < COLLAPSE_WIDTH  — the secondary actions (Edit tags, Pin, Unpin, Archive)
+//                       collapse into a ⋯ overflow menu, leaving Copy, Move to
+//                       and the destructive Remove inline.
+//   < ICON_WIDTH      — those three shed their labels and become square icon
+//                       buttons (name kept in `aria-label`/`title`, so nothing
+//                       is lost to a screen reader or a hover). This is what
+//                       gets the fixed set onto a phone: at 390px the labelled
+//                       row is half again too wide, and the alternative — hiding
+//                       Remove behind the same ⋯ as Archive — would put the one
+//                       irreversible-looking action in a menu the user opens by
+//                       reflex.
+//
+// One bulk action runs at a time (`busy`), and every completed action exits
+// bulk-edit mode.
 
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Archive,
@@ -91,6 +103,7 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
@@ -108,6 +121,10 @@ type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'remove';
 // right-hand buttons) stops fitting; below the return we keep the full set inline
 // until the first measurement lands (width 0), matching card-layout's approach.
 const COLLAPSE_WIDTH = 900;
+// Below this the three surviving inline buttons drop their labels (see the
+// header). Tuned to where the widest labelled trio — Copy links / Move to /
+// Remove plus the ⋯ — stops fitting beside the left cluster's count.
+const ICON_WIDTH = 560;
 
 // One secondary action, renderable as an inline Button or an overflow menu item.
 type SecondaryAction = {
@@ -117,6 +134,32 @@ type SecondaryAction = {
   disabled: boolean;
   run: () => void;
 };
+
+// An inline toolbar action, in whichever of the two tiers is in force. Icon-only
+// is a real square button (`icon-sm`), not a padded one with hidden text — the
+// row is 3rem tall and the extra 8px per button is the difference between four
+// actions fitting a 320px pane and not. Props spread LAST so a caller can
+// override the variant (Remove is destructive) and so Radix's `asChild` triggers
+// can pass their wiring straight through.
+function ActionButton({
+  icon,
+  label,
+  iconOnly,
+  ...props
+}: ComponentProps<typeof Button> & { icon: ReactNode; label: string; iconOnly: boolean }) {
+  return (
+    <Button
+      variant="outline"
+      size={iconOnly ? 'icon-sm' : 'sm'}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
+      {...props}
+    >
+      {icon}
+      {iconOnly ? null : label}
+    </Button>
+  );
+}
 
 export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const { selection } = useLinksPage();
@@ -208,9 +251,10 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
 
   const disabled = count === 0 || busy !== null;
 
-  // Keep the full set inline until the first measurement (width 0) so a wide
-  // pane doesn't flash the ⋯ menu on mount.
+  // Keep the full set inline, labelled, until the first measurement (width 0)
+  // so a wide pane doesn't flash the ⋯ menu — or a row of bare icons — on mount.
   const collapsed = width > 0 && width < COLLAPSE_WIDTH;
+  const iconOnly = width > 0 && width < ICON_WIDTH;
 
   // The collapsible middle of the non-Trash action set, declared once. Archive
   // flips to Unarchive (and its target set) inside the Archive view, matching the
@@ -264,9 +308,12 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   return (
     <div
       ref={setRootEl}
-      className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/30 px-4"
+      className={cn(
+        'flex h-12 shrink-0 items-center justify-between border-b border-border bg-muted/30',
+        iconOnly ? 'gap-2 px-3' : 'gap-3 px-4',
+      )}
     >
-      <div className="flex items-center gap-3">
+      <div className={cn('flex items-center', iconOnly ? 'gap-2' : 'gap-3')}>
         <Button variant="ghost" size="icon-sm" aria-label="Exit bulk edit" onClick={exitBulkEdit}>
           <X className="size-4" />
         </Button>
@@ -276,46 +323,51 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
           checked={allSelected ? true : count > 0 ? 'indeterminate' : false}
           onCheckedChange={() => (allSelected ? clearSelected() : selectAll(links))}
         />
-        <span className="text-sm text-muted-foreground">{count} selected</span>
+        {/* The count stays a WORD at every width: it's the only readout of what
+            the buttons beside it are about to act on, and a bare numeral next to
+            a checkbox reads as a badge, not a total. */}
+        <span className="text-sm whitespace-nowrap text-muted-foreground">{count} selected</span>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" disabled={disabled} onClick={() => void onCopy()}>
-          <Copy className="size-4" />
-          {copied ? 'Copied' : count === 1 ? 'Copy link' : 'Copy links'}
-        </Button>
+        <ActionButton
+          icon={<Copy className="size-4" />}
+          label={copied ? 'Copied' : count === 1 ? 'Copy link' : 'Copy links'}
+          iconOnly={iconOnly}
+          disabled={disabled}
+          onClick={() => void onCopy()}
+        />
         {inTrash ? (
           <>
-            <Button
-              variant="outline"
-              size="sm"
+            <ActionButton
+              icon={<Undo2 className="size-4" />}
+              label={busy === 'restore' ? 'Restoring…' : 'Restore'}
+              iconOnly={iconOnly}
               disabled={disabled}
               onClick={() =>
                 void runBulk('restore', selected, (link) =>
                   update(link, { listId: DEFAULT_LIST_ID }),
                 )
               }
-            >
-              <Undo2 className="size-4" />
-              {busy === 'restore' ? 'Restoring…' : 'Restore'}
-            </Button>
-            <Button
+            />
+            <ActionButton
               variant="destructive"
-              size="sm"
+              icon={<Trash2 className="size-4" />}
+              label="Delete permanently"
+              iconOnly={iconOnly}
               disabled={disabled}
               onClick={() => requestDestroy(selected)}
-            >
-              <Trash2 className="size-4" />
-              Delete permanently
-            </Button>
+            />
           </>
         ) : (
           <>
             <DropdownMenu open={moveOpen} onOpenChange={setMoveOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" disabled={disabled || actionable.length === 0}>
-                  <FolderInput className="size-4" />
-                  {busy === 'move' ? 'Moving…' : 'Move to'}
-                </Button>
+                <ActionButton
+                  icon={<FolderInput className="size-4" />}
+                  label={busy === 'move' ? 'Moving…' : 'Move to'}
+                  iconOnly={iconOnly}
+                  disabled={disabled || actionable.length === 0}
+                />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 p-0">
                 <ListCommand
@@ -331,8 +383,9 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size={iconOnly ? 'icon-sm' : 'sm'}
                     aria-label="More actions"
+                    title="More actions"
                     disabled={disabled || actionable.length === 0}
                   >
                     <MoreHorizontal className="size-4" />
@@ -353,29 +406,30 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
               </DropdownMenu>
             ) : (
               secondaryActions.map((action) => (
-                <Button
+                <ActionButton
                   key={action.key}
-                  variant="outline"
-                  size="sm"
+                  icon={action.icon}
+                  label={action.label}
+                  // Unreachable in practice (every width below COLLAPSE_WIDTH is
+                  // also below ICON_WIDTH, so this branch only runs on a wide
+                  // pane), but passed rather than hardcoded false so the two
+                  // tiers stay independent if either number moves.
+                  iconOnly={iconOnly}
                   disabled={action.disabled}
                   onClick={action.run}
-                >
-                  {action.icon}
-                  {action.label}
-                </Button>
+                />
               ))
             )}
-            <Button
+            <ActionButton
               variant="destructive"
-              size="sm"
+              icon={<Trash2 className="size-4" />}
+              label={busy === 'remove' ? 'Removing…' : 'Remove'}
+              iconOnly={iconOnly}
               disabled={disabled || actionable.length === 0}
               onClick={() =>
                 void runBulk('remove', actionable, (link) => update(link, { listId: TRASH_ID }))
               }
-            >
-              <Trash2 className="size-4" />
-              {busy === 'remove' ? 'Removing…' : 'Remove'}
-            </Button>
+            />
           </>
         )}
       </div>

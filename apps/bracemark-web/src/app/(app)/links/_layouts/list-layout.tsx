@@ -152,7 +152,7 @@ export function ListLayout({
     }
   }, [rows, hasMore, links.length, showMore]);
 
-  if (links.length === 0) return <EmptyState isLoading={isLoading} />;
+  if (links.length === 0) return <EmptyState isLoading={isLoading} variant="list" />;
 
   return (
     <div className="relative h-full">
