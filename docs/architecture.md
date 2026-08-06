@@ -126,6 +126,15 @@ authority to the one domain instead of a second host.
 - bracemark-site uses the presentational end of it (Button, the store/brand
   icons, `lib/utils`, `styles.css`) but **not** `contexts/theme-provider`, which
   reads settings through `web-react` — see the note in the site's root layout
+- `components/links/*` is the shared link-editing surface — the pickers both
+  editors render (`list-select`, `tags-field`), the at-cap wall
+  (`link-quota-banner`), and `host-monogram`, the deterministic letter-on-hue
+  tile a host falls back to when it has no favicon. A piece lands here the
+  moment a SECOND surface draws it: the monogram moved out of bracemark-web's
+  `link-media.tsx` when bracemark-extension's popup specimen became its second
+  consumer, because "same site, same tile" has to hold across the popup and the
+  library it saves into (see [browser-extension.md](./browser-extension.md), _the
+  popup and options surfaces_)
 
 #### @stxapps/web-crypto
 

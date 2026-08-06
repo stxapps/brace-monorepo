@@ -1,48 +1,22 @@
 'use client';
 
-// The row's icon/image presentation chain: a deterministic Monogram fallback,
-// the site Favicon that falls back to it, and the LinkPreviewImage slot that
-// falls back to either a small favicon (list) or a full-bleed hue panel (card).
-// Shared by both link layouts.
+// The row's icon/image presentation chain: the site Favicon, which falls back to
+// the shared HostMonogram, and the LinkPreviewImage slot, which falls back to
+// either a small favicon (list) or a full-bleed hue panel (card). Shared by both
+// link layouts.
 
 // The letter/hue derivations (initialFromHost/hueFromHost) live in
 // @stxapps/shared (url/host-identity.ts): bracemark-expo's card panel is a second
 // consumer, and the same host must paint the same letter on the same hue on
-// every surface. They stay free functions (not buried in Monogram) so the
+// every surface. They stay free functions (not buried in HostMonogram) so the
 // full-bleed panel below can paint the hue as its own background without
 // drawing a nested tile.
+//
+// The monogram MARKUP moved to web-ui alongside them once bracemark-extension's
+// popup specimen became its third consumer — see host-monogram.tsx.
 import { hostFromText, hueFromHost, initialFromHost } from '@stxapps/shared';
 import { type LinkView, useFaviconUrl, useImageFileUrl } from '@stxapps/web-react';
-
-// A deterministic monogram for a host — the favicon's stand-in. Pure and stable:
-// an icon-less site still gets a consistent mark to recognize rows by (and the
-// tile never changes under the user when the real icon later lands).
-//
-// SVG, not a styled div, so ONE component serves every call site's box (size-4 in
-// the rows, size-6 in the preview slot) — the viewBox scales the letter with the
-// tile, where a Tailwind text size would have to be passed in per caller and kept
-// in sync with it.
-function Monogram({ host, className }: { host: string; className: string }) {
-  const letter = initialFromHost(host);
-  const hue = hueFromHost(host);
-
-  return (
-    <svg viewBox="0 0 16 16" className={className} aria-hidden>
-      <rect width="16" height="16" rx="3" fill={`hsl(${hue} 45% 45%)`} />
-      <text
-        x="8"
-        y="8.5"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontSize="10"
-        fontWeight="600"
-        fill="#fff"
-      >
-        {letter}
-      </text>
-    </svg>
-  );
-}
+import { HostMonogram } from '@stxapps/web-ui/components/links/host-monogram';
 
 // The site's favicon, keyed by DISPLAY HOST (`hostFromText`, so it matches the
 // host string rendered beside it) — cached per host in Dexie and fetched at most
@@ -57,7 +31,7 @@ function Monogram({ host, className }: { host: string; className: string }) {
 // steady state, not just a loading state.
 export function Favicon({ host, className }: { host: string; className: string }) {
   const url = useFaviconUrl(host);
-  if (!url) return <Monogram host={host} className={className} />;
+  if (!url) return <HostMonogram host={host} className={className} />;
   // object-contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo being filled into a box).
   return <img src={url} alt="" className={`object-contain ${className}`} />;

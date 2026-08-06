@@ -1,3 +1,5 @@
+import { ChevronRight } from 'lucide-react';
+
 import {
   formatSyncedAt,
   getSyncPhase,
@@ -7,8 +9,11 @@ import {
 } from '@stxapps/shared';
 import { usePendingChangesCount, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
-// The two sync surfaces of the popup: a glanceable pill that sits under the save flow
+import { PopupBody, PopupShell } from './Shell';
+
+// The two sync surfaces of the popup: a glanceable pill docked under the save flow
 // (SyncPill), and the detail view it opens (SyncDetail). Sync lives here — the popup's
 // operational surface — rather than in the Settings page, which is now durable
 // configuration only (theme + account). Both read the same useSync() seam bracemark-web
@@ -17,34 +22,98 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 // status collapses through @stxapps/shared's getSyncPhase, same as bracemark-web's
 // Settings→Data card — only the wording differs per surface.
 
-// The pill's at-a-glance word per phase — shorter than the shared labels since it
-// shares a row with the "Sync" caption.
-const PILL_LABELS: Record<SyncPhase, string> = {
-  checking: 'Checking…',
-  'initial-syncing': 'Syncing…',
-  'initial-error': 'Error',
-  syncing: 'Syncing…',
-  'cycle-error': 'Error',
-  // Not 'Error': the cycle worked, a limit is what stopped the rest. Saying
-  // "Error" here would point the user at a connection problem instead of the fix
+// COLOUR MEANS ATTENTION, and nothing else.
+//
+// Both apps are achromatic by design — every token in web-ui's sheet is
+// `oklch(L 0 0)`, literally zero chroma, which suits a product whose claim is that
+// the server sees nothing. The temptation in a status dot is a green "all good",
+// and it is the wrong move twice over: it spends the surface's only colour on the
+// state that needs no attention, and it trains the eye to expect colour, so the
+// red has to shout to be heard over it. So the healthy states are drawn in the
+// foreground colour at low opacity, and the only two chromatic pixels in the
+// whole extension are the ones that want a click.
+//
+// What separates "at rest" from "working" is then MOTION, not hue: both are the
+// same grey, one darker and pulsing. A hollow ring was tried for the rest state
+// and dropped — at 8px a 1px ring all but vanishes, and it vanished worst in the
+// dark theme, where the footer needs it most.
+const DOT_STYLES: Record<SyncPhase, string> = {
+  checking: 'bg-foreground/50 animate-pulse motion-reduce:animate-none',
+  'initial-syncing': 'bg-foreground/50 animate-pulse motion-reduce:animate-none',
+  syncing: 'bg-foreground/50 animate-pulse motion-reduce:animate-none',
+  idle: 'bg-foreground/25',
+  'initial-error': 'bg-destructive',
+  'cycle-error': 'bg-destructive',
+  // Not the error colour: the cycle worked, a limit is what stopped the rest.
+  // Red here would point the user at a connection problem instead of the fix
   // (see @stxapps/shared sync/status.ts, `blocked-capacity`).
-  'capacity-blocked': 'Storage full',
-  idle: 'Synced ✓',
+  'capacity-blocked': 'bg-amber-500',
 };
 
+function StatusDot({ phase }: { phase: SyncPhase }) {
+  return (
+    <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', DOT_STYLES[phase])} />
+  );
+}
+
+// The pill's line. Shorter than the shared SYNC_PHASE_LABELS because it shares a
+// row with the dot and the chevron — and, at rest, more specific than they are:
+// "Up to date" is a claim, "Synced 3 min ago" is the evidence for it, which is
+// what someone opening a sync pill actually wants to know. The never-synced case
+// gets its own wording rather than a stale-looking blank.
+function pillLabel(phase: SyncPhase, lastSyncAt: number | null): string {
+  switch (phase) {
+    case 'checking':
+      return 'Checking…';
+    case 'initial-syncing':
+      return 'Setting up this device…';
+    case 'syncing':
+      return 'Syncing…';
+    case 'initial-error':
+    case 'cycle-error':
+      return 'Sync failed';
+    case 'capacity-blocked':
+      return 'Storage full';
+    case 'idle':
+      return lastSyncAt ? `Synced ${formatSyncedAt(lastSyncAt)}` : 'Not synced yet';
+  }
+}
+
 export function SyncPill({ onClick }: { onClick: () => void }) {
-  const { storeStatus, bgSyncStatus } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt } = useSync();
+  const phase = getSyncPhase(storeStatus, bgSyncStatus);
+
   return (
     <button
       type="button"
-      className="flex w-85 items-center justify-between border-t px-4 py-2.5 text-sm"
+      className={cn(
+        'group flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-left text-xs',
+        'transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none',
+      )}
       onClick={onClick}
     >
-      <span>Sync</span>
-      <span className="text-muted-foreground">
-        {PILL_LABELS[getSyncPhase(storeStatus, bgSyncStatus)]} ›
-      </span>
+      <StatusDot phase={phase} />
+      <span className={cn('truncate text-muted-foreground')}>{pillLabel(phase, lastSyncAt)}</span>
+      <ChevronRight
+        aria-hidden="true"
+        className={cn(
+          'ml-auto size-3.5 shrink-0 text-muted-foreground/60',
+          'transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none',
+        )}
+      />
     </button>
+  );
+}
+
+// One fact per row in a bordered panel — a spec sheet rather than a paragraph.
+// The label sits left in muted, the value right in foreground, so the column of
+// values can be read down without reading the labels twice.
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className={cn('flex items-center justify-between gap-3 px-3 py-2 text-xs')}>
+      <dt className={cn('shrink-0 text-muted-foreground')}>{label}</dt>
+      <dd className={cn('min-w-0 truncate text-right font-medium')}>{children}</dd>
+    </div>
   );
 }
 
@@ -54,7 +123,7 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
   // store, not the background's mirror.
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
-  const lastSync = lastSyncAt ? formatSyncedAt(lastSyncAt) : 'never';
+  const lastSync = lastSyncAt ? formatSyncedAt(lastSyncAt) : 'Never';
   // The blocked explanation + its fix, worded per reason in shared so this
   // surface, both Data cards, and any future one can't drift.
   const blockedDetail = syncBlockedDetail(phase, blockedCount);
@@ -73,46 +142,38 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
         : null;
 
   return (
-    <div className="flex w-85 flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-semibold">Sync</h1>
-        <button type="button" className="text-primary" onClick={onBack}>
-          ‹ Back
-        </button>
-      </div>
+    <PopupShell title="Sync" onBack={onBack}>
+      <PopupBody>
+        <dl className={cn('divide-y divide-border rounded-lg border border-border')}>
+          <DetailRow label="Status">
+            <span className={cn('flex items-center justify-end gap-2')}>
+              <StatusDot phase={phase} />
+              <span className={cn('truncate')}>{SYNC_PHASE_LABELS[phase]}</span>
+            </span>
+          </DetailRow>
+          <DetailRow label="Pending changes">{pendingCount}</DetailRow>
+          <DetailRow label="Last sync">{lastSync}</DetailRow>
+          {lastError && (
+            <DetailRow label="Last error">
+              <span className={cn('text-destructive')}>{lastError}</span>
+            </DetailRow>
+          )}
+        </dl>
 
-      <section>
-        <div className="flex justify-between py-0.5 text-sm">
-          <span>Status</span>
-          <span>{SYNC_PHASE_LABELS[phase]}</span>
-        </div>
-        <div className="flex justify-between py-0.5 text-sm">
-          <span>Pending changes</span>
-          <span>{pendingCount}</span>
-        </div>
-        <div className="flex justify-between py-0.5 text-sm">
-          <span>Last sync</span>
-          <span>{lastSync}</span>
-        </div>
-        {lastError && (
-          <div className="flex justify-between py-0.5 text-sm">
-            <span>Last error</span>
-            <span className="text-destructive">{lastError}</span>
-          </div>
+        {/* Not styled as an error and given no Retry: the cycle completed, and
+            only upgrading / freeing space clears this. */}
+        {blockedDetail && (
+          <p className={cn('wrap-break-words text-xs leading-5 text-muted-foreground')}>
+            {blockedDetail}
+          </p>
         )}
-      </section>
 
-      {/* Not styled as an error and given no Retry: the cycle completed, and
-          only upgrading / freeing space clears this. */}
-      {blockedDetail && (
-        <p className="wrap-break-words text-sm text-muted-foreground">{blockedDetail}</p>
-      )}
-
-      {actionLabel && (
-        <Button variant="outline" size="sm" onClick={() => requestSync()}>
-          {actionLabel}
-        </Button>
-      )}
-    </div>
+        {actionLabel && (
+          <Button variant="outline" size="sm" onClick={() => requestSync()}>
+            {actionLabel}
+          </Button>
+        )}
+      </PopupBody>
+    </PopupShell>
   );
 }

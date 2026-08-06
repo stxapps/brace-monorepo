@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Monitor, Moon, Sun } from 'lucide-react';
+import { Clock, Monitor, Moon, Sun, TriangleAlert } from 'lucide-react';
 
 import { THEME_MODES, type ThemeMode, type ThemeState } from '@stxapps/shared';
 import { type ThemeSource, useSettingMutations, useSettings } from '@stxapps/web-react';
@@ -7,6 +7,9 @@ import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
+import { cn } from '@stxapps/web-ui/lib/utils';
+
+import { OptionsSection } from './Shell';
 
 // The extension's THEME picker — the one synced setting that actually applies here
 // (layout/serverExtraction don't: the options/popup have no library list and never
@@ -17,6 +20,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/compon
 //   - Device → the off-sync localSettings store, this browser only (wiped on sign-out).
 // The Device tab is what lets the extension keep its own theme (e.g. always-dark)
 // without opening bracemark-web — see docs/theme.md "the sync/device split".
+//
+// The OptionRow markup below is bracemark-web's misc-section radio row, class for
+// class (`has-data-checked:` styling the whole row, not just the dot). Deliberate:
+// the two theme pickers are the same control over the same setting, and a user who
+// sets their theme in one and then finds the other should recognise it instantly.
 
 const THEME_MODE_OPTIONS: Record<
   ThemeMode,
@@ -61,15 +69,18 @@ function OptionRow({
   return (
     <Label
       htmlFor={id}
-      className="flex items-start gap-3 rounded-lg border border-border p-3 has-data-checked:border-primary has-data-checked:bg-muted/40"
+      className={cn(
+        'flex items-start gap-3 rounded-lg border border-border p-3 transition-colors',
+        'hover:bg-muted/40 has-data-checked:border-primary has-data-checked:bg-muted/40',
+      )}
     >
-      <RadioGroupItem id={id} value={value} className="mt-0.5" />
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-2 font-medium">
+      <RadioGroupItem id={id} value={value} className={cn('mt-0.5')} />
+      <span className={cn('flex min-w-0 flex-1 flex-col gap-0.5')}>
+        <span className={cn('flex items-center gap-2 font-medium')}>
           {icon}
           {label}
         </span>
-        <span className="text-sm font-normal text-muted-foreground">{hint}</span>
+        <span className={cn('text-sm font-normal text-muted-foreground')}>{hint}</span>
       </span>
     </Label>
   );
@@ -86,7 +97,7 @@ function ThemeControls({
   onChange: (theme: ThemeState) => void;
 }) {
   return (
-    <div className="mt-4">
+    <div className={cn('mt-4')}>
       <RadioGroup
         value={value.mode}
         onValueChange={(v) => onChange({ ...value, mode: v as ThemeMode })}
@@ -107,25 +118,25 @@ function ThemeControls({
       </RadioGroup>
 
       {value.mode === 'custom' && (
-        <div className="mt-4 flex flex-wrap gap-4">
-          <div className="flex flex-col gap-1.5">
+        <div className={cn('mt-4 flex flex-wrap gap-4')}>
+          <div className={cn('flex flex-col gap-1.5')}>
             <Label htmlFor="theme-light-start">Light starts</Label>
             <Input
               id="theme-light-start"
               type="time"
               value={value.lightStart}
               onChange={(e) => onChange({ ...value, lightStart: e.target.value })}
-              className="w-36"
+              className={cn('w-36')}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className={cn('flex flex-col gap-1.5')}>
             <Label htmlFor="theme-dark-start">Dark starts</Label>
             <Input
               id="theme-dark-start"
               type="time"
               value={value.darkStart}
               onChange={(e) => onChange({ ...value, darkStart: e.target.value })}
-              className="w-36"
+              className={cn('w-36')}
             />
           </div>
         </div>
@@ -134,7 +145,7 @@ function ThemeControls({
   );
 }
 
-export function ThemeSection() {
+export function ThemeSection({ className }: { className?: string }) {
   const { themeSource, syncTheme, localTheme } = useSettings();
   const { setThemeSource, setSyncTheme, setLocalTheme } = useSettingMutations();
   const [error, setError] = useState<string | null>(null);
@@ -147,25 +158,31 @@ export function ThemeSection() {
   };
 
   return (
-    <section>
-      <h2 className="mt-0 mb-2 font-semibold">Theme</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Choose the extension’s appearance. <strong>Sync</strong> applies your choice across all your
-        devices. <strong>Device</strong> keeps a separate choice for this browser only (cleared when
-        you sign out).
-      </p>
-
+    <OptionsSection
+      className={className}
+      title="Theme"
+      description={
+        <>
+          How the extension looks.{' '}
+          <strong className={cn('font-medium text-foreground')}>Sync</strong> applies your choice on
+          every device. <strong className={cn('font-medium text-foreground')}>Device</strong> keeps
+          a separate choice for this browser only, cleared when you sign out.
+        </>
+      }
+    >
       {error && (
-        <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          role="alert"
+          className={cn(
+            'mb-4 flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive',
+          )}
+        >
+          <TriangleAlert className={cn('mt-0.5 size-4 shrink-0')} aria-hidden="true" />
           {error}
         </p>
       )}
 
-      <Tabs
-        value={themeSource}
-        onValueChange={(v) => run(setThemeSource(v as ThemeSource))}
-        className="mt-4"
-      >
+      <Tabs value={themeSource} onValueChange={(v) => run(setThemeSource(v as ThemeSource))}>
         <TabsList>
           <TabsTrigger value="sync">Sync</TabsTrigger>
           {/* The `'local'` source is labeled "Device" for users. */}
@@ -182,6 +199,6 @@ export function ThemeSection() {
           <ThemeControls value={localTheme} onChange={(t) => run(setLocalTheme(t))} />
         </TabsContent>
       </Tabs>
-    </section>
+    </OptionsSection>
   );
 }

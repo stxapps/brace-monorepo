@@ -26,6 +26,52 @@ password-derived account model the auth flows build on.
   organize freely (`bracemark-api/src/lib`, `web-react/src/lib`, the packages); the
   framework-reserved names stay as the framework expects.
 
+### the popup and options surfaces
+
+Both entrypoints render against the **same tokens bracemark-web does** —
+`@stxapps/web-ui/styles.css`, achromatic `oklch(L 0 0)` greys, the shadcn
+components — and **Inter is the only face**. bracemark-site's other two
+(Bricolage for display, IBM Plex Mono for its instrument voice) exist to set
+headlines and specimen panels; the extension has neither, and every font byte is
+paid for on every popup open. Where the site reaches for mono, this surface
+reaches for size and colour.
+
+Four conventions hold the two entrypoints together. Breaking any of them is a
+silent visual regression, so they're written down:
+
+- **The frame owns the geometry.** `popup/Shell.tsx` declares the popup's width
+  (`w-90` — 360px), the header, the 16px body padding and the footer slot;
+  `options/Shell.tsx` declares the topbar, the `max-w-2xl px-6` measure and the
+  section rhythm. Screens compose them and set no width of their own. Before
+  this, six components each carried `w-85 p-4` and had already drifted.
+- **The options page mirrors bracemark-web's settings scale exactly** — same
+  measure, `text-xl font-semibold` page heading, `text-base font-medium`
+  sections, `text-sm text-muted-foreground` descriptions, the same
+  `has-data-checked:` radio rows. Both are "Settings" for one product and can sit
+  in adjacent tabs; only the topbar's "Browser extension" label distinguishes
+  them, and that's deliberate.
+- **The page specimen is one component across the save.** `popup/PageSpecimen.tsx`
+  renders the active tab in the editor and the saved link on the complete screen,
+  and it does not move between them — the controls around it change instead. Its
+  tile falls back extracted image → the live tab's `favIconUrl` (free from
+  `tabs.query`, no network, no host disclosed) → `HostMonogram`, the same
+  letter-on-hue tile bracemark-web's rows use, which now lives in
+  `web-ui/components/links/host-monogram.tsx` so the popup and the library can't
+  draw one host two ways. Its proportions are bracemark-site's hero panel: that
+  hero is a drawing of this component.
+- **Saving cuts the tile's corner** (`corner-cut` / `corner-square`, defined in
+  the extension's `globals.css`). That 45° cut is the brand mark's own geometry —
+  the turned-down page corner — and it is the whole "saved" signal: no check
+  badge, no colour. The two clip paths are 5-point polygons with matching vertex
+  counts so the change can transition on one property; keep them equal or it
+  snaps.
+- **Colour means attention, and nothing else.** The sync dot's healthy states are
+  `bg-foreground/25` at rest and `bg-foreground/50 animate-pulse` while a cycle
+  runs — distinguished by motion, not hue. Only `cycle-error`/`initial-error`
+  (destructive) and `capacity-blocked` (amber) are chromatic. A green "all good"
+  dot is the obvious move and the wrong one: it spends the surface's only colour
+  on the state that needs no attention, and then the red has to shout over it.
+
 ### storage across extension contexts
 
 The extension has three persistence layers, and which one to use depends on the

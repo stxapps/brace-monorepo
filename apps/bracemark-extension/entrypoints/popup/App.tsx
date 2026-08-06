@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { SettingsIcon } from 'lucide-react';
+import { LoaderCircle, SettingsIcon } from 'lucide-react';
 
 import { normalizeUrl, TRASH_ID } from '@stxapps/shared';
 import { type LinkItem, readLinkByUrlKey, useAuth, useSync } from '@stxapps/web-react';
+import { Button } from '@stxapps/web-ui/components/ui/button';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { Complete } from './Complete';
 import { Editor } from './Editor';
+import { PopupMessage, PopupShell } from './Shell';
 import { SignIn } from './SignIn';
 import { SyncDetail, SyncPill } from './Sync';
 
@@ -15,13 +18,25 @@ import { SyncDetail, SyncPill } from './Sync';
 export interface ActiveTab {
   url: string;
   title: string;
+  // The tab's own favicon URL, as the browser already resolved it. Free here and
+  // nowhere else: the popup is standing on the live page, so the specimen can
+  // show a real icon without web-react's favicon fetch — which would go out over
+  // the network, and only after the link is saved.
+  iconUrl?: string;
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+// One spinner for every "we don't know yet" in the popup. Quiet on purpose —
+// these resolve in tens of milliseconds, and a skeleton of a form that is about
+// to appear reads as slower than a still mark does.
+function Loading() {
   return (
-    <div className="flex min-h-30 w-85 flex-col items-center justify-center gap-3 p-4">
-      {children}
-    </div>
+    <PopupMessage>
+      <LoaderCircle
+        className={cn('size-4 animate-spin text-muted-foreground motion-reduce:animate-none')}
+        aria-hidden="true"
+      />
+      <span className={cn('sr-only')}>Loading</span>
+    </PopupMessage>
   );
 }
 
@@ -35,7 +50,13 @@ function Centered({ children }: { children: React.ReactNode }) {
 function App() {
   const { status } = useAuth();
 
-  if (status === 'loading') return <Centered>Loading…</Centered>;
+  if (status === 'loading') {
+    return (
+      <PopupShell>
+        <Loading />
+      </PopupShell>
+    );
+  }
   if (status !== 'authenticated') return <SignIn />;
   return <AuthedApp />;
 }
@@ -62,19 +83,24 @@ function AuthedApp() {
   }, [requestSync]);
 
   if (view === 'sync') return <SyncDetail onBack={() => setView('flow')} />;
+
   return (
-    <>
+    <PopupShell
+      actions={
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => browser.runtime.openOptionsPage()}
+        >
+          <SettingsIcon className={cn('size-4')} />
+        </Button>
+      }
+      footer={<SyncPill onClick={() => setView('sync')} />}
+    >
       <SaveFlow />
-      <button
-        type="button"
-        className="absolute top-2 right-2 p-1 text-muted-foreground"
-        title="Settings"
-        onClick={() => browser.runtime.openOptionsPage()}
-      >
-        <SettingsIcon className="size-4" />
-      </button>
-      <SyncPill onClick={() => setView('sync')} />
-    </>
+    </PopupShell>
   );
 }
 
@@ -91,7 +117,11 @@ function SaveFlow() {
       .then(([active]) => {
         const url = active?.url ?? '';
         // Only http/https pages can be saved/extracted (no chrome://, web store, …).
-        setTab(/^https?:/.test(url) ? { url, title: active?.title ?? '' } : null);
+        setTab(
+          /^https?:/.test(url)
+            ? { url, title: active?.title ?? '', iconUrl: active?.favIconUrl }
+            : null,
+        );
       })
       .catch(() => {
         setTab(null);
@@ -115,19 +145,29 @@ function SaveFlow() {
     [normalizedUrl],
   );
 
-  if (tab === undefined || existing === undefined) return <Centered>Loading…</Centered>;
+  if (tab === undefined || existing === undefined) return <Loading />;
   if (tab === null) {
-    return <Centered>This page can’t be saved.</Centered>;
+    // Names the boundary and what to do about it, rather than reporting a
+    // refusal: "can't be saved" alone leaves the user re-clicking the icon on a
+    // settings page wondering what broke.
+    return (
+      <PopupMessage>
+        <p className={cn('text-sm font-medium')}>Nothing to save here</p>
+        <p className={cn('text-xs leading-5 text-muted-foreground')}>
+          Bracemark saves web pages. Open an http or https page and click the icon again.
+        </p>
+      </PopupMessage>
+    );
   }
 
   // A match in Trash is NOT "already saved": the user removed it, and bracemark-web
   // hides Trash from every view except Trash itself (use-links), so Complete's
-  // "Saved ✓" would point at something they can't find. Falling through to a plain
+  // saved state would point at something they can't find. Falling through to a plain
   // Editor is no better — Save would mint a live copy shadowing the trashed one,
   // and readLinkByUrlKey (a `.first()` on the index) would then return an arbitrary
   // one of the two. So the editor takes the match and offers Restore instead.
   const link = justSaved ?? existing;
-  if (link && link.listId !== TRASH_ID) return <Complete link={link} />;
+  if (link && link.listId !== TRASH_ID) return <Complete link={link} tab={tab} />;
   return (
     <Editor
       tab={tab}
