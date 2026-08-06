@@ -1,194 +1,902 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><style>
-  :root{--fg:oklch(0.145 0 0);--muted:#6b7280;--rule:#e5e7eb}
-  *{box-sizing:border-box}
-  body{margin:0;padding:40px;background:#fff;color:var(--fg);width:1400px;
-       font:13px/1.5 ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif}
-  h1{font-size:20px;margin:0 0 4px}
-  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
-     margin:44px 0 16px;border-top:1px solid var(--rule);padding-top:12px}
-  .sub{color:var(--muted);margin:0 0 14px;max-width:70ch}
-  .row{display:flex;gap:28px;align-items:flex-end}
-  figure{margin:0;text-align:center}
-  figcaption{font-size:12px;color:var(--muted);margin-top:8px}
-  .box{background:#fafafa;border:1px solid var(--rule);border-radius:10px;padding:18px}
-  .dark{background:oklch(0.145 0 0);border-radius:10px;padding:22px 26px;color:oklch(0.985 0 0)}
-  .dark figcaption{color:#9ca3af}
-  table{border-collapse:collapse;font-size:12.5px}
-  th,td{padding:7px 14px;text-align:right;border-bottom:1px solid var(--rule)}
-  th:first-child,td:first-child{text-align:left}
-  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
-  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:7px}
-</style></head><body>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --fg: oklch(0.145 0 0);
+        --muted: #6b7280;
+        --rule: #e5e7eb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px;
+        background: #fff;
+        color: var(--fg);
+        width: 1400px;
+        font:
+          13px/1.5 ui-sans-serif,
+          -apple-system,
+          'Helvetica Neue',
+          sans-serif;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin: 44px 0 16px;
+        border-top: 1px solid var(--rule);
+        padding-top: 12px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 14px;
+        max-width: 70ch;
+      }
+      .row {
+        display: flex;
+        gap: 28px;
+        align-items: flex-end;
+      }
+      figure {
+        margin: 0;
+        text-align: center;
+      }
+      figcaption {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .box {
+        background: #fafafa;
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 18px;
+      }
+      .dark {
+        background: oklch(0.145 0 0);
+        border-radius: 10px;
+        padding: 22px 26px;
+        color: oklch(0.985 0 0);
+      }
+      .dark figcaption {
+        color: #9ca3af;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      th,
+      td {
+        padding: 7px 14px;
+        text-align: right;
+        border-bottom: 1px solid var(--rule);
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .sw {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        vertical-align: -1px;
+        margin-right: 7px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Two questions: the curl, and the colour</h1>
 
-<h1>Two questions: the curl, and the colour</h1>
+    <h2>1 · does the ribbon top want a curl?</h2>
+    <p class="sub">
+      All three carry 04b's letterform and the same orange-400 ribbon, so only the top of the ribbon
+      differs. draft3's curl is rebuilt here as part of the knockout — as authored it is a white
+      rect with a dark circle over it, which hard-codes a light background.
+    </p>
+    <div class="row">
+      <figure>
+        <div class="box">
+          <svg
+            width="209"
+            height="240"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
+          </svg>
+        </div>
+        <figcaption><b>no curl</b><br />plain slot</figcaption>
+      </figure>
+      <figure>
+        <div class="box">
+          <svg
+            width="209"
+            height="240"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            />
+          </svg>
+        </div>
+        <figcaption><b>drape</b><br />draft3's gesture</figcaption>
+      </figure>
+      <figure>
+        <div class="box">
+          <svg
+            width="209"
+            height="240"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            />
+          </svg>
+        </div>
+        <figcaption><b>taper</b><br />symmetric flare</figcaption>
+      </figure>
+    </div>
+    <div class="row" style="margin-top: 26px">
+      <figure>
+        <span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="111"
+            height="128"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" /></svg
+        ></span>
+        <figcaption><b>no curl</b> — 128 / 64 / 32 / 16</figcaption>
+      </figure>
+      <figure>
+        <span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="111"
+            height="128"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg
+        ></span>
+        <figcaption><b>drape</b> — 128 / 64 / 32 / 16</figcaption>
+      </figure>
+      <figure>
+        <span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="111"
+            height="128"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 12px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg
+        ></span>
+        <figcaption><b>taper</b> — 128 / 64 / 32 / 16</figcaption>
+      </figure>
+    </div>
 
-<h2>1 · does the ribbon top want a curl?</h2>
-<p class="sub">All three carry 04b's letterform and the same orange-400 ribbon, so only the top of the ribbon differs. draft3's curl is rebuilt here as part of the knockout — as authored it is a white rect with a dark circle over it, which hard-codes a light background.</p>
-<div class="row">
-  <figure><div class="box"><svg width="209" height="240" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></div><figcaption><b>no curl</b><br>plain slot</figcaption></figure>
-  <figure><div class="box"><svg width="209" height="240" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></div><figcaption><b>drape</b><br>draft3's gesture</figcaption></figure>
-  <figure><div class="box"><svg width="209" height="240" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></div><figcaption><b>taper</b><br>symmetric flare</figcaption></figure>
-</div>
-<div class="row" style="margin-top:26px">
-  <figure><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="111" height="128" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><figcaption><b>no curl</b> — 128 / 64 / 32 / 16</figcaption></figure>
-  <figure><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="111" height="128" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><figcaption><b>drape</b> — 128 / 64 / 32 / 16</figcaption></figure>
-  <figure><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="111" height="128" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 12px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><figcaption><b>taper</b> — 128 / 64 / 32 / 16</figcaption></figure>
-</div>
+    <h2>2 · the ribbon colour</h2>
+    <p class="sub">
+      04e's geometry throughout; only the ribbon fill changes. The top row is the light theme (mark
+      is near-black); the bottom is the dark theme, where <code>currentColor</code> flips the B to
+      near-white and the fixed ribbon colour does not move.
+    </p>
+    <div class="row">
+      <figure>
+        <div class="box">
+          <svg
+            width="165"
+            height="190"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <figcaption><b>petrol</b><br />#1c5a60 · today’s signal token</figcaption>
+      </figure>
+      <figure>
+        <div class="box">
+          <svg
+            width="165"
+            height="190"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
+          </svg>
+        </div>
+        <figcaption><b>orange-400</b><br />#ff8904</figcaption>
+      </figure>
+      <figure>
+        <div class="box">
+          <svg
+            width="165"
+            height="190"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
+          </svg>
+        </div>
+        <figcaption><b>amber-500</b><br />#fe9a00</figcaption>
+      </figure>
+      <figure>
+        <div class="box">
+          <svg
+            width="165"
+            height="190"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
+          </svg>
+        </div>
+        <figcaption><b>orange-600</b><br />#f54900</figcaption>
+      </figure>
+      <figure>
+        <div class="box">
+          <svg
+            width="165"
+            height="190"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
+          </svg>
+        </div>
+        <figcaption><b>orange-700</b><br />#ca3500</figcaption>
+      </figure>
+    </div>
+    <div class="row dark" style="margin-top: 22px">
+      <figure>
+        <svg
+          width="165"
+          height="190"
+          viewBox="95 40 557 640"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+            fill-rule="evenodd"
+            fill="currentColor"
+          />
+          <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+        </svg>
+        <figcaption><b>petrol</b></figcaption>
+      </figure>
+      <figure>
+        <svg
+          width="165"
+          height="190"
+          viewBox="95 40 557 640"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+            fill-rule="evenodd"
+            fill="currentColor"
+          />
+          <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
+        </svg>
+        <figcaption><b>orange-400</b></figcaption>
+      </figure>
+      <figure>
+        <svg
+          width="165"
+          height="190"
+          viewBox="95 40 557 640"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+            fill-rule="evenodd"
+            fill="currentColor"
+          />
+          <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
+        </svg>
+        <figcaption><b>amber-500</b></figcaption>
+      </figure>
+      <figure>
+        <svg
+          width="165"
+          height="190"
+          viewBox="95 40 557 640"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+            fill-rule="evenodd"
+            fill="currentColor"
+          />
+          <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
+        </svg>
+        <figcaption><b>orange-600</b></figcaption>
+      </figure>
+      <figure>
+        <svg
+          width="165"
+          height="190"
+          viewBox="95 40 557 640"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+            fill-rule="evenodd"
+            fill="currentColor"
+          />
+          <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
+        </svg>
+        <figcaption><b>orange-700</b></figcaption>
+      </figure>
+    </div>
+    <div class="row" style="margin-top: 22px">
+      <figure>
+        <span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" /></svg
+        ></span>
+        <figcaption><b>petrol</b> — 64 / 32 / 16</figcaption>
+      </figure>
+      <figure>
+        <span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.75 0.183 55.934)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" /></svg
+        ></span>
+        <figcaption><b>orange-400</b> — 64 / 32 / 16</figcaption>
+      </figure>
+      <figure>
+        <span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.769 0.188 70.08)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.769 0.188 70.08)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" /></svg
+        ></span>
+        <figcaption><b>amber-500</b> — 64 / 32 / 16</figcaption>
+      </figure>
+      <figure>
+        <span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.646 0.222 41.116)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.646 0.222 41.116)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" /></svg
+        ></span>
+        <figcaption><b>orange-600</b> — 64 / 32 / 16</figcaption>
+      </figure>
+      <figure>
+        <span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="56"
+            height="64"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.553 0.195 38.402)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="28"
+            height="32"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path
+              d="M178 40V355L261.5 245L345 355V40Z"
+              fill="oklch(0.553 0.195 38.402)"
+            /></svg></span
+        ><span style="display: inline-block; margin: 0 10px; vertical-align: bottom"
+          ><svg
+            width="14"
+            height="16"
+            viewBox="95 40 557 640"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" /></svg
+        ></span>
+        <figcaption><b>orange-700</b> — 64 / 32 / 16</figcaption>
+      </figure>
+    </div>
 
-<h2>2 · the ribbon colour</h2>
-<p class="sub">04e's geometry throughout; only the ribbon fill changes. The top row is the light theme (mark is near-black); the bottom is the dark theme, where <code>currentColor</code> flips the B to near-white and the fixed ribbon colour does not move.</p>
-<div class="row">
-  <figure><div class="box"><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div><figcaption><b>petrol</b><br>#1c5a60 · today’s signal token</figcaption></figure>
-  <figure><div class="box"><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></div><figcaption><b>orange-400</b><br>#ff8904</figcaption></figure>
-  <figure><div class="box"><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
-</svg></div><figcaption><b>amber-500</b><br>#fe9a00</figcaption></figure>
-  <figure><div class="box"><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
-</svg></div><figcaption><b>orange-600</b><br>#f54900</figcaption></figure>
-  <figure><div class="box"><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
-</svg></div><figcaption><b>orange-700</b><br>#ca3500</figcaption></figure>
-</div>
-<div class="row dark" style="margin-top:22px">
-  <figure><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg><figcaption><b>petrol</b></figcaption></figure>
-  <figure><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg><figcaption><b>orange-400</b></figcaption></figure>
-  <figure><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
-</svg><figcaption><b>amber-500</b></figcaption></figure>
-  <figure><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
-</svg><figcaption><b>orange-600</b></figcaption></figure>
-  <figure><svg width="165" height="190" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
-</svg><figcaption><b>orange-700</b></figcaption></figure>
-</div>
-<div class="row" style="margin-top:22px">
-  <figure><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></span><figcaption><b>petrol</b> — 64 / 32 / 16</figcaption></figure>
-  <figure><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.75 0.183 55.934)" />
-</svg></span><figcaption><b>orange-400</b> — 64 / 32 / 16</figcaption></figure>
-  <figure><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.769 0.188 70.08)" />
-</svg></span><figcaption><b>amber-500</b> — 64 / 32 / 16</figcaption></figure>
-  <figure><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.646 0.222 41.116)" />
-</svg></span><figcaption><b>orange-600</b> — 64 / 32 / 16</figcaption></figure>
-  <figure><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="56" height="64" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="28" height="32" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
-</svg></span><span style="display:inline-block;margin:0 10px;vertical-align:bottom"><svg width="14" height="16" viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.553 0.195 38.402)" />
-</svg></span><figcaption><b>orange-700</b> — 64 / 32 / 16</figcaption></figure>
-</div>
-
-<h2>3 · can it be the app accent too?</h2>
-<p class="sub">WCAG contrast. The accent in <code>globals.css</code> is spent on prose links, feature marks and the featured plan — all of it text on white, which needs 4.5. The ribbon is a large shape and needs no minimum, but it does need to be told apart from the B it sits inside, in both themes.</p>
-<table>
-  <tr><th>colour</th><th>vs white<br><span style="font-weight:400">(link text — needs 4.5)</span></th><th>vs B, light theme<br><span style="font-weight:400">(ribbon legibility)</span></th><th>vs B, dark theme<br><span style="font-weight:400">(ribbon legibility)</span></th></tr>
-  <tr><td><span class="sw" style="background:#1c5a60"></span>petrol <span style="color:#9ca3af">#1c5a60</span></td><td><span style="color:#15803d;font-weight:600">7.83</span></td><td><span style="color:#b91c1c;font-weight:600">2.53</span></td><td><span style="color:#15803d;font-weight:600">7.51</span></td></tr>
-  <tr><td><span class="sw" style="background:#ff8904"></span>orange-400 <span style="color:#9ca3af">#ff8904</span></td><td><span style="color:#b91c1c;font-weight:600">2.38</span></td><td><span style="color:#15803d;font-weight:600">8.33</span></td><td><span style="color:#b91c1c;font-weight:600">2.28</span></td></tr>
-  <tr><td><span class="sw" style="background:#fe9a00"></span>amber-500 <span style="color:#9ca3af">#fe9a00</span></td><td><span style="color:#b91c1c;font-weight:600">2.13</span></td><td><span style="color:#15803d;font-weight:600">9.27</span></td><td><span style="color:#b91c1c;font-weight:600">2.05</span></td></tr>
-  <tr><td><span class="sw" style="background:#f54900"></span>orange-600 <span style="color:#9ca3af">#f54900</span></td><td><span style="color:#b91c1c;font-weight:600">3.60</span></td><td><span style="color:#15803d;font-weight:600">5.50</span></td><td><span style="color:#15803d;font-weight:600">3.45</span></td></tr>
-  <tr><td><span class="sw" style="background:#ca3500"></span>orange-700 <span style="color:#9ca3af">#ca3500</span></td><td><span style="color:#15803d;font-weight:600">5.22</span></td><td><span style="color:#15803d;font-weight:600">3.79</span></td><td><span style="color:#15803d;font-weight:600">5.00</span></td></tr>
-</table>
-
-</body></html>
+    <h2>3 · can it be the app accent too?</h2>
+    <p class="sub">
+      WCAG contrast. The accent in <code>globals.css</code> is spent on prose links, feature marks
+      and the featured plan — all of it text on white, which needs 4.5. The ribbon is a large shape
+      and needs no minimum, but it does need to be told apart from the B it sits inside, in both
+      themes.
+    </p>
+    <table>
+      <tr>
+        <th>colour</th>
+        <th>vs white<br /><span style="font-weight: 400">(link text — needs 4.5)</span></th>
+        <th>vs B, light theme<br /><span style="font-weight: 400">(ribbon legibility)</span></th>
+        <th>vs B, dark theme<br /><span style="font-weight: 400">(ribbon legibility)</span></th>
+      </tr>
+      <tr>
+        <td>
+          <span class="sw" style="background: #1c5a60"></span>petrol
+          <span style="color: #9ca3af">#1c5a60</span>
+        </td>
+        <td><span style="color: #15803d; font-weight: 600">7.83</span></td>
+        <td><span style="color: #b91c1c; font-weight: 600">2.53</span></td>
+        <td><span style="color: #15803d; font-weight: 600">7.51</span></td>
+      </tr>
+      <tr>
+        <td>
+          <span class="sw" style="background: #ff8904"></span>orange-400
+          <span style="color: #9ca3af">#ff8904</span>
+        </td>
+        <td><span style="color: #b91c1c; font-weight: 600">2.38</span></td>
+        <td><span style="color: #15803d; font-weight: 600">8.33</span></td>
+        <td><span style="color: #b91c1c; font-weight: 600">2.28</span></td>
+      </tr>
+      <tr>
+        <td>
+          <span class="sw" style="background: #fe9a00"></span>amber-500
+          <span style="color: #9ca3af">#fe9a00</span>
+        </td>
+        <td><span style="color: #b91c1c; font-weight: 600">2.13</span></td>
+        <td><span style="color: #15803d; font-weight: 600">9.27</span></td>
+        <td><span style="color: #b91c1c; font-weight: 600">2.05</span></td>
+      </tr>
+      <tr>
+        <td>
+          <span class="sw" style="background: #f54900"></span>orange-600
+          <span style="color: #9ca3af">#f54900</span>
+        </td>
+        <td><span style="color: #b91c1c; font-weight: 600">3.60</span></td>
+        <td><span style="color: #15803d; font-weight: 600">5.50</span></td>
+        <td><span style="color: #15803d; font-weight: 600">3.45</span></td>
+      </tr>
+      <tr>
+        <td>
+          <span class="sw" style="background: #ca3500"></span>orange-700
+          <span style="color: #9ca3af">#ca3500</span>
+        </td>
+        <td><span style="color: #15803d; font-weight: 600">5.22</span></td>
+        <td><span style="color: #15803d; font-weight: 600">3.79</span></td>
+        <td><span style="color: #15803d; font-weight: 600">5.00</span></td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -18,7 +18,11 @@ const BG_DARK = '#0b1220';
 
 function load(file) {
   const s = fs.readFileSync(file, 'utf8');
-  const vb = s.match(/viewBox="([^"]+)"/)[1].trim().split(/\s+/).map(Number);
+  const vb = s
+    .match(/viewBox="([^"]+)"/)[1]
+    .trim()
+    .split(/\s+/)
+    .map(Number);
   const d = [...s.matchAll(/ d="([^"]+)"/g)].map((m) => m[1]).join(' ');
   return { d, x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
 }
@@ -53,7 +57,9 @@ function inline(m, cls) {
 
 async function pngUri(svg) {
   // density 72 => the SVG's declared width/height IS the output pixel size
-  const buf = await sharp(Buffer.from(svg), { density: 72 }).png({ compressionLevel: 9 }).toBuffer();
+  const buf = await sharp(Buffer.from(svg), { density: 72 })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
   return 'data:image/png;base64,' + buf.toString('base64');
 }
 
@@ -83,8 +89,14 @@ async function measure(m) {
       const on = data[(y * info.width + x) * info.channels + info.channels - 1] > 127;
       if (on) {
         ink++;
-        if (!inSeg) { inSeg = true; st = x; }
-      } else if (inSeg) { inSeg = false; segs.push([st, x - 1]); }
+        if (!inSeg) {
+          inSeg = true;
+          st = x;
+        }
+      } else if (inSeg) {
+        inSeg = false;
+        segs.push([st, x - 1]);
+      }
     }
     if (inSeg) segs.push([st, info.width - 1]);
     rows.push(segs);
@@ -96,14 +108,20 @@ async function measure(m) {
   for (let y = 0; y < PROFILE_H; y++) if (rows[y].length > 1) multi.push(y);
   let gap = [multi[0], multi.at(-1)];
   for (let k = 1; k < multi.length; k++) {
-    if (multi[k] - multi[k - 1] > 1) { gap = [multi[k - 1], multi[k]]; break; }
+    if (multi[k] - multi[k - 1] > 1) {
+      gap = [multi[k - 1], multi[k]];
+      break;
+    }
   }
 
   let waist = Infinity;
   let waistY = 0;
   for (let y = gap[0]; y <= gap[1]; y++) {
     const w = width(y);
-    if (w < waist) { waist = w; waistY = y; }
+    if (w < waist) {
+      waist = w;
+      waistY = y;
+    }
   }
   let upper = 0;
   for (let y = 0; y < gap[0]; y++) upper = Math.max(upper, width(y));
@@ -114,12 +132,21 @@ async function measure(m) {
   const stem = stemSeg[1] - stemSeg[0] + 1;
 
   const counter = (y0, y1) => {
-    let x0 = Infinity, x1 = -1, t0 = Infinity, t1 = -1;
+    let x0 = Infinity,
+      x1 = -1,
+      t0 = Infinity,
+      t1 = -1;
     for (let y = y0; y <= y1; y++) {
       const s = rows[y];
       for (let k = 1; k < s.length; k++) {
-        const a = s[k - 1][1] + 1, b = s[k][0] - 1;
-        if (b >= a) { x0 = Math.min(x0, a); x1 = Math.max(x1, b); t0 = Math.min(t0, y); t1 = Math.max(t1, y); }
+        const a = s[k - 1][1] + 1,
+          b = s[k][0] - 1;
+        if (b >= a) {
+          x0 = Math.min(x0, a);
+          x1 = Math.max(x1, b);
+          t0 = Math.min(t0, y);
+          t1 = Math.max(t1, y);
+        }
       }
     }
     return { w: (100 * (x1 - x0 + 1)) / W, h: (100 * (t1 - t0 + 1)) / PROFILE_H };
@@ -171,7 +198,8 @@ async function measure(m) {
 
   const oneToOne = (key, theme) =>
     LADDER.map(
-      (s) => `<div class="cell1"><img src="${raster[key][s][theme]}" width="${s}" height="${s}" alt=""></div>`
+      (s) =>
+        `<div class="cell1"><img src="${raster[key][s][theme]}" width="${s}" height="${s}" alt=""></div>`,
     ).join('');
 
   const row = (label, cells) => `<tr><th>${label}</th>${cells}</tr>`;
@@ -409,7 +437,7 @@ ${['draft4', '01', '06']
   <div class="mask">
     <div class="frame squircle tile">${tile(MARKS[k].mark, 128, FG_LIGHT, BG_LIGHT, 1)}</div>
     <div class="cap">${MARKS[k].label}<br>iOS squircle, bleed</div>
-  </div>`
+  </div>`,
   )
   .join('')}
 </div>
@@ -424,7 +452,7 @@ ${['draft4', '01', '06']
       <svg class="safe" viewBox="0 0 128 128"><circle cx="64" cy="64" r="51.2"/></svg>
     </div>
     <div class="cap">${MARKS[k].label}<br>82% + safe zone</div>
-  </div>`
+  </div>`,
   )
   .join('')}
 </div>
@@ -436,7 +464,7 @@ ${['draft4', '01', '06']
   <div class="mask">
     <div class="frame circle tile">${tile(MARKS[k].mark, 128, FG_LIGHT, BG_LIGHT, 0.62)}</div>
     <div class="cap">${MARKS[k].label}<br>Android circle, 62%</div>
-  </div>`
+  </div>`,
   )
   .join('')}
 </div>
@@ -458,17 +486,19 @@ ${['draft4', '01', '06']
   ${inline(MARKS[k].mark, 'x').replace('<svg ', '<svg style="height:13px;width:auto;display:block" ')}
   <span class="wordmark" style="font-size:18px">Bracemark</span>
   <span style="font-size:12px;color:var(--muted);margin-left:12px">${MARKS[k].label}</span>
-</div>`
+</div>`,
   )
   .join('')}
 
 <h3>sidebar row, 20px</h3>
 ${['draft4', '01']
   .map(
-    (k) => `<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;width:280px;border-radius:8px;background:var(--panel);margin-bottom:8px">
+    (
+      k,
+    ) => `<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;width:280px;border-radius:8px;background:var(--panel);margin-bottom:8px">
   ${inline(MARKS[k].mark, 'x').replace('<svg ', '<svg style="height:20px;width:auto;display:block" ')}
   <span>All links</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${k}</span>
-</div>`
+</div>`,
   )
   .join('')}
 

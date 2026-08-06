@@ -67,7 +67,7 @@ const html = `<!doctype html>
 <div class="hero">
 ${ITEMS.map(
   ([f, n, d]) =>
-    `  <div><div class="box">${inline(f, 200)}</div><div class="name">${n}</div><div class="note">${d}</div></div>`
+    `  <div><div class="box">${inline(f, 200)}</div><div class="name">${n}</div><div class="note">${d}</div></div>`,
 ).join('\n')}
 </div>
 

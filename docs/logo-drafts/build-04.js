@@ -39,8 +39,7 @@ const ACCENT = 'oklch(0.75 0.183 55.934)';
 const svg = (body, comment) =>
   `${comment}\n<svg viewBox="${VIEWBOX}" fill="none" xmlns="http://www.w3.org/2000/svg">\n${body}\n</svg>\n`;
 
-const onePath = (d) =>
-  `  <path d="${d}" fill-rule="evenodd" fill="currentColor" />`;
+const onePath = (d) => `  <path d="${d}" fill-rule="evenodd" fill="currentColor" />`;
 
 const files = {};
 
@@ -51,7 +50,7 @@ const files = {};
 // against draft1's 11%). Stem widened 83→85 by moving the ribbon right.
 files['04a-ribbon-proportioned.svg'] = svg(
   onePath(B + rib(180, 300, 320, 225)),
-  `<!-- 04a — RIBBON, RE-PROPORTIONED. draft2's B untouched; only the ribbon\n     changes: 150×153 (square) becomes 120×280 (1:2.3), and the swallowtail\n     goes from 37% to 34% of a much longer ribbon, so the tail reads as a tail\n     instead of as a chevron. This is the smallest change that makes the\n     negative space say "bookmark".\n     What it does NOT fix: 56% of the mark's width is still unbroken ink to the\n     right of the ribbon, because the B has no counters. See the 16px row. -->`
+  `<!-- 04a — RIBBON, RE-PROPORTIONED. draft2's B untouched; only the ribbon\n     changes: 150×153 (square) becomes 120×280 (1:2.3), and the swallowtail\n     goes from 37% to 34% of a much longer ribbon, so the tail reads as a tail\n     instead of as a chevron. This is the smallest change that makes the\n     negative space say "bookmark".\n     What it does NOT fix: 56% of the mark's width is still unbroken ink to the\n     right of the ribbon, because the B has no counters. See the 16px row. -->`,
 );
 
 // ── 04b ── the ribbon doubles as the upper counter, and the lower counter
@@ -59,12 +58,8 @@ files['04a-ribbon-proportioned.svg'] = svg(
 // The ribbon is widened to 182 so it occupies the space an upper counter
 // would, and a stadium-shaped lower counter breaks the bottom mass.
 files['04b-ribbon-counters.svg'] = svg(
-  onePath(
-    B +
-      rib(178, 345, 355, 245) +
-      'M178 430H485A85 85 0 0 1 485 600H178Z'
-  ),
-  `<!-- 04b — RIBBON AS COUNTER, PLUS A LOWER COUNTER. The one study here that\n     edits the B, because the ribbon alone cannot carry the letter: a B needs\n     two counters and draft1/draft2 have none, which is why they go to a solid\n     blob when you shrink them. On the 16px row this is the only one of the\n     five still legible as a letter.\n     The ribbon is 167 × 315 (1:1.9) with a 110-deep swallowtail (35%) — wide\n     enough to sit where the upper counter belongs and do that job as well as\n     its own, long enough to still read as a ribbon. A stadium counter opens\n     the lower bowl; its left edge is aligned with the ribbon's at x=178 so the\n     stem holds one width down the whole letter, and the bars around it come\n     out 75 top / 82 right / 80 bottom, near enough even. -->`
+  onePath(B + rib(178, 345, 355, 245) + 'M178 430H485A85 85 0 0 1 485 600H178Z'),
+  `<!-- 04b — RIBBON AS COUNTER, PLUS A LOWER COUNTER. The one study here that\n     edits the B, because the ribbon alone cannot carry the letter: a B needs\n     two counters and draft1/draft2 have none, which is why they go to a solid\n     blob when you shrink them. On the 16px row this is the only one of the\n     five still legible as a letter.\n     The ribbon is 167 × 315 (1:1.9) with a 110-deep swallowtail (35%) — wide\n     enough to sit where the upper counter belongs and do that job as well as\n     its own, long enough to still read as a ribbon. A stadium counter opens\n     the lower bowl; its left edge is aligned with the ribbon's at x=178 so the\n     stem holds one width down the whole letter, and the bars around it come\n     out 75 top / 82 right / 80 bottom, near enough even. -->`,
 );
 
 // ── 04c ── the reference's structure in one colour: ribbon above, page edges
@@ -75,7 +70,7 @@ const pages = [545, 585, 625]
   .join('');
 files['04c-ribbon-pages.svg'] = svg(
   onePath(B + rib(180, 300, 320, 225) + pages),
-  `<!-- 04c — RIBBON + PAGE EDGES, ONE COLOUR. The structure of the reference\n     screenshot: ribbon in the upper bowl, the stacked page edges of a book in\n     the lower one. Worth seeing because the page lines are doing a counter's\n     job — they are the reason the reference does not read as a blob even\n     though its B, like draft2's, has no counters.\n     They are interior detail rather than silhouette, so they are the first\n     thing to go when it shrinks. That is the trade the 16px row prices. -->`
+  `<!-- 04c — RIBBON + PAGE EDGES, ONE COLOUR. The structure of the reference\n     screenshot: ribbon in the upper bowl, the stacked page edges of a book in\n     the lower one. Worth seeing because the page lines are doing a counter's\n     job — they are the reason the reference does not read as a blob even\n     though its B, like draft2's, has no counters.\n     They are interior detail rather than silhouette, so they are the first\n     thing to go when it shrinks. That is the trade the 16px row prices. -->`,
 );
 
 // ── 04d ── the reference's look: an accent ribbon on the near-black B.
@@ -86,7 +81,7 @@ files['04d-ribbon-accent.svg'] = svg(
   // inside an XML comment, and while a browser will forgive it when the SVG is
   // inlined into HTML, it makes the standalone .svg file unparseable. So the
   // custom properties are named here without their leading dashes.
-  `<!-- 04d — ACCENT RIBBON. The reference's move: the ribbon coloured rather\n     than knocked out. Tailwind orange-400, oklch(0.75 0.183 55.934).\n     COST, and it is not small: this is two colours and one of them is fixed,\n     so the mark stops being a single currentColor path. Read the header of\n     packages/web-ui/src/components/icons/bracemark-icon.tsx before adopting\n     it — the brand-mark / brand-mark-dot token pair that was deleted from\n     styles.css existed for exactly this reason, and this reintroduces the\n     need for it. It also no longer composes on an arbitrary surface.\n     The letterform is still 04a's, so this is a blob at 16px however good the\n     ribbon colour is. 04e is this colour on a letterform that survives. -->`
+  `<!-- 04d — ACCENT RIBBON. The reference's move: the ribbon coloured rather\n     than knocked out. Tailwind orange-400, oklch(0.75 0.183 55.934).\n     COST, and it is not small: this is two colours and one of them is fixed,\n     so the mark stops being a single currentColor path. Read the header of\n     packages/web-ui/src/components/icons/bracemark-icon.tsx before adopting\n     it — the brand-mark / brand-mark-dot token pair that was deleted from\n     styles.css existed for exactly this reason, and this reintroduces the\n     need for it. It also no longer composes on an arbitrary surface.\n     The letterform is still 04a's, so this is a blob at 16px however good the\n     ribbon colour is. 04e is this colour on a letterform that survives. -->`,
 );
 
 // ── 04e ── 04b's geometry with 04d's colour. Downscaling the reference
@@ -97,7 +92,7 @@ files['04d-ribbon-accent.svg'] = svg(
 files['04e-counters-accent.svg'] = svg(
   `  <path d="${B}M178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />\n` +
     `  <path d="${rib(178, 345, 355, 245)}" fill="${ACCENT}" />`,
-  `<!-- 04e — 04b's GEOMETRY, 04d's COLOUR. The recommendation.\n     04b is the only study whose letter survives 16px, and downscaling the\n     reference screenshot to 16px shows why colour is worth spending there:\n     its page lines and its swallowtail are gone at that size but the coloured\n     ribbon is still unmistakable. Colour is the one attribute that does not\n     degrade with resolution — provided it actually contrasts with the mark it\n     sits in, which is why this is orange-400 and not the site's petrol. See\n     the ACCENT note at the top of build-04.js.\n     Same trade as 04d, and it is a real one: two colours, one of them fixed,\n     so this is no longer a single currentColor path. It will need a token pair\n     back in styles.css and it will not compose on an arbitrary surface — read\n     the header of packages/web-ui/src/components/icons/bracemark-icon.tsx,\n     which explains why the last pair was deleted. -->`
+  `<!-- 04e — 04b's GEOMETRY, 04d's COLOUR. The recommendation.\n     04b is the only study whose letter survives 16px, and downscaling the\n     reference screenshot to 16px shows why colour is worth spending there:\n     its page lines and its swallowtail are gone at that size but the coloured\n     ribbon is still unmistakable. Colour is the one attribute that does not\n     degrade with resolution — provided it actually contrasts with the mark it\n     sits in, which is why this is orange-400 and not the site's petrol. See\n     the ACCENT note at the top of build-04.js.\n     Same trade as 04d, and it is a real one: two colours, one of them fixed,\n     so this is no longer a single currentColor path. It will need a token pair\n     back in styles.css and it will not compose on an arbitrary surface — read\n     the header of packages/web-ui/src/components/icons/bracemark-icon.tsx,\n     which explains why the last pair was deleted. -->`,
 );
 
 // ── 04f / 04g ── does the ribbon's top want a curl?
@@ -115,12 +110,12 @@ const RIB_BODY = 'V355L261.5 245L345 355V100';
 files['04f-curl-drape.svg'] = svg(
   `  <path d="${B}M178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />\n` +
     `  <path d="M155 40C165 70 170 85 178 100${RIB_BODY}C337 85 330 70 315 40Z" fill="${ACCENT}" />`,
-  `<!-- 04f — CURL, DRAPED. draft3's top-of-ribbon gesture rebuilt as geometry\n     rather than as opaque overlays, on 04b's letterform. The ribbon leans:\n     wider to the left at the top edge, settling right as it falls, so it\n     reads as lying ACROSS the cover.\n     It is a 512px refinement. Below about 128px it is gone — see the ladder. -->`
+  `<!-- 04f — CURL, DRAPED. draft3's top-of-ribbon gesture rebuilt as geometry\n     rather than as opaque overlays, on 04b's letterform. The ribbon leans:\n     wider to the left at the top edge, settling right as it falls, so it\n     reads as lying ACROSS the cover.\n     It is a 512px refinement. Below about 128px it is gone — see the ladder. -->`,
 );
 files['04g-curl-taper.svg'] = svg(
   `  <path d="${B}M178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />\n` +
     `  <path d="M196 40C188 68 180 86 178 100${RIB_BODY}C343 86 335 68 327 40Z" fill="${ACCENT}" />`,
-  `<!-- 04g — CURL, SYMMETRIC. The same flare taken to both sides: 131 wide at\n     the top edge, 167 by y=100. Reads as the ribbon coming out from BEHIND\n     the cover rather than draping over it, and unlike 04f it does not make the\n     ribbon look like it is leaning. Also a 512px-only refinement. -->`
+  `<!-- 04g — CURL, SYMMETRIC. The same flare taken to both sides: 131 wide at\n     the top edge, 167 by y=100. Reads as the ribbon coming out from BEHIND\n     the cover rather than draping over it, and unlike 04f it does not make the\n     ribbon look like it is leaning. Also a 512px-only refinement. -->`,
 );
 
 for (const [name, content] of Object.entries(files)) {

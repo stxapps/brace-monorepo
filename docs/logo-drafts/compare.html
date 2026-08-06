@@ -1,775 +1,2104 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><style>
-  :root { --fg: oklch(0.145 0 0); --bg: #fff; --muted: #6b7280; --rule: #e5e7eb; }
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 40px; background: var(--bg); color: var(--fg);
-         font: 13px/1.5 ui-sans-serif, -apple-system, "Helvetica Neue", sans-serif; width: 1280px; }
-  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
-       margin: 44px 0 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
-  .sub { color: var(--muted); margin: 0 0 8px; }
-  .hero { display: flex; gap: 28px; }
-  .hero > div { flex: 1; text-align: center; }
-  .hero .box { background: #fafafa; border: 1px solid var(--rule); border-radius: 10px;
-               padding: 24px 8px; display: flex; align-items: center; justify-content: center; height: 230px; }
-  .name { font-weight: 600; margin-top: 10px; }
-  .note { color: var(--muted); font-size: 12px; }
-  table { border-collapse: collapse; width: 100%; }
-  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
-       font-weight: 500; text-align: center; padding-bottom: 10px; }
-  th.l, td.l { text-align: left; width: 200px; }
-  td { text-align: center; padding: 14px 0; border-top: 1px solid var(--rule); vertical-align: middle; }
-  td.l { font-weight: 600; }
-  .dark { background: oklch(0.145 0 0); color: oklch(0.985 0 0); border-radius: 10px; padding: 24px 28px; }
-  .dark th, .dark .note { color: #9ca3af; }
-  .dark td { border-top: 1px solid #262626; }
-  .strip16 { display: flex; gap: 40px; align-items: center; padding: 10px 0; }
-  .maskable { display: flex; gap: 32px; }
-  .maskable figure { margin: 0; text-align: center; }
-  .mwrap { position: relative; width: 192px; height: 192px; border: 1px solid var(--rule);
-           border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
-  .mwrap::after { content: ""; position: absolute; inset: 10%; border: 2px dashed #dc2626;
-                  border-radius: 50%; pointer-events: none; }
-  figcaption { font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .pixrow { display: flex; gap: 26px; }
-  .pixrow figure { margin: 0; text-align: center; }
-  .pixrow canvas { image-rendering: pixelated; border: 1px solid var(--rule); border-radius: 6px; }
-  .pixrow canvas + canvas { margin-top: 8px; }
-</style></head><body>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --fg: oklch(0.145 0 0);
+        --bg: #fff;
+        --muted: #6b7280;
+        --rule: #e5e7eb;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          13px/1.5 ui-sans-serif,
+          -apple-system,
+          'Helvetica Neue',
+          sans-serif;
+        width: 1280px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin: 44px 0 16px;
+        border-top: 1px solid var(--rule);
+        padding-top: 12px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 8px;
+      }
+      .hero {
+        display: flex;
+        gap: 28px;
+      }
+      .hero > div {
+        flex: 1;
+        text-align: center;
+      }
+      .hero .box {
+        background: #fafafa;
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        padding: 24px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 230px;
+      }
+      .name {
+        font-weight: 600;
+        margin-top: 10px;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        font-weight: 500;
+        text-align: center;
+        padding-bottom: 10px;
+      }
+      th.l,
+      td.l {
+        text-align: left;
+        width: 200px;
+      }
+      td {
+        text-align: center;
+        padding: 14px 0;
+        border-top: 1px solid var(--rule);
+        vertical-align: middle;
+      }
+      td.l {
+        font-weight: 600;
+      }
+      .dark {
+        background: oklch(0.145 0 0);
+        color: oklch(0.985 0 0);
+        border-radius: 10px;
+        padding: 24px 28px;
+      }
+      .dark th,
+      .dark .note {
+        color: #9ca3af;
+      }
+      .dark td {
+        border-top: 1px solid #262626;
+      }
+      .strip16 {
+        display: flex;
+        gap: 40px;
+        align-items: center;
+        padding: 10px 0;
+      }
+      .maskable {
+        display: flex;
+        gap: 32px;
+      }
+      .maskable figure {
+        margin: 0;
+        text-align: center;
+      }
+      .mwrap {
+        position: relative;
+        width: 192px;
+        height: 192px;
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fafafa;
+      }
+      .mwrap::after {
+        content: '';
+        position: absolute;
+        inset: 10%;
+        border: 2px dashed #dc2626;
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      figcaption {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .pixrow {
+        display: flex;
+        gap: 26px;
+      }
+      .pixrow figure {
+        margin: 0;
+        text-align: center;
+      }
+      .pixrow canvas {
+        image-rendering: pixelated;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+      }
+      .pixrow canvas + canvas {
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Bracemark logo — variant comparison</h1>
+    <p class="sub">
+      All five on the same 38×44 grid used by <code>bracemark-icon.tsx</code>, so any winner is a
+      drop-in path swap.
+    </p>
 
-<h1>Bracemark logo — variant comparison</h1>
-<p class="sub">All five on the same 38×44 grid used by <code>bracemark-icon.tsx</code>, so any winner is a drop-in path swap.</p>
+    <h2>512 px — where you fall in love with a mark</h2>
+    <div class="hero">
+      <div>
+        <div class="box">
+          <svg
+            width="172.72727272727272"
+            height="200"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">01 · baseline</div>
+        <div class="note">shipping today — dog-eared B</div>
+      </div>
+      <div>
+        <div class="box">
+          <svg
+            width="172.72727272727272"
+            height="200"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">02 · dog-ear, deepened</div>
+        <div class="note">cut 11→13, parallel chamfer</div>
+      </div>
+      <div>
+        <div class="box">
+          <svg
+            width="172.72727272727272"
+            height="200"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">03 · ribbon knockout</div>
+        <div class="note">draft1's idea, repaired</div>
+      </div>
+      <div>
+        <div class="box">
+          <svg
+            width="172.72727272727272"
+            height="200"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">04 · draft1</div>
+        <div class="note">traced from your PNG</div>
+      </div>
+      <div>
+        <div class="box">
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </div>
+        <div class="name">04-draft2.svg</div>
+        <div class="note"></div>
+      </div>
+      <div>
+        <div class="box">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">04a-ribbon-proportioned.svg</div>
+        <div class="note"></div>
+      </div>
+      <div>
+        <div class="box">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">04b-ribbon-counters.svg</div>
+        <div class="note"></div>
+      </div>
+      <div>
+        <div class="box">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <div class="name">04c-ribbon-pages.svg</div>
+        <div class="note"></div>
+      </div>
+      <div>
+        <div class="box">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <div class="name">04d-ribbon-petrol.svg</div>
+        <div class="note"></div>
+      </div>
+      <div>
+        <div class="box">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <div class="name">04e-counters-petrol.svg</div>
+        <div class="note"></div>
+      </div>
+      <div>
+        <div class="box">
+          <svg
+            width="172.72727272727272"
+            height="200"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </div>
+        <div class="name">05 · brace spine</div>
+        <div class="note">{ + B — argues from the name</div>
+      </div>
+    </div>
 
-<h2>512 px — where you fall in love with a mark</h2>
-<div class="hero">
-  <div>
-    <div class="box"><svg width="172.72727272727272" height="200" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <div class="name">01 · baseline</div>
-    <div class="note">shipping today — dog-eared B</div>
-  </div>
-  <div>
-    <div class="box"><svg width="172.72727272727272" height="200" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <div class="name">02 · dog-ear, deepened</div>
-    <div class="note">cut 11→13, parallel chamfer</div>
-  </div>
-  <div>
-    <div class="box"><svg width="172.72727272727272" height="200" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <div class="name">03 · ribbon knockout</div>
-    <div class="note">draft1's idea, repaired</div>
-  </div>
-  <div>
-    <div class="box"><svg width="172.72727272727272" height="200" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <div class="name">04 · draft1</div>
-    <div class="note">traced from your PNG</div>
-  </div>
-  <div>
-    <div class="box"><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></div>
-    <div class="name">04-draft2.svg</div>
-    <div class="note"></div>
-  </div>
-  <div>
-    <div class="box"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <div class="name">04a-ribbon-proportioned.svg</div>
-    <div class="note"></div>
-  </div>
-  <div>
-    <div class="box"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <div class="name">04b-ribbon-counters.svg</div>
-    <div class="note"></div>
-  </div>
-  <div>
-    <div class="box"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <div class="name">04c-ribbon-pages.svg</div>
-    <div class="note"></div>
-  </div>
-  <div>
-    <div class="box"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div>
-    <div class="name">04d-ribbon-petrol.svg</div>
-    <div class="note"></div>
-  </div>
-  <div>
-    <div class="box"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div>
-    <div class="name">04e-counters-petrol.svg</div>
-    <div class="note"></div>
-  </div>
-  <div>
-    <div class="box"><svg width="172.72727272727272" height="200" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></div>
-    <div class="name">05 · brace spine</div>
-    <div class="note">{ + B — argues from the name</div>
-  </div>
-</div>
+    <h2>The size ladder — where you decide</h2>
+    <table>
+      <tr>
+        <th class="l">variant</th>
+        <th>128px</th>
+        <th>64px</th>
+        <th>32px</th>
+        <th>16px</th>
+      </tr>
+      <tr>
+        <td class="l">01 · baseline</td>
+        <td>
+          <svg
+            width="110.54545454545455"
+            height="128"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="55.27272727272727"
+            height="64"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="27.636363636363637"
+            height="32"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="13.818181818181818"
+            height="16"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">02 · dog-ear, deepened</td>
+        <td>
+          <svg
+            width="110.54545454545455"
+            height="128"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="55.27272727272727"
+            height="64"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="27.636363636363637"
+            height="32"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="13.818181818181818"
+            height="16"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">03 · ribbon knockout</td>
+        <td>
+          <svg
+            width="110.54545454545455"
+            height="128"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="55.27272727272727"
+            height="64"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="27.636363636363637"
+            height="32"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="13.818181818181818"
+            height="16"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04 · draft1</td>
+        <td>
+          <svg
+            width="110.54545454545455"
+            height="128"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="55.27272727272727"
+            height="64"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="27.636363636363637"
+            height="32"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="13.818181818181818"
+            height="16"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04-draft2.svg</td>
+        <td>
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04a-ribbon-proportioned.svg</td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04b-ribbon-counters.svg</td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04c-ribbon-pages.svg</td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04d-ribbon-petrol.svg</td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">04e-counters-petrol.svg</td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+        <td>
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </td>
+      </tr>
+      <tr>
+        <td class="l">05 · brace spine</td>
+        <td>
+          <svg
+            width="110.54545454545455"
+            height="128"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="55.27272727272727"
+            height="64"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="27.636363636363637"
+            height="32"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </td>
+        <td>
+          <svg
+            width="13.818181818181818"
+            height="16"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </td>
+      </tr>
+    </table>
 
-<h2>The size ladder — where you decide</h2>
-<table>
-  <tr><th class="l">variant</th><th>128px</th><th>64px</th><th>32px</th><th>16px</th></tr>
-  <tr><td class="l">01 · baseline</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-  <tr><td class="l">02 · dog-ear, deepened</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-  <tr><td class="l">03 · ribbon knockout</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-  <tr><td class="l">04 · draft1</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-  <tr><td class="l">04-draft2.svg</td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td></tr>
-  <tr><td class="l">04a-ribbon-proportioned.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td></tr>
-  <tr><td class="l">04b-ribbon-counters.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td></tr>
-  <tr><td class="l">04c-ribbon-pages.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td></tr>
-  <tr><td class="l">04d-ribbon-petrol.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td></tr>
-  <tr><td class="l">04e-counters-petrol.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td></tr>
-  <tr><td class="l">05 · brace spine</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td></tr>
-</table>
+    <h2>Dark surface — currentColor inverts, nothing else changes</h2>
+    <div class="dark">
+      <table>
+        <tr>
+          <th class="l">variant</th>
+          <th>128px</th>
+          <th>64px</th>
+          <th>32px</th>
+          <th>16px</th>
+        </tr>
+        <tr>
+          <td class="l">01 · baseline</td>
+          <td>
+            <svg
+              width="110.54545454545455"
+              height="128"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="55.27272727272727"
+              height="64"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="27.636363636363637"
+              height="32"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="13.818181818181818"
+              height="16"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">02 · dog-ear, deepened</td>
+          <td>
+            <svg
+              width="110.54545454545455"
+              height="128"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="55.27272727272727"
+              height="64"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="27.636363636363637"
+              height="32"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="13.818181818181818"
+              height="16"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">03 · ribbon knockout</td>
+          <td>
+            <svg
+              width="110.54545454545455"
+              height="128"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="55.27272727272727"
+              height="64"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="27.636363636363637"
+              height="32"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="13.818181818181818"
+              height="16"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04 · draft1</td>
+          <td>
+            <svg
+              width="110.54545454545455"
+              height="128"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="55.27272727272727"
+              height="64"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="27.636363636363637"
+              height="32"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="13.818181818181818"
+              height="16"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04-draft2.svg</td>
+          <td>
+            <svg
+              width="720"
+              height="720"
+              viewBox="0 0 720 720"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect width="720" height="720" fill="white" />
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="#1A202C"
+              />
+              <path
+                d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+                fill="white"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="720"
+              height="720"
+              viewBox="0 0 720 720"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect width="720" height="720" fill="white" />
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="#1A202C"
+              />
+              <path
+                d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+                fill="white"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="720"
+              height="720"
+              viewBox="0 0 720 720"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect width="720" height="720" fill="white" />
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="#1A202C"
+              />
+              <path
+                d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+                fill="white"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="720"
+              height="720"
+              viewBox="0 0 720 720"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect width="720" height="720" fill="white" />
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="#1A202C"
+              />
+              <path
+                d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+                fill="white"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04a-ribbon-proportioned.svg</td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04b-ribbon-counters.svg</td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04c-ribbon-pages.svg</td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04d-ribbon-petrol.svg</td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="currentColor"
+              />
+              <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="currentColor"
+              />
+              <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="currentColor"
+              />
+              <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+                fill="currentColor"
+              />
+              <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">04e-counters-petrol.svg</td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+              <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+              <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+              <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+          <td>
+            <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+                fill-rule="evenodd"
+                fill="currentColor"
+              />
+              <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+            </svg>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">05 · brace spine</td>
+          <td>
+            <svg
+              width="110.54545454545455"
+              height="128"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <g
+                stroke="currentColor"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              >
+                <path
+                  d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+                />
+                <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+                <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+              </g>
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="55.27272727272727"
+              height="64"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <g
+                stroke="currentColor"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              >
+                <path
+                  d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+                />
+                <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+                <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+              </g>
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="27.636363636363637"
+              height="32"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <g
+                stroke="currentColor"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              >
+                <path
+                  d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+                />
+                <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+                <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+              </g>
+            </svg>
+          </td>
+          <td>
+            <svg
+              width="13.818181818181818"
+              height="16"
+              viewBox="0 0 38 44"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <g
+                stroke="currentColor"
+                stroke-width="4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              >
+                <path
+                  d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+                />
+                <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+                <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+              </g>
+            </svg>
+          </td>
+        </tr>
+      </table>
+    </div>
 
-<h2>Dark surface — currentColor inverts, nothing else changes</h2>
-<div class="dark">
-  <table>
-    <tr><th class="l">variant</th><th>128px</th><th>64px</th><th>32px</th><th>16px</th></tr>
-    <tr><td class="l">01 · baseline</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-    <tr><td class="l">02 · dog-ear, deepened</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-    <tr><td class="l">03 · ribbon knockout</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-    <tr><td class="l">04 · draft1</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></td></tr>
-    <tr><td class="l">04-draft2.svg</td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td><td><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></td></tr>
-    <tr><td class="l">04a-ribbon-proportioned.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td></tr>
-    <tr><td class="l">04b-ribbon-counters.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td></tr>
-    <tr><td class="l">04c-ribbon-pages.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></td></tr>
-    <tr><td class="l">04d-ribbon-petrol.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td></tr>
-    <tr><td class="l">04e-counters-petrol.svg</td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td><td><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></td></tr>
-    <tr><td class="l">05 · brace spine</td><td><svg width="110.54545454545455" height="128" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td><td><svg width="55.27272727272727" height="64" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td><td><svg width="27.636363636363637" height="32" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td><td><svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></td></tr>
-  </table>
-</div>
+    <h2>16 px, magnified 10× with smoothing off — the actual pixels</h2>
+    <p class="sub">
+      Rasterised to a real 16×16 bitmap, then blown up nearest-neighbour. This is what lands in a
+      browser tab.
+    </p>
+    <div class="pixrow" id="pix"></div>
 
-<h2>16 px, magnified 10× with smoothing off — the actual pixels</h2>
-<p class="sub">Rasterised to a real 16×16 bitmap, then blown up nearest-neighbour. This is what lands in a browser tab.</p>
-<div class="pixrow" id="pix"></div>
+    <h2>Maskable safe zone — Android crops to the dashed circle</h2>
+    <div class="maskable">
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="152"
+            height="176"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>01 · baseline — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="152"
+            height="176"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>02 · dog-ear, deepened — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="152"
+            height="176"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>03 · ribbon knockout — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="152"
+            height="176"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04 · draft1 — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </div>
+        <figcaption>04-draft2.svg — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04a-ribbon-proportioned.svg — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04b-ribbon-counters.svg — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04c-ribbon-pages.svg — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <figcaption>04d-ribbon-petrol.svg — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <figcaption>04e-counters-petrol.svg — full bleed</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="152"
+            height="176"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </div>
+        <figcaption>05 · brace spine — full bleed</figcaption>
+      </figure>
+    </div>
+    <div class="maskable" style="margin-top: 20px">
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="96.72727272727273"
+            height="112"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>01 · baseline — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="96.72727272727273"
+            height="112"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>02 · dog-ear, deepened — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="96.72727272727273"
+            height="112"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>03 · ribbon knockout — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="96.72727272727273"
+            height="112"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04 · draft1 — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="720"
+            height="720"
+            viewBox="0 0 720 720"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect width="720" height="720" fill="white" />
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="#1A202C"
+            />
+            <path
+              d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z"
+              fill="white"
+            />
+          </svg>
+        </div>
+        <figcaption>04-draft2.svg — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04a-ribbon-proportioned.svg — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04b-ribbon-counters.svg — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <figcaption>04c-ribbon-pages.svg — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z"
+              fill="currentColor"
+            />
+            <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <figcaption>04d-ribbon-petrol.svg — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z"
+              fill-rule="evenodd"
+              fill="currentColor"
+            />
+            <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
+          </svg>
+        </div>
+        <figcaption>04e-counters-petrol.svg — padded to 64%</figcaption>
+      </figure>
+      <figure>
+        <div class="mwrap">
+          <svg
+            width="96.72727272727273"
+            height="112"
+            viewBox="0 0 38 44"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <g
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            >
+              <path
+                d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5"
+              />
+              <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+              <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+            </g>
+          </svg>
+        </div>
+        <figcaption>05 · brace spine — padded to 64%</figcaption>
+      </figure>
+    </div>
 
-<h2>Maskable safe zone — Android crops to the dashed circle</h2>
-<div class="maskable">
-  <figure>
-    <div class="mwrap"><svg width="152" height="176" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>01 · baseline — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="152" height="176" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>02 · dog-ear, deepened — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="152" height="176" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>03 · ribbon knockout — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="152" height="176" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>04 · draft1 — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></div>
-    <figcaption>04-draft2.svg — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <figcaption>04a-ribbon-proportioned.svg — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <figcaption>04b-ribbon-counters.svg — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <figcaption>04c-ribbon-pages.svg — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div>
-    <figcaption>04d-ribbon-petrol.svg — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div>
-    <figcaption>04e-counters-petrol.svg — full bleed</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="152" height="176" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></div>
-    <figcaption>05 · brace spine — full bleed</figcaption>
-  </figure>
-</div>
-<div class="maskable" style="margin-top:20px">
-  <figure>
-    <div class="mwrap"><svg width="96.72727272727273" height="112" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>01 · baseline — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="96.72727272727273" height="112" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>02 · dog-ear, deepened — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="96.72727272727273" height="112" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>03 · ribbon knockout — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="96.72727272727273" height="112" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path
-    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"
-    fill-rule="evenodd"
-    fill="currentColor"
-  />
-</svg></div>
-    <figcaption>04 · draft1 — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="720" height="720" fill="white"/>
-<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>
-<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>
-</svg></div>
-    <figcaption>04-draft2.svg — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <figcaption>04a-ribbon-proportioned.svg — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <figcaption>04b-ribbon-counters.svg — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />
-</svg></div>
-    <figcaption>04c-ribbon-pages.svg — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
-  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div>
-    <figcaption>04d-ribbon-petrol.svg — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
-  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />
-</svg></div>
-    <figcaption>04e-counters-petrol.svg — padded to 64%</figcaption>
-  </figure>
-  <figure>
-    <div class="mwrap"><svg width="96.72727272727273" height="112" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
-    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
-    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
-  </g>
-</svg></div>
-    <figcaption>05 · brace spine — padded to 64%</figcaption>
-  </figure>
-</div>
-
-<script>
-const MARKS = [{"label":"01 · baseline","svg":"<svg width=\"13.818181818181818\" height=\"16\" viewBox=\"0 0 38 44\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path\n    d=\"M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z\"\n    fill-rule=\"evenodd\"\n    fill=\"currentColor\"\n  />\n</svg>"},{"label":"02 · dog-ear, deepened","svg":"<svg width=\"13.818181818181818\" height=\"16\" viewBox=\"0 0 38 44\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path\n    d=\"M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z\"\n    fill-rule=\"evenodd\"\n    fill=\"currentColor\"\n  />\n</svg>"},{"label":"03 · ribbon knockout","svg":"<svg width=\"13.818181818181818\" height=\"16\" viewBox=\"0 0 38 44\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path\n    d=\"M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z\"\n    fill-rule=\"evenodd\"\n    fill=\"currentColor\"\n  />\n</svg>"},{"label":"04 · draft1","svg":"<svg width=\"13.818181818181818\" height=\"16\" viewBox=\"0 0 38 44\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path\n    d=\"M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z\"\n    fill-rule=\"evenodd\"\n    fill=\"currentColor\"\n  />\n</svg>"},{"label":"04-draft2.svg","svg":"<svg width=\"720\" height=\"720\" viewBox=\"0 0 720 720\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n<rect width=\"720\" height=\"720\" fill=\"white\"/>\n<path d=\"M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z\" fill=\"#1A202C\"/>\n<path d=\"M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z\" fill=\"white\"/>\n</svg>"},{"label":"04a-ribbon-proportioned.svg","svg":"<svg viewBox=\"95 40 557 640\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path d=\"M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z\" fill-rule=\"evenodd\" fill=\"currentColor\" />\n</svg>"},{"label":"04b-ribbon-counters.svg","svg":"<svg viewBox=\"95 40 557 640\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path d=\"M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z\" fill-rule=\"evenodd\" fill=\"currentColor\" />\n</svg>"},{"label":"04c-ribbon-pages.svg","svg":"<svg viewBox=\"95 40 557 640\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path d=\"M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z\" fill-rule=\"evenodd\" fill=\"currentColor\" />\n</svg>"},{"label":"04d-ribbon-petrol.svg","svg":"<svg viewBox=\"95 40 557 640\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path d=\"M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z\" fill=\"currentColor\" />\n  <path d=\"M180 40V320L240 225L300 320V40Z\" fill=\"oklch(0.43 0.062 205)\" />\n</svg>"},{"label":"04e-counters-petrol.svg","svg":"<svg viewBox=\"95 40 557 640\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <path d=\"M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z\" fill-rule=\"evenodd\" fill=\"currentColor\" />\n  <path d=\"M178 40V355L261.5 245L345 355V40Z\" fill=\"oklch(0.43 0.062 205)\" />\n</svg>"},{"label":"05 · brace spine","svg":"<svg width=\"13.818181818181818\" height=\"16\" viewBox=\"0 0 38 44\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n  <g stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\">\n    <path d=\"M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5\" />\n    <path d=\"M15 2.5H22A8 8 0 0 1 22 18.5H15\" />\n    <path d=\"M15 25.5H24A8 8 0 0 1 24 41.5H15\" />\n  </g>\n</svg>"}];
-const SCALE = 10, N = 16;
-const host = document.getElementById('pix');
-MARKS.forEach((m) => {
-  const fig = document.createElement('figure');
-  const cap = document.createElement('figcaption');
-  cap.textContent = m.label;
-  [['#0a0a0a', '#ffffff'], ['#fafafa', '#0a0a0a']].forEach(([fg, bg]) => {
-    const c = document.createElement('canvas');
-    c.width = c.height = N * SCALE;
-    const ctx = c.getContext('2d');
-    const off = document.createElement('canvas');
-    off.width = off.height = N;
-    const octx = off.getContext('2d');
-    const img = new Image();
-    const src = m.svg.replace(/currentColor/g, fg);
-    img.onload = () => {
-      octx.clearRect(0, 0, N, N);
-      // centre the 38:44 mark inside a square 16×16 cell
-      octx.drawImage(img, (N - img.width) / 2, (N - img.height) / 2, img.width, img.height);
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, c.width, c.height);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(off, 0, 0, N, N, 0, 0, c.width, c.height);
-    };
-    img.width = (16 * 38) / 44;
-    img.height = 16;
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
-    fig.appendChild(c);
-  });
-  fig.appendChild(cap);
-  host.appendChild(fig);
-});
-</script>
-</body></html>
+    <script>
+      const MARKS = [
+        {
+          label: '01 · baseline',
+          svg: '<svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path\n    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"\n    fill-rule="evenodd"\n    fill="currentColor"\n  />\n</svg>',
+        },
+        {
+          label: '02 · dog-ear, deepened',
+          svg: '<svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path\n    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"\n    fill-rule="evenodd"\n    fill="currentColor"\n  />\n</svg>',
+        },
+        {
+          label: '03 · ribbon knockout',
+          svg: '<svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path\n    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"\n    fill-rule="evenodd"\n    fill="currentColor"\n  />\n</svg>',
+        },
+        {
+          label: '04 · draft1',
+          svg: '<svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path\n    d="M4 0H6.2V24.7L11.3 19.6L16.4 24.7V0H25A10 10 0 0 1 25 20A12 12 0 0 1 25 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0Z"\n    fill-rule="evenodd"\n    fill="currentColor"\n  />\n</svg>',
+        },
+        {
+          label: '04-draft2.svg',
+          svg: '<svg width="720" height="720" viewBox="0 0 720 720" fill="none" xmlns="http://www.w3.org/2000/svg">\n<rect width="720" height="720" fill="white"/>\n<path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="#1A202C"/>\n<path d="M326.876 193.761L327.872 19.8522L178.995 19L178 192.908L256 137L326.876 193.761Z" fill="white"/>\n</svg>',
+        },
+        {
+          label: '04a-ribbon-proportioned.svg',
+          svg: '<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40Z" fill-rule="evenodd" fill="currentColor" />\n</svg>',
+        },
+        {
+          label: '04b-ribbon-counters.svg',
+          svg: '<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />\n</svg>',
+        },
+        {
+          label: '04c-ribbon-pages.svg',
+          svg: '<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM180 40V320L240 225L300 320V40ZM171 545H509A11 11 0 0 1 509 567H171A11 11 0 0 1 171 545ZM171 585H509A11 11 0 0 1 509 607H171A11 11 0 0 1 171 585ZM171 625H509A11 11 0 0 1 509 647H171A11 11 0 0 1 171 625Z" fill-rule="evenodd" fill="currentColor" />\n</svg>',
+        },
+        {
+          label: '04d-ribbon-petrol.svg',
+          svg: '<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />\n  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.43 0.062 205)" />\n</svg>',
+        },
+        {
+          label: '04e-counters-petrol.svg',
+          svg: '<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />\n  <path d="M178 40V355L261.5 245L345 355V40Z" fill="oklch(0.43 0.062 205)" />\n</svg>',
+        },
+        {
+          label: '05 · brace spine',
+          svg: '<svg width="13.818181818181818" height="16" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">\n  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">\n    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />\n    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />\n    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />\n  </g>\n</svg>',
+        },
+      ];
+      const SCALE = 10,
+        N = 16;
+      const host = document.getElementById('pix');
+      MARKS.forEach((m) => {
+        const fig = document.createElement('figure');
+        const cap = document.createElement('figcaption');
+        cap.textContent = m.label;
+        [
+          ['#0a0a0a', '#ffffff'],
+          ['#fafafa', '#0a0a0a'],
+        ].forEach(([fg, bg]) => {
+          const c = document.createElement('canvas');
+          c.width = c.height = N * SCALE;
+          const ctx = c.getContext('2d');
+          const off = document.createElement('canvas');
+          off.width = off.height = N;
+          const octx = off.getContext('2d');
+          const img = new Image();
+          const src = m.svg.replace(/currentColor/g, fg);
+          img.onload = () => {
+            octx.clearRect(0, 0, N, N);
+            // centre the 38:44 mark inside a square 16×16 cell
+            octx.drawImage(img, (N - img.width) / 2, (N - img.height) / 2, img.width, img.height);
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, c.width, c.height);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(off, 0, 0, N, N, 0, 0, c.width, c.height);
+          };
+          img.width = (16 * 38) / 44;
+          img.height = 16;
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+          fig.appendChild(c);
+        });
+        fig.appendChild(cap);
+        host.appendChild(fig);
+      });
+    </script>
+  </body>
+</html>

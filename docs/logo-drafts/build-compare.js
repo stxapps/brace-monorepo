@@ -2,7 +2,10 @@ const fs = require('fs');
 const path = require('path');
 
 const DIR = __dirname;
-const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.svg')).sort();
+const files = fs
+  .readdirSync(DIR)
+  .filter((f) => f.endsWith('.svg'))
+  .sort();
 
 const LABELS = {
   '01-baseline-dogear.svg': ['01 · baseline', 'shipping today — dog-eared B'],
@@ -74,7 +77,7 @@ const html = `<!doctype html>
     <div class="box">${inline(m.file, 200)}</div>
     <div class="name">${m.label[0]}</div>
     <div class="note">${m.label[1]}</div>
-  </div>`
+  </div>`,
     )
     .join('\n  ')}
 </div>
@@ -87,7 +90,7 @@ const html = `<!doctype html>
       (m) =>
         `<tr><td class="l">${m.label[0]}</td>${ladder
           .map((s) => `<td>${inline(m.file, s)}</td>`)
-          .join('')}</tr>`
+          .join('')}</tr>`,
     )
     .join('\n  ')}
 </table>
@@ -101,7 +104,7 @@ const html = `<!doctype html>
         (m) =>
           `<tr><td class="l">${m.label[0]}</td>${ladder
             .map((s) => `<td>${inline(m.file, s)}</td>`)
-            .join('')}</tr>`
+            .join('')}</tr>`,
       )
       .join('\n    ')}
   </table>
@@ -118,7 +121,7 @@ const html = `<!doctype html>
       (m) => `<figure>
     <div class="mwrap">${inline(m.file, 176)}</div>
     <figcaption>${m.label[0]} — full bleed</figcaption>
-  </figure>`
+  </figure>`,
     )
     .join('\n  ')}
 </div>
@@ -128,15 +131,13 @@ const html = `<!doctype html>
       (m) => `<figure>
     <div class="mwrap">${inline(m.file, 112)}</div>
     <figcaption>${m.label[0]} — padded to 64%</figcaption>
-  </figure>`
+  </figure>`,
     )
     .join('\n  ')}
 </div>
 
 <script>
-const MARKS = ${JSON.stringify(
-  marks.map((m) => ({ label: m.label[0], svg: inline(m.file, 16) }))
-)};
+const MARKS = ${JSON.stringify(marks.map((m) => ({ label: m.label[0], svg: inline(m.file, 16) })))};
 const SCALE = 10, N = 16;
 const host = document.getElementById('pix');
 MARKS.forEach((m) => {
