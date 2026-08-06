@@ -49,7 +49,13 @@ silent visual regression, so they're written down:
   sections, `text-sm text-muted-foreground` descriptions, the same
   `has-data-checked:` radio rows. Both are "Settings" for one product and can sit
   in adjacent tabs; only the topbar's "Browser extension" label distinguishes
-  them, and that's deliberate.
+  them, and that's deliberate. **The other side of that mirror is now a real
+  component**, not a convention two files agree to follow by hand:
+  `bracemark-web/src/app/(app)/settings/_components/settings-kit.tsx` owns the
+  measure, the heading steps, the bordered row and the notice tones for all
+  eight sections there (its header comment carries the reasoning). If a scale
+  step moves on either side, move it on both — this bullet is the only thing
+  holding them together, and neither build can fail on the difference.
 - **The page specimen is one component across the save.** `popup/PageSpecimen.tsx`
   renders the active tab in the editor and the saved link on the complete screen,
   and it does not move between them — the controls around it change instead. Its

@@ -58,6 +58,8 @@ import {
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 
+import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
+
 type SortDir = 'asc' | 'desc';
 
 // Alphabetical by name (case-insensitive via localeCompare), tie-broken by id so
@@ -345,80 +347,80 @@ export function TagsSection() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <h2 className="text-xl font-semibold">Tags</h2>
-      <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so
-        there's no nesting.
-      </p>
+    <SettingsPane>
+      <SettingsHeader
+        title="Tags"
+        description="Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so there's no nesting."
+      />
 
-      {error && (
-        <p className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <div className="mb-2 flex justify-end">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={tags.length === 0}>
-              <ArrowUpDown className="size-4" /> Sort
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => run(reorder(sortedByName(tags, 'asc')))}>
-              <ArrowDownAZ className="size-4" /> A → Z
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => run(reorder(sortedByName(tags, 'desc')))}>
-              <ArrowDownZA className="size-4" /> Z → A
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* The toolbar and the list it acts on are one block, so they sit tighter
+          than the pane's rhythm — `Sort` belongs to the table below it, not to
+          the description above it. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={tags.length === 0}>
+                <ArrowUpDown className="size-4" /> Sort
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => run(reorder(sortedByName(tags, 'asc')))}>
+                <ArrowDownAZ className="size-4" /> A → Z
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => run(reorder(sortedByName(tags, 'desc')))}>
+                <ArrowDownZA className="size-4" /> Z → A
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="rounded-lg border border-border">
+          <CreateRow
+            onCreate={async (name) => {
+              // Not run() like the other ops: CreateRow awaits this to clear its
+              // field only on success, so we surface the error here and re-throw to
+              // keep the typed value.
+              setError(null);
+              try {
+                await create(name, null, tags, 0);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+                throw e;
+              }
+            }}
+          />
+
+          {tags.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</p>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={tags.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                <ul>
+                  {tags.map((tag, index) => (
+                    <SortableRow
+                      key={tag.id}
+                      tag={tag}
+                      isFirst={index === 0}
+                      isLast={index === tags.length - 1}
+                      onRename={(name) => run(rename(tag, name))}
+                      onMoveUp={() => shift(tag, index, -1)}
+                      onMoveDown={() => shift(tag, index, 1)}
+                      onDelete={() => run(destroy(tag))}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
       </div>
-
-      <div className="rounded-lg border border-border">
-        <CreateRow
-          onCreate={async (name) => {
-            // Not run() like the other ops: CreateRow awaits this to clear its
-            // field only on success, so we surface the error here and re-throw to
-            // keep the typed value.
-            setError(null);
-            try {
-              await create(name, null, tags, 0);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
-              throw e;
-            }
-          }}
-        />
-
-        {tags.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</p>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={tags.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-              <ul>
-                {tags.map((tag, index) => (
-                  <SortableRow
-                    key={tag.id}
-                    tag={tag}
-                    isFirst={index === 0}
-                    isLast={index === tags.length - 1}
-                    onRename={(name) => run(rename(tag, name))}
-                    onMoveUp={() => shift(tag, index, -1)}
-                    onMoveDown={() => shift(tag, index, 1)}
-                    onDelete={() => run(destroy(tag))}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-        )}
-      </div>
-    </div>
+    </SettingsPane>
   );
 }

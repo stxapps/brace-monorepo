@@ -54,6 +54,13 @@ import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@stxapps/web-ui/components/ui/tabs';
 
+import {
+  SettingsGroup,
+  SettingsHeader,
+  SettingsNotice,
+  SettingsPane,
+} from '../../_components/settings-kit';
+
 import { LockPasswordDialog } from '@/components/lock-password-dialog';
 import { usePaywall } from '@/contexts/paywall-provider';
 
@@ -292,28 +299,24 @@ export function MiscSection() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <h2 className="text-xl font-semibold">Misc.</h2>
-      <p className="mt-1 mb-6 text-sm text-muted-foreground">General preferences for the app.</p>
+    <SettingsPane>
+      <SettingsHeader title="Misc." description="General preferences for the app." />
 
-      {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <section>
-        <h3 className="text-base font-medium">Link layout</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose how your saved links are displayed. <strong>Sync</strong> applies your choice
-          across all your devices. <strong>Device</strong> keeps a separate choice for this device
-          only (cleared when you sign out).
-        </p>
-
+      <SettingsGroup
+        title="Link layout"
+        description={
+          <>
+            Choose how your saved links are displayed. <strong>Sync</strong> applies your choice
+            across all your devices. <strong>Device</strong> keeps a separate choice for this device
+            only (cleared when you sign out).
+          </>
+        }
+      >
         <Tabs
           value={linksLayoutSource}
           onValueChange={(v) => run(setLinksLayoutSource(v as LinksLayoutSource))}
-          className="mt-4"
         >
           <TabsList>
             <TabsTrigger value="sync">Sync</TabsTrigger>
@@ -337,18 +340,16 @@ export function MiscSection() {
             />
           </TabsContent>
         </Tabs>
-      </section>
+      </SettingsGroup>
 
-      <section className="mt-10">
-        <h3 className="text-base font-medium">Link sort</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose how your saved links are ordered. This applies across all your devices.
-        </p>
-
+      <SettingsGroup
+        title="Link sort"
+        description="Choose how your saved links are ordered. This applies across all your devices."
+      >
         {/* Global-only (synced), so no Sync/Device tabs — the two axes are set
             directly. The RadioGroup value is the raw persisted string, so an unknown
             future value simply shows nothing selected (like the layout radios). */}
-        <div className="mt-4">
+        <div>
           <Label className="text-sm font-medium">Sort by</Label>
           <RadioGroup
             value={sortOn}
@@ -371,7 +372,7 @@ export function MiscSection() {
           </RadioGroup>
         </div>
 
-        <div className="mt-4">
+        <div>
           <Label className="text-sm font-medium">Order</Label>
           <RadioGroup
             value={sortOrder}
@@ -393,21 +394,19 @@ export function MiscSection() {
             })}
           </RadioGroup>
         </div>
-      </section>
+      </SettingsGroup>
 
-      <section className="mt-10">
-        <h3 className="text-base font-medium">Theme</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Choose the app's appearance. <strong>Sync</strong> applies your choice across all your
-          devices. <strong>Device</strong> keeps a separate choice for this device only (cleared
-          when you sign out).
-        </p>
-
-        <Tabs
-          value={themeSource}
-          onValueChange={(v) => run(setThemeSource(v as ThemeSource))}
-          className="mt-4"
-        >
+      <SettingsGroup
+        title="Theme"
+        description={
+          <>
+            Choose the app's appearance. <strong>Sync</strong> applies your choice across all your
+            devices. <strong>Device</strong> keeps a separate choice for this device only (cleared
+            when you sign out).
+          </>
+        }
+      >
+        <Tabs value={themeSource} onValueChange={(v) => run(setThemeSource(v as ThemeSource))}>
           <TabsList>
             <TabsTrigger value="sync">Sync</TabsTrigger>
             <TabsTrigger value="local">Device</TabsTrigger>
@@ -420,16 +419,13 @@ export function MiscSection() {
             <ThemeControls value={localTheme} onChange={(t) => run(setLocalTheme(t))} />
           </TabsContent>
         </Tabs>
-      </section>
+      </SettingsGroup>
 
-      <section className="mt-10">
-        <h3 className="text-base font-medium">App lock</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Lock the whole app with a password on this device only — it engages every time the app
-          loads. If you forget the password, sign out and sign back in with your account password;
-          signing out removes all locks on this device.
-        </p>
-        <div className="mt-4">
+      <SettingsGroup
+        title="App lock"
+        description="Lock the whole app with a password on this device only — it engages every time the app loads. If you forget the password, sign out and sign back in with your account password; signing out removes all locks on this device."
+      >
+        <div>
           {appLock.exists ? (
             // Remove stays open even for a free (downgraded) account, so an
             // existing lock is never stranded — mirrors list unlock/remove.
@@ -447,7 +443,7 @@ export function MiscSection() {
             </Button>
           )}
         </div>
-      </section>
+      </SettingsGroup>
 
       {lockDialog === 'set' && (
         <LockPasswordDialog
@@ -473,6 +469,6 @@ export function MiscSection() {
           }}
         />
       )}
-    </div>
+    </SettingsPane>
   );
 }

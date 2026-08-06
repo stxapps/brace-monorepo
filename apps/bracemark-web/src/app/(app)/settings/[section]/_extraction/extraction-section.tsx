@@ -35,6 +35,13 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { Switch } from '@stxapps/web-ui/components/ui/switch';
 
+import {
+  SettingsHeader,
+  SettingsNotice,
+  SettingsPane,
+  SettingsRow,
+} from '../../_components/settings-kit';
+
 // One labelled count in a bordered tile.
 function Stat({ label, value }: { label: string; value: number }) {
   return (
@@ -90,86 +97,72 @@ export function ExtractionSection() {
   // an upsell instead of controls (after all hooks — no conditional hook calls).
   if (!entitlements.serverExtraction) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-8">
-        <h2 className="text-xl font-semibold">Link previews</h2>
-        <p className="mt-1 mb-6 text-sm text-muted-foreground">
-          Bracemark fills in each saved link's title and preview image automatically. Links saved
-          from the Bracemark extension are previewed right on your device; previews for links saved
-          on the web or added by import are part of the Plus plan.
-        </p>
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="font-medium">Server-side previews</span>
-            <span className="text-sm text-muted-foreground">
-              Upgrade to fill in titles and preview images for links that weren't previewed on the
-              device that saved them.
-            </span>
-          </div>
-          <Button asChild variant="outline">
-            <Link href="/settings/subscription">Upgrade to Plus</Link>
-          </Button>
-        </div>
-      </div>
+      <SettingsPane>
+        <SettingsHeader
+          title="Link previews"
+          description="Bracemark fills in each saved link's title and preview image automatically. Links saved from the Bracemark extension are previewed right on your device; previews for links saved on the web or added by import are part of the Plus plan."
+        />
+        <SettingsRow
+          title="Server-side previews"
+          description="Upgrade to fill in titles and preview images for links that weren't previewed on the device that saved them."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/settings/subscription">Upgrade to Plus</Link>
+            </Button>
+          }
+        />
+      </SettingsPane>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <h2 className="text-xl font-semibold">Link previews</h2>
-      <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Bracemark fills in each saved link's title and preview image automatically — you don't need
-        to do it by hand. Links you save from the Bracemark extension or mobile app are previewed
-        right on your device, so the page never leaves it. For links saved on the web or added by
-        import, turn on server-side previews below and Bracemark will fetch them for you.
-      </p>
+    <SettingsPane>
+      <SettingsHeader
+        title="Link previews"
+        description="Bracemark fills in each saved link's title and preview image automatically — you don't need to do it by hand. Links you save from the Bracemark extension or mobile app are previewed right on your device, so the page never leaves it. For links saved on the web or added by import, turn on server-side previews below and Bracemark will fetch them for you."
+      />
 
-      <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-        <div className="flex min-w-0 flex-col gap-0.5">
+      <SettingsRow
+        title={
           <Label htmlFor="server-extraction" className="font-medium">
             Server-side previews
           </Label>
-          <span className="text-sm font-normal text-muted-foreground">
-            Fetch each link on the server to fill in its title and preview image — for links that
-            weren't previewed on the device that saved them. Only the link's URL is sent, never your
-            account or anything else, and only while this is on.
-          </span>
-        </div>
-        <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
-      </div>
+        }
+        description="Fetch each link on the server to fill in its title and preview image — for links that weren't previewed on the device that saved them. Only the link's URL is sent, never your account or anything else, and only while this is on."
+        action={
+          <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
+        }
+      />
 
-      {error && (
-        <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
       {serverExtraction && !enabled ? (
-        <p className="mt-6 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+        <SettingsNotice tone="pending">
           Server-side previews are on but currently unavailable — they resume once you're signed in
           and the server is reachable.
-        </p>
+        </SettingsNotice>
       ) : enabled ? (
-        <div className="mt-6">
+        <div className="flex flex-col gap-4">
           <div className="grid grid-cols-3 gap-3">
             <Stat label="With preview" value={doneCount} />
             <Stat label="Pending" value={pendingCount} />
             <Stat label="Failed" value={failedCount} />
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {total === 0
               ? 'No links to preview yet.'
               : `${doneCount} of ${total} link${total === 1 ? '' : 's'} previewed.`}
           </p>
 
           {autoLimitReached && !isExtractingAll && (
-            <p className="mt-4 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+            <SettingsNotice tone="pending">
               Automatic previews paused for this session. Use <strong>Generate all</strong> to
               finish the remaining links.
-            </p>
+            </SettingsNotice>
           )}
 
-          <div className="mt-6">
+          <div>
             {isExtractingAll ? (
               <Button variant="outline" onClick={pause}>
                 <Pause className="size-4" />
@@ -201,6 +194,6 @@ export function ExtractionSection() {
           </div>
         </div>
       ) : null}
-    </div>
+    </SettingsPane>
   );
 }

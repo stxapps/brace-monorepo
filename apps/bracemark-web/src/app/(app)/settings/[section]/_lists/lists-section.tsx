@@ -80,6 +80,7 @@ import {
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 
+import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
 import {
   excludeActiveDescendants,
   getMovePlan,
@@ -627,121 +628,123 @@ export function ListsSection() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <h2 className="text-xl font-semibold">Lists</h2>
-      <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you
-        can rename and reorder them, but not delete them.
-      </p>
+    <SettingsPane>
+      <SettingsHeader
+        title="Lists"
+        description="Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you can rename and reorder them, but not delete them."
+      />
 
-      {error && (
-        <p className="mb-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <div className="mb-2 flex justify-end">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <ArrowUpDown className="size-4" /> Sort
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => sortGroup(null, 'asc')}>
-              <ArrowDownAZ className="size-4" /> A → Z
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => sortGroup(null, 'desc')}>
-              <ArrowDownZA className="size-4" /> Z → A
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {/* Toolbar + the list it acts on are one block, tighter than the pane's
+          rhythm — same shape as the Tags section, which is the same screen for a
+          flat collection. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <ArrowUpDown className="size-4" /> Sort
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => sortGroup(null, 'asc')}>
+                <ArrowDownAZ className="size-4" /> A → Z
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => sortGroup(null, 'desc')}>
+                <ArrowDownZA className="size-4" /> Z → A
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
-      <div className="rounded-lg border border-border">
-        <CreateRow
-          onCreate={async (name) => {
-            // Not run() like the other ops: CreateRow awaits this to clear its
-            // field only on success, so we surface the error here and re-throw
-            // to keep the typed value.
-            setError(null);
-            try {
-              await create(name, null, childrenOf(lists, null), 0);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
-              throw e;
-            }
-          }}
-        />
+        <div className="rounded-lg border border-border">
+          <CreateRow
+            onCreate={async (name) => {
+              // Not run() like the other ops: CreateRow awaits this to clear its
+              // field only on success, so we surface the error here and re-throw
+              // to keep the typed value.
+              setError(null);
+              try {
+                await create(name, null, childrenOf(lists, null), 0);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+                throw e;
+              }
+            }}
+          />
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          onDragCancel={resetDnd}
-        >
-          <SortableContext
-            items={displayRows.map((row) => row.item.id)}
-            strategy={verticalListSortingStrategy}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onDragCancel={resetDnd}
           >
-            <ul>
-              {displayRows.map((row) => {
-                // Parents this row may not move under — its own subtree (no
-                // cycles) + no-children containers. ListCommand renders every
-                // other list (it reads useLists itself) minus these.
-                const excludeIds = [...forbiddenParentIds(lists, row.item.id)];
-                // The dragged row renders at its projected (would-be) depth so the
-                // indent tracks the pointer; every other row keeps its real depth.
-                const renderDepth =
-                  row.item.id === activeId && projection ? projection.depth : row.depth;
-                return (
-                  <SortableRow
-                    key={row.item.id}
-                    row={row}
-                    renderDepth={renderDepth}
-                    collapsedIds={collapsedIds}
-                    excludeIds={excludeIds}
-                    lock={listLocks.get(row.item.id)}
-                    onToggle={() => toggle(row.item.id)}
-                    onRename={(name) => run(rename(row.item, name))}
-                    onMoveUp={() =>
-                      run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))
-                    }
-                    onMoveDown={() =>
-                      run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
-                    }
-                    onMoveTo={(parentId) => {
-                      // Moving UNDER a list nests it (the Plus lever); moving to
-                      // "Top level" (null) flattens and stays free — so a
-                      // downgraded user can always un-nest.
-                      if (parentId !== null && !entitlements.nestedLists) {
-                        paywall.show('nestedLists');
-                        return;
+            <SortableContext
+              items={displayRows.map((row) => row.item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul>
+                {displayRows.map((row) => {
+                  // Parents this row may not move under — its own subtree (no
+                  // cycles) + no-children containers. ListCommand renders every
+                  // other list (it reads useLists itself) minus these.
+                  const excludeIds = [...forbiddenParentIds(lists, row.item.id)];
+                  // The dragged row renders at its projected (would-be) depth so the
+                  // indent tracks the pointer; every other row keeps its real depth.
+                  const renderDepth =
+                    row.item.id === activeId && projection ? projection.depth : row.depth;
+                  return (
+                    <SortableRow
+                      key={row.item.id}
+                      row={row}
+                      renderDepth={renderDepth}
+                      collapsedIds={collapsedIds}
+                      excludeIds={excludeIds}
+                      lock={listLocks.get(row.item.id)}
+                      onToggle={() => toggle(row.item.id)}
+                      onRename={(name) => run(rename(row.item, name))}
+                      onMoveUp={() =>
+                        run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))
                       }
-                      const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
-                      run(move(row.item, parentId, dest, dest.length));
-                    }}
-                    onSortChildren={(dir) => sortGroup(row.item.id, dir)}
-                    onAddLock={() =>
-                      // Gate at the affordance, before any password dialog: a free
-                      // user never types a secret into a form that can't submit.
-                      // Unlock/remove stay open below so a downgraded (ex-Plus)
-                      // user can always reach their existing locks.
-                      entitlements.locks
-                        ? setLockDialog({ mode: 'add', listId: row.item.id })
-                        : paywall.show('locks')
-                    }
-                    onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
-                    onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
-                    onDelete={() => run(destroy(row.item))}
-                  />
-                );
-              })}
-            </ul>
-          </SortableContext>
-        </DndContext>
+                      onMoveDown={() =>
+                        run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
+                      }
+                      onMoveTo={(parentId) => {
+                        // Moving UNDER a list nests it (the Plus lever); moving to
+                        // "Top level" (null) flattens and stays free — so a
+                        // downgraded user can always un-nest.
+                        if (parentId !== null && !entitlements.nestedLists) {
+                          paywall.show('nestedLists');
+                          return;
+                        }
+                        const dest = childrenOf(lists, parentId).filter(
+                          (s) => s.id !== row.item.id,
+                        );
+                        run(move(row.item, parentId, dest, dest.length));
+                      }}
+                      onSortChildren={(dir) => sortGroup(row.item.id, dir)}
+                      onAddLock={() =>
+                        // Gate at the affordance, before any password dialog: a free
+                        // user never types a secret into a form that can't submit.
+                        // Unlock/remove stay open below so a downgraded (ex-Plus)
+                        // user can always reach their existing locks.
+                        entitlements.locks
+                          ? setLockDialog({ mode: 'add', listId: row.item.id })
+                          : paywall.show('locks')
+                      }
+                      onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
+                      onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
+                      onDelete={() => run(destroy(row.item))}
+                    />
+                  );
+                })}
+              </ul>
+            </SortableContext>
+          </DndContext>
+        </div>
       </div>
 
       {lockDialog?.mode === 'add' && (
@@ -782,6 +785,6 @@ export function ListsSection() {
           }}
         />
       )}
-    </div>
+    </SettingsPane>
   );
 }

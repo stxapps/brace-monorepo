@@ -31,6 +31,8 @@ import {
 import { useEntitlements, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
+import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
+
 import { openPaddleCheckout } from '@/lib/paddle';
 
 // The upgrade cards (copy + which plans are on sale) come from PLAN_CARDS in
@@ -145,10 +147,9 @@ export function SubscriptionSection() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-8">
-        <h2 className="text-xl font-semibold">Subscription</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Loading your subscription…</p>
-      </div>
+      <SettingsPane>
+        <SettingsHeader title="Subscription" description="Loading your subscription…" />
+      </SettingsPane>
     );
   }
 
@@ -160,14 +161,15 @@ export function SubscriptionSection() {
   const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <h2 className="text-xl font-semibold">Subscription</h2>
-      <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Your plan applies to your whole account, on every device. Payments are handled by Paddle;
-        Bracemark never sees your card details.
-      </p>
+    <SettingsPane>
+      <SettingsHeader
+        title="Subscription"
+        description="Your plan applies to your whole account, on every device. Payments are handled by Paddle; Bracemark never sees your card details."
+      />
 
-      {/* Current plan */}
+      {/* Current plan. Not a SettingsRow: the row is a title/description pair with
+          one trailing control, and this grows a payment-issue notice and a
+          Manage-billing block UNDER that pair, inside the same border. */}
       <div className="rounded-lg border border-border p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -212,10 +214,10 @@ export function SubscriptionSection() {
         </div>
 
         {status === 'grace' && (
-          <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <SettingsNotice tone="error" className="mt-3">
             Your last payment didn't go through. Update your payment method to keep your plan —
             we'll retry for a while before it lapses.
-          </p>
+          </SettingsNotice>
         )}
 
         {plan !== 'free' && source === 'paddle' && (
@@ -238,24 +240,14 @@ export function SubscriptionSection() {
       </div>
 
       {busy === 'activating' && (
-        <p className="mt-4 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-          Finishing your upgrade…
-        </p>
+        <SettingsNotice tone="pending">Finishing your upgrade…</SettingsNotice>
       )}
-      {notice && (
-        <p className="mt-4 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      {notice && <SettingsNotice tone="pending">{notice}</SettingsNotice>}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
       {/* Upgrades */}
       {upgradeCards.length > 0 && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {upgradeCards.map(({ plan: cardPlan, blurb, features }) => (
             <div key={cardPlan} className="flex flex-col rounded-lg border border-border p-4">
               <div className="flex items-baseline justify-between">
@@ -286,6 +278,6 @@ export function SubscriptionSection() {
           ))}
         </div>
       )}
-    </div>
+    </SettingsPane>
   );
 }

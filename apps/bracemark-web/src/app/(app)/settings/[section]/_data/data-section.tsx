@@ -20,8 +20,6 @@
 
 import { useRef, useState } from 'react';
 import {
-  ChevronLeft,
-  ChevronRight,
   CircleAlert,
   CircleCheck,
   Download,
@@ -57,6 +55,13 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@stxapps/web-ui/components/ui/radio-group';
+
+import {
+  SettingsHeader,
+  SettingsNotice,
+  SettingsPane,
+  SettingsRow,
+} from '../../_components/settings-kit';
 
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
@@ -101,11 +106,18 @@ function SyncStatus() {
         : null;
 
   return (
-    <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-      <div className="flex min-w-0 items-start gap-2.5">
-        <span className="mt-0.5 shrink-0">{icon}</span>
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-sm font-medium">Sync</span>
+    <SettingsRow
+      icon={<span className="mt-0.5 block">{icon}</span>}
+      title={<span className="text-sm">Sync</span>}
+      action={
+        action ? (
+          <Button variant="outline" size="sm" onClick={action.onClick}>
+            {action.label}
+          </Button>
+        ) : null
+      }
+      description={
+        <>
           <span className={`text-sm ${isError ? 'text-destructive' : 'text-muted-foreground'}`}>
             {text}
           </span>
@@ -136,61 +148,9 @@ function SyncStatus() {
               Saved page copies and images download when you open them.
             </span>
           )}
-        </div>
-      </div>
-      {action && (
-        <Button variant="outline" size="sm" onClick={action.onClick}>
-          {action.label}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-// One tappable row on the overview that opens a sub-view. Full-width button with
-// a leading icon, a title + description, and a trailing chevron affordance.
-function ActionRow({
-  icon,
-  title,
-  description,
-  onClick,
-  destructive,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  onClick: () => void;
-  destructive?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-lg border border-border p-4 text-left transition-colors hover:bg-muted/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-    >
-      <span className={`shrink-0 ${destructive ? 'text-destructive' : 'text-muted-foreground'}`}>
-        {icon}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className={`font-medium ${destructive ? 'text-destructive' : ''}`}>{title}</span>
-        <span className="text-sm text-muted-foreground">{description}</span>
-      </span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-    </button>
-  );
-}
-
-// The back link shared by every sub-view — returns to the overview.
-function BackLink({ onBack }: { onBack: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onBack}
-      className="mb-4 -ml-1 inline-flex items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-    >
-      <ChevronLeft className="size-4" />
-      Data
-    </button>
+        </>
+      }
+    />
   );
 }
 
@@ -295,15 +255,12 @@ function ImportView({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div>
-      <BackLink onBack={onBack} />
-      <h2 className="text-xl font-semibold">Import data</h2>
-      <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Import from a file — a Bracemark backup (.zip), an HTML bookmarks file (web browsers,
-        LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of
-        links. The format is detected automatically; links you already have are skipped. Large
-        imports may take a few minutes.
-      </p>
+    <>
+      <SettingsHeader
+        back={{ label: 'Data', onClick: onBack }}
+        title="Import data"
+        description="Import from a file — a Bracemark backup (.zip), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. Large imports may take a few minutes."
+      />
       <input
         ref={inputRef}
         type="file"
@@ -317,7 +274,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
       </Button>
 
       <ImportStatus state={state} />
-    </div>
+    </>
   );
 }
 
@@ -430,13 +387,12 @@ function ExportView({ onBack }: { onBack: () => void }) {
   const lockedCount = lockedListIds.size;
 
   return (
-    <div>
-      <BackLink onBack={onBack} />
-      <h2 className="text-xl font-semibold">Export all data</h2>
-      <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Download a copy of your data to your device. Pick a format for where it’s going. This may
-        take a few minutes for a large library.
-      </p>
+    <>
+      <SettingsHeader
+        back={{ label: 'Data', onClick: onBack }}
+        title="Export all data"
+        description="Download a copy of your data to your device. Pick a format for where it’s going. This may take a few minutes for a large library."
+      />
 
       <RadioGroup
         value={format}
@@ -462,17 +418,16 @@ function ExportView({ onBack }: { onBack: () => void }) {
       </RadioGroup>
 
       {lockedCount > 0 && (
-        <p className="mt-4 flex items-start gap-2 rounded-lg border border-border p-3 text-sm text-muted-foreground">
-          <Lock className="mt-0.5 size-4 shrink-0" />
+        <SettingsNotice icon={<Lock className="size-4" />}>
           <span>
             {lockedCount} locked {lockedCount === 1 ? 'list' : 'lists'} — and the links inside{' '}
             {lockedCount === 1 ? 'it' : 'them'} — won&apos;t be included. Unlock{' '}
             {lockedCount === 1 ? 'it' : 'them'} first if you want everything.
           </span>
-        </p>
+        </SettingsNotice>
       )}
 
-      <div className="mt-6">
+      <div>
         <Button variant="outline" onClick={() => run(format, lockedListIds)} disabled={running}>
           <Download className="size-4" />
           Export all data
@@ -480,7 +435,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
       </div>
 
       <ExportStatus state={state} excludedCount={lockedCount} />
-    </div>
+    </>
   );
 }
 
@@ -542,23 +497,24 @@ function DeleteView({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div>
-      <BackLink onBack={onBack} />
-      <h2 className="text-xl font-semibold">Delete all data</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Delete all your data — every saved link in every list, all your lists and tags, and all your
-        settings — from all your devices.
-      </p>
-      <p className="mt-3 text-sm text-muted-foreground">
-        This removes your data only, not your account — you can still sign in. If another device has
-        changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
-        exporting a copy first.
-      </p>
-      <p className="mt-3 text-sm font-medium text-destructive">This action cannot be undone.</p>
+    <>
+      <SettingsHeader back={{ label: 'Data', onClick: onBack }} title="Delete all data" />
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Delete all your data — every saved link in every list, all your lists and tags, and all
+          your settings — from all your devices.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          This removes your data only, not your account — you can still sign in. If another device
+          has changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
+          exporting a copy first.
+        </p>
+        <p className="text-sm font-medium text-destructive">This action cannot be undone.</p>
+      </div>
 
       <Label
         htmlFor="delete-confirm"
-        className="mt-6 flex items-start gap-3 rounded-lg border border-border p-3"
+        className="flex items-start gap-3 rounded-lg border border-border p-3"
       >
         <Checkbox
           id="delete-confirm"
@@ -579,7 +535,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
         <p className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</p>
       )}
 
-      <div className="mt-6">
+      <div>
         <Button variant="destructive" onClick={onDelete} disabled={running || done}>
           <Trash2 className="size-4" />
           Delete all data
@@ -587,7 +543,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       </div>
 
       <DeleteStatus state={state} />
-    </div>
+    </>
   );
 }
 
@@ -595,31 +551,30 @@ export function DataSection() {
   const [view, setView] = useState<DataView>('overview');
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <SettingsPane>
       {view === 'overview' ? (
         <>
-          <h2 className="text-xl font-semibold">Data</h2>
-          <p className="mt-1 mb-6 text-sm text-muted-foreground">
-            Your data syncs across your devices, end-to-end encrypted. Import, export, or delete all
-            of it here.
-          </p>
+          <SettingsHeader
+            title="Data"
+            description="Your data syncs across your devices, end-to-end encrypted. Import, export, or delete all of it here."
+          />
 
           <SyncStatus />
 
-          <div className="mt-6 flex flex-col gap-3">
-            <ActionRow
+          <div className="flex flex-col gap-3">
+            <SettingsRow
               icon={<Upload className="size-5" />}
               title="Import data"
               description="Add links from a text file or another app."
               onClick={() => setView('import')}
             />
-            <ActionRow
+            <SettingsRow
               icon={<Download className="size-5" />}
               title="Export all data"
               description="Download everything as a backup or bookmarks file."
               onClick={() => setView('export')}
             />
-            <ActionRow
+            <SettingsRow
               icon={<Trash2 className="size-5" />}
               title="Delete all data"
               description="Permanently remove all your data."
@@ -635,6 +590,6 @@ export function DataSection() {
       ) : (
         <DeleteView onBack={() => setView('overview')} />
       )}
-    </div>
+    </SettingsPane>
   );
 }

@@ -6,6 +6,12 @@ import { Topbar } from './_panes/topbar';
 // scrolling main pane on the right. The active section's content (the matching
 // page) renders into `children`.
 //
+// Below `md` it is a ONE-pane frame: the sidebar hides itself and the topbar
+// grows the section menu in its place (see those two files). Nothing here needs
+// to know — the rail is `hidden md:flex`, so the main column takes the width it
+// gives up, and there is no breakpoint measured in JS to disagree with the one
+// the CSS matched (docs/safe-area.md, _the core problem_).
+//
 // The active section lives in the URL PATH now (`/settings/lists`, …), not React
 // state — so a section is a real, linkable destination: open `/settings/lists`
 // straight from the links page, manage your lists, and Back returns you to
