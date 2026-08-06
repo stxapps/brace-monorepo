@@ -1,0 +1,14 @@
+<!-- 04d — ACCENT RIBBON. The reference's move: the ribbon coloured rather
+     than knocked out. Tailwind orange-400, oklch(0.75 0.183 55.934).
+     COST, and it is not small: this is two colours and one of them is fixed,
+     so the mark stops being a single currentColor path. Read the header of
+     packages/web-ui/src/components/icons/bracemark-icon.tsx before adopting
+     it — the brand-mark / brand-mark-dot token pair that was deleted from
+     styles.css existed for exactly this reason, and this reintroduces the
+     need for it. It also no longer composes on an arbitrary surface.
+     The letterform is still 04a's, so this is a blob at 16px however good the
+     ribbon colour is. 04e is this colour on a letterform that survives. -->
+<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909Z" fill="currentColor" />
+  <path d="M180 40V320L240 225L300 320V40Z" fill="oklch(0.75 0.183 55.934)" />
+</svg>

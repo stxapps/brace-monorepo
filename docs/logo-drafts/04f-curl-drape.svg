@@ -1,0 +1,9 @@
+<!-- 04f — CURL, DRAPED. draft3's top-of-ribbon gesture rebuilt as geometry
+     rather than as opaque overlays, on 04b's letterform. The ribbon leans:
+     wider to the left at the top edge, settling right as it falls, so it
+     reads as lying ACROSS the cover.
+     It is a 512px refinement. Below about 128px it is gone — see the ladder. -->
+<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
+  <path d="M155 40C165 70 170 85 178 100V355L261.5 245L345 355V100C337 85 330 70 315 40Z" fill="oklch(0.75 0.183 55.934)" />
+</svg>

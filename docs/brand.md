@@ -185,6 +185,87 @@ done: the two defensive domains under _domains_ above, DNS and certs for the new
 hosts in [deployment.md](./deployment.md#status--setup-checklist), and the store
 listing URLs under _open decisions_ below.
 
+### the mark
+
+**`01-baseline` ships — a solid geometric B with its top-right corner cut away at
+45°, the way a page corner is turned down to keep a place.** The shape, the
+one-path/`currentColor` invariant, and the 38×44 grid it is constructed on are
+documented at the top of
+`packages/web-ui/src/components/icons/bracemark-icon.tsx`; that comment is the
+source of truth for _what the shape is doing_ and is not repeated here. This
+section owns the **decision** and the **inventory**.
+
+An exploration in `docs/logo-drafts/` (not wired into any build — see its
+README) tested the alternatives and produced two serious challengers. Both were
+rejected, for opposite reasons, and the pair is the useful record:
+
+- **`06-waist-deepened`** — `01` with the waist cut from 74.5% of glyph width to
+  64%, which is the one measurement where `01` falls outside Bricolage
+  Grotesque's 65–67% range. It is genuinely better at 16px. It is **not
+  beautiful at large sizes**: the deeper waist buys small-size clarity at the
+  cost of the letterform.
+- **`draft4`** — a different concept, a rounded rectangle whose right edge is
+  replaced by the two bowls of a B. Handsome at 128px and up, and it has the
+  widest counters of anything tested (55.5%/63.1% against `01`'s 46.0%/57.9%).
+  But its waist goes the **wrong** way — 84.8%, the shallowest in the whole
+  exploration — and the shape falls apart at icon sizes.
+
+`01` wins because it is the only one that is acceptable at **both** ends, which
+is the property that actually matters: the same path is rendered at 16px in a
+browser tab and at 1024px in an App Store listing. Neither challenger was a
+refinement of `01` that could simply be merged — each traded one end for the
+other. `docs/logo-drafts/compare-07.html` is the size ladder the decision was
+made from; `compare-06.html` carries the Bricolage measurements.
+
+**Where the mark lives — two source components and 30 raster assets.**
+
+| where                                                                                                                                                                  | what                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                              | the source of truth                                                                                                                                       |
+| `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                          | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
+| `bracemark-web/public/` (10), `bracemark-web/src/app/` (4), `bracemark-site/src/app/` (4), `bracemark-expo/assets/images/` (8), `bracemark-extension/public/icon/` (4) | 30 PNG/ICO files rendered from that path                                                                                                                  |
+
+The two components must not drift. Nothing enforces it — no test compares the
+two `d` strings — so a retouch of the mark is a **two-file** change plus a
+re-render of every raster.
+
+**The raster conventions, which are a rule and not a per-file judgement:**
+
+- **Favicons and toolbar icons** (`logo16/32/48/64`, the extension's
+  `icon/16|32|48|128`, `icon1`/`icon2`, expo `favicon.png`) — transparent
+  background, mark in `#0a0a0a`, **ink height = 7N/8 of an N×N canvas**,
+  centred, natural 38:44 aspect.
+- **App and PWA tiles** (`logo192/512`, `*-maskable`, `apple-touch-icon`,
+  `apple-icon`, expo `icon.png`/`ios-light.png`) — opaque **white** tile, mark
+  `#0a0a0a`, ink height 50–55%.
+- **The expo dark and tinted variants** (`ios-dark.png`, `ios-tinted.png`) —
+  transparent, near-white mark, 55%; iOS composites them over its own backdrop.
+- **The two `favicon.ico`** (`bracemark-web`, `bracemark-site`) — three frames
+  each, 16/32/48, following the favicon rule above.
+
+There is **no committed generator** for any of this — the PNGs were produced ad
+hoc, so the rule above is the only thing that makes them reproducible. Two
+consequences worth knowing before you re-render: the geometry reproduces exactly
+from the rule, but the **antialiasing does not** (a fresh render off the same
+path differs from the committed file by up to ~26% alpha on edge pixels alone,
+because a different rasteriser drew it), and a re-render is therefore never a
+byte-clean diff.
+
+**Maskable padding is a measured number: 64.2%.** The mark fits Android's 80%
+safe circle at that ink height and no larger. This is a property of the 0.863
+aspect plus the corner radii, so it is identical for `01`, `06` and `draft4` —
+changing the mark would not have bought slack here. The `-maskable` files ship at
+50%, comfortably inside it; the non-maskable tiles at 55% are **not** maskable
+and must not be substituted.
+
+**Known gap: the browser extension's toolbar icons have no dark-theme variant.**
+`#0a0a0a` on Chrome's dark toolbar is close to invisible. MV3 has no
+manifest-level light/dark icon switch (Firefox's `theme_icons` is Firefox-only),
+and the service worker has no `matchMedia` to drive `action.setIcon` from, so
+this is a real fix rather than a config line. It predates the mark decision — the
+icons were the legacy four-dot artwork until they were regenerated onto `01` —
+and it is not tracked anywhere else.
+
 ### the brand lines, and the store listings
 
 The name settles what the product is _called_. This settles what it _says_ — one
@@ -251,6 +332,9 @@ file.
   listing _copy_ beside them (`listing-copy.ts`) is written and unblocked — it is
   paste-ready for the consoles, and only the browser extension's share of it is
   wired into a build.
+- **The extension's toolbar icons are invisible on a dark browser theme** (see
+  _the mark_). Needs an `action.setIcon` path driven from an extension page or a
+  content script, since the MV3 service worker cannot read the colour scheme.
 - **No X handle yet.** `@bracedotto` is the legacy one, and `twitter:site` in the
   marketing site's root layout is deliberately unset until a Bracemark handle
   exists — a wrong handle credits someone else's account on every share. The bio

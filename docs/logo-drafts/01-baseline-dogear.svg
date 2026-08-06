@@ -1,0 +1,10 @@
+<!-- 01 — BASELINE. The mark currently shipping, copied verbatim from
+     packages/web-ui/src/components/icons/bracemark-icon.tsx. Here only so the
+     alternatives are judged against what they would replace. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+    fill-rule="evenodd"
+    fill="currentColor"
+  />
+</svg>

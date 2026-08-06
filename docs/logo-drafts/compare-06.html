@@ -1,0 +1,161 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Is the mark a Bricolage B?</title><style>
+/* bricolage-latin.woff2 is the latin subset next/font pulled for
+   apps/bracemark-site — copied in here so this page survives a .next clean.
+   Variable, 200..800, the same file the site actually serves. */
+@font-face{font-family:"Bricolage";font-weight:200 800;src:url("bricolage-latin.woff2") format("woff2")}
+:root{--rule:#e5e7eb;--muted:#6b7280}
+*{box-sizing:border-box}
+body{margin:0;padding:40px;background:#fff;color:oklch(0.145 0 0);width:1240px;
+     font:13px/1.5 ui-sans-serif,-apple-system,"Helvetica Neue",sans-serif}
+h1{font-size:20px;margin:0 0 4px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+   margin:40px 0 18px;border-top:1px solid var(--rule);padding-top:12px}
+.sub{color:var(--muted);margin:0 0 18px;max-width:78ch}
+figcaption{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
+figure{margin:0}
+
+/* At font-size:400px Bricolage puts 264px of cap height on the page, with the
+   cap top 68px below the line box top. Every specimen is drawn to that same
+   264px cap so the comparison is like for like; the whole row is then scaled
+   down for display, which changes nothing about the relative sizes. */
+.scale{transform:scale(0.40);transform-origin:0 0;height:180px}
+.row{display:flex;gap:40px;align-items:flex-start;width:2900px}
+.cell{position:relative;width:270px;height:420px}
+.cell .g{position:absolute;left:0;top:-68px;font-family:"Bricolage";font-size:400px;
+         line-height:400px;color:#111}
+.cell svg{position:absolute;top:0}
+
+.ovcell{position:relative;width:300px;height:300px}
+.ovcell .g{position:absolute;top:-68px;font-family:"Bricolage";font-size:400px;
+           line-height:400px;color:#d8d8dc}
+.ovcell svg{position:absolute;top:0}
+
+table{border-collapse:collapse;font-size:12.5px;margin-top:4px}
+th,td{padding:6px 13px;text-align:right;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500}
+tr.mark td{background:#fafafa;font-weight:600}
+.legend{color:var(--muted);font-size:12px;margin-top:12px;max-width:78ch}
+.caps{display:flex;gap:0;width:1160px}
+.caps figcaption{width:124px;font-size:11px}
+
+.lock{display:flex;align-items:center;gap:10px;padding:14px 18px;border:1px solid var(--rule);border-radius:10px;background:#fff}
+.wm{font-family:"Bricolage";font-size:18px;line-height:1;font-weight:600;letter-spacing:-0.025em;color:#111}
+.pair{display:flex;align-items:flex-end;gap:22px;padding:16px 20px;border:1px solid var(--rule);border-radius:10px}
+.pair .bigB{font-family:"Bricolage";font-weight:600;font-size:182px;line-height:120px;color:#111;
+            display:block;height:120px;overflow:hidden}
+</style></head><body>
+
+<h1>Is the mark a Bricolage Grotesque B?</h1>
+<p class="sub">Bricolage is the site's display face (<code>--font-display</code>, loaded in
+<code>apps/bracemark-site/src/app/layout.tsx</code>). It is variable, 200–800, so the question is not just
+"is it Bricolage" but "is it Bricolage at some weight". Everything here is matched on cap height.</p>
+
+<h2>1 · side by side, matched cap height</h2>
+<div class="scale"><div class="row">
+  <div class="cell"><span class="g" style="font-weight:400">B</span></div>
+  <div class="cell"><span class="g" style="font-weight:600">B</span></div>
+  <div class="cell"><span class="g" style="font-weight:800">B</span></div>
+  <div class="cell"><svg style="left:30px" height="264" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg></div>
+  <div class="cell"><svg style="left:30px" height="264" viewBox="95 40 557 640" fill="none"><path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="#111"/></svg></div>
+
+  <div class="cell"><svg style="left:30px" height="264" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H22A5.5 5.5 0 0 1 22 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg></div>
+  <div class="cell"><svg style="left:30px" height="264" viewBox="0 0 38 44" fill="none"><path d="M4 0H23A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H23A5.5 5.5 0 0 1 23 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg></div>
+</div></div>
+<div class="caps">
+  <figcaption>Bricolage 400</figcaption><figcaption>Bricolage 600</figcaption><figcaption>Bricolage 800</figcaption>
+  <figcaption>01-baseline<br>(shipping)</figcaption><figcaption>04b<br>(draft2's B + counters)</figcaption>
+  <figcaption>06<br>(waist deepened)</figcaption><figcaption>07<br>(no dog-ear)</figcaption>
+</div>
+
+<h2>2 · overlaid</h2>
+<p class="sub">Bricolage in grey, the mark outlined in red on top, aligned on the left edge of the stem and the cap line.</p>
+<div class="scale" style="height:130px"><div class="row">
+  <div class="ovcell">
+    <span class="g" style="font-weight:600;left:-31px">B</span>
+    <svg style="left:0" height="264" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="none" stroke="#e11d48" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>
+  </div>
+  <div class="ovcell">
+    <span class="g" style="font-weight:800;left:-28px">B</span>
+    <svg style="left:0" height="264" viewBox="95 40 557 640" fill="none"><path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="none" stroke="#e11d48" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg>
+  </div>
+</div></div>
+<div class="caps"><figcaption style="width:136px">01-baseline over<br>Bricolage 600</figcaption><figcaption style="width:136px">04b over<br>Bricolage 800</figcaption></div>
+
+<h2>3 · measured</h2>
+<p class="sub">Taken off the rendered bitmaps rather than off the outlines, so the font and the SVGs are measured the same way.</p>
+<table>
+  <tr><th>specimen</th><th>w / h</th><th>stem</th><th>waist reach</th><th>waist height</th><th>upper bowl</th><th>lower bowl</th><th>ink</th></tr>
+  <tr><td>Bricolage 400</td><td>0.780</td><td>17.5%</td><td>65.5%</td><td>47.7%</td><td>94.2%</td><td>99.5%</td><td>52.1%</td></tr>
+  <tr><td>Bricolage 600</td><td>0.830</td><td>22.4%</td><td>66.2%</td><td>47.7%</td><td>94.5%</td><td>99.5%</td><td>62.7%</td></tr>
+  <tr><td>Bricolage 800</td><td>0.879</td><td>26.3%</td><td>66.8%</td><td>48.1%</td><td>94.8%</td><td>99.6%</td><td>71.2%</td></tr>
+  <tr class="mark"><td>01-baseline</td><td>0.840</td><td>24.4%</td><td>77.1%</td><td>47.5%</td><td>89.0%</td><td>99.7%</td><td>60.3%</td></tr>
+  <tr><td>draft2 B (no counters)</td><td>0.870</td><td>94.0%</td><td>84.8%</td><td>45.2%</td><td>94.0%</td><td>99.7%</td><td>92.2%</td></tr>
+  <tr class="mark"><td>04b (draft2 + counters)</td><td>0.870</td><td>14.9%</td><td>84.8%</td><td>45.2%</td><td>94.0%</td><td>99.7%</td><td>62.2%</td></tr>
+  <tr class="mark"><td>06 waist deepened</td><td>0.840</td><td>24.4%</td><td>65.2%</td><td>49.8%</td><td>89.0%</td><td>99.7%</td><td>57.7%</td></tr>
+  <tr class="mark"><td>07 plain bowl</td><td>0.840</td><td>24.4%</td><td>67.3%</td><td>49.8%</td><td>92.9%</td><td>99.7%</td><td>61.1%</td></tr>
+</table>
+<p class="legend"><b>waist reach</b> — how far right the silhouette still reaches where the two bowls meet, as a
+share of full width. Lower is a deeper, more pinched waist. <b>stem</b> — width of the left stem as a share of
+glyph width, measured at 22% height. <b>ink</b> — share of the bounding box that is filled.
+<br><br>01-baseline sits inside Bricolage's range on <em>w/h</em>, <em>stem</em> and <em>waist height</em>, and
+outside it on <em>waist reach</em> by 11 points. 04b matches the bowls but its stem is thinner than
+Bricolage's lightest weight while its bowls are heavier than its heaviest.</p>
+
+
+<h2>4 · the lockup that actually ships</h2>
+<p class="sub"><code>apps/bracemark-site/src/components/site-header.tsx:28</code> puts the mark at 28px and the
+word <em>Bracemark</em> in <code>font-display</code> — Bricolage, <code>font-semibold</code> (600),
+<code>tracking-tight</code> — <strong>10px to its right</strong>. So a drawn B and a typeset Bricolage B sit
+side by side in the header of the apex domain. That is why the mark has to agree with the face.</p>
+<div class="row" style="width:auto;flex-wrap:wrap;gap:56px">
+  <figure>
+    <div class="lock">
+      <svg height="28" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg>
+      <span class="wm">Bracemark</span>
+    </div>
+    <figcaption>01-baseline (shipping)</figcaption>
+  </figure>
+  <figure>
+    <div class="lock">
+      <svg height="28" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H22A5.5 5.5 0 0 1 22 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg>
+      <span class="wm">Bracemark</span>
+    </div>
+    <figcaption>06 waist deepened</figcaption>
+  </figure>
+  <figure>
+    <div class="lock">
+      <svg height="28" viewBox="0 0 38 44" fill="none"><path d="M4 0H23A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H23A5.5 5.5 0 0 1 23 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg>
+      <span class="wm">Bracemark</span>
+    </div>
+    <figcaption>07 no dog-ear</figcaption>
+  </figure>
+</div>
+
+<p class="sub" style="margin-top:34px">The same two B's at matched cap height — the mark's B beside the
+wordmark's B, which is the comparison the header is making 10px apart.</p>
+<div class="row" style="width:auto;flex-wrap:wrap;gap:56px">
+  <figure>
+    <div class="pair">
+      <svg height="120" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg>
+      <span class="bigB">B</span>
+    </div>
+    <figcaption>01-baseline</figcaption>
+  </figure>
+  <figure>
+    <div class="pair">
+      <svg height="120" viewBox="0 0 38 44" fill="none"><path d="M4 0H22L33 11A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H22A5.5 5.5 0 0 1 22 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg>
+      <span class="bigB">B</span>
+    </div>
+    <figcaption>06</figcaption>
+  </figure>
+  <figure>
+    <div class="pair">
+      <svg height="120" viewBox="0 0 38 44" fill="none"><path d="M4 0H23A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H23A5.5 5.5 0 0 1 23 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z" fill-rule="evenodd" fill="#111"/></svg>
+      <span class="bigB">B</span>
+    </div>
+    <figcaption>07</figcaption>
+  </figure>
+</div>
+
+</body></html>

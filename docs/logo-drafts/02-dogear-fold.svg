@@ -1,0 +1,20 @@
+<!-- SUPERSEDED by 06-waist-deepened.svg. This is 01-baseline's letterform, so it
+     carries the 77% waist that 06 corrects to 65%. Kept only as the record of
+     the parallel-chamfer idea, which 08-dogear-band.svg carries forward onto
+     the corrected letterform.
+
+     02 — DOG-EAR, DEEPENED. Same concept as the baseline, two changes:
+     the 45° cut grows from 11 units to 13, and the upper counter's top-right
+     corner is chamfered on the SAME 45° line, offset by one bar-width (6.4
+     units perpendicular). That parallel pair is what makes the corner read as
+     a folded page rather than a corner someone sliced off — a fold has two
+     edges, the baseline only draws one. Still one path, one colour, evenodd.
+     The cut sits on x−y=20 and the chamfer on x−y=12; 8/√2 = 5.66 units of
+     perpendicular separation, which matches the 6-unit bars elsewhere. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M4 0H20L33 13V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H18L22 10A4 4 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+    fill-rule="evenodd"
+    fill="currentColor"
+  />
+</svg>

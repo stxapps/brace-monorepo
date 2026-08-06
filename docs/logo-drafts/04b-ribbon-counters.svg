@@ -1,0 +1,14 @@
+<!-- 04b — RIBBON AS COUNTER, PLUS A LOWER COUNTER. The one study here that
+     edits the B, because the ribbon alone cannot carry the letter: a B needs
+     two counters and draft1/draft2 have none, which is why they go to a solid
+     blob when you shrink them. On the 16px row this is the only one of the
+     five still legible as a letter.
+     The ribbon is 167 × 315 (1:1.9) with a 110-deep swallowtail (35%) — wide
+     enough to sit where the upper counter belongs and do that job as well as
+     its own, long enough to still read as a ribbon. A stadium counter opens
+     the lower bowl; its left edge is aligned with the ribbon's at x=178 so the
+     stem holds one width down the whole letter, and the bars around it come
+     out 75 top / 82 right / 80 bottom, near enough even. -->
+<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 40V355L261.5 245L345 355V40ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
+</svg>

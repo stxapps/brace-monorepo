@@ -1,0 +1,22 @@
+<!-- 06 — 01-baseline WITH THE WAIST CUT DEEPER. Keeps the dog-ear.
+     The one measured way the shipping mark falls outside Bricolage Grotesque's
+     range: its waist still reaches 77% of the glyph width, where Bricolage
+     holds 65-67% at every weight from 400 to 800. A shallow waist welds the two
+     bowls into one mass down the right side, and the right side is what carries
+     the letter when the mark is small.
+     Waist pulled from x=28 to x=24, which measures 65.2% against Bricolage
+     600's 66.2%.
+     The fix is not just moving the point. 01-baseline's upper bowl is not a
+     bowl — the 45 degree cut lands on a VERTICAL segment at x=33, so the right
+     side goes straight down and then turns hard into the waist. Deepen the
+     waist under that and you get a spur. So the vertical segment is gone: the
+     cut now runs straight into a single convex arc that carries the bowl round
+     and into the waist, the way Bricolage's does.
+     Same 38x44 grid, same arc-only construction, one path, one colour. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M4 0H22L33 11A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H22A5.5 5.5 0 0 1 22 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+    fill-rule="evenodd"
+    fill="currentColor"
+  />
+</svg>

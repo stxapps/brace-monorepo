@@ -1,0 +1,21 @@
+<!-- 07 — THE SAME LETTERFORM WITH NO DOG-EAR. The base to build a ribbon on.
+     06 is 01-baseline with the waist fixed and the dog-ear kept. This is the
+     same corrected letterform with the cut removed, so the upper bowl is a
+     plain curve. It exists because the dog-ear and the ribbon are alternative
+     answers to the same question — how the top of the mark says "bookmark" —
+     and every ribbon study so far has been drawn on draft2's letterform rather
+     than on a corrected version of this one.
+     Measured against Bricolage 600: waist 67.3% (vs 66.2%), upper bowl 92.9%
+     (vs 94.5%), w/h 0.840 (vs 0.830), ink 61.1% (vs 62.7%). The closest of
+     anything in this directory to a real grotesque B, which is the point — a
+     mark that sits beside Bricolage headlines on the marketing site should
+     look like it belongs to the same family without being a trace of it.
+     Drop a ribbon knockout into the upper bowl and this becomes the 04 family
+     rebuilt on a letterform that actually holds up. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M4 0H23A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H23A5.5 5.5 0 0 1 23 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+    fill-rule="evenodd"
+    fill="currentColor"
+  />
+</svg>

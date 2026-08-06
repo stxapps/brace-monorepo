@@ -1,0 +1,16 @@
+<!-- 05 — BRACE SPINE. The one concept that argues from the name rather than
+     from the category: "Bracemark" is brace + mark, and no bookmark competitor
+     can own a curly brace. The B's spine is replaced by a `{`, the two bowls
+     stay where a B's bowls belong, so it reads `{` and B at once — the same
+     double reading the dog-ear gets from a folded page.
+     Drawn as strokes, not a filled silhouette, which is the honest trade:
+     it is by far the lightest mark here and the first to break at 16px. Judge
+     it on the 16px row before falling for it at 512. Still one colour and
+     still currentColor, so the theming story is unchanged. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M9.5 2.5C5.5 2.5 5.5 4.5 5.5 8V17C5.5 20 4.5 22 3 22C4.5 22 5.5 24 5.5 27V36C5.5 39.5 5.5 41.5 9.5 41.5" />
+    <path d="M15 2.5H22A8 8 0 0 1 22 18.5H15" />
+    <path d="M15 25.5H24A8 8 0 0 1 24 41.5H15" />
+  </g>
+</svg>

@@ -1,0 +1,35 @@
+<!-- 08 — THE FOLD, MADE OBVIOUS. 06's corrected letterform, plus the flap in
+     orange-400. This is the only way found to put the accent on a dog-ear that
+     is still visible at 16px, and it comes with a caveat worth reading first.
+
+     THE CONSTRAINT. A folded page corner has a fixed visual grammar: the corner
+     missing from the silhouette, plus the flap it folded back, shown in another
+     tone. The flap is the removed corner mirrored across the fold line, so for
+     a cut running (22,0) to (33,11) the flap is the triangle (22,0)-(33,11)-
+     (22,11) — legs of 11. It does not fit. The upper counter bulges to x=27.5
+     and the outer edge is at 33, so there are only 5.5 units between them, one
+     bar-width. A flap small enough to clear the counter has legs of about 5,
+     which is 2px at 16px and reads as a stray orange pixel, not as a fold.
+
+     So what is drawn here is a BAND along the fold line, one bar-width wide,
+     with the upper counter chamfered parallel to it so the band has somewhere
+     to sit. That is the same move 02 made in one colour; this fills it.
+
+     THE CAVEAT. A band is not a fold. It reads as a diagonal wedge of colour
+     across the corner — legible, but the fold grammar is gone, so what it says
+     is "this corner is orange" rather than "this page is folded". The dog-ear's
+     whole argument was that it is a SILHOUETTE feature and silhouettes survive
+     downscaling; colour is being added to solve a problem the dog-ear did not
+     have, on the smallest area in the mark.
+
+     Compare against 06 before taking it. If the mark needs to carry the accent
+     at icon sizes, the ribbon studies (04e) have twenty times the area to do it
+     in, and that is the real choice here — not band versus flap. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M4 0H22L33 11A11 11 0 0 1 24 22A12 11.2 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H19L23 10A4.5 4.5 0 0 1 22 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+    fill-rule="evenodd"
+    fill="currentColor"
+  />
+  <path d="M13.5 0H22L33 11H24.5Z" fill="oklch(0.75 0.183 55.934)" />
+</svg>

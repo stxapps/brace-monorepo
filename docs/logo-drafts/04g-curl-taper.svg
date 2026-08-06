@@ -1,0 +1,8 @@
+<!-- 04g — CURL, SYMMETRIC. The same flare taken to both sides: 131 wide at
+     the top edge, 167 by y=100. Reads as the ribbon coming out from BEHIND
+     the cover rather than draping over it, and unlike 04f it does not make the
+     ribbon look like it is leaning. Also a 512px-only refinement. -->
+<svg viewBox="95 40 557 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M567.728 330.909C655 243.636 631.784 84.3071 508.707 40.0002C447.064 40 182.273 39.9999 153.182 40.0001C124.091 40.0005 95.0002 63.2033 95.0002 98.1819L95.0001 154.038C95 284.858 94.9996 598.266 95 621.818C95.0004 650.909 118.283 680 153.182 680C178.807 680 329.467 680 432.243 680H516.818C714.02 607.273 662.273 374.545 567.728 330.909ZM178 430H485A85 85 0 0 1 485 600H178Z" fill-rule="evenodd" fill="currentColor" />
+  <path d="M196 40C188 68 180 86 178 100V355L261.5 245L345 355V100C343 86 335 68 327 40Z" fill="oklch(0.75 0.183 55.934)" />
+</svg>

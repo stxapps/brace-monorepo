@@ -1,0 +1,24 @@
+<!-- 03 — THE DRAFT'S IDEA, FIXED. Keeps the negative-space ribbon and repairs
+     what broke it in draft1:
+       - the lower counter is restored, so the letter has two counters and
+         reads as a B rather than as a slotted blob;
+       - the upper bowl is SQUARED off (rounded corner, vertical right edge at
+         x=28) instead of drawn as a semicircular bowl. This is the non-obvious
+         fix: a bowl with no counter is a solid half-disc, so the ink to the
+         right of the ribbon comes out 12 units fat and the top half turns into
+         a lump. A straight edge parallel to the ribbon's right wall holds that
+         ink at 7 units, the same weight as the bars everywhere else;
+       - the swallowtail is 7 units deep on a 22-unit ribbon (32%), against
+         draft1's 11%, and the tail hangs 3 units past the waist so it reads as
+         a ribbon lying over the page rather than as a slot.
+     The ribbon is part of the outline, not a white shape painted on top, so
+     the mark composes on any surface and themes with currentColor.
+     The cost, visible on the size ladder: the squared top and round bottom are
+     two different vocabularies in one letter. -->
+<svg width="38" height="44" viewBox="0 0 38 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M4 0H9V22L15 15L21 22V0H24A4 4 0 0 1 28 4V19H24A12.5 12.5 0 0 1 24 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 27H24A6 6 0 0 1 24 39H9Z"
+    fill-rule="evenodd"
+    fill="currentColor"
+  />
+</svg>
