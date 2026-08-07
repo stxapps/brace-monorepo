@@ -325,7 +325,11 @@ export const DB_NAME = 'bracemark-data.db';
 // orderings (date modified / date added) over the two groupings (per type /
 // per list); url and url-key are the exact-lookup indexes. All the sparse ones
 // are partial so non-carrying rows (e.g. `files/` content) stay out.
-const DDL = `
+//
+// Exported for the store specs, which run it against an in-memory sqlite
+// (item-store.spec.ts) so the guarded writes are tested over the REAL schema —
+// never imported by runtime code outside this module.
+export const DDL = `
   CREATE TABLE IF NOT EXISTS sync_meta (
     username TEXT PRIMARY KEY NOT NULL,
     sync_cursor_updated_at INTEGER NOT NULL,

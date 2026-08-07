@@ -141,15 +141,36 @@ export class UserDataDO extends DurableObject<Bindings> {
   // ordered against each other. Running the whole batch in one RPC keeps it to a
   // single round trip to this serialized SQLite. Returns each entry's recorded
   // `updatedAt`, in input order, for the client to store and advance its cursor to.
+  //
+  // THE CLAMP: an entry whose `updatedAt` is not ahead of every row already in the
+  // log is recorded at `MAX(updated_at) + 1` instead. A put's timestamp is minted at
+  // PUT time (R2's `LastModified`) but only becomes visible here at commit time, and
+  // the two can be minutes apart (the rest of a chunk's uploads, retry backoff) — so
+  // without the clamp a slow committer could append an op BEHIND a cursor some other
+  // client already advanced past (its own commits, or a faster committer's, stamped
+  // later), and that client's keyset pull would skip the op forever: silent
+  // cross-device staleness with no error and nothing to retry. Clamping makes every
+  // append strictly newer than any cursor this log could have issued, which is what
+  // the doc's "anything that lands mid-sync carries a later `updatedAt`" promise
+  // actually requires (docs/local-first-sync.md — the three flows). Within one batch
+  // the shared floor is fine: the batch commits atomically under this serialized DO,
+  // so a puller sees all of it or none, and the path tiebreak orders its ties.
+  // Consequences are benign by construction: per-path order is preserved (the prior
+  // op for a path is already in the log, so the clamp only ever lifts the new one
+  // above it), and a stamp nudged past R2's real `LastModified` at most costs a
+  // fallback-listing comparison one redundant, idempotent re-download.
   commitOps(entries: CommitEntry[]): { results: CommitResult[] } {
     const sizes = fileSizesRepo(this.sql);
     const ops = opLogsRepo(this.sql);
+    const { newestUpdatedAt } = ops.bounds();
+    const floor = newestUpdatedAt === null ? 0 : newestUpdatedAt + 1;
     const results = entries.map(({ op, path, updatedAt, size }) => {
+      const stamped = Math.max(updatedAt, floor);
       if (op === 'put') sizes.set(path, size);
       else sizes.remove(path);
 
-      ops.append(op, path, updatedAt);
-      return { path, updatedAt };
+      ops.append(op, path, stamped);
+      return { path, updatedAt: stamped };
     });
     return { results };
   }

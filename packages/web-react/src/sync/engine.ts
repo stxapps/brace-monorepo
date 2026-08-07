@@ -87,8 +87,12 @@ const UPLOAD_CONCURRENCY = 8;
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // the chunk must fit BOTH the sign cap and the commit cap in one call each. Both are
 // 1000 today; min() stays correct if they ever diverge. Bounding the chunk this way
-// is what keeps each presigned PUT URL's mint-to-PUT latency inside its own upload
-// window, well under the 5-min TTL, on a push of any size.
+// keeps each presigned PUT URL's mint-to-PUT latency inside its own chunk's upload
+// window — for KB-sized index blobs that is well under the 5-min TTL on any push. A
+// `files/` content chunk CAN outlive the TTL on a slow uplink; that is absorbed per
+// blob, not per chunk: an expired-URL PUT fails only its own op (uploadBlobs), the
+// chunk still commits the blobs that landed, and the rest retry next cycle under
+// fresh URLs — monotonic progress either way, never a livelock.
 const PUT_BATCH = Math.min(SIGN_BATCH, COMMIT_BATCH);
 
 // A path under `files/` is heavy content (a saved page copy, screenshot). Per the doc,
@@ -248,7 +252,16 @@ export async function loadEntityContent(
   if (!blob) return undefined;
 
   const data = await decryptEntity(deps.encryptionKey, blob);
-  await db.items.update(path, { data });
+  // Cache under a compare-and-set on the stamp read at the top: a sync pull can
+  // restamp this path mid-fetch (newer `updatedAt`, cached `data` dropped), and
+  // landing the older blob under the new stamp would serve stale content FOREVER —
+  // the engine's staleness skip only re-downloads when the server stamp moves
+  // again. Losing the race just skips the cache: the caller still gets the bytes
+  // it asked for, and the next call fetches the newer version.
+  await db.transaction('rw', db.items, async () => {
+    const current = await db.items.get(path);
+    if (current?.updatedAt === rec.updatedAt) await db.items.update(path, { data });
+  });
   return data;
 }
 
@@ -271,10 +284,17 @@ export async function loadEntityContents(
   const records = await db.items.bulkGet(paths);
   const missingPaths: string[] = [];
   const wanted: string[] = [];
+  // The stamp each fetch starts from, for the same compare-and-set cache write
+  // loadEntityContent does (see there): a path restamped mid-fetch skips the cache
+  // rather than pinning old bytes under the new stamp.
+  const baseStamps = new Map<string, number>();
   paths.forEach((path, i) => {
     const rec = records[i];
     if (!rec) missingPaths.push(path);
-    else if (!rec.data) wanted.push(path);
+    else if (!rec.data) {
+      wanted.push(path);
+      baseStamps.set(path, rec.updatedAt);
+    }
   });
 
   const total = wanted.length;
@@ -296,7 +316,10 @@ export async function loadEntityContents(
         : undefined;
       if (blob) {
         const data = await decryptEntity(deps.encryptionKey, blob);
-        await db.items.update(path, { data });
+        await db.transaction('rw', db.items, async () => {
+          const current = await db.items.get(path);
+          if (current?.updatedAt === baseStamps.get(path)) await db.items.update(path, { data });
+        });
       } else {
         missingPaths.push(path);
       }
@@ -353,7 +376,17 @@ async function incrementalCycle(
 
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
-  const committed = await pushPending(deps, pending, outcome);
+  const { committed, orphanedPaths } = await pushPending(deps, pending, outcome);
+  // Complete the self-heal: a wedged op the push dropped (uploadBlobs) had its path
+  // reserved for the push by the reconcile above, keeping the server's copy OUT of
+  // the download set — re-add whatever this window shows for it, so the heal
+  // restores the entity instead of leaving the path locally absent. (A path with no
+  // op in the window stays absent until a fallback re-lists it — the op that put it
+  // there is behind the cursor.)
+  for (const path of orphanedPaths) {
+    const op = serverOps.get(path);
+    if (op?.op === 'put') downloads.push({ path: op.path, updatedAt: op.updatedAt });
+  }
   await storeDownloads(deps, downloads);
   await applyDeletes(deps.username, localDeletes);
 
@@ -385,7 +418,7 @@ async function fallbackCycle(
   outcome: SyncOutcome,
 ): Promise<void> {
   const files = await listAllFiles(deps.api);
-  const serverPaths = new Set(files.map((f) => f.path));
+  const serverFiles = new Map(files.map((f) => [f.path, f.updatedAt]));
   const pendingPaths = new Set(pending.map((p) => p.path));
 
   // One key-only cursor over the local table projects path -> updatedAt WITHOUT
@@ -411,7 +444,7 @@ async function fallbackCycle(
   // drop it. (A local-only path with a pending put is an unpushed create.)
   const localDeletes: string[] = [];
   for (const path of localUpdatedAt.keys()) {
-    if (serverPaths.has(path) || pendingPaths.has(path)) continue;
+    if (serverFiles.has(path) || pendingPaths.has(path)) continue;
     localDeletes.push(path);
   }
 
@@ -423,7 +456,13 @@ async function fallbackCycle(
   // the deletion) and frees the path's file_sizes quota entry. Commit is idempotent
   // on both stores, so pushing unconditionally is always safe; dropping the op
   // would leak the quota entry forever.
-  const committed = await pushPending(deps, pending, outcome);
+  const { committed, orphanedPaths } = await pushPending(deps, pending, outcome);
+  // Same heal as the incremental cycle: a dropped op's path was excluded from the
+  // download set above — re-add the listed server copy so it comes back.
+  for (const path of orphanedPaths) {
+    const updatedAt = serverFiles.get(path);
+    if (updatedAt !== undefined) downloads.push({ path, updatedAt });
+  }
   await storeDownloads(deps, downloads);
   await applyDeletes(deps.username, localDeletes);
 
@@ -437,10 +476,21 @@ async function fallbackCycle(
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
 
+// Transient upload failures collected across the put phases (uploadBlobs) — the
+// count decides whether the metadata phase may run and whether the cycle must
+// reject; the first error is what it rejects with (the real transport failure,
+// not a summary). An accumulator for the same reason SyncOutcome is one.
+interface UploadFailures {
+  count: number;
+  firstError: unknown;
+}
+
 // Drain a set of pending ops: sign → PUT → commit (docs flow #3). Returns the
 // committed results (R2's authoritative clock) so the caller can advance its cursor
-// over its own writes. Removes each committed path from the queue; a `no_object`
-// failure is left queued to re-PUT next drain.
+// over its own writes, plus the paths of ops the self-heal dropped (uploadBlobs) so
+// the caller can re-add their server copies to its download set. Removes each
+// committed path from the queue; a `no_object` failure is left queued to re-PUT
+// next drain.
 //
 // Runs in the global phase order [delete-metadata, delete-content, put-content,
 // put-metadata] — the mirror pair of the multi-file-consistency rules (docs
@@ -452,16 +502,23 @@ async function fallbackCycle(
 // PUT URL never outlives its own chunk's upload window, and a push too large to
 // finish inside one 5-min TTL still makes monotonic progress instead of livelocking
 // on an all-up-front sign whose tail expires before it can be uploaded.
+//
+// THROWS after the phases when any upload transiently failed — not before them, so
+// the cycle keeps its progress (committed chunks stay committed; failed ops stay
+// queued for fresh URLs next drain), and not silently, because a rejection is the
+// contract every caller schedules a retry and shows an error status through.
 async function pushPending(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   outcome: SyncOutcome,
-): Promise<CommitResult[]> {
-  if (ops.length === 0) return [];
+): Promise<{ committed: CommitResult[]; orphanedPaths: string[] }> {
+  if (ops.length === 0) return { committed: [], orphanedPaths: [] };
 
   const puts = ops.filter((o) => o.op === 'put');
   const deletes = ops.filter((o) => o.op === 'delete');
   const committed: CommitResult[] = [];
+  const orphanedPaths: string[] = [];
+  const failures: UploadFailures = { count: 0, firstError: undefined };
 
   // Phase 1+2: deletes carry no blob to upload — the commit itself drives the R2
   // delete (the client can't; files/sign mints only PUT/GET URLs). Metadata first,
@@ -486,17 +543,29 @@ async function pushPending(
       deps,
       puts.filter((o) => isContentPath(o.path)),
       outcome,
+      orphanedPaths,
+      failures,
     )),
   );
-  committed.push(
-    ...(await pushPuts(
-      deps,
-      puts.filter((o) => !isContentPath(o.path)),
-      outcome,
-    )),
-  );
+  // A content upload that failed left its op queued — so the metadata phase (which
+  // may reference that content) is HELD this cycle, or a puller could land metadata
+  // whose content 404s: the exact breach the phase order exists to prevent. Held
+  // wholesale because the engine is schema-blind — it can't tell which metadata is
+  // safe. The held ops just stay queued; the next drain retries both halves in order.
+  if (failures.count === 0) {
+    committed.push(
+      ...(await pushPuts(
+        deps,
+        puts.filter((o) => !isContentPath(o.path)),
+        outcome,
+        orphanedPaths,
+        failures,
+      )),
+    );
+  }
 
-  return committed;
+  if (failures.count > 0) throw failures.firstError;
+  return { committed, orphanedPaths };
 }
 
 // Drive a homogeneous put set (all content OR all metadata — the caller splits and
@@ -508,12 +577,14 @@ async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
   outcome: SyncOutcome,
+  orphanedPaths: string[],
+  failures: UploadFailures,
 ): Promise<CommitResult[]> {
   const committed: CommitResult[] = [];
   for (const batch of chunk(puts, PUT_BATCH)) {
     const signed = await signPushable(deps, batch, outcome);
     if (signed === null) continue;
-    const orphaned = await uploadBlobs(deps, signed.ops, signed.urls);
+    const { orphaned, failed } = await uploadBlobs(deps, signed.ops, signed.urls, failures);
     // A put with no local bytes left (see uploadBlobs) can never be satisfied, so it is
     // dropped from the queue rather than committed into a guaranteed `no_object` that
     // requeues it forever. Dropped BEFORE the commit, so the op log never records an op
@@ -522,8 +593,17 @@ async function pushPuts(
     let uploaded = signed.ops;
     if (orphaned.length > 0) {
       await clearDrainedOps(orphaned);
+      orphanedPaths.push(...orphaned.map((o) => o.path));
       const dropped = new Set(orphaned.map((o) => o.path));
-      uploaded = signed.ops.filter((o) => !dropped.has(o.path));
+      uploaded = uploaded.filter((o) => !dropped.has(o.path));
+    }
+    // A transiently-failed PUT stays queued but is excluded from the commit: unlike an
+    // unsigned path there is nothing gained by asking the server to HEAD an object we
+    // know we didn't send — on a big failed chunk that's up to a thousand doomed
+    // entries per cycle — and the failure is already surfaced through `failures`.
+    if (failed.length > 0) {
+      const skipped = new Set(failed.map((o) => o.path));
+      uploaded = uploaded.filter((o) => !skipped.has(o.path));
     }
     committed.push(...(await commitBatched(deps, uploaded)));
   }
@@ -601,37 +681,49 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
     const { results } = await deps.api.call(opsCommitEndpoint, {
       ops: batch.map((o) => ({ op: o.op, path: o.path })),
     });
-    for (const r of results) {
-      committed.push(r);
-      await db.items.update(r.path, { updatedAt: r.updatedAt });
-    }
+    committed.push(...results);
+    // All of a batch's restamps share one rw transaction — update() per result
+    // opened a transaction each, which made a 1000-op commit pay a thousand IDB
+    // round trips for what is one logical write. update() still no-ops per row
+    // when the record is gone (a committed delete has nothing to stamp).
+    await db.transaction('rw', db.items, async () => {
+      for (const r of results) await db.items.update(r.path, { updatedAt: r.updatedAt });
+    });
     const accepted = new Set(results.map((r) => r.path));
     await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
   }
   return committed;
 }
 
-// Encrypt and PUT each op's local blob to its signed URL. Returns the ops whose local
-// bytes are GONE — ones the drain can never satisfy.
+// Encrypt and PUT each op's local blob to its signed URL. Sorts the ops it could
+// not move into two buckets the caller treats differently, because the three
+// skip shapes look alike and are not:
 //
-// The two skips look alike and are not. An unsigned path (no URL came back) is
-// transient: leaving it queued IS the retry, and the commit's `no_object` is the
-// honest report. A path with no local record (or a record stripped of its bytes) is
-// TERMINAL: a write puts the record and enqueues its op in one transaction
-// (data/mutations.ts writeBytesWith), so an op without bytes is never a write that
-// hasn't landed yet — it is a record that went missing underneath a queued op. Nothing
-// will ever put those bytes back, so retrying is a permanent wedge: the pending count
-// sticks above zero and no cycle can drain it. Reported up so the caller drops it.
-//
-// Since applyDeletes stopped producing that state it should be unreachable; it stays
-// as the self-heal for queues already wedged by it (and for any future route to the
-// same shape), because a queue that can't drain is invisible to every other repair.
+//  - `orphaned` — no local record, or a record stripped of its bytes. TERMINAL: a
+//    write puts the record and enqueues its op in one transaction
+//    (data/mutations.ts writeBytesWith), so an op without bytes is never a write
+//    that hasn't landed yet — it is a record that went missing underneath a queued
+//    op, and nothing will ever put those bytes back. Retrying is a permanent
+//    wedge (the pending count sticks above zero forever), so the caller drops it.
+//    Since applyDeletes stopped producing that state it should be unreachable; it
+//    stays as the self-heal for queues already wedged by it, because a queue that
+//    can't drain is invisible to every other repair.
+//  - `failed` — the PUT itself threw (network blip, an expired presigned URL on a
+//    chunk that outlived the TTL). TRANSIENT: the op stays queued and re-signs
+//    next drain; recorded on `failures` so the cycle still rejects after the
+//    phases instead of reporting a false 'idle'. Caught per op, so one bad blob
+//    no longer aborts its whole chunk before the chunk could commit anything —
+//    which on a chunk too big for one TTL window was a deterministic livelock.
+//  - an unsigned path (no URL came back): also transient — leaving it queued IS
+//    the retry, and the commit's `no_object` is the honest report.
 async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   urls: Map<string, string>,
-): Promise<PendingOpRecord[]> {
+  failures: UploadFailures,
+): Promise<{ orphaned: PendingOpRecord[]; failed: PendingOpRecord[] }> {
   const orphaned: PendingOpRecord[] = [];
+  const failed: PendingOpRecord[] = [];
   await mapLimit(ops, UPLOAD_CONCURRENCY, async (op) => {
     const rec = await db.items.get(op.path);
     if (!rec?.data) {
@@ -642,9 +734,15 @@ async function uploadBlobs(
     const url = urls.get(op.path);
     if (!url) return;
 
-    await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
+    try {
+      await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
+    } catch (err) {
+      failed.push(op);
+      failures.count += 1;
+      failures.firstError ??= err;
+    }
   });
-  return orphaned;
+  return { orphaned, failed };
 }
 
 // --- download / store / delete ----------------------------------------------

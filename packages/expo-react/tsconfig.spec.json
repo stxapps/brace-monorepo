@@ -8,7 +8,7 @@
   "include": [
     "jest.config.ts",
     "jest.config.cts",
-    "src/testing/setup.ts",
+    "src/testing/**/*.ts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
     "src/**/*.test.tsx",

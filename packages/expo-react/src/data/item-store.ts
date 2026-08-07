@@ -163,11 +163,20 @@ export async function deleteItemsUnqueued(username: string, paths: string[]): Pr
   });
 }
 
-// Stamp R2's authoritative `updatedAt` onto a committed path (sync/engine.ts).
-// A no-op if the row is gone (a committed delete has no record left to stamp) —
+// Stamp R2's authoritative `updatedAt` onto a batch of committed paths
+// (sync/engine.ts commitBatched) — one transaction for the whole batch rather
+// than a statement-per-path round trip through the driver. Each UPDATE is a
+// no-op if its row is gone (a committed delete has no record left to stamp) —
 // the same forgiveness as Dexie's `update`.
-export async function stampItemUpdatedAt(path: string, updatedAt: number): Promise<void> {
-  getDb().update(items).set({ updatedAt }).where(eq(items.path, path)).run();
+export async function stampItemUpdatedAts(
+  stamps: { path: string; updatedAt: number }[],
+): Promise<void> {
+  if (stamps.length === 0) return;
+  getDb().transaction((tx) => {
+    for (const s of stamps) {
+      tx.update(items).set({ updatedAt: s.updatedAt }).where(eq(items.path, s.path)).run();
+    }
+  });
 }
 
 // Flip a `files/` content row's materialization flag (db.ts `has_data_file`) —
@@ -175,6 +184,22 @@ export async function stampItemUpdatedAt(path: string, updatedAt: number): Promi
 // disk. Same row-gone forgiveness as above.
 export async function markItemDataFile(path: string, hasDataFile: boolean): Promise<void> {
   getDb().update(items).set({ hasDataFile }).where(eq(items.path, path)).run();
+}
+
+// The compare-and-set variant for the engine's lazy-load path: flip the flag only
+// if the row still sits at the `updatedAt` the download started from. A sync pull
+// can restamp the path mid-materialize (the re-stored row resets the flag and its
+// disk file is torn down), and blindly marking it would pin the OLDER plaintext
+// under the newer stamp — stale content served as current until the server moves
+// again. Returns whether the flag was set; on false the caller owns the stale
+// plaintext it just wrote (sync/engine.ts loadEntityContent).
+export async function markItemDataFileIfCurrent(path: string, updatedAt: number): Promise<boolean> {
+  const res = getDb()
+    .update(items)
+    .set({ hasDataFile: true })
+    .where(and(eq(items.path, path), eq(items.updatedAt, updatedAt)))
+    .run();
+  return res.changes > 0;
 }
 
 // The row + junction delete, tx-taking — for callers that compose it into a LARGER

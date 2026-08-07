@@ -64,6 +64,34 @@ describe('UserDataDO op log', () => {
     expect(second.hasMore).toBe(false);
   });
 
+  // The clamp: a put's timestamp is minted at PUT time (R2's LastModified) but only
+  // becomes visible at commit time, so a slow committer can arrive carrying a stamp
+  // older than ops already in the log — behind cursors other clients have already
+  // advanced past, where a keyset pull would never see it. commitOps must lift such
+  // an entry above everything recorded, and return the lifted stamp (it is what the
+  // committing client stores locally and advances its own cursor to).
+  it('clamps a commit that arrives with a stamp behind the log', async () => {
+    const stub = userDataStub(env, 'user-clamp');
+    await stub.commitOps([{ op: 'put', path: 'links/fast.enc', updatedAt: 5000, size: 1 }]);
+
+    // The slow committer: its blob was PUT at t=1000, but its commit lands after
+    // fast.enc's. Recorded — and returned — as newest + 1, never 1000.
+    const { results } = await stub.commitOps([
+      { op: 'put', path: 'links/slow.enc', updatedAt: 1000, size: 1 },
+    ]);
+    expect(results).toEqual([{ path: 'links/slow.enc', updatedAt: 5001 }]);
+
+    // A cursor at the pre-commit newest now finds the late op instead of skipping it.
+    const pulled = await stub.listOps(5000, 'links/fast.enc', 500);
+    expect(pulled.ops).toEqual([{ op: 'put', path: 'links/slow.enc', updatedAt: 5001 }]);
+
+    // An in-order commit is untouched — the clamp only engages on the race.
+    const inOrder = await stub.commitOps([
+      { op: 'put', path: 'links/next.enc', updatedAt: 9000, size: 1 },
+    ]);
+    expect(inOrder.results[0].updatedAt).toBe(9000);
+  });
+
   it('reports null bounds for a never-written log', async () => {
     const empty = await userDataStub(env, 'user-empty').listOps(null, null, 500);
     expect(empty).toEqual({

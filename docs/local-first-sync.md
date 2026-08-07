@@ -318,8 +318,17 @@ extraction.title ?? host(url)`). Written by client extractors (the browser
   **viewport/scroll** fetches per-row media (thumbnail/screenshot) as rows come
   into view (prefetch slightly ahead); **open** fetches the full saved page copy.
   Each fetched blob is decrypted once and **cached in Dexie**, so re-views are
-  instant and offline. The one tradeoff: a never-opened page copy isn't available
-  offline (see _deferred_ — offline pinning).
+  instant and offline. That cache write is a **compare-and-set on the `updatedAt`
+  the fetch started from**: a lazy fetch spans network round trips, and a sync
+  pull that lands inside one restamps the path to a newer version (dropping the
+  cached bytes). Writing the older blob under that new stamp would pin **stale
+  content forever** — the staleness skip only re-downloads when the server stamp
+  moves _again_, and it just did. Losing the race simply skips the cache: the
+  caller still gets the bytes it asked for, and the next call fetches the new
+  version. expo stores the plaintext as a file rather than a column, so there the
+  CAS guards the `has_data_file` flag and a lost race deletes the stale file and
+  reports "not available" instead. The one tradeoff: a never-opened page copy
+  isn't available offline (see _deferred_ — offline pinning).
 - **Plaintext typing: the namespace says what's inside, never the blob.** On the
   wire every object is the same opaque encrypted frame (see _crypto boundary —
   blob wire format_); nothing about an R2 object distinguishes JSON from an
@@ -368,7 +377,9 @@ get the ops whose `updatedAt` is newer than the cursor, apply them (download +
 decrypt + store for `put`, remove for `delete`), and advance the cursor to the
 **newest `updatedAt` in the response** (not the server's current newest — anything
 that lands mid-sync simply carries a later `updatedAt` and is caught next time;
-this is why the race in older drafts is a non-issue).
+this is why the race in older drafts is a non-issue). That promise is not free:
+it is what the **commit clamp** under _push_ enforces, since a put's stamp is
+minted at PUT time and could otherwise land behind a cursor already issued.
 
 **3. Push (new / edited / deleted entity).** Write to the local store first and
 enqueue the mutation in the pending-ops queue, then drain the queue:
@@ -423,6 +434,43 @@ duplicate costs one redundant download and nothing else — server-side op
 coalescing (see _deferred_) trims the extra rows later. Never fail a commit on a
 duplicate path.
 
+> **A push is chunked, and a failed upload costs its own op — never its chunk.**
+> One pipeline pass signs, uploads, and commits a **single chunk** (bounded by the
+> smaller of the `files/sign` and `ops/commit` caps), rather than signing
+> everything up front: that keeps each presigned PUT's mint-to-PUT latency inside
+> its **own** chunk's upload window. For KB-sized index blobs that is far under
+> the 5-minute TTL on a push of any size. A `files/` **content** chunk genuinely
+> can outlive it on a slow uplink — so the expiry is absorbed **per blob**: an
+> expired-URL PUT (R2 answers 403) fails only its own op, the chunk still commits
+> the blobs that **did** land, and the rest re-sign next drain under fresh URLs.
+> Letting the failure escape and abort the whole chunk instead made a chunk too
+> big for one TTL window a **deterministic livelock** — every retry restarted the
+> same too-big chunk and re-expired at the same point, so the push never advanced.
+> Absorbing it per blob makes the remainder **shrink every cycle**.
+>
+> Three rules keep that from becoming a correctness hole:
+>
+> - **A failed op is left queued but kept OUT of the commit.** Unlike an unsigned
+>   path there is nothing to gain from asking the server to `HEAD` an object we
+>   know we never sent — on a large failed chunk that is up to a thousand
+>   guaranteed `no_object` entries per cycle.
+> - **The metadata phase is HELD for the rest of the cycle if any content upload
+>   failed** — otherwise a puller could land metadata whose content `404`s, the
+>   exact breach the content-before-metadata order exists to prevent. Held
+>   _wholesale_ because the engine is schema-blind: it cannot tell which metadata
+>   is safe. The held ops just stay queued and the next drain retries both halves
+>   in order.
+> - **The cycle still REJECTS**, after the phases rather than before them — so it
+>   keeps the progress it made, while the caller's error branch (`bgSyncStatus
+'error'`, a scheduled retry) still fires. Reporting a clean `idle` over an
+>   unpushed edit would leave the user nothing to notice and nothing to retry.
+>
+> This is also why `mapLimit`'s own failure policy is fail-fast (stop feeding work
+> into a failing cycle): the upload loop catches **per op** so its transient
+> failures never reach the pool at all. Coverage:
+> `packages/shared/src/async/pool.spec.ts`,
+> `packages/web-react/src/sync/engine.spec.ts`.
+
 The store records the **R2 `LastModified` returned by commit** as the file's
 `updatedAt` and advances the sync cursor to it — never the local clock. Every `put`
 is therefore stamped on R2's clock — the same value the client stores locally and
@@ -437,6 +485,30 @@ can be resurrected by skew. The one exception is deliberate: local-wins reconcil
 re-`put`s a path whose `delete` another device already committed — keeping the
 unsynced edit is the point — and that re-put's commit `HEAD` is stamped after the
 delete in real time, so it orders after it up to Worker↔R2 clock skew.)
+
+> **The commit clamp: an appended op is always strictly newer than any cursor the
+> log could have issued.** A put's `updatedAt` is minted at **PUT** time (R2's
+> `LastModified`) but only becomes visible at **commit** time, and the two can be
+> minutes apart — the rest of a chunk's uploads, a retry backoff, a slow uplink on
+> a big `files/` blob. So a slow committer can arrive carrying a stamp **older
+> than ops already in the log**: behind a cursor another client (or its own
+> earlier commit) has already advanced past, in a keyset pull that will therefore
+> **never see it**. That is silent cross-device staleness with no error and
+> nothing to retry — and it is exactly the hole under flow 2's promise that
+> "anything that lands mid-sync simply carries a later `updatedAt`". `commitOps`
+> closes it by recording any such entry at **`MAX(updated_at) + 1`** instead, and
+> **returning the lifted stamp** — it is what the committing client stores locally
+> and advances its own cursor to, so client and log never disagree.
+>
+> The consequences are benign by construction. Per-path order is preserved: the
+> prior op for a path is already in the log, so the clamp only ever lifts the new
+> one **above** it. Within one batch the shared floor is fine: the batch commits
+> atomically under the serialized DO, so a puller sees all of it or none, and the
+> `(updatedAt, path)` tiebreak orders its ties. And a stamp nudged past R2's real
+> `LastModified` costs at most **one redundant, idempotent re-download** the next
+> time a fallback listing compares the two. An in-order commit is untouched — the
+> clamp only engages on the race. Coverage:
+> `apps/bracemark-api/src/do/user-data.spec.ts`.
 
 ### the ops/list endpoint
 
@@ -592,6 +664,17 @@ conditional writes close it.
 > local record is gone is dropped from the queue instead of retried — a write
 > stores the record and enqueues its op in ONE transaction, so an op without
 > bytes is never a write that hasn't landed yet.
+>
+> **Dropping that op unwedges the queue but, alone, leaves the entity locally
+> ABSENT** — so the heal has a second half. Step 2 had already reserved the path
+> for the push (local-wins keeps every pending path out of the download set),
+> which kept the server's copy out of a push that then never happened. So after
+> the drop, the cycle **re-adds whatever its window shows for that path** to the
+> download set: the pulled `put` op in an incremental cycle, the listed file in a
+> fallback. A pulled `delete` is honoured (nothing is resurrected), and a path
+> with no op in the window stays absent until a fallback re-lists it — the op
+> that wrote it is behind the cursor, and inventing a download for a path the
+> server may no longer have would be worse.
 >
 > **The same rule governs step 3's CLEAR: a drain removes the ops it pushed, not
 > the paths it pushed.** The queue is one row per (account, path), so a re-edit
