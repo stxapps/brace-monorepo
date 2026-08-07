@@ -76,7 +76,7 @@ describe('writeExtraction', () => {
   it('counts retries across writes, ignoring the caller-supplied placeholder', async () => {
     // `attempts` is the WRITER's to own — only the read-merge sees the prior value —
     // so repeated failures have to escalate even though newFacet always passes 0.
-    for (const _ of [1, 2, 3]) {
+    for (let i = 0; i < 3; i++) {
       await writeExtraction(USER, LINK_ID, {
         facet: 'titleImage',
         state: newFacet('failed', 'extension:fg'),
