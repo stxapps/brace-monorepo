@@ -30,6 +30,8 @@ const TAXONOMY = {
     { id: 'list-a', name: 'Reading', depth: 0, rank: 'a1' },
   ],
   tags: [{ id: 'tag-a', name: 'alpha', rank: 'a0' }],
+  linkCount: 3,
+  maxLinks: null,
 };
 
 beforeEach(() => {
@@ -39,7 +41,13 @@ beforeEach(() => {
 });
 
 test('shows the signed-out notice when no session is present', async () => {
-  loadShareTaxonomyMock.mockResolvedValue({ sessionPresent: false, lists: [], tags: [] });
+  loadShareTaxonomyMock.mockResolvedValue({
+    sessionPresent: false,
+    lists: [],
+    tags: [],
+    linkCount: 0,
+    maxLinks: null,
+  });
   const { findByTestId } = render(<ShareScreen url="https://example.com" />);
   expect(await findByTestId('share-signed-out')).toBeTruthy();
 });
@@ -49,13 +57,38 @@ test('shows the no-url notice when nothing shareable arrived', async () => {
   expect(await findByTestId('share-no-url')).toBeTruthy();
 });
 
+// The cap gate refuses BEFORE the form, like every other create surface — so
+// there is no Save button to press at all (docs/share-sheet.md, _the plan's
+// link cap_).
+test('replaces the form with the quota banner at the plan’s link cap', async () => {
+  loadShareTaxonomyMock.mockResolvedValue({ ...TAXONOMY, linkCount: 200, maxLinks: 200 });
+  const { findByTestId, queryByTestId } = render(<ShareScreen url="https://example.com" />);
+  expect(await findByTestId('share-quota')).toBeTruthy();
+  expect(queryByTestId('share-add')).toBeNull();
+});
+
+// An unknown cap fails OPEN — guessing `free` would tell a paying customer
+// their library is full.
+test('offers the form when the cap is unknown', async () => {
+  loadShareTaxonomyMock.mockResolvedValue({ ...TAXONOMY, linkCount: 9999, maxLinks: null });
+  const { findByTestId } = render(<ShareScreen url="https://example.com" />);
+  expect(await findByTestId('share-add')).toBeTruthy();
+});
+
 test('saves a draft into the picked list and shows the saved state', async () => {
   const { findByTestId, getByTestId } = render(
     <ShareScreen url="https://example.com/a" title="Example" />,
   );
 
-  fireEvent.press(await findByTestId('share-list-list-a'));
+  fireEvent.press(await findByTestId('share-list-row'));
+  // Picking closes the list screen and returns to compose.
+  fireEvent.press(getByTestId('share-list-list-a'));
+
+  fireEvent.press(getByTestId('share-tags-row'));
   fireEvent.press(getByTestId('share-tag-tag-a'));
+  // Tags is multi-select, so it takes an explicit Done.
+  fireEvent.press(getByTestId('share-back'));
+
   fireEvent.press(getByTestId('share-add'));
 
   await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
@@ -76,7 +109,8 @@ test('saves a draft into the picked list and shows the saved state', async () =>
 test('defaults to the inbox list and reuses an existing tag by name', async () => {
   const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/b" />);
 
-  const input = await findByTestId('share-tag-input');
+  fireEvent.press(await findByTestId('share-tags-row'));
+  const input = getByTestId('share-tag-input');
   // Case-insensitive reuse — must select tag-a, not mint a duplicate.
   fireEvent.changeText(input, 'ALPHA');
   fireEvent(input, 'submitEditing');
@@ -84,6 +118,7 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
   // (web findOrCreate's create-at-index-0).
   fireEvent.changeText(input, 'fresh');
   fireEvent(input, 'submitEditing');
+  fireEvent.press(getByTestId('share-back'));
   fireEvent.press(getByTestId('share-add'));
 
   await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
@@ -96,7 +131,8 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
 test('creates a new list — minted, selected, ranked before the first root list', async () => {
   const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/c" />);
 
-  const input = await findByTestId('share-list-input');
+  fireEvent.press(await findByTestId('share-list-row'));
+  const input = getByTestId('share-list-input');
   fireEvent.changeText(input, 'Cooking');
   fireEvent(input, 'submitEditing');
   fireEvent.press(getByTestId('share-add'));
@@ -110,11 +146,31 @@ test('creates a new list — minted, selected, ranked before the first root list
   expect(draft.listId).toBe('minted-1');
 });
 
-test('reuses an existing list on an exact case-insensitive name match', async () => {
-  const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/d" />);
+// The Create row is the same affordance as submitting the field — and it is
+// suppressed on an exact case-insensitive match (below).
+test('creates a new list from the Create row', async () => {
+  const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/c2" />);
 
-  const input = await findByTestId('share-list-input');
+  fireEvent.press(await findByTestId('share-list-row'));
+  fireEvent.changeText(getByTestId('share-list-input'), 'Cooking');
+  fireEvent.press(getByTestId('share-list-create'));
+  fireEvent.press(getByTestId('share-add'));
+
+  await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));
+  const draft = saveSharedDraftMock.mock.calls[0][0] as ShareDraft;
+  expect(draft.listId).toBe('minted-1');
+});
+
+test('reuses an existing list on an exact case-insensitive name match', async () => {
+  const { findByTestId, getByTestId, queryByTestId } = render(
+    <ShareScreen url="https://example.com/d" />,
+  );
+
+  fireEvent.press(await findByTestId('share-list-row'));
+  const input = getByTestId('share-list-input');
   fireEvent.changeText(input, 'reading');
+  // No Create row competing with the identical row right above it.
+  expect(queryByTestId('share-list-create')).toBeNull();
   fireEvent(input, 'submitEditing');
   fireEvent.press(getByTestId('share-add'));
 
@@ -129,13 +185,17 @@ test('discards the pending new list when another list is selected', async () => 
     <ShareScreen url="https://example.com/e" />,
   );
 
-  const input = await findByTestId('share-list-input');
+  fireEvent.press(await findByTestId('share-list-row'));
+  const input = getByTestId('share-list-input');
   fireEvent.changeText(input, 'Cooking');
   fireEvent(input, 'submitEditing');
   // Selecting away discards the pending create — an unselected new list must
   // never be created.
+  fireEvent.press(getByTestId('share-list-row'));
   fireEvent.press(getByTestId('share-list-list-a'));
+  fireEvent.press(getByTestId('share-list-row'));
   expect(queryByTestId('share-new-list')).toBeNull();
+  fireEvent.press(getByTestId('share-back'));
   fireEvent.press(getByTestId('share-add'));
 
   await waitFor(() => expect(saveSharedDraftMock).toHaveBeenCalledTimes(1));

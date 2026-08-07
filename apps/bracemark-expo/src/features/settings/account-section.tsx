@@ -47,7 +47,7 @@ import { Text } from '../../components/ui/text';
 import { PasswordInput } from '../auth/password-input';
 import { PasswordStrengthMeter, usePasswordStrength } from '../auth/password-strength';
 import { ShowOnceSecret } from '../auth/show-once-secret';
-import { ActionRow, BackLink } from './rows';
+import { SettingsHeader, SettingsNotice, SettingsPane, SettingsRow } from './settings-kit';
 
 type AccountView = 'overview' | 'change-password' | 'recovery' | 'sign-out-others' | 'delete';
 
@@ -87,14 +87,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <BackLink label="Account" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Delete account
-      </Text>
-      <Text className="mt-1 text-sm text-muted-foreground">
-        Permanently delete your account and everything in it: all your data on all your devices,
-        your account keys, and every signed-in session.
-      </Text>
+      <SettingsHeader
+        title="Delete account"
+        description="Permanently delete your account and everything in it: all your data on all your devices, your account keys, and every signed-in session."
+        back={{ label: 'Account', onPress: onBack }}
+      />
       <Text className="mt-3 text-sm text-muted-foreground">
         Your username stays reserved and can&apos;t be registered again — by you or anyone else. If
         you have a canceled subscription with paid time remaining, that time is forfeited. Consider
@@ -105,9 +102,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       </Text>
 
       {subscriptionBlocks && (
-        <View className="mt-4 flex-row items-start gap-2 rounded-lg border border-border p-3">
-          <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
+        <SettingsNotice
+          className="mt-4"
+          icon={<Icon as={CircleAlert} className="size-4 text-muted-foreground" />}
+        >
+          <Text className="text-sm text-muted-foreground">
             You have an active subscription. Cancel it in{' '}
             <Text
               className="text-sm text-muted-foreground underline"
@@ -117,7 +116,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
             </Text>{' '}
             first — deleting the account doesn&apos;t stop the billing.
           </Text>
-        </View>
+        </SettingsNotice>
       )}
 
       {/* Fresh proof, not just the session: the server only accepts this call
@@ -178,10 +177,13 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       </View>
 
       {errorText && (
-        <View className="mt-3 flex-row items-start gap-2">
-          <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-          <Text className="min-w-0 flex-1 text-sm text-destructive">{errorText}</Text>
-        </View>
+        <SettingsNotice
+          tone="error"
+          className="mt-3"
+          icon={<Icon as={CircleAlert} className="size-4 text-destructive" />}
+        >
+          {errorText}
+        </SettingsNotice>
       )}
     </View>
   );
@@ -266,10 +268,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   if (done) {
     return (
       <View>
-        <BackLink label="Account" onBack={onBack} />
-        <Text role="heading" className="text-xl font-semibold">
-          Change password
-        </Text>
+        <SettingsHeader title="Change password" back={{ label: 'Account', onPress: onBack }} />
         <View className="mt-3 flex-row items-start gap-2">
           <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
           <Text className="min-w-0 flex-1 text-sm">
@@ -289,13 +288,11 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <BackLink label="Account" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Change password
-      </Text>
-      <Text className="mt-1 text-sm text-muted-foreground">
-        You&apos;ll need your current password. There is no email reset, so keep the new one safe.
-      </Text>
+      <SettingsHeader
+        title="Change password"
+        description="You'll need your current password. There is no email reset, so keep the new one safe."
+        back={{ label: 'Account', onPress: onBack }}
+      />
 
       <View className="mt-6 max-w-sm gap-4">
         {useRecovery ? (
@@ -467,18 +464,18 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
   if (code) {
     return (
       <View>
-        {/* No BackLink here, deliberately (every other sub-view has one) — the
-            mint has landed and the old door is dead; Done (gated on `saved`) is
-            the only exit. See web's rationale in full. */}
-        <Text role="heading" className="text-xl font-semibold">
-          Recovery code
-        </Text>
-        <Text className="mt-1 mb-4 text-sm text-muted-foreground">
-          {hadRecovery
-            ? 'Save this somewhere safe — it won’t be shown again. Your previous code has stopped working, so this is the only one that can get you back into your account.'
-            : 'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'}
-        </Text>
-        <View className="max-w-sm">
+        {/* No `back` on this header, deliberately (every other sub-view has
+            one) — the mint has landed and the old door is dead; Done (gated on
+            `saved`) is the only exit. See web's rationale in full. */}
+        <SettingsHeader
+          title="Recovery code"
+          description={
+            hadRecovery
+              ? 'Save this somewhere safe — it won’t be shown again. Your previous code has stopped working, so this is the only one that can get you back into your account.'
+              : 'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'
+          }
+        />
+        <View className="mt-4 max-w-sm">
           <ShowOnceSecret
             secret={code}
             label="Your recovery code"
@@ -498,15 +495,15 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
 
   return (
     <View>
-      <BackLink label="Account" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Recovery code
-      </Text>
-      <Text className="mt-1 text-sm text-muted-foreground">
-        {hadRecovery
-          ? 'Generate a new recovery code. Your previous code will stop working.'
-          : 'Set up a recovery code — a second way into your account if you lose your password.'}
-      </Text>
+      <SettingsHeader
+        title="Recovery code"
+        description={
+          hadRecovery
+            ? 'Generate a new recovery code. Your previous code will stop working.'
+            : 'Set up a recovery code — a second way into your account if you lose your password.'
+        }
+        back={{ label: 'Account', onPress: onBack }}
+      />
 
       <View className="mt-6 max-w-sm gap-4">
         <View className="gap-2">
@@ -536,10 +533,12 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
           </Button>
         </View>
         {error ? (
-          <View className="flex-row items-start gap-2">
-            <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <Text className="min-w-0 flex-1 text-sm text-destructive">{error}</Text>
-          </View>
+          <SettingsNotice
+            tone="error"
+            icon={<Icon as={CircleAlert} className="size-4 text-destructive" />}
+          >
+            {error}
+          </SettingsNotice>
         ) : null}
       </View>
     </View>
@@ -567,10 +566,7 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <BackLink label="Account" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Sign out other devices
-      </Text>
+      <SettingsHeader title="Sign out other devices" back={{ label: 'Account', onPress: onBack }} />
       {done ? (
         <View className="mt-3 flex-row items-start gap-2">
           <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -591,10 +587,13 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
             </Button>
           </View>
           {error ? (
-            <View className="mt-3 flex-row items-start gap-2">
-              <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-              <Text className="min-w-0 flex-1 text-sm text-destructive">{error}</Text>
-            </View>
+            <SettingsNotice
+              tone="error"
+              className="mt-3"
+              icon={<Icon as={CircleAlert} className="size-4 text-destructive" />}
+            >
+              {error}
+            </SettingsNotice>
           ) : null}
         </>
       )}
@@ -608,29 +607,28 @@ export function AccountSection() {
   const hasRecovery = useHasRecoveryDoor();
 
   return (
-    <View className="px-6 py-8">
+    <SettingsPane>
       {view === 'overview' ? (
         <>
-          <Text role="heading" className="text-xl font-semibold">
-            Account
-          </Text>
-          <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-            Your account is your username and password — no email, nothing else on file.
-          </Text>
+          <SettingsHeader
+            title="Account"
+            description="Your account is your username and password — no email, nothing else on file."
+          />
 
-          <View className="rounded-lg border border-border p-4">
-            <View className="min-w-0 gap-0.5">
-              <Text className="text-sm font-medium">Username</Text>
+          <SettingsRow
+            title="Username"
+            description={
               <Text numberOfLines={1} className="text-sm text-muted-foreground">
                 {username}
               </Text>
-            </View>
-          </View>
+            }
+          />
 
           {hasRecovery.data === false ? (
-            <View className="mt-4 flex-row items-start gap-2 rounded-lg border border-border p-3">
-              <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
+            <SettingsNotice
+              icon={<Icon as={CircleAlert} className="size-4 text-muted-foreground" />}
+            >
+              <Text className="text-sm text-muted-foreground">
                 You haven&apos;t set up a recovery code. Without one, a lost password means a lost
                 account — there is no email reset.{' '}
                 <Text
@@ -641,18 +639,18 @@ export function AccountSection() {
                 </Text>
                 .
               </Text>
-            </View>
+            </SettingsNotice>
           ) : null}
 
-          <View className="mt-6 gap-3">
-            <ActionRow
-              icon={KeyRound}
+          <View className="gap-3">
+            <SettingsRow
+              icon={<Icon as={KeyRound} className="size-5 text-muted-foreground" />}
               title="Change password"
               description="Set a new password using your current one or your recovery code."
               onPress={() => setView('change-password')}
             />
-            <ActionRow
-              icon={ShieldCheck}
+            <SettingsRow
+              icon={<Icon as={ShieldCheck} className="size-5 text-muted-foreground" />}
               title="Recovery code"
               description={
                 hasRecovery.data === false
@@ -661,14 +659,14 @@ export function AccountSection() {
               }
               onPress={() => setView('recovery')}
             />
-            <ActionRow
-              icon={MonitorSmartphone}
+            <SettingsRow
+              icon={<Icon as={MonitorSmartphone} className="size-5 text-muted-foreground" />}
               title="Sign out other devices"
               description="End every other signed-in session but this one."
               onPress={() => setView('sign-out-others')}
             />
-            <ActionRow
-              icon={UserX}
+            <SettingsRow
+              icon={<Icon as={UserX} className="size-5 text-destructive" />}
               title="Delete account"
               description="Permanently delete your account and all your data."
               onPress={() => setView('delete')}
@@ -688,6 +686,6 @@ export function AccountSection() {
       ) : (
         <DeleteAccountView onBack={() => setView('overview')} />
       )}
-    </View>
+    </SettingsPane>
   );
 }

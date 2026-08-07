@@ -27,13 +27,20 @@ import '../../../global.css';
 //         all pure functions with no module-level side effects.
 //   AVOID dialog, dropdown-menu, alert-dialog, native-only-animated-view —
 //         they pull react-native-reanimated and @rn-primitives/portal, i.e. a
-//         native runtime initialized on every cold share. The sheet is one
-//         screen with two pickers; it has no need for portals or modals.
+//         native runtime initialized on every cold share. The sheet's pickers
+//         are SCREENS within the sheet rather than overlays over it, which is
+//         partly why: it has no need for portals or modals.
 //
 // The split only HOLDS because components/ui has no barrel index.ts and Metro
 // does not meaningfully tree-shake: each import names its own file, so the
 // graph stays tight. If a barrel is ever added, importing through it here would
 // silently drag reanimated into the extension bundle.
+//
+// THE SAME ARGUMENT, ONE LEVEL OUT, IS WHY THE SHARE TREE DEEP-IMPORTS LUCIDE
+// (`lucide-react-native/icons/folder`, not the barrel) — see
+// share-kit.tsx's header. It is the only corner of the app that does, and
+// components/links/link-quota-banner.tsx follows the rule because this tree
+// renders it. Anything added under features/share/ inherits both rules.
 
 export function ShareRoot(props: ShareInitialProps) {
   const payload = useMemo(() => payloadFromInitialProps(props), [props]);

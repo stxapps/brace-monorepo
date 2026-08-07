@@ -101,24 +101,36 @@ export function Topbar() {
   };
 
   return (
-    <View className="h-14 shrink-0 flex-row items-center gap-3 border-b border-border px-2">
+    <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
       <Pressable
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open navigation"
-        className="size-10 items-center justify-center rounded-md"
+        className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
       >
         <Icon as={Menu} className="size-5 text-foreground" />
       </Pressable>
+      {/* THE TITLE IS THE VIEW'S NAME AND CARRIES THE WEIGHT — the opposite of
+          the settings topbar's, whose label is a surface marker over a pane that
+          has its own heading. Here there is no heading below: the list starts
+          immediately, so this line is the only thing that says which of a
+          hundred lists you are looking at, and it stays `text-lg font-semibold`
+          for it. The drawer button and the two actions match the settings bar
+          exactly (`size-9`, pulled to the frame edge, `px-3` row) — a user
+          crosses between the two bars constantly and they must not shift. */}
       <Text numberOfLines={1} className="min-w-0 flex-1 text-lg font-semibold">
         {label}
       </Text>
-      <View className="flex-row items-center">
+      <View className="flex-row items-center gap-1">
         <Pressable
           onPress={toggleSearch}
-          aria-label="Search"
+          // The name states what pressing it DOES, which keeps every state
+          // collision-free: closed it is the only "Search links" on screen; open,
+          // the box below owns that name and this becomes "Close search" — honest,
+          // since dismissing a committed search also restores the view it ran from.
+          aria-label={searchVisible ? 'Close search' : 'Search links'}
           aria-expanded={searchVisible}
           className={cn(
-            'size-10 items-center justify-center rounded-md',
+            'size-9 items-center justify-center rounded-md active:bg-muted',
             searchVisible && 'bg-muted',
           )}
         >

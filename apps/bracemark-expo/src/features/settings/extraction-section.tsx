@@ -45,6 +45,7 @@ import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 // The ladder, as copy. Ordered by DEVICE_EXTRACTION_MODES (increasing disclosure),
 // which the radio list maps over — so a mode added to that tuple shows up here as a
@@ -145,15 +146,11 @@ export function ExtractionSection() {
   const total = doneCount + pendingCount + failedCount;
 
   return (
-    <View className="px-6 py-8">
-      <Text role="heading" className="text-xl font-semibold">
-        Link previews
-      </Text>
-      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-        Bracemark fills in each saved link&apos;s title and preview image automatically — you
-        don&apos;t need to do it by hand. The work happens on this phone: the app fetches the page
-        itself, so no server of ours ever sees it. Choose how far that should go.
-      </Text>
+    <SettingsPane>
+      <SettingsHeader
+        title="Link previews"
+        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. The work happens on this phone: the app fetches the page itself, so no server of ours ever sees it. Choose how far that should go."
+      />
 
       <RadioGroup
         value={deviceExtractionMode}
@@ -176,21 +173,15 @@ export function ExtractionSection() {
         })}
       </RadioGroup>
 
-      {error && (
-        <View className="mt-4 rounded-md bg-destructive/10 px-3 py-2">
-          <Text className="text-sm text-destructive">{error}</Text>
-        </View>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
       {deviceExtractionMode === 'all' && !enabled ? (
-        <View className="mt-6 rounded-md bg-muted/50 px-3 py-2">
-          <Text className="text-sm text-muted-foreground">
-            Previews are on but paused — they resume once you&apos;re signed in and your links have
-            finished loading.
-          </Text>
-        </View>
+        <SettingsNotice tone="pending">
+          Previews are on but paused — they resume once you&apos;re signed in and your links have
+          finished loading.
+        </SettingsNotice>
       ) : enabled ? (
-        <View className="mt-6">
+        <View>
           <View className="flex-row gap-3">
             <Stat label="With preview" value={doneCount} />
             <Stat label="Pending" value={pendingCount} />
@@ -204,13 +195,13 @@ export function ExtractionSection() {
           </Text>
 
           {autoLimitReached && !isExtractingAll && (
-            <View className="mt-4 rounded-md bg-muted/50 px-3 py-2">
+            <SettingsNotice tone="pending" className="mt-4">
               <Text className="text-sm text-muted-foreground">
                 Automatic previews paused for now. Use{' '}
                 <Text className="text-sm font-semibold text-muted-foreground">Generate all</Text> to
                 finish the remaining links.
               </Text>
-            </View>
+            </SettingsNotice>
           )}
 
           <View className="mt-6 flex-row">
@@ -232,6 +223,6 @@ export function ExtractionSection() {
           </Text>
         </View>
       ) : null}
-    </View>
+    </SettingsPane>
   );
 }

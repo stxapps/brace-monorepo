@@ -1,33 +1,55 @@
-// The share sheet's one screen (docs/share-sheet.md): url + title preview, the
-// list picker, the tags field, Add. Platform-blind — everything it exchanges
-// with the world goes through @stxapps/expo-react's share-store
-// (loadShareTaxonomy / saveSharedDraft) and the closeShareSheet host seam, so
-// the same component renders inside the iOS extension and Android's
-// ShareActivity.
+// The share sheet's screen — url + title specimen, the destination, the tags,
+// Save. Platform-blind: everything it exchanges with the world goes through
+// @stxapps/expo-react's share-store (loadShareTaxonomy / saveSharedDraft) and
+// the closeShareSheet host seam, so the same component renders inside the iOS
+// extension and Android's ShareActivity (docs/share-sheet.md).
 //
-// The pickers (share-list-picker / share-tags-picker, presentational) are the
-// SHARE-SIZED cousins of the web ListSelect/TagsField (docs/editors.md), and
-// this screen upholds the same editor invariants at smaller scope: the draft is
-// local component state (copy-to-draft), a typed list/tag name is matched
-// case-insensitively against the taxonomy before minting a new one (the
-// findOrCreate / exact-match-suppression rule, applied at input time since the
+// ─────────────────────────────────────────────────────────────────────────────
+// THE SHAPE OF THIS SURFACE, and why it changed.
+//
+// This sheet floats over Safari for about three seconds. The 90% path is
+// share → Save; the list and the tags are the 10%. The previous layout had that
+// backwards — two always-open text inputs and a 160px scrolling tree took most
+// of a 520pt panel, the page being saved was two lines of unstyled text at the
+// top, and the confirmation was a separate screen reading "✓ Saved to
+// Bracemark". So:
+//
+//   1. THE PAGE IS THE SUBJECT (share-specimen.tsx). It is drawn the way the
+//      library draws it, it is on screen from the first frame to the last, and
+//      the save happens TO it — its corner comes off, which is the brand's own
+//      "saved" gesture and the same one the browser-extension popup already
+//      performs on the same object (docs/brand.md, _the mark_). The compose
+//      screen and the saved screen are no longer two screens with nothing in
+//      common; they are one screen whose controls change.
+//   2. THE CHOICES ARE DISCLOSED, NOT SPREAD OUT. A destination is one value
+//      and a tag set is bounded by what the user picked, so both fit on a row
+//      that shows the current answer and opens a screen with room to change it
+//      (share-list-picker / share-tags-picker). One glance and one tap for the
+//      90%; one extra tap, and a picker that is no longer a peephole, for the
+//      10%.
+//   3. THE VERB IS "SAVE" the whole way through — the button, the progress, the
+//      confirmation — matching the extension popup and the app's own add
+//      screen. "Add to Bracemark" → "✓ Saved to Bracemark" was two verbs and a
+//      glyph for one action.
+//
+// The screen still upholds every editor invariant it did before, at smaller
+// scope: the draft is local component state (copy-to-draft), a typed list/tag
+// name is matched case-insensitively against the taxonomy before minting a new
+// one (findOrCreate / exact-match suppression, applied at input time since the
 // sheet already holds the taxonomy), the list create is TOP-LEVEL ONLY
-// (parentId pinned null at apply — the editors' rule), and ids AND ranks for
-// everything new are minted HERE so the draft is idempotent downstream and the
-// extension's upload can push complete entities (share-store's header: a
-// stale-snapshot rank can only tie, broken by id). Creating a list selects it;
-// selecting another list discards the pending create — a new list exists only
-// as the share's destination.
+// (parentId pinned null at apply), and ids AND ranks for everything new are
+// minted HERE so the draft is idempotent downstream and the extension's upload
+// can push complete entities (share-store's header: a stale-snapshot rank can
+// only tie, broken by id). Creating a list selects it; selecting another list
+// discards the pending create — a new list exists only as the share's
+// destination.
 
-import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import Folder from 'lucide-react-native/icons/folder';
+import Link2Off from 'lucide-react-native/icons/link-2-off';
+import LogIn from 'lucide-react-native/icons/log-in';
+import Tag from 'lucide-react-native/icons/tag';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
@@ -39,82 +61,35 @@ import {
 } from '@stxapps/expo-react';
 import { DEFAULT_LIST_ID, rankBetween } from '@stxapps/shared';
 
+import { LinkQuotaBanner } from '../../components/links/link-quota-banner';
+import { Button } from '../../components/ui/button';
+import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { apiClient } from '../../lib/api-client';
 import { closeShareSheet } from './share-host';
+import { ShareHeader, ShareNotice, ShareRow, ShareRowGroup, ShareSheet } from './share-kit';
 import { ShareListPicker } from './share-list-picker';
+import { ShareSpecimen } from './share-specimen';
 import { ShareTagsPicker } from './share-tags-picker';
 import type { SharePayload } from './share-url';
 
 type Phase = 'loading' | 'ready' | 'saving' | 'saved';
 
-// How long the ✓ lingers before the sheet dismisses itself.
-const SAVED_DISMISS_MS = 900;
+// Which of the sheet's screens is up. Not a router — three screens in one
+// component, because the iOS extension bundle has no business carrying one
+// (docs/share-sheet.md, _keep index.share.js lean_).
+type View3 = 'compose' | 'lists' | 'tags';
 
-// The sheet's container. On iOS, expo-share-extension provides the floating
-// sheet (height/background from app.config.ts) — fill it. On Android the
-// activity is translucent and full-screen — render the bottom sheet ourselves,
-// with a tap-to-dismiss backdrop.
-//
-// Keyboard: BOTH hosts overlay it, so the sheet must move itself. The iOS host
-// view is bottom-pinned at a fixed height with no keyboard logic of its own
-// (ShareExtensionViewController), and ShareActivity's manifest `adjustResize`
-// no longer resizes — edge-to-edge is process-global (the generated
-// ReactNativeApplicationEntryPoint flips RN's static flag, and RN core's
-// ReactActivityDelegate applies it to EVERY ReactActivity, ShareActivity
-// included), and a translucent window never resized for the keyboard anyway.
-// Deliberately a plain KeyboardAvoidingView behavior="padding", NOT
-// react-native-keyboard-controller like the app tree (root _layout.tsx): its
-// iOS native layer is built on UIApplication.shared, unavailable in an
-// extension process (expo-share-extension's APPLICATION_EXTENSION_API_ONLY=No
-// only makes such pods compile, not work) — and one plain KAV keeps the two
-// hosts rendering the same tree. The ScrollView keeps the squeezed content
-// (tag input, Add) reachable while the keyboard is up; the list picker's own
-// ScrollView nests inside it, hence its nestedScrollEnabled.
-// `keyboardShouldPersistTaps` lets a tap on a row/button land while the
-// keyboard is up instead of only dismissing it.
-function Sheet({ children }: { children: React.ReactNode }) {
-  if (Platform.OS === 'ios') {
-    return (
-      <KeyboardAvoidingView behavior="padding" className="flex-1 bg-background">
-        <ScrollView contentContainerClassName="p-4" keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    );
-  }
-  return (
-    <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
-      <Pressable
-        testID="share-backdrop"
-        onPress={closeShareSheet}
-        className="absolute top-0 right-0 bottom-0 left-0 bg-black/40"
-      />
-      <View className="max-h-[85%] rounded-t-2xl bg-background">
-        <ScrollView contentContainerClassName="p-4" keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
-      </View>
-    </KeyboardAvoidingView>
-  );
-}
-
-// A terminal message (signed-out, no URL) + Close.
-function Notice({ testID, message }: { testID: string; message: string }) {
-  return (
-    <Sheet>
-      <Text testID={testID} className="py-6 text-center">
-        {message}
-      </Text>
-      <Pressable onPress={closeShareSheet} className="items-center rounded-lg bg-secondary py-3">
-        <Text className="font-medium text-secondary-foreground">Close</Text>
-      </Pressable>
-    </Sheet>
-  );
-}
+// How long the saved state lingers before the sheet dismisses itself. Longer
+// than the 900ms it replaces, because there is now something to READ — the
+// destination — and something to SEE, the corner coming off the tile. Still
+// under the "dismiss fast, never hold the sheet on a spinner" rule: the durable
+// commit already happened, and no sync is being waited on.
+const SAVED_DISMISS_MS = 1200;
 
 export function ShareScreen({ url, title }: SharePayload) {
   const [phase, setPhase] = useState<Phase>('loading');
+  const [view, setView] = useState<View3>('compose');
   const [taxonomy, setTaxonomy] = useState<ShareTaxonomy | null>(null);
   const [listId, setListId] = useState<string>(DEFAULT_LIST_ID);
   const [newList, setNewList] = useState<ShareNewEntity | null>(null);
@@ -144,8 +119,8 @@ export function ShareScreen({ url, title }: SharePayload) {
     };
   }, []);
 
-  // Let the ✓ linger, then dismiss — as an effect (not a bare setTimeout in the
-  // save handler) so unmounting cancels it.
+  // Let the saved state linger, then dismiss — as an effect (not a bare
+  // setTimeout in the save handler) so unmounting cancels it.
   useEffect(() => {
     if (phase !== 'saved') return;
     const timer = setTimeout(closeShareSheet, SAVED_DISMISS_MS);
@@ -226,7 +201,28 @@ export function ShareScreen({ url, title }: SharePayload) {
     setNewTags((tags) => tags.filter((tag) => tag.id !== id));
   }, []);
 
-  const onAdd = useCallback(async () => {
+  const backToCompose = useCallback(() => setView('compose'), []);
+
+  // The destination's own name — the pending mint when that is what is selected,
+  // else the taxonomy row. Undefined only against a taxonomy that doesn't carry
+  // the selected id, which a corrupt snapshot can produce; the row says so
+  // rather than rendering a blank.
+  const listName = useMemo(() => {
+    if (newList && newList.id === listId) return newList.name;
+    return taxonomy?.lists.find((list) => list.id === listId)?.name;
+  }, [taxonomy, listId, newList]);
+
+  // What the tags row echoes back: the picked existing tags in pick order, then
+  // this session's mints. Names, not ids — the row is a summary, and the picker
+  // behind it is where anything gets changed.
+  const tagNames = useMemo(() => {
+    const existing = selectedTagIds
+      .map((id) => taxonomy?.tags.find((tag) => tag.id === id)?.name)
+      .filter((name): name is string => name !== undefined);
+    return [...existing, ...newTags.map((tag) => tag.name)];
+  }, [taxonomy, selectedTagIds, newTags]);
+
+  const onSave = useCallback(async () => {
     if (!url) return;
     setPhase('saving');
     setError(null);
@@ -244,75 +240,111 @@ export function ShareScreen({ url, title }: SharePayload) {
     };
     try {
       // The api client powers saveSharedDraft's un-awaited post-write kick
-      // (Android inline sync / iOS upload); Add itself only waits on
-      // the durable local write.
+      // (Android inline sync / iOS upload); Save itself only waits on the
+      // durable local write.
       const result = await saveSharedDraft(draft, apiClient);
-      // At the plan's link cap — nothing was written, so this is a refusal, not
-      // a failure: say what happened and where to fix it rather than inviting a
-      // retry that would refuse again. Both platforms, off different sources
-      // (see isAtLinkCap); on iOS this is the only thing standing between a
-      // free account and an over-cap save, since the server no longer counts.
+      // At the plan's link cap. The gate below normally catches this before the
+      // form is ever offered, so reaching it means the count moved under us —
+      // Android re-counts sqlite live inside saveSharedDraft, and on iOS the
+      // snapshot can be a run of shares old. Nothing was written, so this is a
+      // refusal, not a failure: say so rather than invite a retry that would
+      // refuse again.
       if (result === 'quota') {
         setPhase('ready');
-        setError('You have reached your plan’s link limit. Upgrade in Bracemark to save more.');
+        setError('Your plan’s link limit is full. Open Bracemark to upgrade or free up room.');
         return;
       }
       setPhase('saved');
     } catch {
       setPhase('ready');
-      setError('Could not save. Please try again.');
+      setError('Couldn’t save. Try again.');
     }
   }, [url, title, listId, newList, selectedTagIds, newTags]);
 
+  // ── the screens ───────────────────────────────────────────────────────────
+
+  // Nothing is known yet except the page itself — so show the page. The read is
+  // a file (iOS) or an indexed sqlite query (Android) and usually resolves in a
+  // frame or two; opening on the specimen means the sheet arrives with its
+  // subject already in place and only the controls fade in under it, rather than
+  // flashing a spinner in an empty panel and then jumping.
   if (phase === 'loading' || !taxonomy) {
     return (
-      <Sheet>
-        <View className="items-center py-10">
+      <ShareSheet>
+        <ShareHeader />
+        {url !== null && <ShareSpecimen url={url} title={title} />}
+        <View className="items-center py-6">
           <ActivityIndicator />
         </View>
-      </Sheet>
+      </ShareSheet>
     );
   }
 
   if (!taxonomy.sessionPresent) {
     return (
-      <Notice testID="share-signed-out" message="Open Bracemark and sign in first to save links." />
+      <ShareNotice testID="share-signed-out" icon={LogIn} title="Sign in to save links">
+        Open Bracemark on this device and sign in. Everything is encrypted with your password, so
+        the sheet can’t save until you have.
+      </ShareNotice>
     );
   }
 
   if (url === null) {
-    return <Notice testID="share-no-url" message="No link found in what was shared." />;
-  }
-
-  if (phase === 'saved') {
     return (
-      <Sheet>
-        <Text testID="share-saved" className="py-10 text-center text-lg font-semibold">
-          ✓ Saved to Bracemark
-        </Text>
-      </Sheet>
+      <ShareNotice testID="share-no-url" icon={Link2Off} title="No link in this share">
+        Bracemark saves web links, and there isn’t one here. Try sharing from your browser, or share
+        text that contains a link.
+      </ShareNotice>
     );
   }
 
-  return (
-    <Sheet>
-      <Text testID="share-title" numberOfLines={1} className="font-semibold">
-        {title ?? url}
-      </Text>
-      <Text testID="share-url" numberOfLines={1} className="mt-0.5 text-sm text-muted-foreground">
-        {url}
-      </Text>
+  // At the cap, refuse BEFORE the form — the rule every create surface follows
+  // (docs/editors.md), and the one place it matters most: the cap is
+  // client-enforced (docs/iap.md, _enforcement_), so this gate IS the wall, and
+  // refusing here is refusing before the user has filed a link that was never
+  // going to be saved. Both platforms read the same two numbers off the
+  // taxonomy — live sqlite on Android, the snapshot on iOS — and both fail OPEN
+  // when `maxLinks` is null, because guessing `free` would tell a paying
+  // customer their library is full.
+  if (taxonomy.maxLinks !== null && taxonomy.linkCount >= taxonomy.maxLinks) {
+    return (
+      <ShareSheet>
+        <ShareHeader dismissible={false} />
+        <ShareSpecimen url={url} title={title} />
+        <View testID="share-quota">
+          <LinkQuotaBanner
+            count={taxonomy.linkCount}
+            max={taxonomy.maxLinks}
+            // No upgrade CTA: neither host can route into the app's
+            // /settings/subscription screen (Android's BracemarkShare module
+            // exposes close() and nothing else), and a button that opens the
+            // app somewhere else would be worse than the banner's own sentence.
+            action={
+              <Button variant="outline" size="lg" onPress={closeShareSheet}>
+                <Text>Close</Text>
+              </Button>
+            }
+          />
+        </View>
+      </ShareSheet>
+    );
+  }
 
-      <Text className="mt-4 text-xs font-medium text-muted-foreground uppercase">List</Text>
+  if (view === 'lists') {
+    return (
       <ShareListPicker
         lists={taxonomy.lists}
         newList={newList}
         selectedId={listId}
         onSelect={selectList}
         onCreateName={submitListName}
+        onDone={backToCompose}
       />
+    );
+  }
 
-      <Text className="mt-4 text-xs font-medium text-muted-foreground uppercase">Tags</Text>
+  if (view === 'tags') {
+    return (
       <ShareTagsPicker
         tags={taxonomy.tags}
         selectedTagIds={selectedTagIds}
@@ -320,26 +352,92 @@ export function ShareScreen({ url, title }: SharePayload) {
         onToggle={toggleTag}
         onRemoveNew={removeNewTag}
         onSubmitName={submitTagName}
+        onDone={backToCompose}
       />
+    );
+  }
+
+  // Saved. The specimen has not moved and has not been replaced — only its
+  // corner is gone, and the controls under it are down to the one fact worth
+  // confirming: WHERE it landed. "Saved" alone is half an answer in an app whose
+  // organising idea is lists, and the destination is the thing the user set
+  // seconds ago (bracemark-extension's Complete screen makes the same argument).
+  if (phase === 'saved') {
+    return (
+      <ShareSheet>
+        <ShareHeader />
+        <ShareSpecimen url={url} title={title} saved />
+        <View className="flex-row items-center gap-2 py-1">
+          <Icon as={Folder} className="size-3.5 shrink-0 text-muted-foreground" />
+          <Text
+            testID="share-saved"
+            numberOfLines={1}
+            className="min-w-0 flex-1 text-sm text-muted-foreground"
+          >
+            {listName === undefined ? (
+              'Saved'
+            ) : (
+              <>
+                Saved to <Text className="text-sm font-medium text-foreground">{listName}</Text>
+              </>
+            )}
+          </Text>
+        </View>
+      </ShareSheet>
+    );
+  }
+
+  return (
+    <ShareSheet>
+      <ShareHeader />
+      <ShareSpecimen url={url} title={title} />
+
+      <ShareRowGroup>
+        <ShareRow icon={Folder} testID="share-list-row" onPress={() => setView('lists')}>
+          <Text numberOfLines={1} className="font-medium">
+            {listName ?? 'Choose a list'}
+          </Text>
+        </ShareRow>
+        <ShareRow icon={Tag} testID="share-tags-row" bordered onPress={() => setView('tags')}>
+          {tagNames.length === 0 ? (
+            <Text className="text-muted-foreground">Add tags</Text>
+          ) : (
+            // The library's own read-only chip (features/links/link-tag-chips.tsx
+            // — `bg-muted rounded-full px-2 py-0.5`, `text-xs`), so the tags read
+            // here exactly as they will on the row this share becomes.
+            <View className="flex-row flex-wrap items-center gap-1">
+              {tagNames.map((name) => (
+                <Text
+                  key={name}
+                  numberOfLines={1}
+                  className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                >
+                  {name}
+                </Text>
+              ))}
+            </View>
+          )}
+        </ShareRow>
+      </ShareRowGroup>
 
       {error !== null && (
-        <Text testID="share-error" className="mt-3 text-sm text-destructive">
-          {error}
-        </Text>
+        <View className="rounded-lg bg-destructive/10 px-3 py-2.5">
+          <Text testID="share-error" className="text-sm text-destructive">
+            {error}
+          </Text>
+        </View>
       )}
 
-      <Pressable
-        testID="share-add"
-        onPress={onAdd}
-        disabled={phase === 'saving'}
-        className="mt-4 items-center rounded-lg bg-primary py-3"
-      >
-        {phase === 'saving' ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text className="font-semibold text-primary-foreground">Add to Bracemark</Text>
-        )}
-      </Pressable>
-    </Sheet>
+      {/* The sheet's one primary action — everything else on every screen is an
+          outline or a bare row. The label carries the progress rather than a
+          spinner: an ActivityIndicator inside this button needs a colour, and
+          the only honest one is `--primary-foreground`, which the RN prop can't
+          take as a class — the previous hardcoded white vanished into the light
+          grey this button is in dark mode. "Saving…" is also what the browser
+          extension's Save button says. */}
+      <Button testID="share-add" size="lg" disabled={phase === 'saving'} onPress={onSave}>
+        <Text>{phase === 'saving' ? 'Saving…' : 'Save'}</Text>
+      </Button>
+    </ShareSheet>
   );
 }

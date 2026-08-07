@@ -5,27 +5,25 @@
 // a plain prop-driven component. `about` stays a labelled placeholder, exactly
 // like web's.
 
-import { View } from 'react-native';
-
-import { Text } from '../../components/ui/text';
 import { AccountSection } from './account-section';
 import { DataSection } from './data-section';
 import { ExtractionSection } from './extraction-section';
 import { ListsSection } from './lists-section';
 import { MiscSection } from './misc-section';
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './sections';
+import { SettingsHeader, SettingsPane } from './settings-kit';
 import { SubscriptionSection } from './subscription-section';
 import { TagsSection } from './tags-section';
 
+// Still a placeholder, exactly like web's — but rendered through the kit, so an
+// unbuilt section sits at the same inset and heading step as the seven real
+// ones instead of announcing itself as unfinished by being shaped differently.
 function Placeholder({ id }: { id: SettingsSectionId }) {
   const label = SETTINGS_SECTIONS.find((s) => s.id === id)?.label ?? id;
   return (
-    <View className="px-6 py-8">
-      <Text role="heading" className="text-xl font-semibold">
-        {label}
-      </Text>
-      <Text className="mt-2 text-sm text-muted-foreground">{label} settings coming soon.</Text>
-    </View>
+    <SettingsPane>
+      <SettingsHeader title={label} description={`${label} settings coming soon.`} />
+    </SettingsPane>
   );
 }
 

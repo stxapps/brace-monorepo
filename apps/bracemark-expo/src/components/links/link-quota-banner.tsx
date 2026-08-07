@@ -1,5 +1,9 @@
 import { View } from 'react-native';
-import { Lock } from 'lucide-react-native';
+// Deep-imported, unlike every other lucide call site in the app: the share sheet
+// renders this banner, so it sits in the iOS share-extension bundle, where the
+// lucide barrel's ~1600 icon modules would be executed on every cold share
+// (features/share/share-kit.tsx carries the full reasoning).
+import Lock from 'lucide-react-native/icons/lock';
 
 import { PLAN_LABELS } from '@stxapps/shared';
 

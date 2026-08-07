@@ -54,6 +54,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
+import { SettingsGroup, SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: LucideIcon }> = {
   list: { label: 'List', hint: 'A dense, single-column list.', icon: List },
@@ -263,35 +264,25 @@ export function MiscSection() {
   };
 
   return (
-    <View className="px-6 py-8">
-      <Text role="heading" className="text-xl font-semibold">
-        Misc.
-      </Text>
-      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-        General preferences for the app.
-      </Text>
+    <SettingsPane>
+      <SettingsHeader title="Misc." description="General preferences for the app." />
 
-      {error && (
-        <View className="mb-4 rounded-md bg-destructive/10 px-3 py-2">
-          <Text className="text-sm text-destructive">{error}</Text>
-        </View>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <View>
-        <Text role="heading" className="text-base font-medium">
-          Link layout
-        </Text>
-        <Text className="mt-1 text-sm text-muted-foreground">
-          Choose how your saved links are displayed.{' '}
-          <Text className="text-sm font-semibold">Sync</Text> applies your choice across all your
-          devices. <Text className="text-sm font-semibold">Device</Text> keeps a separate choice for
-          this device only (cleared when you sign out).
-        </Text>
-
+      <SettingsGroup
+        title="Link layout"
+        description={
+          <Text className="text-sm text-muted-foreground">
+            Choose how your saved links are displayed.{' '}
+            <Text className="text-sm font-semibold">Sync</Text> applies your choice across all your
+            devices. <Text className="text-sm font-semibold">Device</Text> keeps a separate choice
+            for this device only (cleared when you sign out).
+          </Text>
+        }
+      >
         <Tabs
           value={linksLayoutSource}
           onValueChange={(v) => run(setLinksLayoutSource(v as LinksLayoutSource))}
-          className="mt-4"
         >
           <TabsList>
             <TabsTrigger value="sync">
@@ -319,20 +310,16 @@ export function MiscSection() {
             />
           </TabsContent>
         </Tabs>
-      </View>
+      </SettingsGroup>
 
-      <View className="mt-10">
-        <Text role="heading" className="text-base font-medium">
-          Link sort
-        </Text>
-        <Text className="mt-1 text-sm text-muted-foreground">
-          Choose how your saved links are ordered. This applies across all your devices.
-        </Text>
-
+      <SettingsGroup
+        title="Link sort"
+        description="Choose how your saved links are ordered. This applies across all your devices."
+      >
         {/* Global-only (synced), so no Sync/Device tabs — the two axes are set
             directly. The RadioGroup value is the raw persisted string, so an
             unknown future value simply shows nothing selected. */}
-        <View className="mt-4">
+        <View>
           <Text className="text-sm font-medium">Sort by</Text>
           <RadioGroup
             value={sortOn}
@@ -379,24 +366,20 @@ export function MiscSection() {
             })}
           </RadioGroup>
         </View>
-      </View>
+      </SettingsGroup>
 
-      <View className="mt-10">
-        <Text role="heading" className="text-base font-medium">
-          Theme
-        </Text>
-        <Text className="mt-1 text-sm text-muted-foreground">
-          Choose the app&apos;s appearance. <Text className="text-sm font-semibold">Sync</Text>{' '}
-          applies your choice across all your devices.{' '}
-          <Text className="text-sm font-semibold">Device</Text> keeps a separate choice for this
-          device only (cleared when you sign out).
-        </Text>
-
-        <Tabs
-          value={themeSource}
-          onValueChange={(v) => run(setThemeSource(v as ThemeSource))}
-          className="mt-4"
-        >
+      <SettingsGroup
+        title="Theme"
+        description={
+          <Text className="text-sm text-muted-foreground">
+            Choose the app&apos;s appearance. <Text className="text-sm font-semibold">Sync</Text>{' '}
+            applies your choice across all your devices.{' '}
+            <Text className="text-sm font-semibold">Device</Text> keeps a separate choice for this
+            device only (cleared when you sign out).
+          </Text>
+        }
+      >
+        <Tabs value={themeSource} onValueChange={(v) => run(setThemeSource(v as ThemeSource))}>
           <TabsList>
             <TabsTrigger value="sync">
               <Text>Sync</Text>
@@ -413,18 +396,13 @@ export function MiscSection() {
             <ThemeControls value={localTheme} onChange={(t) => run(setLocalTheme(t))} />
           </TabsContent>
         </Tabs>
-      </View>
+      </SettingsGroup>
 
-      <View className="mt-10">
-        <Text role="heading" className="text-base font-medium">
-          App lock
-        </Text>
-        <Text className="mt-1 text-sm text-muted-foreground">
-          Lock the whole app with a password on this device only — it engages every time the app
-          loads. If you forget the password, sign out and sign back in with your account password;
-          signing out removes all locks on this device.
-        </Text>
-        <View className="mt-4 flex-row">
+      <SettingsGroup
+        title="App lock"
+        description="Lock the whole app with a password on this device only — it engages every time the app loads. If you forget the password, sign out and sign back in with your account password; signing out removes all locks on this device."
+      >
+        <View className="flex-row">
           {appLock.exists ? (
             // Remove stays open even for a free (downgraded) account, so an
             // existing lock is never stranded — mirrors list unlock/remove.
@@ -449,7 +427,7 @@ export function MiscSection() {
             Switch reflects the persisted flag, so a cancelled enable (the OS
             confirm) leaves it off. */}
         {appLock.exists && biometricAvailable && (
-          <View className="mt-4 flex-row items-center justify-between gap-4">
+          <View className="flex-row items-center justify-between gap-4">
             <View className="min-w-0 flex-1">
               <Text className="font-medium">Unlock with {biometricLabel}</Text>
               <Text className="mt-0.5 text-sm text-muted-foreground">
@@ -460,7 +438,7 @@ export function MiscSection() {
             <Switch value={appLock.biometric} onValueChange={(v) => run(setAppBiometric(v))} />
           </View>
         )}
-      </View>
+      </SettingsGroup>
 
       {lockDialog === 'set' && (
         <LockPasswordDialog
@@ -486,6 +464,6 @@ export function MiscSection() {
           }}
         />
       )}
-    </View>
+    </SettingsPane>
   );
 }

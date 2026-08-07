@@ -42,6 +42,7 @@ import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
 import { CreateRow } from './rows';
+import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 type SortDir = 'asc' | 'desc';
 
@@ -230,22 +231,16 @@ export function TagsSection() {
   };
 
   return (
-    <View className="px-4 py-8">
-      <Text role="heading" className="text-xl font-semibold">
-        Tags
-      </Text>
-      <Text className="mt-1 mb-4 text-sm text-muted-foreground">
-        Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so
-        there&apos;s no nesting.
-      </Text>
+    // `px-4` for the same reason the Lists table uses it — see the note there.
+    <SettingsPane className="px-4">
+      <SettingsHeader
+        title="Tags"
+        description="Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so there’s no nesting."
+      />
 
-      {error && (
-        <View className="mb-3 rounded-md bg-destructive/10 px-3 py-2">
-          <Text className="text-sm text-destructive">{error}</Text>
-        </View>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <View className="mb-2 flex-row justify-end">
+      <View className="-mb-1 flex-row justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" disabled={tags.length === 0}>
@@ -303,6 +298,6 @@ export function TagsSection() {
           ))
         )}
       </View>
-    </View>
+    </SettingsPane>
   );
 }

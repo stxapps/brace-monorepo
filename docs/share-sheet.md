@@ -1,6 +1,6 @@
 ## share sheet (bracemark-expo)
 
-How "share from Safari/Chrome → pick list, add tags → Add → saved locally,
+How "share from Safari/Chrome → pick list, add tags → Save → saved locally,
 synced in the background" works on mobile. Living reference like
 [architecture.md](./architecture.md); the local-first write path it feeds is
 [local-first-sync.md](./local-first-sync.md), the taxonomy pickers it minifies
@@ -30,7 +30,7 @@ from it:
 | ------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                     |
 | saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                  |
-| sync after Add           | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                         |
+| sync after Save          | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                         |
 | session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot to gate the form; the shared-Keychain session mirror arms the upload's api |
 
 **The two shells meet at one `AppRegistry` string.** Each native host mounts
@@ -60,7 +60,7 @@ instead exchanges **atomic per-item JSON files** — no locks, no contention:
   Trash excluded (saving into the deletion staging area is incoherent); tags in
   rank order. Every row carries its `rank` so the sheet can mint neighbour
   ranks for what it creates (below).
-- `<app-group>/share/outbox/<linkId>.json` — one `ShareDraft` per Add, written
+- `<app-group>/share/outbox/<linkId>.json` — one `ShareDraft` per Save, written
   by the EXTENSION:
   `{ id, url, title?, listId, tagIds, newTags, newLists, sharedAt }`.
   The main app drains each through the normal write edge on launch/foreground
@@ -135,6 +135,61 @@ that. Sign-out clears it with everything else (`clearShareData` deletes the whol
 `share/` subtree rather than naming artifacts, so a future addition can't be
 missed).
 
+### the sheet's shape — four screens, one specimen
+
+The sheet floats over Safari for about three seconds, and the traffic through it
+is lopsided: **the 90% path is share → Save**; the list and the tags are the
+10%. The layout is built around that, and around one object.
+
+**The page is the subject.** `share-specimen.tsx` draws the shared URL the way
+the library will draw it — a 44px monogram tile, the title, the address — and it
+is on screen from the first frame to the last. It is the RN port of the browser
+extension's `PageSpecimen`, deliberately: that popup already learned the lesson
+this sheet hadn't. A compose screen followed by a separate "✓ Saved to
+Bracemark" screen reads as submitting a form and being handed a receipt — two
+screens with nothing visibly in common. Here the save happens **to** the object:
+the controls beneath it change, the specimen does not move, and **its corner
+comes off**. That fold is the whole confirmation signal, and it is the meaning
+the mark already carries on the extension's tile — square is unsaved, cut is
+saved ([brand.md](./brand.md#the-mark)) — not a new one.
+
+The tile is **always the monogram**. Web's chain is extracted image → the live
+tab's favicon → HostMonogram; the sheet has neither of the first two and must
+not go looking (it never fetches the page, and the iOS extension must stay off
+the app's sqlite, where a cached favicon lives). The deterministic tile is the
+whole chain — and it is the same tile the library draws for that host, so "same
+site, same mark" holds across the boundary.
+
+**The choices are disclosed, not spread out.** The compose screen carries two
+rows — destination and tags — each showing the current answer and opening a
+screen with room to change it. A destination is one value; a tag set is bounded
+by what the user picked. The pickers were previously a `max-h-40` peephole
+nested inside the sheet's own ScrollView plus a blind "New list…" field, which
+gave the 10% path most of a 520pt panel and still had nowhere to put a tree.
+As screens they get the height, and they borrow the app's own picker rules line
+for line (`components/links/list-command.tsx`, `tags-field.tsx`): one input that
+filters as you type and doubles as the new entity's name field, ancestor paths on
+filtered rows, an explicit `Create "…"` affordance suppressed on an exact
+case-insensitive match. Someone who has picked a list in the app should not have
+to learn a second picker here.
+
+So the four screens are **compose → (choose list | add tags) → saved**, switched
+by local state rather than a router — the extension bundle has no business
+carrying one. Three rules hold them together:
+
+- **The header is constant** (`ShareHeader`, `share-kit.tsx`) and the same height
+  everywhere, so the specimen under it never moves. It carries the **brand
+  lockup** — this is the one surface in the product that floats over another app
+  and has no other carrier — plus a close control, which is not decoration: on
+  iOS there is no backdrop to tap and no swipe to dismiss, so before it the
+  compose screen had no way out except saving.
+- **One primary button in the whole sheet**, and it is Save. Every other button
+  on every screen is an outline.
+- **The verb is "Save" the whole way through** — button, progress ("Saving…"),
+  confirmation ("Saved to _My List_") — matching the extension popup and the
+  app's own add screen. The confirmation names the DESTINATION because "Saved"
+  alone is half an answer in an app whose organising idea is lists.
+
 ### what the sheet does and doesn't do
 
 - **Title**: comes from the share payload only — Android `EXTRA_SUBJECT`, iOS
@@ -172,8 +227,19 @@ missed).
   create surface refuses the save at the cap and shows the upgrade banner instead
   of the form ([editors.md](./editors.md)), and since the cap is client-enforced
   (docs/iap.md, _enforcement_) these gates ARE the wall — nothing behind them
-  counts links. `saveSharedDraft` returns `'quota'` and the sheet says so instead
-  of ✓.
+  counts links.
+
+  **The sheet obeys that rule literally: the banner replaces the form.** It
+  reads `linkCount`/`maxLinks` off the taxonomy it already loaded — the same two
+  numbers `isAtLinkCap` uses, on both platforms — so the refusal lands before
+  the user files a link that was never going to be saved. There is no upgrade
+  CTA on it, because neither host can route into the app's subscription screen
+  (Android's `BracemarkShare` module exposes `close()` and nothing else); the
+  banner's own sentence is the direction.
+
+  `saveSharedDraft` still returns `'quota'`, and the sheet still handles it, as
+  the backstop for the count moving underneath the gate — Android re-counts
+  sqlite live inside the save, and an iOS snapshot can be a run of shares old.
 
   Android's share activity runs in the app's process, so `isAtLinkCap`
   (expo-react's `data/share-store.ts`) counts `links/` rows the trash-INCLUSIVE
@@ -196,9 +262,13 @@ missed).
   taken without reopening the app: they are all judged against the count as of
   the first one, and the drain + refresh on next foreground re-syncs it.
 
-- **No session** (cold share before first sign-in): the sheet shows "Open
-  Bracemark and sign in first" instead of hanging or crashing — snapshot absent /
-  `sessionPresent: false` on iOS, `getSession() === null` on Android.
+- **No session** (cold share before first sign-in): the sheet shows "Sign in to
+  save links", and says why — everything is encrypted with the password, so
+  there is nothing the sheet could do without it — instead of hanging or
+  crashing. Snapshot absent / `sessionPresent: false` on iOS,
+  `getSession() === null` on Android. It and the no-link state are shaped like
+  the links pane's `EmptyState` (a mark, a title, a sentence that says what to do
+  next), because they are the same kind of moment.
 - **Sign-out hygiene**: clearing account data also deletes the snapshot and
   outbox (clear-data.ts), same reasoning as the session-store install
   sentinel's Keychain-ghost note.
@@ -214,13 +284,14 @@ arrive with their features.
 
 **The sheet dismisses fast; sync is never awaited in-sheet.** The durable
 commit is the local write (the pending op enqueued in the same transaction on
-Android, the outbox file on iOS) — NOT the sync completing. So Add is always
-`write → ✓ → close()`; any sync/upload is fired **best-effort, un-awaited**.
+Android, the outbox file on iOS) — NOT the sync completing. So Save is always
+`write → the fold → close()`; any sync/upload is fired **best-effort,
+un-awaited**.
 Never hold the sheet on a "syncing…" spinner: the user shared and wants back to
 the caller, and delivery is guaranteed by the durable record + next-open drain,
 not by the in-sheet kick landing.
 
-- **Android Add** = mutations writes, then an inline sync kick, un-awaited —
+- **Android Save** = mutations writes, then an inline sync kick, un-awaited —
   one entity, sub-second, so it usually lands while the process is alive.
   **Caveat: the ShareActivity's process may have been spawned just for the
   share** (main app not running); once the activity `finish()`es and nothing
@@ -237,7 +308,7 @@ not by the in-sheet kick landing.
   and the un-awaited `runIncrementalSync` promise runs on the app-level React
   host's JS runtime, which the activity's `finish()` doesn't cancel; that IS the
   process scope in RN terms.)
-- **iOS Add** = outbox write + best-effort upload kick + ✓ +
+- **iOS Save** = outbox write + best-effort upload kick + the fold +
   `close()`. Down-sync happens on next launch/foreground drain (`ShareBridge`);
   an opportunistic BGAppRefresh backstop (expo-background-task) remains a
   possible enhancement, less pressing now that the upload gives cross-device
@@ -269,11 +340,11 @@ top of it — not a replacement.** The extension builds the entity, writes the
 outbox file (durable, always), and _then_ best-effort encrypts + PUTs it:
 
 ```
-tap Add →
+tap Save →
   mint id, build ShareDraft →
   write outbox/<id>.json         ← durable, always happens
   best-effort: encrypt + PUT     ← may fail (offline, key read, link error)
-  ✓ + close()
+  the fold + close()
 ```
 
 Keeping the outbox even when the upload "works" is what makes the share
@@ -336,7 +407,12 @@ complete. Failures skip the commit
 extension process lives ~a second past the ✓, so the durable outbox IS the
 retry.
 
-Prebuild verification: confirm `react-native-quick-crypto` links into the
+Prebuild verification: the extension target gets its own `use_native_modules!`
+pass in the generated Podfile (expo-share-extension's `withPodfile`), so
+community RN modules link there as they do in the app — that is what covers
+`react-native-svg` (the lockup's mark) and `react-native-safe-area-context` (the
+sheet's bottom inset), neither of which is in `excludedPackages`. Confirm
+`react-native-quick-crypto` links into the
 extension target — if it doesn't, the fallback is **not** "go full Swift" but
 call **BracemarkFileCrypto** (your own autolinked module — the `BracemarkCrypto` pod
 links anyway for BracemarkSharedKeychain) for the AES, staying in the RN path. The entity blobs are
@@ -354,21 +430,37 @@ is init cost paid on every cold share (see the cold-start note in the file map
 below). The extension bundle should pull in `ShareRoot`/`ShareScreen`, the
 pickers, `share-store`, and `mutations` — **not** the router tree, `_layout`'s
 providers, or main-app-only modules. Police this graph actively; it's the one
-real lever on RN cold-start latency.
+real lever on RN cold-start latency. Two standing consequences:
+
+- **Lucide is deep-imported in the share tree** (`lucide-react-native/icons/x`),
+  and nowhere else in the app. The barrel is ~1600 icon modules, Metro does not
+  tree-shake, and the barrel module executes every one of them on import. Android
+  pays nothing (its share activity rides the main bundle, where the barrel is
+  already resident); iOS would pay per cold share. The subpath is a declared
+  package export with types (`./icons/*`), resolved under the `react-native`
+  condition by Metro and jest alike — not a reach into `dist/`. This is why
+  `components/links/link-quota-banner.tsx`, which the sheet renders at the cap,
+  deep-imports too.
+- **No portals, no Reanimated, and no `react-native-svg` on the compose path.**
+  The pickers are screens within the sheet rather than overlays over it, and the
+  specimen's corner cut is an overlay rather than a stroked SVG path
+  ([brand.md](./brand.md#the-mark), _at TILE scale_). `react-native-svg` does
+  enter the bundle — the brand lockup's mark needs it — but nothing else in the
+  tree depends on it.
 
 ### file map
 
-| piece                                                                                                                | where                                                                                                                                   |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| share screen UI + prop normalizing + close() seam                                                                    | `apps/bracemark-expo/src/features/share/`                                                                                               |
-| entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)    |
-| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                       | `@stxapps/expo-react` `data/share-store.ts`                                                                                             |
-| best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                            |
-| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                           |
-| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift) |
-| write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                               |
-| iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`       |
-| Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)      |
+| piece                                                                                                                | where                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| share screen UI + prop normalizing + close() seam                                                                    | `apps/bracemark-expo/src/features/share/` — `share-root` (prop normalizing), `share-screen` (the four screens + the draft), `share-kit` (frame/header/row/notice), `share-specimen` (the page + the fold), `share-list-picker`, `share-tags-picker`, `share-host` (close) |
+| entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)                                                                                                                                      |
+| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                       | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                               |
+| best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                                                                                                                                                              |
+| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                             |
+| session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                   |
+| write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                 |
+| iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                         |
+| Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                        |
 
 Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded
 font), none of

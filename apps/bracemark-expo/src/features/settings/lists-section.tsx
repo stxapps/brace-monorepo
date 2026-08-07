@@ -79,6 +79,7 @@ import {
 } from './dnd-helpers';
 import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
 import { CreateRow } from './rows';
+import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
@@ -556,22 +557,19 @@ export function ListsSection() {
   });
 
   return (
-    <View className="px-4 py-8">
-      <Text role="heading" className="text-xl font-semibold">
-        Lists
-      </Text>
-      <Text className="mt-1 mb-4 text-sm text-muted-foreground">
-        Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you
-        can rename and reorder them, but not delete them.
-      </Text>
+    // `px-4`, one step tighter than the pane's own `px-6`: the table below is a
+    // DRAG surface, and every pixel of inset is a pixel a dragged row has to
+    // travel before it clears the edge. The vertical rhythm and the max-w-2xl
+    // measure still come from the pane, so this is the only axis that differs.
+    <SettingsPane className="px-4">
+      <SettingsHeader
+        title="Lists"
+        description="Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you can rename and reorder them, but not delete them."
+      />
 
-      {error && (
-        <View className="mb-3 rounded-md bg-destructive/10 px-3 py-2">
-          <Text className="text-sm text-destructive">{error}</Text>
-        </View>
-      )}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <View className="mb-2 flex-row justify-end">
+      <View className="-mb-1 flex-row justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">
@@ -696,6 +694,6 @@ export function ListsSection() {
           }}
         />
       )}
-    </View>
+    </SettingsPane>
   );
 }

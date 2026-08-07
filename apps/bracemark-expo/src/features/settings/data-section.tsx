@@ -54,7 +54,7 @@ import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
-import { ActionRow, BackLink } from './rows';
+import { SettingsHeader, SettingsPane, SettingsRow } from './settings-kit';
 
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
@@ -261,17 +261,12 @@ function ImportView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <BackLink label="Data" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Import data
-      </Text>
-      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-        Import from a file — a Bracemark backup (.zip), an HTML bookmarks file (web browsers,
-        LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of
-        links. The format is detected automatically; links you already have are skipped. Large
-        imports may take a few minutes.
-      </Text>
-      <View className="flex-row">
+      <SettingsHeader
+        title="Import data"
+        description="Import from a file — a Bracemark backup (.zip), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. Large imports may take a few minutes."
+        back={{ label: 'Data', onPress: onBack }}
+      />
+      <View className="mt-6 flex-row">
         <Button variant="outline" onPress={() => void pick()} disabled={running}>
           <Icon as={Upload} className="size-4" />
           <Text>Choose a file</Text>
@@ -429,19 +424,16 @@ function ExportView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <BackLink label="Data" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Export all data
-      </Text>
-      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-        Save a copy of your data. Pick a format for where it’s going. This may take a few minutes
-        for a large library.
-      </Text>
+      <SettingsHeader
+        title="Export all data"
+        description="Save a copy of your data. Pick a format for where it’s going. This may take a few minutes for a large library."
+        back={{ label: 'Data', onPress: onBack }}
+      />
 
       <RadioGroup
         value={format}
         onValueChange={(v) => setFormat(v as ExportFormat)}
-        className="gap-3"
+        className="mt-6 gap-3"
       >
         {EXPORT_FORMAT_OPTIONS.map((option) => (
           <Pressable
@@ -548,14 +540,11 @@ function DeleteView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <BackLink label="Data" onBack={onBack} />
-      <Text role="heading" className="text-xl font-semibold">
-        Delete all data
-      </Text>
-      <Text className="mt-1 text-sm text-muted-foreground">
-        Delete all your data — every saved link in every list, all your lists and tags, and all your
-        settings — from all your devices.
-      </Text>
+      <SettingsHeader
+        title="Delete all data"
+        description="Delete all your data — every saved link in every list, all your lists and tags, and all your settings — from all your devices."
+        back={{ label: 'Data', onPress: onBack }}
+      />
       <Text className="mt-3 text-sm text-muted-foreground">
         This removes your data only, not your account — you can still sign in. If another device has
         changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
@@ -607,34 +596,31 @@ export function DataSection() {
   const [view, setView] = useState<DataView>('overview');
 
   return (
-    <View className="px-6 py-8">
+    <SettingsPane>
       {view === 'overview' ? (
         <>
-          <Text role="heading" className="text-xl font-semibold">
-            Data
-          </Text>
-          <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-            Your data syncs across your devices, end-to-end encrypted. Import, export, or delete all
-            of it here.
-          </Text>
+          <SettingsHeader
+            title="Data"
+            description="Your data syncs across your devices, end-to-end encrypted. Import, export, or delete all of it here."
+          />
 
           <SyncStatus />
 
-          <View className="mt-6 gap-3">
-            <ActionRow
-              icon={Upload}
+          <View className="gap-3">
+            <SettingsRow
+              icon={<Icon as={Upload} className="size-5 text-muted-foreground" />}
               title="Import data"
               description="Add links from a text file or another app."
               onPress={() => setView('import')}
             />
-            <ActionRow
-              icon={Download}
+            <SettingsRow
+              icon={<Icon as={Download} className="size-5 text-muted-foreground" />}
               title="Export all data"
               description="Save everything as a backup or bookmarks file."
               onPress={() => setView('export')}
             />
-            <ActionRow
-              icon={Trash2}
+            <SettingsRow
+              icon={<Icon as={Trash2} className="size-5 text-destructive" />}
               title="Delete all data"
               description="Permanently remove all your data."
               onPress={() => setView('delete')}
@@ -649,6 +635,6 @@ export function DataSection() {
       ) : (
         <DeleteView onBack={() => setView('overview')} />
       )}
-    </View>
+    </SettingsPane>
   );
 }

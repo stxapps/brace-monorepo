@@ -51,7 +51,7 @@ import {
   type TreeNode,
 } from '@stxapps/shared';
 
-import { BracemarkIcon } from '../../components/icons/bracemark-icon';
+import { BrandLockup } from '../../components/brand-lockup';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
@@ -438,18 +438,29 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
 
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
-      {/* Brand mark, pinned above the scrolling trees (web's h-14 header). */}
-      <View className="h-14 flex-row items-center gap-2 px-4">
-        <BracemarkIcon />
+      {/* The brand lockup, pinned above the scrolling trees at the topbar's own
+          `h-14` with the same hairline under it, so the drawer's header and the
+          bar it covers meet across the frame. It was a bare mark with no
+          wordmark and no rule — which made this the one surface in the app that
+          showed the icon WITHOUT the name, the exact inverse of what a drawer is
+          for. Both rails now open on the identical lockup (components/
+          brand-lockup.tsx), as do bracemark-web's two rails and the browser
+          extension's options page. */}
+      <View className="h-14 justify-center border-b border-border px-4">
+        <BrandLockup />
       </View>
 
       {/* Count-gated find-in-nav over both trees (funnel icon, not a magnifier):
           it filters which list/tag ROWS show, distinct from the topbar's Search
           over saved LINK content. Pinned above the trees; the funnel icon is an
-          absolute overlay the input's left padding clears (web parity). */}
+          absolute overlay the input's left padding clears (web parity).
+
+          `pt-2` clears the header's hairline; the icon's absolute `top` is the
+          input's own vertical centre measured from this wrapper's edge, so it
+          moves with that padding. */}
       {showFilter && (
-        <View className="relative px-3 pb-1">
-          <View className="absolute left-5 z-10" style={{ top: 13, pointerEvents: 'none' }}>
+        <View className="relative px-3 pt-2 pb-1">
+          <View className="absolute left-5 z-10" style={{ top: 21, pointerEvents: 'none' }}>
             <Icon as={ListFilter} className="size-3.5 text-muted-foreground" />
           </View>
           <Input

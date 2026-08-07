@@ -80,14 +80,17 @@ export function MoreOptionsMenu() {
                 ? 'More options (storage full)'
                 : 'More options'
           }
-          className="relative size-10 items-center justify-center rounded-md"
+          // `size-9` and pulled to the frame edge, matching every other icon
+          // button on both topbars (links and settings) — this is the last slot
+          // in the row, so it sets where the bar's right edge reads.
+          className="relative -mr-1 size-9 items-center justify-center rounded-md active:bg-muted"
         >
           <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
           {(syncError || blocked) && (
             <View
               aria-hidden
               className={cn(
-                'absolute top-1.5 right-1.5 size-1.5 rounded-full',
+                'absolute top-1 right-1 size-1.5 rounded-full',
                 syncError ? 'bg-destructive' : 'bg-muted-foreground',
               )}
             />

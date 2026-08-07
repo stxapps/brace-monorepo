@@ -184,9 +184,15 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   NavigationContainer mounts react-navigation's `SafeAreaProviderCompat`, so
   screens can use `SafeAreaView`/`useSafeAreaInsets` with **no explicit
   `SafeAreaProvider` in `_layout.tsx`** (see its header comment). The one tree
-  outside any provider is the share sheet — `share-screen.tsx` uses no
-  safe-area API at all: the iOS host sheet is positioned by the system, and
-  Android's bottom sheet + backdrop fill the window by design.
+  outside any provider is the share sheet (`features/share/share-kit.tsx`), and
+  it uses `SafeAreaView` anyway — **which is legal, and the distinction is worth
+  knowing: `SafeAreaView` is a native view that measures its OWN insets and
+  reads no context; only `useSafeAreaInsets` needs the provider.** It takes
+  `edges={{ bottom: 'additive' }}` and nothing else. Bottom, because the iOS
+  host view is pinned to the screen bottom and the Android panel is a bottom
+  sheet, so both land under the home indicator / nav bar — the omission was
+  visible as a Save button whose bottom edge sat inside the home indicator's own
+  swipe region. Nothing else, because neither host ever reaches the notch.
 - **Screens: `SafeAreaView` from `react-native-safe-area-context`** (never the
   deprecated RN-core one), wrapped once per file as
   `const StyledSafeAreaView = withUniwind(SafeAreaView)` so it accepts

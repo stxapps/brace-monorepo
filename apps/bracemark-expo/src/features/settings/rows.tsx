@@ -1,55 +1,20 @@
-// Small row primitives shared across sections: the tappable ActionRow that
-// opens a sub-view and the BackLink every sub-view puts at the top (the
-// overview-style Account/Data sections), and the CreateRow pinned atop the
-// Lists and Tags tables. Web keeps a copy per section (`_account/`/`_lists/`/…
-// are self-contained folders by design); here the whole settings feature is
-// one folder, so the self-containment argument dissolves and one copy serves
-// all.
+// The CreateRow pinned atop the Lists and Tags tables — the one row primitive
+// that is NOT part of the settings design system, because it is not a settings
+// control at all: it is the head of an editable table, sitting on that table's
+// hairline rather than on the pane's rhythm.
+//
+// What used to live beside it — `ActionRow` and `BackLink` — moved into
+// settings-kit.tsx as `SettingsRow` (its drill-down shape) and
+// `SettingsBackLink`. They were the same two shapes the kit had to declare
+// anyway, and keeping a second copy here is exactly the drift the kit exists to
+// stop.
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight, type LucideIcon, Plus, X } from 'lucide-react-native';
+import { Check, Plus, X } from 'lucide-react-native';
 
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
-import { Text } from '../../components/ui/text';
-import { cn } from '../../lib/utils';
-
-// One tappable row on an overview that opens a sub-view. Full-width with a
-// leading icon, a title + description, and a trailing chevron affordance.
-export function ActionRow({
-  icon,
-  title,
-  description,
-  onPress,
-  destructive,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  onPress: () => void;
-  destructive?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className="w-full flex-row items-center gap-3 rounded-lg border border-border p-4 active:bg-muted/40"
-    >
-      <Icon
-        as={icon}
-        className={cn(
-          'size-5 shrink-0',
-          destructive ? 'text-destructive' : 'text-muted-foreground',
-        )}
-      />
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text className={cn('font-medium', destructive && 'text-destructive')}>{title}</Text>
-        <Text className="text-sm text-muted-foreground">{description}</Text>
-      </View>
-      <Icon as={ChevronRight} className="size-4 shrink-0 text-muted-foreground" />
-    </Pressable>
-  );
-}
 
 // The create-an-item row pinned at the top of the Lists and Tags tables. The
 // plus turns into a cancel once the field is active (focused or non-empty); a
@@ -111,16 +76,5 @@ export function CreateRow({
         </Pressable>
       )}
     </View>
-  );
-}
-
-// The back link shared by every sub-view — returns to its section's overview;
-// `label` names the section (web's per-section BackLink hardcodes it).
-export function BackLink({ label, onBack }: { label: string; onBack: () => void }) {
-  return (
-    <Pressable onPress={onBack} className="mb-4 flex-row items-center gap-1 self-start rounded">
-      <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />
-      <Text className="text-sm text-muted-foreground">{label}</Text>
-    </Pressable>
   );
 }

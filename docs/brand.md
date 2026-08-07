@@ -229,21 +229,69 @@ The two components must not drift. Nothing enforces it — no test compares the
 two `d` strings — so a retouch of the mark is a **two-file** change plus a
 re-render of every raster.
 
-**The 45° fold is also a UI device, and it is spoken for twice.** Neither use
-renders the mark — both cut the same corner off a rectangle with a `clip-path`,
-at a size set against the object rather than against the mark's 29% ratio, which
-only reads as a silhouette on ~40px objects.
+**The lockup — mark beside wordmark — is one set of measurements rendered on
+seven surfaces**: a 20px mark (`h-5`), the wordmark at `text-[0.9375rem]
+leading-none font-semibold tracking-tight`, `gap-2.5` between them. It is the
+brand's only appearance on any surface that has no other carrier, so the surfaces
+have to agree: bracemark-web's links rail, its settings rail and its auth card;
+the browser extension's `OptionsShell`; and bracemark-expo's two drawers, its
+auth screen, and **its share sheet** — which is the purest case of the rule,
+since that one floats over somebody else's app and has nothing but the lockup to
+say whose sheet it is. Web types the six utilities into each file with a comment
+naming the others. **Expo does not, and must not** — the mark's height is a
+`height` PROP there (`react-native-svg` sizes by prop, not by class), so a
+hand-typed copy drifts by a pixel the first time one is edited; all four native
+call sites go through `apps/bracemark-expo/src/components/brand-lockup.tsx`,
+which also takes the wordmark from `BRAND.name` rather than the literal.
 
-| where                                                            | cut     | what it means                                                                                                            |
-| ---------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------ |
-| the browser extension's page tile (`corner-cut`/`corner-square`) | 0.75rem | **state** — square is unsaved, cut is saved; the whole signal, no badge (`browser-extension.md`)                         |
-| bracemark-web's auth card (`(auth)/layout.tsx`)                  | 1.5rem  | **identity** — the two signed-out routes have no sidebar to carry the brand, so the card itself is the Bracemark surface |
+**The 45° fold is also a UI device, and it carries exactly two MEANINGS.** No
+use renders the mark — each cuts the same corner off a rectangle, at a size set
+against the object rather than against the mark's 29% ratio, which only reads as
+a silhouette on ~40px objects.
 
-Keep that split before adding a third: a fold that means "saved" somewhere and
-nothing in particular elsewhere teaches users it means nothing. On any surface
-big enough to have a border, remember the clip takes the ring and the box shadow
-with it — the auth card draws its hairline as a 1px filled layer underneath and
-its shadow as a `drop-shadow` filter, which is the pattern to copy.
+| where                                                                       | cut     | what it means                                                                                                               |
+| --------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| the browser extension's page tile (`corner-cut`/`corner-square`)            | 0.75rem | **state** — square is unsaved, cut is saved; the whole signal, no badge (`browser-extension.md`)                            |
+| bracemark-expo's share-sheet specimen (`features/share/share-specimen.tsx`) | 12px    | **state**, the same one — the native port of the row above, on the same 44px tile (see below)                               |
+| bracemark-web's auth card (`(auth)/layout.tsx`)                             | 1.5rem  | **identity** — the signed-out routes have no rail to carry the brand, so the card itself is the Bracemark surface           |
+| bracemark-expo's auth card (`components/dog-eared-card.tsx`)                | 24px    | **identity**, the same one — the native port of the row above, not a third meaning; the case is _stronger_ here (see below) |
+
+Count meanings, not surfaces — the table is **four rows and two meanings**, and
+each meaning is one idea rendered on two platforms. The expo card is the web card
+on another platform: same two screens, same job, same 1.5rem/24px cut, and a
+native app has no tab title to fall back on, so it is even more true there that
+these screens are the only place the app never says its own name. The share
+sheet's specimen is the browser extension's page tile on another platform, and
+the pairing is just as tight: the same question ("this page — saved or not?"),
+the same 44px tile, the same 12px cut, both drawn as the thing the library will
+draw for that link. **A THIRD MEANING is what is still forbidden** — a fold that
+means "saved" somewhere and nothing in particular elsewhere teaches users it
+means nothing.
+
+The two platforms draw it differently, and on RN the technique is chosen by
+SCALE rather than by taste:
+
+- **Web** clips, and the clip takes the ring and the box shadow with it — so the
+  card draws its hairline as a 1px filled layer underneath and its shadow as a
+  `drop-shadow` filter. Copy that pattern for any clipped surface big enough to
+  have a border.
+- **RN has no `clip-path` at all**, so it has two techniques, and the dividing
+  line is whether the shape carries a hairline:
+  - **At CARD scale, a stroked path.** The obvious native trick — a rotated
+    square in the page colour laid over the corner — cannot carry a hairline,
+    which would leave the diagonal as the one edge with no border, and the
+    diagonal is the whole device. So the expo auth card's outline is **one
+    filled-and-stroked `react-native-svg` path** sized from the content's
+    measured box: three rounded corners and a straight chamfer where the fourth
+    would be. It also ships **no shadow**, deliberately — RN would cast the
+    CONTENT BOX's rectangular shadow, putting a rectangular halo around a folded
+    corner and turning a turned page into a chipped one.
+  - **At TILE scale, the overlay is correct** — and it is not an approximation.
+    Web's own 44px tile loses its ring along the diagonal too, because
+    `clip-path` erases the ring with everything else, so a rotated square in the
+    page colour reproduces the web result exactly. That is what the share sheet's
+    specimen uses, and it keeps `react-native-svg` off a path whose init cost is
+    paid on every cold share.
 
 **The raster conventions, which are a rule and not a per-file judgement:**
 

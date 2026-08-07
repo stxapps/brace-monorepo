@@ -40,6 +40,7 @@ import {
   restoreStorePurchases,
   STORE_SOURCE,
 } from '../../lib/iap';
+import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 // The upgrade cards (copy + which plans are on sale) come from PLAN_CARDS in
 // @stxapps/shared iap/plans.ts, next to the entitlements table they render —
@@ -187,12 +188,9 @@ export function SubscriptionSection() {
 
   if (isLoading) {
     return (
-      <View className="px-6 py-8">
-        <Text role="heading" className="text-xl font-semibold">
-          Subscription
-        </Text>
-        <Text className="mt-2 text-sm text-muted-foreground">Loading your subscription…</Text>
-      </View>
+      <SettingsPane>
+        <SettingsHeader title="Subscription" description="Loading your subscription…" />
+      </SettingsPane>
     );
   }
 
@@ -212,15 +210,17 @@ export function SubscriptionSection() {
   const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
 
   return (
-    <View className="px-6 py-8">
-      <Text role="heading" className="text-xl font-semibold">
-        Subscription
-      </Text>
-      <Text className="mt-1 mb-6 text-sm text-muted-foreground">
-        Your plan applies to your whole account, on every device. Payments are handled by the{' '}
-        {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'}; Bracemark never sees your card
-        details.
-      </Text>
+    <SettingsPane>
+      <SettingsHeader
+        title="Subscription"
+        description={
+          <Text className="text-sm text-muted-foreground">
+            Your plan applies to your whole account, on every device. Payments are handled by the{' '}
+            {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'}; Bracemark never sees your
+            card details.
+          </Text>
+        }
+      />
 
       {/* Current plan */}
       <View className="rounded-lg border border-border p-4">
@@ -270,12 +270,10 @@ export function SubscriptionSection() {
         </View>
 
         {status === 'grace' && (
-          <View className="mt-3 rounded-md bg-destructive/10 px-3 py-2">
-            <Text className="text-sm text-destructive">
-              Your last payment didn&apos;t go through. Update your payment method to keep your plan
-              — we&apos;ll retry for a while before it lapses.
-            </Text>
-          </View>
+          <SettingsNotice tone="error" className="mt-3">
+            Your last payment didn&apos;t go through. Update your payment method to keep your plan —
+            we&apos;ll retry for a while before it lapses.
+          </SettingsNotice>
         )}
 
         {/* Manage: a subscription bought in THIS platform's store is managed in
@@ -308,20 +306,12 @@ export function SubscriptionSection() {
         )}
       </View>
 
-      {notice && (
-        <View className="mt-4 rounded-md bg-muted/50 px-3 py-2">
-          <Text className="text-sm text-muted-foreground">{notice}</Text>
-        </View>
-      )}
-      {error && (
-        <View className="mt-4 rounded-md bg-destructive/10 px-3 py-2">
-          <Text className="text-sm text-destructive">{error}</Text>
-        </View>
-      )}
+      {notice && <SettingsNotice tone="pending">{notice}</SettingsNotice>}
+      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
       {/* Upgrades */}
       {upgradeCards.length > 0 && (
-        <View className="mt-6 gap-4">
+        <View className="gap-4">
           {upgradeCards.map(({ plan: cardPlan, blurb, features }) => {
             const product = products?.[cardPlan];
             return (
@@ -363,12 +353,12 @@ export function SubscriptionSection() {
       )}
 
       {plan === 'free' && (
-        <View className="mt-4 items-start">
+        <View className="items-start">
           <Button variant="ghost" size="sm" disabled={busy !== null} onPress={() => void restore()}>
             <Text>{busy === 'restore' ? 'Restoring…' : 'Restore purchases'}</Text>
           </Button>
         </View>
       )}
-    </View>
+    </SettingsPane>
   );
 }

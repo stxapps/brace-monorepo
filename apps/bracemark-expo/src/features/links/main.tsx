@@ -68,7 +68,10 @@ const CARD_GRID_PADDING = 8;
 type LayoutConfig = {
   // FlashList's remount key on a layout switch (below) — the RESOLVED layout,
   // not the raw setting string, so unknown synced values don't churn the list.
-  name: string;
+  // It doubles as the skeleton's shape (shared.tsx): the first-read silhouette
+  // has to be the shape of whatever is about to land, and this is the only place
+  // that knows which layout resolved.
+  name: 'list' | 'card';
   Item: (props: LinkItemProps) => React.ReactNode;
   columns: (paneWidth: number) => number;
   contentPadding: number;
@@ -207,7 +210,7 @@ function UnlockedMain() {
   return (
     <>
       {links.length === 0 ? (
-        <EmptyState isLoading={isLoading} />
+        <EmptyState isLoading={isLoading} variant={name} />
       ) : (
         <View className="relative min-h-0 flex-1">
           <RefreshPill show={hasPending} onPress={applyAndScrollTop} />

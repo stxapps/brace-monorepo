@@ -53,9 +53,16 @@ silent visual regression, so they're written down:
   component**, not a convention two files agree to follow by hand:
   `bracemark-web/src/app/(app)/settings/_components/settings-kit.tsx` owns the
   measure, the heading steps, the bordered row and the notice tones for all
-  eight sections there (its header comment carries the reasoning). If a scale
-  step moves on either side, move it on both — this bullet is the only thing
-  holding them together, and neither build can fail on the difference.
+  eight sections there (its header comment carries the reasoning).
+  **bracemark-expo has the third copy of that scale**, and it is a component too:
+  `apps/bracemark-expo/src/features/settings/settings-kit.tsx`, same names, same
+  steps, same `max-w-2xl px-6` measure, with web's `focus-visible:`/`hover:`
+  states becoming `active:` because neither a keyboard nor a pointer exists
+  there. So the product's settings scale now lives in **three** files —
+  `OptionsShell` here, and one kit per app — and **nothing enforces their
+  agreement**: no shared package, no test, and neither build can fail on the
+  difference. If a scale step moves in one, move it in all three; this bullet is
+  the only thing holding them together.
 - **The page specimen is one component across the save.** `popup/PageSpecimen.tsx`
   renders the active tab in the editor and the saved link on the complete screen,
   and it does not move between them — the controls around it change instead. Its
