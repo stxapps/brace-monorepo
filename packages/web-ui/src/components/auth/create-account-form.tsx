@@ -42,9 +42,17 @@ import { Input } from '@stxapps/web-ui/components/ui/input';
 // Not react-hook-form: the multi-step secret ceremony (generate, reveal, confirm,
 // re-generate) is local UI state, and the only validated inputs are username
 // (usernameSchema) and password (newPasswordSchema + the zxcvbn gate), checked inline.
+//
+// Every step opens with a StepRow ("Step 2 of 3", back link on the left) — see the
+// note there for why the count lives in the form rather than the page header.
 
 type Step = 'setup' | 'confirm' | 'recovery';
 type Mode = 'generated' | 'own';
+
+// Source of truth for the step COUNT as well as the order: StepRow derives
+// "n of 3" by index, so adding a step to the ceremony renumbers the indicator
+// automatically instead of leaving a hardcoded "3" behind to go stale.
+const STEPS: readonly Step[] = ['setup', 'confirm', 'recovery'];
 
 export function CreateAccountForm() {
   const createAccount = useCreateAccount();
@@ -181,6 +189,7 @@ export function CreateAccountForm() {
 
     return (
       <FieldGroup>
+        <StepRow step="setup" />
         <Field data-invalid={!!usernameError}>
           <FieldLabel htmlFor="username">Username</FieldLabel>
           <Input
@@ -278,7 +287,7 @@ export function CreateAccountForm() {
   if (step === 'confirm') {
     return (
       <FieldGroup>
-        <BackLink onClick={() => setStep('setup')} />
+        <StepRow step="confirm" onBack={() => setStep('setup')} />
         <Field data-invalid={confirmError}>
           <FieldLabel htmlFor="confirm">Confirm your password</FieldLabel>
           <FieldDescription>Re-enter it to make sure you have it saved correctly.</FieldDescription>
@@ -311,7 +320,7 @@ export function CreateAccountForm() {
   // --- step: recovery -------------------------------------------------------
   return (
     <FieldGroup>
-      <BackLink onClick={() => setStep('confirm')} />
+      <StepRow step="recovery" onBack={() => setStep('confirm')} />
       <Field>
         <FieldLabel>Recovery code</FieldLabel>
         <FieldDescription>
@@ -361,15 +370,46 @@ export function CreateAccountForm() {
   );
 }
 
-function BackLink({ onClick }: { onClick: () => void }) {
+// The row every step opens with: back link on the left (absent on the first step),
+// "Step n of 3" on the right.
+//
+// It lives HERE, not in the page's CardHeader, because `step` is this component's
+// local state — surfacing it in the header would mean lifting that state across the
+// web-ui→app boundary (and again across the feature→route boundary on native) for
+// three words. The page header stays static and describes the ACCOUNT; this row is
+// the part that tracks the step, which is exactly the split the header comment in
+// `(auth)/create-account/page.tsx` describes.
+//
+// Its real job is on step ONE, where it's the only thing that says a recovery code
+// is coming — by step 3 the user has seen two screens and can infer the shape. On
+// the recovery step it then reads as "one screen left", which is the number that
+// competes with that step's "Skip for now" escape hatch.
+//
+// Deliberately NOT dots or a progress bar: dots imply steps you can click back to,
+// which this ceremony doesn't offer past a single Back. And deliberately no
+// "(optional)" on step 3 even though it is skippable — the Skip link below already
+// offers the exit; pre-announcing it in the counter just discourages setting up the
+// second door. See docs/account.md, _generated password_.
+function StepRow({ step, onBack }: { step: Step; onBack?: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="-ml-1 inline-flex items-center gap-1 self-start rounded text-sm text-muted-foreground hover:text-foreground"
-    >
-      <ChevronLeft className="size-4" />
-      Back
-    </button>
+    <div className="flex items-center justify-between gap-2">
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="-ml-1 inline-flex items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="size-4" />
+          Back
+        </button>
+      ) : (
+        // Holds the right-hand column in place on the first step, where there's
+        // nothing to go back to — `justify-between` alone would left-align the count.
+        <span />
+      )}
+      <span className="text-sm text-muted-foreground">
+        Step {STEPS.indexOf(step) + 1} of {STEPS.length}
+      </span>
+    </div>
   );
 }

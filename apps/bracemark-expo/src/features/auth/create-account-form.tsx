@@ -38,9 +38,17 @@ import { ShowOnceSecret } from './show-once-secret';
 // Not react-hook-form: the multi-step secret ceremony (generate, reveal, confirm,
 // re-generate) is local UI state, and the only validated inputs are username
 // (usernameSchema) and password (newPasswordSchema + the zxcvbn gate), checked inline.
+//
+// Every step opens with a StepRow ("Step 2 of 3", back link on the left) — see the
+// note there for why the count lives in the form rather than the screen header.
 
 type Step = 'setup' | 'confirm' | 'recovery';
 type Mode = 'generated' | 'own';
+
+// Source of truth for the step COUNT as well as the order: StepRow derives
+// "n of 3" by index, so adding a step to the ceremony renumbers the indicator
+// automatically instead of leaving a hardcoded "3" behind to go stale.
+const STEPS: readonly Step[] = ['setup', 'confirm', 'recovery'];
 
 export function CreateAccountForm() {
   const createAccount = useCreateAccount();
@@ -172,6 +180,7 @@ export function CreateAccountForm() {
 
     return (
       <View className="gap-6">
+        <StepRow step="setup" />
         <View className="gap-2">
           <Text className="text-sm font-medium">Username</Text>
           <Input
@@ -256,7 +265,7 @@ export function CreateAccountForm() {
   if (step === 'confirm') {
     return (
       <View className="gap-6">
-        <BackLink onPress={() => setStep('setup')} />
+        <StepRow step="confirm" onBack={() => setStep('setup')} />
         <View className="gap-2">
           <Text className="text-sm font-medium">Confirm your password</Text>
           <Text className="text-sm text-muted-foreground">
@@ -288,7 +297,7 @@ export function CreateAccountForm() {
   // --- step: recovery -------------------------------------------------------
   return (
     <View className="gap-6">
-      <BackLink onPress={() => setStep('confirm')} />
+      <StepRow step="recovery" onBack={() => setStep('confirm')} />
       <View className="gap-2">
         <Text className="text-sm font-medium">Recovery code</Text>
         <Text className="text-sm text-muted-foreground">
@@ -330,11 +339,26 @@ export function CreateAccountForm() {
   );
 }
 
-function BackLink({ onPress }: { onPress: () => void }) {
+// The row every step opens with: back link on the left (absent on the first step),
+// "Step n of 3" on the right. The native twin of web-ui's StepRow — see that file
+// for why the count lives in the form rather than the screen header, why it matters
+// most on step ONE, and why it's neither dots nor a progress bar.
+function StepRow({ step, onBack }: { step: Step; onBack?: () => void }) {
   return (
-    <Pressable onPress={onPress} className="flex-row items-center gap-1 self-start py-1">
-      <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />
-      <Text className="text-sm text-muted-foreground">Back</Text>
-    </Pressable>
+    <View className="flex-row items-center justify-between gap-2">
+      {onBack ? (
+        <Pressable onPress={onBack} className="flex-row items-center gap-1 py-1">
+          <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />
+          <Text className="text-sm text-muted-foreground">Back</Text>
+        </Pressable>
+      ) : (
+        // Holds the right-hand column in place on the first step, where there's
+        // nothing to go back to — `justify-between` alone would left-align the count.
+        <View />
+      )}
+      <Text className="text-sm text-muted-foreground">
+        Step {STEPS.indexOf(step) + 1} of {STEPS.length}
+      </Text>
+    </View>
   );
 }

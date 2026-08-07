@@ -386,7 +386,16 @@ their own only behind a strength gate. As built:
   wallet panel). Skipping starts the account password-only; a **"no recovery set"
   nudge** then lives in Settings → Account. The optional recovery door rides in the
   same signed create-account payload (`createAccountPayloadSchema.recoveryDoor`,
-  threaded by `useCreateAccount`).
+  threaded by `useCreateAccount`);
+- all three steps open with a **`StepRow`** — the Back link plus a plain
+  **"Step _n_ of 3"**. It earns its place on step **one**, where it's the only thing
+  that tells the user a recovery code is coming; the page header can't do that job
+  because it's static by design (it describes the account, not the step) and
+  `step` is form-local state. By the recovery step it reads as "one screen left",
+  which is the number that competes with that step's Skip link — so the counter
+  deliberately does **not** say "(optional)" there, even though the step is. Not
+  dots or a progress bar: dots imply steps you can click back to. Mirrored in
+  `bracemark-expo`'s `features/auth/create-account-form.tsx`.
 
 This keeps the promise: a user _can_ pick their own username and password (good
 UX), but the **safe path is the default path** (wallet-grade entropy), rather
