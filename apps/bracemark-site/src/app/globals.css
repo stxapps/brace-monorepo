@@ -67,6 +67,28 @@
 
 @layer components {
   /*
+   * A full-bleed page section, and the hairline that opens it. The page is a
+   * stack of these: hero, trust strip, capture, library, pricing, close, footer.
+   *
+   * The line is the ONLY thing separating two consecutive untinted sections —
+   * on the home page that is capture → library → pricing → close → footer, five
+   * in a row on the same ground, which without a seam read as one very long
+   * section. Where a band brings its own fill (`bg-muted/40`, the inverted claim
+   * block) the fill already does that work and the line just rides the edge of
+   * it, so this stays unconditional rather than growing a modifier.
+   *
+   * It is a named class rather than the `border-border border-t` written inline
+   * elsewhere in this app because these five are a page-level RHYTHM, not five
+   * independent rules — the eyebrow below names the band, and the two want to
+   * move together. Padding is deliberately not here: each band sets its own,
+   * and `px-safe` has to sit on the same element as the border so the line
+   * reaches the physical edge while the type stays inset (docs/safe-area.md).
+   */
+  .band {
+    @apply border-border border-t;
+  }
+
+  /*
    * The small mono label that opens a section. Wide tracking + uppercase makes it
    * read as an annotation on a drawing rather than a heading, which is the point:
    * it names the band, the display type states the claim.

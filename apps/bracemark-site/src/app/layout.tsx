@@ -41,11 +41,29 @@ const plexMono = IBM_Plex_Mono({
   variable: '--font-plex-mono',
 });
 
+// `themeColor` and `colorScheme` are the light-only decision (see the note above
+// RootLayout) expressed at the document level, and they move together.
+//
+// `#ffffff` is not a loose brand white — it is `--background` (`oklch(1 0 0)`)
+// written in a syntax a `<meta>` accepts. It has to be a literal: the tag is
+// emitted into `<head>` and cannot read a custom property.
+//
+// `colorScheme: 'light'` states the same thing for the UA's own painting — the
+// canvas before CSS applies, scrollbars, and any form control — so a visitor whose
+// OS is dark gets a white page rather than a dark flash that resolves to white.
+// web-ui's `:root` already sets `color-scheme: light` in CSS; this repeats it as a
+// meta because the commitment belongs to THIS app, and a light-only site should not
+// be depending on a shared sheet's default to stay light.
+//
+// The moment the site gains a theme, both become the two-entry media form
+// (`{ media: '(prefers-color-scheme: dark)', color: … }`) — one is not correct
+// without the other. → docs/theme.md, _per-app wiring_.
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: '#ffffff',
+  colorScheme: 'light',
 };
 
 // Kept as a full sentence rather than assembled from BRAND: a meta description is
@@ -95,11 +113,18 @@ export const metadata: Metadata = {
 // layout. The theme's source of truth is the user's synced settings, read through
 // `@stxapps/web-react` (Dexie) — a data layer this site must not pull in, and could
 // not read anyway: it's a different origin, so it doesn't even share bracemark-web's
-// localStorage mirror. The marketing pages are therefore light-only for now.
+// localStorage mirror. The marketing pages are **light-only**, and that is a decision
+// rather than a gap: the other three properties all support the four-mode theme
+// (docs/theme.md), this one deliberately does not.
 //
-// They are nonetheless written against the shadcn TOKENS (`bg-background`,
-// `text-muted-foreground`, `border-border`) rather than literal greys, so giving
-// them a theme later is adding the provider, not repainting seven pages.
+// The pages are nonetheless written against the shadcn TOKENS (`bg-background`,
+// `text-muted-foreground`, `border-border`) rather than literal greys, so the
+// GREYSCALE half of a theme would come free. What would not is the site's own accent
+// ramp — `--color-signal*` in globals.css is authored for a white ground and inverts
+// badly (signal falls from 7.88:1 to 2.51:1 on the dark background; the two tints
+// become a white panel and a glaring rule) — and the three inverted slabs, whose
+// whole rhetoric is that dark is what the server sees. Numbers, and the mechanism to
+// use if this is ever revisited, are in docs/theme.md, _per-app wiring_.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={cn(inter.variable, bricolage.variable, plexMono.variable)}>

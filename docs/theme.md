@@ -230,6 +230,44 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
   Wiring sqlite + settings decryption to honor a device-pinned theme for a
   transient sheet isn't worth it.
 
+- **bracemark-site** — the marketing site is **light-only, deliberately**, and it is
+  the one property with no theme code at all: no `ThemeProvider`, no
+  `themeInitScript()`, no `.dark` class ever set. Everything above this bullet is
+  unreachable from it, for three structural reasons rather than an oversight: it
+  has no `@stxapps/web-react` dependency (no Dexie, no `useSettings`), the
+  preference lives encrypted in `settings/general.enc` behind an account the site
+  has no notion of, and it serves the **apex** while bracemark-web serves `app.` —
+  a different origin, so it cannot read even the `localStorage` FOUC mirror.
+  The commitment is pinned in two places that must move together:
+  `viewport.themeColor` and `viewport.colorScheme` in `layout.tsx`.
+
+  Should that ever change, the mechanism is **not** the four-mode model — there is
+  no account to hang a preference on and a toggle would compete with the real
+  preference the app already owns. It is `prefers-color-scheme` and nothing else,
+  which happens to agree with `DEFAULT_THEME` (`system`) for a visitor who has not
+  chosen anything yet. Two notes for whoever does it:
+
+  - **The greyscale is free; the accent is not.** The pages are written against the
+    shadcn tokens, so they follow web-ui's `.dark` block unchanged. The site's own
+    four accent tokens (`globals.css`) are authored for a white ground and invert
+    badly: `--color-signal` drops from 7.88:1 on white to **2.51:1** on the dark
+    background (`--color-signal-strong`, 1.87:1), while `--color-signal-soft` and
+    `--color-signal-line` — subtle tints on white — become an 18:1 white panel and a
+    14.8:1 rule. That is a second accent ramp to author, on 29 and 17 elements.
+  - **The inverted slabs invert with it.** The hero's ciphertext panel, the claim
+    section, and the featured plan card are `bg-foreground text-background`; under a
+    dark theme they become near-white. They still read as the page's inverse, but
+    the rhetoric — dark is the opaque thing the server sees — flips with them. A
+    design call, not a token.
+
+  On the wiring itself: web-ui's dark variant is class-based
+  (`@custom-variant dark (&:is(.dark *))`), so a media query alone drives nothing.
+  Prefer a short pre-paint inline script setting `.dark` from `matchMedia` (plus
+  `suppressHydrationWarning`) over redefining the greyscale tokens under
+  `@media (prefers-color-scheme: dark)` in the site's sheet — the latter duplicates
+  ~30 of web-ui's dark tokens, which is exactly the drift that sheet's own header
+  warns against, and it leaves the `dark:` variants inside web-ui components inert.
+
 ### extending
 
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in
