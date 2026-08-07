@@ -8,9 +8,16 @@ import { COMPANY, FOOTER_LINKS, SUPPORT_EMAIL } from '../lib/site';
 // The company's legal name sits here as well as in /terms and /privacy, and all
 // three read it from `COMPANY` — a footer that names a different entity than the
 // terms it links to is the kind of thing a store reviewer does catch.
+//
+// `pb-safe` is the one inset on this site that fixes an interaction rather than a
+// clipped glyph: the last row is the copyright line, and above it the link columns
+// end within a thumb's reach of the home indicator, whose swipe region wins every
+// contested tap. It belongs here and NOT on the <body> — the min-h-dvh column in
+// layout.tsx is body's child, so padding one level up adds to that column instead
+// of insetting it (docs/safe-area.md, _applying safe area_).
 export function SiteFooter() {
   return (
-    <footer className={cn('band mt-24')}>
+    <footer className={cn('band px-safe pb-safe mt-24')}>
       <div className={cn('mx-auto max-w-6xl px-4 py-14 md:px-6 lg:px-8')}>
         <div className={cn('grid gap-10 sm:grid-cols-2 lg:grid-cols-5 lg:gap-8')}>
           <div className={cn('lg:col-span-2')}>

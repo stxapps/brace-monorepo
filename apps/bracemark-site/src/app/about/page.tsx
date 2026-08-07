@@ -198,7 +198,7 @@ export default function Page() {
         </div>
       </PageShell>
 
-      <section className={cn('band mt-24')}>
+      <section className={cn('band px-safe mt-24')}>
         <div className={cn('mx-auto max-w-3xl px-4 py-20 text-center md:px-6 lg:px-8')}>
           <h2
             className={cn(

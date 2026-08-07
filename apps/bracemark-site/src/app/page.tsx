@@ -131,6 +131,10 @@ function HeroPanel() {
 // --- band scaffolding ------------------------------------------------------
 // Sections are separated by a full-width hairline and named by a mono eyebrow.
 // One component, so the rhythm is set once instead of re-spaced per section.
+//
+// `px-safe` on the <section> and the numeric gutter on the inner div: the tint
+// reaches the physical edge, the type stays clear of a landscape notch. Every
+// full-bleed section on this page is built this way (docs/safe-area.md).
 function Band({
   label,
   title,
@@ -145,7 +149,7 @@ function Band({
   className?: string;
 }) {
   return (
-    <section className={cn('band', className)}>
+    <section className={cn('band px-safe', className)}>
       <div className={cn('mx-auto max-w-6xl px-4 py-20 md:px-6 md:py-24 lg:px-8')}>
         <p className={cn('eyebrow')}>{label}</p>
         <h2
@@ -230,75 +234,81 @@ const STORES = [
 export default function Page() {
   return (
     <>
-      {/* --- hero -------------------------------------------------------- */}
-      <section className={cn('mx-auto max-w-6xl px-4 pt-16 pb-20 md:px-6 md:pt-24 lg:px-8')}>
-        <div className={cn('grid items-center gap-14 lg:grid-cols-12 lg:gap-16')}>
-          <div className={cn('lg:col-span-7')}>
-            <p className={cn('eyebrow')}>End-to-end encrypted · Local-first</p>
-            <h1
-              className={cn(
-                'font-display mt-5 text-[2.75rem] leading-[0.98] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4.25rem]',
-              )}
-            >
-              {BRAND.tagline}.
-            </h1>
-            <p className={cn('text-muted-foreground mt-6 max-w-xl text-lg leading-8')}>
-              Save anything worth coming back to — articles, docs, threads, products, videos.
-              Bracemark encrypts every link on your device before it syncs, with a key only you can
-              derive. Not a promise we make. A thing we can’t undo.
-            </p>
+      {/* --- hero --------------------------------------------------------
+          The hero has no background of its own, so unlike the bands below it
+          gains nothing from bleeding — the wrapper exists purely because
+          `px-safe` and the section's own `px-4` are the same two longhands and
+          cannot share an element (docs/safe-area.md). */}
+      <div className={cn('px-safe')}>
+        <section className={cn('mx-auto max-w-6xl px-4 pt-16 pb-20 md:px-6 md:pt-24 lg:px-8')}>
+          <div className={cn('grid items-center gap-14 lg:grid-cols-12 lg:gap-16')}>
+            <div className={cn('lg:col-span-7')}>
+              <p className={cn('eyebrow')}>End-to-end encrypted · Local-first</p>
+              <h1
+                className={cn(
+                  'font-display mt-5 text-[2.75rem] leading-[0.98] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4.25rem]',
+                )}
+              >
+                {BRAND.tagline}.
+              </h1>
+              <p className={cn('text-muted-foreground mt-6 max-w-xl text-lg leading-8')}>
+                Save anything worth coming back to — articles, docs, threads, products, videos.
+                Bracemark encrypts every link on your device before it syncs, with a key only you
+                can derive. Not a promise we make. A thing we can’t undo.
+              </p>
 
-            <div className={cn('mt-9 flex flex-wrap items-center gap-3')}>
-              <Button asChild size="lg">
-                <a href={CREATE_ACCOUNT_URL}>
-                  Create your account
-                  <ArrowGlyph className={cn('size-4')} />
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="ghost">
-                <Link href="/pricing">See pricing</Link>
-              </Button>
+              <div className={cn('mt-9 flex flex-wrap items-center gap-3')}>
+                <Button asChild size="lg">
+                  <a href={CREATE_ACCOUNT_URL}>
+                    Create your account
+                    <ArrowGlyph className={cn('size-4')} />
+                  </a>
+                </Button>
+                <Button asChild size="lg" variant="ghost">
+                  <Link href="/pricing">See pricing</Link>
+                </Button>
+              </div>
+
+              <p className={cn('text-muted-foreground mt-5 max-w-md text-sm leading-6')}>
+                Free for your first {FREE_LINKS} links. No card — and no email address, because the
+                account has nowhere to put one.
+              </p>
+
+              <div className={cn('mt-10 flex items-center gap-5')}>
+                <span className={cn('eyebrow')}>Also on</span>
+                <ul className={cn('flex items-end gap-4')}>
+                  {STORES.map(({ href, label, Icon, width }) => (
+                    <li key={label}>
+                      {/* Desaturated at rest, true colour on hover. Four brand
+                          marks in full colour are the loudest thing on an
+                          otherwise achromatic page, and they are recognised by
+                          silhouette anyway — the colour is there when a hand is
+                          actually on them. */}
+                      <a
+                        className={cn(
+                          'focus-visible:ring-ring/50 block rounded-sm opacity-80 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
+                        )}
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Icon className={cn(width)} aria-label={label} />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
-            <p className={cn('text-muted-foreground mt-5 max-w-md text-sm leading-6')}>
-              Free for your first {FREE_LINKS} links. No card — and no email address, because the
-              account has nowhere to put one.
-            </p>
-
-            <div className={cn('mt-10 flex items-center gap-5')}>
-              <span className={cn('eyebrow')}>Also on</span>
-              <ul className={cn('flex items-end gap-4')}>
-                {STORES.map(({ href, label, Icon, width }) => (
-                  <li key={label}>
-                    {/* Desaturated at rest, true colour on hover. Four brand
-                        marks in full colour are the loudest thing on an
-                        otherwise achromatic page, and they are recognised by
-                        silhouette anyway — the colour is there when a hand is
-                        actually on them. */}
-                    <a
-                      className={cn(
-                        'focus-visible:ring-ring/50 block rounded-sm opacity-80 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
-                      )}
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <Icon className={cn(width)} aria-label={label} />
-                    </a>
-                  </li>
-                ))}
-              </ul>
+            <div className={cn('lg:col-span-5')}>
+              <HeroPanel />
             </div>
           </div>
-
-          <div className={cn('lg:col-span-5')}>
-            <HeroPanel />
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* --- the three things a sceptic checks first --------------------- */}
-      <section className={cn('band bg-muted/40')}>
+      <section className={cn('band px-safe bg-muted/40')}>
         <div className={cn('mx-auto max-w-6xl px-4 md:px-6 lg:px-8')}>
           <dl
             className={cn('divide-border grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0')}
@@ -362,7 +372,7 @@ export default function Page() {
           The one loud moment on the site, and it is loud with nothing but type
           on an inverted ground. Everything it asserts is architecture, which is
           why the three columns underneath are mechanisms, not values. */}
-      <section className={cn('bg-foreground text-background')}>
+      <section className={cn('bg-foreground text-background px-safe')}>
         <div className={cn('mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32 lg:px-8')}>
           <p
             className={cn(
@@ -426,7 +436,7 @@ export default function Page() {
       </Band>
 
       {/* --- close --------------------------------------------------------- */}
-      <section className={cn('band')}>
+      <section className={cn('band px-safe')}>
         <div className={cn('mx-auto max-w-6xl px-4 py-24 text-center md:px-6 md:py-28 lg:px-8')}>
           <h2
             className={cn(

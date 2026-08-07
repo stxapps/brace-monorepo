@@ -13,10 +13,20 @@ import { HEADER_LINKS, SIGN_IN_URL } from '../lib/site';
 // Sticky, because /terms and /privacy are long documents and a reader three
 // screens into the liability section should not have to scroll back to the top to
 // leave. The blur keeps the hairline legible over the hero panel behind it.
+//
+// The safe utilities sit on the <header> and the numeric gutter a level in, which
+// is the sheet.tsx shape (docs/safe-area.md, _applying safe area_): the tinted,
+// blurred bar bleeds to the physical edge while only its CONTENTS inset, so a
+// landscape notch eats no logo. They can't share an element anyway — `px-safe` and
+// `px-4` both resolve to padding-left/right and would fight by stylesheet order.
+// `pt-safe` is 0 in Safari, where the URL bar already covers the notch; it earns
+// its place in standalone/PWA display, where nothing does.
 export function SiteHeader() {
   return (
     <header
-      className={cn('border-border bg-background/85 sticky top-0 z-50 border-b backdrop-blur-md')}
+      className={cn(
+        'border-border bg-background/85 px-safe pt-safe sticky top-0 z-50 border-b backdrop-blur-md',
+      )}
     >
       <div className={cn('mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 md:px-6 lg:px-8')}>
         <Link

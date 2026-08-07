@@ -154,6 +154,28 @@ behind the bar — and a single-screen frame has no scroll of its own to bring i
 back. Every box in the table uses `h-dvh`/`min-h-dvh`; `min-h-screen` and `h-screen`
 should not reappear in `bracemark-web`.
 
+**`svh`/`lvh` are not upgrades to `dvh`, and nothing in this workspace should use
+them.** The usual argument for `svh` — that `dvh` re-resolves while the URL bar
+animates, so it janks — does not reach any surface we have, because the bar only
+animates when the _document_ scrolls:
+
+- A `h-dvh overflow-hidden` frame makes the document exactly viewport-tall, so it
+  never scrolls and the bar never moves. Inner panes scrolling doesn't retract it.
+- A `min-h-dvh` box on a short page is the same story. On a long page the content
+  already exceeds the min-height, so the unit stops deciding the height at all.
+
+What `svh` _would_ cost is real: it resolves to the bar-visible height always, so in
+the bar-retracted state the box is **shorter than the viewport**. On
+`focused-page.tsx` that means a strip of `body`'s `bg-background` showing beneath the
+box's `bg-muted`; on an `overflow-hidden` frame it means dead space below the shell.
+`dvh` is the only unit that always ends exactly at the bottom of what the user can
+see, which is the property every surface here wants.
+
+The one case the units really do differ on is content taller than `svh` but shorter
+than `lvh`: it scrolls, the bar retracts, it now fits, the bar returns, it scrolls
+again. That oscillation is set by _content_ height — swapping the min-height unit
+does not fix it, and reaching for `svh` because of it is a misdiagnosis.
+
 A blanket on the surface **itself** is still the right default when that surface is
 a flat background with a centred column (the auth pages, the lock screen): the
 background fills edge-to-edge under the notch while the content is inset. Switch to
@@ -190,6 +212,49 @@ For the blanket case the habit is simply to give `safe-area` a box with no paddi
 of its own and keep the numeric padding a level in; `components/focused-page.tsx`
 (the auth pages, the 404 and the error boundary) and `app-lock-gate.tsx` are both
 shaped that way for exactly this reason.
+
+### the marketing site (bracemark-site)
+
+The apex is a **scroll** site — no single-screen frame anywhere — which changes both
+halves of this page. `bracemark-site` is a different property from `bracemark-web`
+(docs/brand.md); the utilities are the same because both import `web-ui`'s sheet.
+
+**`dvh` appears exactly once**, on the sticky-footer column in
+`src/app/layout.tsx`, and that is the only place a scroll site needs a viewport
+unit:
+
+```tsx
+<div className={cn('bg-background text-foreground flex min-h-dvh flex-col antialiased')}>
+```
+
+The `h-dvh`-on-every-surface rule above is a **`bracemark-web` rule**. It exists
+because that app has `overflow-hidden` frames whose last row is unreachable if the
+box outgrows the viewport; the site has none, so viewport-locking any section there
+would manufacture the problem rather than solve it. `min-h-screen`/`h-screen` are
+still wrong in both apps, for the same `100vh`-behind-the-URL-bar reason.
+
+**Every inset on the site is horizontal, plus one bottom.** Top insets are 0 in
+Safari — the URL bar already covers the notch in both orientations — so what
+actually bites is **landscape**, where the side inset is 44–59px against a 16px
+`px-4` gutter, and the **home indicator** under the footer's last rows. The site
+sets `viewportFit: 'cover'` in `layout.tsx`, so these are live; a page that opts
+into edge-to-edge and then insets nothing is the worst of both, and that is what
+this was before.
+
+Every gutter on the site is a two-element sandwich — bleeding outer, numeric inner —
+because `px-safe` and `px-4` can't share an element (see the collision rule above).
+Two shapes, by whether the outer element has a background worth bleeding:
+
+| shape                                                       | where                                                                                                                                                                      |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **bleeding** — outer already existed, tint reaches the edge | `site-header.tsx` (`px-safe pt-safe`), `site-footer.tsx` (`px-safe pb-safe`), the `Band` component and the three bare `<section>`s in `app/page.tsx`, `app/about/page.tsx` |
+| **wrapper** — no background, the div exists only to inset   | `components/page-shell.tsx` (so every long document), `app/faq/page.tsx`, `app/pricing/page.tsx`, the hero in `app/page.tsx`                                               |
+
+`pb-safe` sits on the `<footer>`, **not** on `<body>`: the `min-h-dvh` column is
+body's child, so padding one level up adds to that column instead of insetting it —
+the blanket bug again, one level higher than the `bracemark-web` version. `pt-safe`
+on the sticky header does nothing in Safari and is there for standalone/PWA display,
+where the top inset is real.
 
 ### breakpoints vs. insets
 
