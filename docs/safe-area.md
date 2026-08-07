@@ -86,6 +86,10 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
 - `@utility safe-area` — pads all four sides with the insets.
 - `@utility pt-safe / pr-safe / pb-safe / pl-safe` — per-side variants to mix with
   normal spacing.
+- `@utility px-safe / py-safe` — the axis pairs, so the safe utilities cover the
+  same shapes the numeric `p*-` scale does. They emit **physical** longhands
+  (`padding-left`/`padding-right`), not `padding-inline`, because the insets are
+  themselves physical — see the comment in `styles.css`.
 - `--env-safe-area-inset-*` custom-property tokens. **Do not read these back via
   `getComputedStyle`** — several browsers (Safari included) return the literal
   `env(...)` string. Use `getWindowInsets()` instead, which measures a probe
@@ -154,16 +158,38 @@ should not reappear in `bracemark-web`.
 A blanket on the surface **itself** is still the right default when that surface is
 a flat background with a centred column (the auth pages, the lock screen): the
 background fills edge-to-edge under the notch while the content is inset. Switch to
-the per-side utilities (`pt-safe` header, `pb-safe` bottom bar, `px-safe` side
+the narrower utilities (`pt-safe` header, `pb-safe` bottom bar, `px-safe` side
 content) once a sticky bar should bleed to the edge with only its _contents_ inset —
-`web-ui`'s `sheet.tsx` is the worked example.
+`web-ui`'s `sheet.tsx` is the worked example. The set is `safe-area`, the four sides,
+and the two axes; anything else you invent (`ps-safe`, `p-safe`) is an **undefined
+utility class, which emits nothing at all rather than erroring**, so a typo here
+fails silently.
 
-**Don't put a safe utility and a numeric one on the same element.** `safe-area` and
-`px-4` both emit a plain `padding` declaration, so one replaces the other and which
-one wins is a stylesheet-ordering detail — class order in JSX does not decide it.
-Give the insets a box with no padding of its own and keep the numeric padding a
-level in; `(auth)/layout.tsx` and `app-lock-gate.tsx` are both shaped that way for
-exactly this reason.
+**Don't stack a safe utility and a numeric one on the same _side_ of the same
+element.** The conflict is per-side, and the winner is decided by declaration order
+in the generated stylesheet — class order in JSX has nothing to do with it. What
+each utility actually emits (Tailwind v4):
+
+| utility                                       | declaration                                   |
+| --------------------------------------------- | --------------------------------------------- |
+| `safe-area`                                   | `padding-top/right/bottom/left` — 4 longhands |
+| `pt-safe` / `pr-safe` / `pb-safe` / `pl-safe` | the one matching longhand                     |
+| `px-safe` / `py-safe`                         | the two matching longhands                    |
+| `p-4`                                         | `padding` — shorthand, all four sides         |
+| `px-4`                                        | `padding-inline` → left/right                 |
+| `py-4`                                        | `padding-block` → top/bottom                  |
+| `pt-4`                                        | `padding-top`                                 |
+
+Every safe utility emits physical longhands; the numeric axis ones emit logical
+shorthands. That difference does **not** buy you an escape — `padding-inline`
+resolves to `padding-left`/`padding-right`, so it conflicts with them and just
+resolves by order like everything else. What matters is only which _sides_ overlap:
+`safe-area` collides with any numeric padding utility, `px-safe` + `px-4` collide,
+and `pt-safe` + `px-4` is fine while `pt-safe` + `py-4` is not.
+
+For the blanket case the habit is simply to give `safe-area` a box with no padding
+of its own and keep the numeric padding a level in; `(auth)/layout.tsx` and
+`app-lock-gate.tsx` are both shaped that way for exactly this reason.
 
 ### breakpoints vs. insets
 

@@ -211,3 +211,22 @@
 @utility pl-safe {
   padding-left: env(safe-area-inset-left);
 }
+
+/*
+ * Axis pairs, to match the `px-*`/`py-*` shape people reach for by habit.
+ * PHYSICAL longhands on purpose, not the `padding-inline`/`padding-block`
+ * shorthands Tailwind's numeric `px-*`/`py-*` compile to: the insets themselves
+ * are physical (`safe-area-inset-left` is the left of the DEVICE, whatever the
+ * writing direction), so a logical shorthand would hand the left inset to the
+ * right edge under `dir="rtl"`. Consequence worth knowing — `px-safe` and `px-4`
+ * DO collide, since `padding-inline` resolves to these same two longhands and
+ * the winner is stylesheet order (docs/safe-area.md, _applying safe area_).
+ */
+@utility px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+@utility py-safe {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
