@@ -134,14 +134,13 @@ That second shape is what `bracemark-web` used to have: a blanket
 `<div className="safe-area">` in `inner-layout.tsx` around every route. It's gone.
 Each full-height surface now carries its own:
 
-| surface                         | where                                                    |
-| ------------------------------- | -------------------------------------------------------- |
-| links frame                     | `(app)/links/page.tsx` — on the `h-dvh` frame            |
-| settings frame                  | `(app)/settings/layout.tsx` — same                       |
-| sign-in / create-account        | `(auth)/layout.tsx` — the outer `min-h-dvh` box          |
-| app lock screen                 | `components/app-lock-gate.tsx` — its full-screen wrapper |
-| decrypting / sync-error screens | `components/initial-sync-gate.tsx`                       |
-| the error boundary              | `app/error.tsx` — its outer box                          |
+| surface                                           | where                                                     |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| links frame                                       | `(app)/links/page.tsx` — on the `h-dvh` frame             |
+| settings frame                                    | `(app)/settings/layout.tsx` — same                        |
+| sign-in / create-account, 404, the error boundary | `components/focused-page.tsx` — the outer `min-h-dvh` box |
+| app lock screen                                   | `components/app-lock-gate.tsx` — its full-screen wrapper  |
+| decrypting / sync-error screens                   | `components/initial-sync-gate.tsx`                        |
 
 `(app)/layout.tsx` deliberately wraps its children in **no element at all** — it is
 a parent of the first two, so insets there would reproduce the blanket bug one level
@@ -188,8 +187,9 @@ resolves by order like everything else. What matters is only which _sides_ overl
 and `pt-safe` + `px-4` is fine while `pt-safe` + `py-4` is not.
 
 For the blanket case the habit is simply to give `safe-area` a box with no padding
-of its own and keep the numeric padding a level in; `(auth)/layout.tsx` and
-`app-lock-gate.tsx` are both shaped that way for exactly this reason.
+of its own and keep the numeric padding a level in; `components/focused-page.tsx`
+(the auth pages, the 404 and the error boundary) and `app-lock-gate.tsx` are both
+shaped that way for exactly this reason.
 
 ### breakpoints vs. insets
 
