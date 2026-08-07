@@ -26,7 +26,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import Plus from 'lucide-react-native/icons/plus';
 import X from 'lucide-react-native/icons/x';
 
-import type { ShareNewEntity, ShareTaxonomyTag } from '@stxapps/expo-react';
+import type { ShareNewEntity, ShareTaxonomyTag } from '@stxapps/expo-react/data/share-store';
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';

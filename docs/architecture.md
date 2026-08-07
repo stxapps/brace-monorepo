@@ -510,6 +510,41 @@ nature. `bracemark-api` is bundled at build time too — see below — so it use
 current project is bundled, `bundler` is the base default rather than a
 per-project override.
 
+#### the barrel is the API — except where a barrel is the cost
+
+Every package's `exports` map is `"."` → `src/index.ts`, and consumers import
+that: one entry point, one place to see what a package offers. `web-ui` is the
+long-standing exception (a shadcn component library, whose components are meant
+to be deep-imported — hence its `@stxapps/web-ui/**` entry in the
+`enforce-module-boundaries` `allow` list).
+
+The second exception is narrower and is a **memory** rule, not an API one. A
+barrel costs whatever it re-exports, because **Metro does not tree-shake**: an
+`index.ts` of 60 `export *`s compiles to 60 eager `require`s, so importing one
+symbol from `@stxapps/expo-react` executes every provider, every hook, the sync
+engine and the import/export path. In an app that is a one-time cost paid at
+startup on a bundle that holds all of it anyway. In the **iOS share extension**
+— a separate process, re-created on every share, with its own memory budget —
+it is paid per share, for code that process will never call. So a handful of
+files carry **explicit subpath exports** beside the `"."` entry:
+
+| package                | subpath                 | who names it, and why                                                 |
+| ---------------------- | ----------------------- | --------------------------------------------------------------------- |
+| `@stxapps/expo-react`  | `./data/share-store`    | the share sheet's data seam — the alternative is the whole package    |
+| `@stxapps/expo-react`  | `./lib/auth-api-client` | the app's `lib/api-client` binding, which the sheet threads into Save |
+| `@stxapps/expo-crypto` | `./lib/ids`             | `newId` alone, without the AES + Argon2 stack behind the barrel       |
+| `@stxapps/expo-crypto` | `./lib/shared-keychain` | `session-store`'s three-function native wrapper, same reason          |
+
+They are declared, not reached for: a deep import that isn't in `exports` fails
+to resolve. Add one only when a real cold-start path demands it, keep it out of
+`index.ts`'s way (the barrel still re-exports the same file), and remember the
+counterpart rule — the extensionless spelling above applies to the `exports`
+targets too (`./src/lib/ids.ts` is a real path; there is no `.js` on disk).
+
+The consumer side of this rule, and the numbers behind it, live in
+[share-sheet.md](./share-sheet.md), _keep `index.share.js` lean_ — including the
+lint rule that enforces it for the one tree where it is load-bearing.
+
 ### bundling bracemark-api
 
 `bracemark-api` runs on **Cloudflare Workers**, with `src/worker.ts`

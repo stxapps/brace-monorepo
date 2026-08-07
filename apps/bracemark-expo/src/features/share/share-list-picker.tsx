@@ -31,7 +31,7 @@ import { Pressable, ScrollView } from 'react-native';
 import Check from 'lucide-react-native/icons/check';
 import Plus from 'lucide-react-native/icons/plus';
 
-import type { ShareNewEntity, ShareTaxonomyList } from '@stxapps/expo-react';
+import type { ShareNewEntity, ShareTaxonomyList } from '@stxapps/expo-react/data/share-store';
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';

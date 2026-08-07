@@ -7,15 +7,19 @@
 // EVERY IMPORT HERE IS ON THE iOS EXTENSION'S CRITICAL PATH. share-root.tsx's
 // header is the fence; two consequences show up in this file:
 //
-//   - LUCIDE IS DEEP-IMPORTED (`lucide-react-native/icons/x`), the only corner
-//     of the app that does. The barrel is ~1600 icon modules and Metro does not
-//     tree-shake, so `import { X } from 'lucide-react-native'` executes all of
-//     them on every cold share. On Android that costs nothing — the share
-//     activity rides the main bundle, where the barrel is already resident —
-//     but iOS pays it per share, and docs/share-sheet.md asks for exactly this
-//     graph to be policed. The subpath is a declared package export with types
-//     (`./icons/*`), resolved by Metro and jest alike under the `react-native`
-//     condition, not a reach into dist/.
+//   - NO BARREL IS EVER IMPORTED HERE — not lucide's, not a workspace
+//     package's. LUCIDE IS DEEP-IMPORTED (`lucide-react-native/icons/x`), the
+//     only corner of the app that does. The barrel is ~1700 icon modules and
+//     Metro does not tree-shake, so `import { X } from 'lucide-react-native'`
+//     executes all of them on every cold share. On Android that costs nothing —
+//     the share activity rides the main bundle, where the barrel is already
+//     resident — but iOS pays it per share, and docs/share-sheet.md asks for
+//     exactly this graph to be policed. The subpath is a declared package export
+//     with types (`./icons/*`), resolved by Metro and jest alike under the
+//     `react-native` condition, not a reach into dist/. `@stxapps/expo-react`
+//     and `@stxapps/expo-crypto` are deep-imported for the same reason and by
+//     the same mechanism (share-screen.tsx); a lint rule enforces both
+//     (share-root.tsx's header).
 //   - NO PORTALS, NO REANIMATED. Nothing here is a Dialog or a DropdownMenu;
 //     the pickers are screens within the sheet rather than overlays over it.
 
@@ -174,18 +178,33 @@ export function ShareRowGroup({ children }: { children: ReactNode }) {
 }
 
 // One disclosure row: an icon that names the KIND of choice, the current value,
-// and a chevron. It carries no label ("List", "Tags") on purpose — the icon
-// plus a folder's name is not ambiguous, the sub-screen it opens is titled, and
-// a 520pt sheet has better uses for two lines of type. The uppercase eyebrows
-// that used to sit above the pickers were the only ones in the app.
+// and a chevron. It carries no VISIBLE label ("List", "Tags") on purpose — the
+// icon plus a folder's name is not ambiguous, the sub-screen it opens is titled,
+// and a 520pt sheet has better uses for two lines of type. The uppercase
+// eyebrows that used to sit above the pickers were the only ones in the app.
+//
+// It still carries the label to SCREEN READERS (`label`, required), because the
+// icon that replaces it is decorative to them: without this the row announces
+// "Reading, button" — the value with no hint of what it changes, on a surface
+// with exactly two rows that both look like that. Dropping a word of type is a
+// visual decision; dropping the semantics is not part of it.
 export function ShareRow({
   icon,
+  label,
+  value,
   testID,
   onPress,
   bordered,
   children,
 }: {
   icon: LucideIcon;
+  // What the row's icon says visually — "List", "Tags". Announced with the
+  // current value (the `value` below), never rendered.
+  label: string;
+  // The current answer, for the announcement only: the visible children are
+  // styled nodes (chips, a truncated name) that a screen reader would read as a
+  // heap of fragments.
+  value: string;
   testID: string;
   onPress: () => void;
   // Second row and after — the hairline belongs to the row that follows one, so
@@ -197,6 +216,7 @@ export function ShareRow({
     <Pressable
       testID={testID}
       onPress={onPress}
+      aria-label={`${label}: ${value}`}
       accessibilityRole="button"
       className={cn(
         'min-h-12 flex-row items-center gap-3 px-3 py-2.5 active:bg-muted/50',

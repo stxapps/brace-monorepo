@@ -51,14 +51,21 @@ import Link2Off from 'lucide-react-native/icons/link-2-off';
 import LogIn from 'lucide-react-native/icons/log-in';
 import Tag from 'lucide-react-native/icons/tag';
 
-import { newId } from '@stxapps/expo-crypto';
+// Both workspace imports name a FILE, not the package barrel — the same rule as
+// the lucide deep imports below, one level out. `@stxapps/expo-react`'s index is
+// 60 `export *`s (every provider, every hook, the sync engine, import/export)
+// and `@stxapps/expo-crypto`'s pulls Argon2 + the AES stack: Metro does not
+// tree-shake, so a barrel import executes ALL of it on every cold share. The
+// subpaths are declared package exports; features/share/** may not name the
+// barrels at all (eslint no-restricted-imports enforces it).
+import { newId } from '@stxapps/expo-crypto/lib/ids';
 import {
   loadShareTaxonomy,
   saveSharedDraft,
   type ShareDraft,
   type ShareNewEntity,
   type ShareTaxonomy,
-} from '@stxapps/expo-react';
+} from '@stxapps/expo-react/data/share-store';
 import { DEFAULT_LIST_ID, rankBetween } from '@stxapps/shared';
 
 import { LinkQuotaBanner } from '../../components/links/link-quota-banner';
@@ -88,6 +95,16 @@ type View3 = 'compose' | 'lists' | 'tags';
 const SAVED_DISMISS_MS = 1200;
 
 export function ShareScreen({ url, title }: SharePayload) {
+  // The link's id, minted ONCE for this sheet rather than per Save attempt.
+  // "Idempotent by construction" (share-store's header) rests on the id being
+  // stable across every path that can retry a draft — and a failed Save is one
+  // of them: Android's applyShareDraft writes the lists, the tags, the link and
+  // the extraction title in sequence, so a throw after the link row lands would,
+  // with a freshly minted id on the retry, file the page TWICE. Held here, the
+  // retry re-writes the same entity and converges under last-write-wins, the
+  // same way the drain's own retry does. (The new lists/tags below are already
+  // session-stable, which is why only the link needed fixing.)
+  const [linkId] = useState(newId);
   const [phase, setPhase] = useState<Phase>('loading');
   const [view, setView] = useState<View3>('compose');
   const [taxonomy, setTaxonomy] = useState<ShareTaxonomy | null>(null);
@@ -227,7 +244,7 @@ export function ShareScreen({ url, title }: SharePayload) {
     setPhase('saving');
     setError(null);
     const draft: ShareDraft = {
-      id: newId(),
+      id: linkId,
       url,
       ...(title !== undefined ? { title } : {}),
       listId,
@@ -259,7 +276,7 @@ export function ShareScreen({ url, title }: SharePayload) {
       setPhase('ready');
       setError('Couldn’t save. Try again.');
     }
-  }, [url, title, listId, newList, selectedTagIds, newTags]);
+  }, [linkId, url, title, listId, newList, selectedTagIds, newTags]);
 
   // ── the screens ───────────────────────────────────────────────────────────
 
@@ -393,12 +410,27 @@ export function ShareScreen({ url, title }: SharePayload) {
       <ShareSpecimen url={url} title={title} />
 
       <ShareRowGroup>
-        <ShareRow icon={Folder} testID="share-list-row" onPress={() => setView('lists')}>
+        <ShareRow
+          icon={Folder}
+          label="List"
+          value={listName ?? 'Choose a list'}
+          testID="share-list-row"
+          onPress={() => setView('lists')}
+        >
           <Text numberOfLines={1} className="font-medium">
             {listName ?? 'Choose a list'}
           </Text>
         </ShareRow>
-        <ShareRow icon={Tag} testID="share-tags-row" bordered onPress={() => setView('tags')}>
+        <ShareRow
+          icon={Tag}
+          label="Tags"
+          // The same summary the row shows, flattened: a screen reader gets the
+          // picked names in one phrase instead of a run of chip fragments.
+          value={tagNames.length === 0 ? 'none' : tagNames.join(', ')}
+          testID="share-tags-row"
+          bordered
+          onPress={() => setView('tags')}
+        >
           {tagNames.length === 0 ? (
             <Text className="text-muted-foreground">Add tags</Text>
           ) : (

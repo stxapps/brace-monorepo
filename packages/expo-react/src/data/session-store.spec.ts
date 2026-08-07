@@ -7,8 +7,11 @@ const mockSecureEntries = new Map<string, string>();
 const mockFiles = new Set<string>();
 const mockSharedKeychain = new Map<string, string>();
 
-// The shared-Keychain trio (expo-crypto) backing the iOS session mirror.
-jest.mock('@stxapps/expo-crypto', () => ({
+// The shared-Keychain trio backing the iOS session mirror. Mocked at the SUBPATH
+// the module imports (@stxapps/expo-crypto/lib/shared-keychain, not the package
+// barrel) — session-store names the file so the extension's cold path stays
+// clear of the AES stack; see its import comment.
+jest.mock('@stxapps/expo-crypto/lib/shared-keychain', () => ({
   setSharedKeychainItem: jest.fn(async (group: string, key: string, value: string) => {
     mockSharedKeychain.set(`${group}/${key}`, value);
   }),

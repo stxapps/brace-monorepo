@@ -36,11 +36,20 @@ import '../../../global.css';
 // graph stays tight. If a barrel is ever added, importing through it here would
 // silently drag reanimated into the extension bundle.
 //
-// THE SAME ARGUMENT, ONE LEVEL OUT, IS WHY THE SHARE TREE DEEP-IMPORTS LUCIDE
-// (`lucide-react-native/icons/folder`, not the barrel) — see
-// share-kit.tsx's header. It is the only corner of the app that does, and
-// components/links/link-quota-banner.tsx follows the rule because this tree
-// renders it. Anything added under features/share/ inherits both rules.
+// THE SAME ARGUMENT, ONE LEVEL OUT, IS WHY THIS TREE NAMES A FILE AND NEVER A
+// PACKAGE BARREL: `lucide-react-native/icons/folder`,
+// `@stxapps/expo-react/data/share-store`, `@stxapps/expo-crypto/lib/ids` — the
+// two workspace packages via declared subpath exports, since their index.ts is
+// 60 (resp. 8) `export *`s that Metro executes in full. It is the only corner of
+// the app that does this, and components/links/link-quota-banner.tsx follows the
+// rule because this tree renders it. Anything added under features/share/
+// inherits all of it.
+//
+// The rules above are LINTED (`@typescript-eslint/no-restricted-imports` in
+// apps/bracemark-expo/eslint.config.mjs, scoped to this tree) rather than left to
+// these headers: the barrels went unnoticed here for exactly as long as the rule
+// was prose. Type-only imports are exempt — babel erases them, so they cost
+// nothing.
 
 export function ShareRoot(props: ShareInitialProps) {
   const payload = useMemo(() => payloadFromInitialProps(props), [props]);

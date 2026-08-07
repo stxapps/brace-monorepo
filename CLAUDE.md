@@ -111,6 +111,15 @@ test. Check the linked doc before acting on any of these.
   `'./lib/theme.js'` — packages are `bundler=none` and consumed as raw source, so
   the NodeNext spelling resolves literally and 404s in Turbopack/Metro.
   → `architecture.md`, _module resolution in packages_.
+- **The lazy requires on the iOS share path.** `data/share-store.ts` (the whole
+  sqlite/write-edge/sync half, plus `share-upload`) and `expo-crypto`'s
+  `lib/ids.ts` defer their imports behind `require()` at the call site **on
+  purpose**: everything the extension's entry imports statically is executed on
+  every cold share, in a process re-created each time. "Tidying" one back into a
+  top-level `import` changes no behaviour, passes every check, and silently puts
+  drizzle-orm or quick-crypto back into the sheet's boot. The barrel-import half
+  of this rule IS linted; this half can't be. → `share-sheet.md`, _keep
+  `index.share.js` lean_.
 - **Never write "extension" bare.** Two unrelated things carry the name: the
   **browser extension** (`bracemark-extension`) and the iOS **share extension** (a
   target inside `bracemark-expo`). Qualify which one on first mention, in code

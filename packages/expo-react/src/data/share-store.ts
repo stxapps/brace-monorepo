@@ -58,14 +58,32 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
-import { runIncrementalSync } from '../sync/engine';
 import { appGroupDir } from './app-group';
-import { getItem, namespaceRows } from './item-store';
-import { writeExtraction, writeLink, writeList, writeTag } from './mutations';
-import { countLinks, readLists, readTags } from './queries';
 import { getSession, loadSession, loadSharedSession } from './session-store';
-import { uploadShareDraft } from './share-upload';
-import { readCachedStatus } from './subscription-store';
+
+// THE STORE HALF OF THIS MODULE IS LAZY, and that is a memory rule, not a style
+// choice. This file is on the iOS share extension's critical path, where
+// everything the entry transitively imports is executed on every cold share
+// (docs/share-sheet.md, _keep index.share.js lean_) — and the extension is the
+// one caller that needs NONE of it: sqlite, the write edge and the sync engine
+// belong to the Android activity (same process as the app) and to the main
+// app's drain. Statically imported, they put drizzle-orm + expo-sqlite + the
+// engine into the extension's init for nothing; behind these accessors they
+// stay out of the cold path and cost a cached module lookup on the platform
+// that does use them. `typeof import(...)` keeps every call site fully typed,
+// and Metro resolves the literal specifier at build time, so the graph is
+// unchanged — only WHEN each module is evaluated.
+//
+// The same reasoning covers `share-upload` (iOS, but only after Save — it drags
+// the whole quick-crypto stack) and `newId` in @stxapps/expo-crypto's lib/ids.
+// Keep them lazy; a static import here is silent, and only a cold share on a
+// device shows the cost.
+const engine = (): typeof import('../sync/engine') => require('../sync/engine');
+const itemStore = (): typeof import('./item-store') => require('./item-store');
+const mutations = (): typeof import('./mutations') => require('./mutations');
+const queries = (): typeof import('./queries') => require('./queries');
+const shareUpload = (): typeof import('./share-upload') => require('./share-upload');
+const subscriptions = (): typeof import('./subscription-store') => require('./subscription-store');
 
 // --- shapes -------------------------------------------------------------------
 
@@ -219,12 +237,12 @@ export function parseShareTaxonomy(raw: string): ShareTaxonomy | null {
 // that hasn't fetched `iap/status` — writes `maxLinks: null`, i.e. fails OPEN,
 // because guessing `free` would tell a paying customer their library is full.
 async function readTaxonomyFromDb(): Promise<ShareTaxonomy> {
-  const status = readCachedStatus();
+  const status = subscriptions().readCachedStatus();
   return {
     sessionPresent: true,
-    lists: buildShareLists(await readLists()),
-    tags: buildShareTags(await readTags()),
-    linkCount: await countLinks(),
+    lists: buildShareLists(await queries().readLists()),
+    tags: buildShareTags(await queries().readTags()),
+    linkCount: await queries().countLinks(),
     maxLinks: status ? entitlementsOf(status.plan).maxLinks : null,
   };
 }
@@ -324,11 +342,11 @@ export function isAtLinkCap(): boolean {
     if (!snapshot || snapshot.maxLinks === null) return false;
     return snapshot.linkCount >= snapshot.maxLinks;
   }
-  const status = readCachedStatus();
+  const status = subscriptions().readCachedStatus();
   if (!status) return false;
   const { maxLinks } = entitlementsOf(status.plan);
   if (maxLinks === null) return false;
-  return namespaceRows(LINKS_PREFIX).length >= maxLinks;
+  return itemStore().namespaceRows(LINKS_PREFIX).length >= maxLinks;
 }
 
 // One Add. The sheet checks `sessionPresent` before offering the form, so a
@@ -366,11 +384,13 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
   // on the app-level React host IS the doc's "application/process scope" — the
   // activity's finish() doesn't cancel it; only a process reap does, and that
   // loss is covered by the pending op + the app's next sync cycle.
-  void runIncrementalSync({
-    username: session.username,
-    encryptionKey: session.encryptionKey,
-    api,
-  }).catch(() => undefined);
+  void engine()
+    .runIncrementalSync({
+      username: session.username,
+      encryptionKey: session.encryptionKey,
+      api,
+    })
+    .catch(() => undefined);
   return 'saved';
 }
 
@@ -383,7 +403,7 @@ async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<voi
   try {
     const session = await loadSharedSession();
     if (!session || session.expiresAt <= Date.now()) return;
-    await uploadShareDraft({ encryptionKey: session.encryptionKey, api }, draft);
+    await shareUpload().uploadShareDraft({ encryptionKey: session.encryptionKey, api }, draft);
   } catch {
     // Best-effort by design — the main app drains the outbox on next open.
   }
@@ -403,11 +423,11 @@ async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<voi
 async function applyShareDraft(username: string, draft: ShareDraft): Promise<void> {
   // readLists() already folds in the system defaults, so the validity set below
   // needs no separate SYSTEM_LIST_IDS spread.
-  const existingLists = await readLists();
+  const existingLists = await queries().readLists();
 
   for (const newList of draft.newLists) {
-    if (await getItem(pathFromId(newList.id, LISTS_PREFIX))) continue;
-    await writeList(
+    if (await itemStore().getItem(pathFromId(newList.id, LISTS_PREFIX))) continue;
+    await mutations().writeList(
       username,
       {
         path: pathFromId(newList.id, LISTS_PREFIX),
@@ -423,8 +443,8 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
   }
 
   for (const newTag of draft.newTags) {
-    if (await getItem(pathFromId(newTag.id, TAGS_PREFIX))) continue;
-    await writeTag(
+    if (await itemStore().getItem(pathFromId(newTag.id, TAGS_PREFIX))) continue;
+    await mutations().writeTag(
       username,
       {
         path: pathFromId(newTag.id, TAGS_PREFIX),
@@ -446,7 +466,7 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
   const listId =
     listIds.has(draft.listId) && draft.listId !== TRASH_ID ? draft.listId : DEFAULT_LIST_ID;
 
-  await writeLink(
+  await mutations().writeLink(
     username,
     {
       path: pathFromId(draft.id, LINKS_PREFIX),
@@ -461,7 +481,7 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
 
   const title = cleanTitle(draft.title);
   if (title !== undefined) {
-    await writeExtraction(username, draft.id, { fields: { title } });
+    await mutations().writeExtraction(username, draft.id, { fields: { title } });
   }
 }
 

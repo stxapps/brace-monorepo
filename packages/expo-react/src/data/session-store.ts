@@ -19,11 +19,17 @@
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 
+// The FILE, not the package barrel: this module is reachable from the iOS share
+// extension (share-store hydrates the session mirror there), and expo-crypto's
+// index re-exports the AES + Argon2 modules, which pull react-native-quick-crypto
+// — ~390KB of JS plus readable-stream, buffer and nitro-modules — into the init
+// of a process re-created on every share (docs/share-sheet.md). All this file
+// wants is the three-function native wrapper, which costs nothing.
 import {
   deleteSharedKeychainItem,
   getSharedKeychainItem,
   setSharedKeychainItem,
-} from '@stxapps/expo-crypto';
+} from '@stxapps/expo-crypto/lib/shared-keychain';
 import { bytesToHex, hexToBytes } from '@stxapps/shared';
 
 import { APP_GROUP_ID } from './app-group';

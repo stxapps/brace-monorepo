@@ -1,4 +1,4 @@
-import { createAuthApiClient } from '@stxapps/expo-react';
+import { createAuthApiClient } from '@stxapps/expo-react/lib/auth-api-client';
 
 // bracemark-expo's binding of the shared auth-aware API client to bracemark-api's base
 // URL — the RN counterpart of bracemark-web's `lib/api-client.ts` and the extension's

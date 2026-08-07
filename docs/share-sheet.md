@@ -77,8 +77,12 @@ default (`group.` + bundle id = `group.com.bracemark.app`).
 
 The link id (and any new list's/tag's id AND `rank`) is minted **in the
 sheet** (`newId`) and travels with the draft everywhere — outbox file name,
-sqlite row, server entity. Any path can retry (drain crash between item write
-and file delete, upload + later drain) and converge on the same entities
+sqlite row, server entity. It is minted **once per sheet, not once per Save
+attempt**: the sheet's own retry after a failed Save is a retry like any other,
+and Android's `applyShareDraft` writes the link row before the extraction title,
+so a throw between them plus a freshly minted id would file the page twice. Any
+path can retry (drain crash between item write and file delete, upload + later
+drain, the user tapping Save again) and converge on the same entities
 instead of duplicating or shuffling — the drain applies the draft's ranks
 verbatim, so it re-writes byte-identical taxonomy entities to what the
 extension may already have uploaded. Same reason the drain is a plain
@@ -143,15 +147,22 @@ is lopsided: **the 90% path is share → Save**; the list and the tags are the
 
 **The page is the subject.** `share-specimen.tsx` draws the shared URL the way
 the library will draw it — a 44px monogram tile, the title, the address — and it
-is on screen from the first frame to the last. It is the RN port of the browser
-extension's `PageSpecimen`, deliberately: that popup already learned the lesson
-this sheet hadn't. A compose screen followed by a separate "✓ Saved to
-Bracemark" screen reads as submitting a form and being handed a receipt — two
-screens with nothing visibly in common. Here the save happens **to** the object:
-the controls beneath it change, the specimen does not move, and **its corner
-comes off**. That fold is the whole confirmation signal, and it is the meaning
-the mark already carries on the extension's tile — square is unsaved, cut is
-saved ([brand.md](./brand.md#the-mark)) — not a new one.
+holds the top of the sheet from the loading state through the confirmation. It is
+the RN port of the browser extension's `PageSpecimen`, deliberately: that popup
+already learned the lesson this sheet hadn't. A compose screen followed by a
+separate "✓ Saved to Bracemark" screen reads as submitting a form and being
+handed a receipt — two screens with nothing visibly in common. Here the save
+happens **to** the object: the controls beneath it change, the specimen does not
+move, and **its corner comes off**. That fold is the whole confirmation signal,
+and it is the meaning the mark already carries on the extension's tile — square
+is unsaved, cut is saved ([brand.md](./brand.md#the-mark)) — not a new one.
+
+The two pickers are the exception, and a deliberate one: they replace the
+specimen rather than sit under it. They are screens precisely because the tree
+and the chip cloud need the height (below), and 44px of tile plus its gap is a
+sixth of what the list has to work with. The thread the user is holding is the
+one they just tapped — "choose a list" — not the page, which is still there when
+they come back, unmoved.
 
 The tile is **always the monogram**. Web's chain is extracted image → the live
 tab's favicon → HostMonogram; the sheet has neither of the first two and must
@@ -178,11 +189,16 @@ by local state rather than a router — the extension bundle has no business
 carrying one. Three rules hold them together:
 
 - **The header is constant** (`ShareHeader`, `share-kit.tsx`) and the same height
-  everywhere, so the specimen under it never moves. It carries the **brand
-  lockup** — this is the one surface in the product that floats over another app
-  and has no other carrier — plus a close control, which is not decoration: on
-  iOS there is no backdrop to tap and no swipe to dismiss, so before it the
-  compose screen had no way out except saving.
+  on all four screens, so nothing under it ever shifts as the sheet switches. It
+  carries the **brand lockup** — this is the one surface in the product that
+  floats over another app and has no other carrier — plus a close control, which
+  is not decoration: on iOS there is no backdrop to tap and no swipe to dismiss,
+  so before it the compose screen had no way out except saving.
+- **The two disclosure rows say what they are to a screen reader**, even though
+  they carry no visible label: `ShareRow` takes a `label` + `value` and announces
+  "List: Reading" / "Tags: alpha, beta". Dropping a word of type from a 520pt
+  sheet is a visual decision, and it does not extend to dropping the semantics —
+  without this the row reads as a bare value with no hint of what it changes.
 - **One primary button in the whole sheet**, and it is Save. Every other button
   on every screen is an outline.
 - **The verb is "Save" the whole way through** — button, progress ("Saving…"),
@@ -428,25 +444,72 @@ share-extension cap; don't move image work across the process boundary to
 **Keep `index.share.js` lean.** Everything the share entry transitively imports
 is init cost paid on every cold share (see the cold-start note in the file map
 below). The extension bundle should pull in `ShareRoot`/`ShareScreen`, the
-pickers, `share-store`, and `mutations` — **not** the router tree, `_layout`'s
-providers, or main-app-only modules. Police this graph actively; it's the one
-real lever on RN cold-start latency. Two standing consequences:
+pickers and `share-store` — **not** the router tree, `_layout`'s providers, the
+store/sync layer, or main-app-only modules. It is the one real lever on RN
+cold-start latency, and it has to be policed with a tool, because a violation is
+silent: nothing fails, Android can't reproduce it (its share activity rides the
+main bundle, where every one of these modules is resident anyway), and the sheet
+just boots slower on iOS.
 
-- **Lucide is deep-imported in the share tree** (`lucide-react-native/icons/x`),
-  and nowhere else in the app. The barrel is ~1600 icon modules, Metro does not
-  tree-shake, and the barrel module executes every one of them on import. Android
-  pays nothing (its share activity rides the main bundle, where the barrel is
-  already resident); iOS would pay per cold share. The subpath is a declared
-  package export with types (`./icons/*`), resolved under the `react-native`
-  condition by Metro and jest alike — not a reach into `dist/`. This is why
-  `components/links/link-quota-banner.tsx`, which the sheet renders at the cap,
-  deep-imports too.
-- **No portals, no Reanimated, and no `react-native-svg` on the compose path.**
-  The pickers are screens within the sheet rather than overlays over it, and the
-  specimen's corner cut is an overlay rather than a stroked SVG path
-  ([brand.md](./brand.md#the-mark), _at TILE scale_). `react-native-svg` does
-  enter the bundle — the brand lockup's mark needs it — but nothing else in the
-  tree depends on it.
+**The rule is: name a FILE, never a barrel.** Metro does not tree-shake, and a
+barrel module _executes_ everything it re-exports. Three of them are in reach of
+this tree, and all three are now deep-imported through declared subpath exports
+([architecture.md](./architecture.md), _the barrel is the API_):
+
+- **Lucide** (`lucide-react-native/icons/x`) — the barrel is ~1700 icon modules,
+  every one executed on import. The subpath is a declared package export with
+  types (`./icons/*`), resolved under the `react-native` condition by Metro and
+  jest alike, not a reach into `dist/`. `components/links/link-quota-banner.tsx`,
+  which the sheet renders at the cap, follows the rule for the same reason.
+- **`@stxapps/expo-react`** (`/data/share-store`) — its index is 60 `export *`s:
+  every provider and hook, the sync engine, import/export. Through the barrel the
+  extension was executing drizzle-orm, expo-sqlite, @tanstack/react-query,
+  react-hook-form, fflate, expo-image-manipulator and expo-local-authentication,
+  none of which it can call.
+- **`@stxapps/expo-crypto`** (`/lib/ids`, `/lib/shared-keychain`) — its index
+  pulls the AES + Argon2 stack, i.e. react-native-quick-crypto plus
+  readable-stream, buffer and nitro-modules, for the sake of `newId` and three
+  Keychain calls.
+
+Type-only imports are exempt and stay exempt: babel erases them, and the bundle
+confirms it. **The rest is enforced** by `@typescript-eslint/no-restricted-imports`
+in `apps/bracemark-expo/eslint.config.mjs`, scoped to `features/share/**` plus
+`link-quota-banner`, and it covers the ui components below as well. Prose in a
+file header did not hold; the barrels sat in the bundle unnoticed until someone
+measured.
+
+**Lazy where the platform, not the module, decides.** Two modules the extension
+DOES import have halves it never runs, and they defer them behind
+`require()` at the call site rather than a top-level `import`:
+
+- `share-store` keeps the write edge, the read queries, the item store, the
+  cached plan and the sync engine lazy — that is the **Android + main-app** half
+  (sqlite, drizzle), and it is most of the module's surface. `typeof import(...)`
+  keeps the call sites typed; Metro still resolves the literal specifier, so the
+  graph is identical and only the evaluation moves.
+- `share-upload` and `newId` are lazy for a subtler reason: they belong to the
+  iOS path, but only **after Save**. Deferring them keeps the whole quick-crypto
+  stack off the cold path, where the user is waiting, and lands it on a tap that
+  needs it anyway.
+
+**No portals, no Reanimated.** The pickers are screens within the sheet rather
+than overlays over it, and the specimen's corner cut is an overlay rather than a
+stroked SVG path ([brand.md](./brand.md#the-mark), _at TILE scale_).
+`react-native-svg` is in the bundle regardless — **every lucide icon renders
+through it**, so this is not a cost the brand lockup adds and not one that
+dropping the lockup would remove.
+
+**The numbers, so a regression is legible.** Bundle
+`index.share.js` for iOS (`npx expo export:embed --platform ios --entry-file
+index.share.js --bundle-output /tmp/share.jsbundle --dev false`) and count the
+modules Metro reports. As of the deep-import pass: **1452 modules, 2.96MB**
+minified, of which roughly **640 execute at init** — down from 1661 / 3.65MB /
+~1050 through the barrels. Modules in the bundle are cheap (Hermes bytecode,
+paged in on use); modules EXECUTED at init are what the cold share pays for, and
+the two move together only when an import is removed rather than deferred. What
+remains eager is irreducible without a bigger change: zod and the `@stxapps/shared`
+barrel (its endpoint contracts are what the upload speaks), react-native-svg (the
+icons), and culori (uniwind's runtime).
 
 ### file map
 

@@ -17,6 +17,16 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./lib/ids": {
+      "types": "./src/lib/ids.ts",
+      "import": "./src/lib/ids.ts",
+      "default": "./src/lib/ids.ts"
+    },
+    "./lib/shared-keychain": {
+      "types": "./src/lib/shared-keychain.ts",
+      "import": "./src/lib/shared-keychain.ts",
+      "default": "./src/lib/shared-keychain.ts"
+    },
     "./package.json": "./package.json"
   },
   "dependencies": {
