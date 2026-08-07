@@ -27,7 +27,12 @@
       },
       "start": {
         "options": {
-          "command": "next start --port 3001"
+          "command": "serve out -p 3001"
+        }
+      },
+      "serve-static": {
+        "options": {
+          "command": "serve out -p 3001"
         }
       }
     }
@@ -44,6 +49,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
+    "serve": "^14.2.6",
     "tailwindcss": "^4.3.0"
   }
 }

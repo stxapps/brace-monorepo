@@ -108,6 +108,27 @@ The one dev-time consequence: bracemark-web's Support link points at
 click while working on the app, and paying for a fourth always-on Next dev server
 to cover it isn't worth it.
 
+#### the local port map
+
+| dev server                              | port   | pinned in                                | consumed by                            |
+| --------------------------------------- | ------ | ---------------------------------------- | -------------------------------------- |
+| bracemark-web (`npm run dev`)           | `3000` | `apps/bracemark-web/package.json`        | site's `NEXT_PUBLIC_APP_URL`, api CORS |
+| bracemark-site (`npm run dev:site`)     | `3001` | `apps/bracemark-site/package.json`       | web + expo `*_SITE_URL`, api CORS      |
+| bracemark-extension (`npm run dev:ext`) | `3002` | `apps/bracemark-extension/wxt.config.ts` | nothing                                |
+| bracemark-api (`npm run dev`)           | `8787` | wrangler default                         | every frontend's `*_API_URL`           |
+
+**3000 and 3001 are contractual; 3002 is not.** The two Next ports are baked into
+`.env.development` files and into bracemark-api's dev `CORS_ORIGINS`, so moving
+either means editing five files. The browser extension's port is HMR transport
+only — its pages load from `chrome-extension://` and its api calls are CORS-exempt
+via `host_permissions`, so nothing references it. When a port clashes, **3002 is
+the one that moves.** (It started at 3001, which collided with `dev:site` — the
+one pairing that could not run side by side.)
+
+The `nx start` / `serve-static` preview servers reuse 3000 and 3001, so run the
+preview or the dev server for a given app, not both — see
+[deployment.md](./deployment.md#previewing-a-production-build-locally--nx-start).
+
 ### bracemark-extension — wxt / Vite
 
 wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need the

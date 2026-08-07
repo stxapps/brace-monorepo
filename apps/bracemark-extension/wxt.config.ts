@@ -79,11 +79,18 @@ function stubArgon2WorkerPlugin(): Plugin {
 // genuinely differ between stores.
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
-  // bracemark-web's `npm run dev` owns :3000 (apps/bracemark-web/package.json). WXT's
-  // dev server defaults to :3000 too, so running both at once collides — pin
-  // the extension's dev server to :3001.
+  // Both neighbouring dev servers are already spoken for: bracemark-web's `npm run
+  // dev` owns :3000 and bracemark-site's `npm run dev:site` owns :3001 (see each
+  // app's package.json). WXT's dev server defaults to :3000, so it collides with
+  // web out of the box — pin the extension's dev server to :3002, clear of both.
+  //
+  // Unlike the other two, this port is HMR transport ONLY and nothing consumes it:
+  // extension pages load from `chrome-extension://`, and the api calls are
+  // CORS-exempt via host_permissions, so :3002 is deliberately absent from
+  // bracemark-api's dev CORS_ORIGINS (which lists :3000 and :3001 — the two Next dev
+  // servers). That's why this is the port that moves when there's a clash.
   dev: {
-    server: { port: 3001 },
+    server: { port: 3002 },
   },
   // WXT defaults Firefox to MV2; pin MV3 on both to match the existing
   // extensions (Firefox MV3 keeps `background.scripts`, which WXT emits).

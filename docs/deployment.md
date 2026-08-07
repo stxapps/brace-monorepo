@@ -170,6 +170,35 @@ aws cloudfront create-invalidation --distribution-id <prod-site-dist> --paths '/
 else. A staging build of the site linking to production's app is exactly the kind
 of cross-tier leak the two-stack split exists to prevent.
 
+### previewing a production build locally — `nx start`
+
+Both web apps are `output: 'export'`, and **`next start` refuses to run against a
+static export** — it exits with `"next start" does not work with "output: export"
+configuration. Use "npx serve@latest out" instead.` So the `start` and
+`serve-static` targets that `@nx/next` infers (`nx.json`, `startTargetName`) are
+dead on arrival in their default form.
+
+They can't simply be deleted — those targets are **inferred by the plugin**, so
+removing the `nx.targets` override in `package.json` just reverts them to a bare
+(still broken) `next start`. Instead both apps override the command to serve the
+exported directory, which is what Next itself points you at:
+
+```bash
+npx nx build @stxapps/bracemark-web && npx nx start @stxapps/bracemark-web   # :3000
+npx nx build @stxapps/bracemark-site && npx nx start @stxapps/bracemark-site # :3001
+```
+
+`start` depends on `build`, so the build step above is implicit. Each app declares
+`serve` as a devDependency for this. The ports match the dev servers (see
+[env-files.md](./env-files.md#bracemark-site--nextjs-static-export)) — run the
+preview or the dev server, not both.
+
+This is the closest local stand-in for the S3 + CloudFront path, but it is **not**
+a faithful one: the clean-URL rewrites live in a CloudFront Function and the
+security headers live in a response headers policy, so neither is exercised here.
+`serve` does its own `index.html` resolution, which is close enough to catch
+broken relative asset paths and little more.
+
 ### bracemark-api → Cloudflare Workers _(planned)_
 
 Hono app, **Workers-only** (`src/worker.ts`, `export default app`; no Node

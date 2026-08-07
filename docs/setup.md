@@ -118,9 +118,11 @@ now, not their own host (architecture.md — _apps_).
   `postcss.config.js` + `@tailwindcss/postcss`, and a `globals.css` that imports
   `@stxapps/web-ui/styles.css`.
 - The generator's output was then reshaped to match bracemark-web: static export
-  in next.config.js, the `nx.targets` block (dev/start on port 3001, the
-  `staging` build configuration), tsconfig `references` to shared + web-ui, and
-  the ESM-packages patch in jest.config.cts.
+  in next.config.js, the `nx.targets` block (dev on port 3001, `start` /
+  `serve-static` repointed off `next start` — see
+  [deployment.md](./deployment.md#previewing-a-production-build-locally--nx-start)
+  — and the `staging` build configuration), tsconfig `references` to shared +
+  web-ui, and the ESM-packages patch in jest.config.cts.
 
 #### serwist
 
