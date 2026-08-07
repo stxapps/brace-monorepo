@@ -564,6 +564,65 @@ and visible first). A change another device commits _between_ the list pull and
 your push is a TOCTOU window that degrades to the same accepted LWW overwrite until
 conditional writes close it.
 
+> **Step 2's pending-op test is re-taken at APPLY time, in step 4's own
+> transaction — never trusted as a snapshot.** A cycle is many round trips long,
+> and _this_ device keeps writing through it: the extension's active-tab
+> extraction writes `extractions/{id}.enc` while the very save that triggered it
+> is still syncing, and a user keeps typing. Such a write is **absent from step
+> 2's snapshot**, so both of step 4's writes used to run straight over it —
+> `applyDeletes` matched a brand-new create against the "local only, not queued"
+> row below and deleted it, and a download landed the server copy on top of a
+> local edit. Both leave the **pending op behind**, and that is what makes the
+> delete case unrecoverable rather than merely lossy: the op is now unpushable
+> **forever** (no bytes to upload → every commit answers `no_object` → by design
+> the path requeues), so the queue sticks at a non-zero pending count that no
+> sync can drain and the entity is gone — typically an extraction, so a link
+> silently stuck without its title/image. The download case is quieter and just
+> as wrong: the surviving op then uploads the _server's_ bytes back, laundering
+> the lost edit into a legitimate-looking commit.
+>
+> So `applyDeletes` and the pulled-record put (`putPulled`) both re-read the
+> queue **inside their own write transaction**. IndexedDB serializes the
+> overlapping `rw` transactions, so a concurrent local write either commits first
+> (its op is visible → the path is spared) or after (its put re-creates the
+> record) — both orders end with the local write intact. The re-read is per
+> record for downloads, since each arrives after its own GET; batching them would
+> hold a chunk's decrypted blobs in memory and cost the resume-where-interrupted
+> property. As a backstop for a queue **already** wedged, a pending `put` whose
+> local record is gone is dropped from the queue instead of retried — a write
+> stores the record and enqueues its op in ONE transaction, so an op without
+> bytes is never a write that hasn't landed yet.
+>
+> **The same rule governs step 3's CLEAR: a drain removes the ops it pushed, not
+> the paths it pushed.** The queue is one row per (account, path), so a re-edit
+> before the drain collapses onto the same row — which means a drain that deletes
+> by path deletes whatever is there when its commit returns, including an edit
+> made _during_ the push, whose bytes never went up. That one is the quietest
+> failure in the whole engine: the local store keeps the change, the queue keeps
+> nothing, and there is no error, no pending count, and no retry to notice — the
+> edit simply never syncs. So each queue row carries a **`writeId`** minted per
+> enqueue, and the clear is a **compare-and-delete** on it (`clearDrainedOps`).
+> `baseUpdatedAt` can't serve: a mid-cycle re-edit reads the same base, because
+> the commit's restamp hasn't landed yet. **Settings is where this surfaces
+> first** — `settings/general.enc` is the one path every client rewrites in place,
+> and a theme picker fires a write + a sync kick per click, so click N+1 lands
+> inside click N's push window. Entity namespaces mint a fresh path per record
+> and collide far more rarely, which is exactly why the bug read as
+> "settings don't sync" rather than as a general one.
+>
+> **Both engines carry all three guards**, and they land differently per platform.
+> web-react re-reads the queue inside a Dexie multi-store transaction
+> (`applyDeletes` / `putPulled`); expo-react composes the read into the write's own
+> synchronous sqlite transaction (`item-store`'s `putItemsUnqueued` /
+> `deleteItemsUnqueued` over `pending-store`'s `queuedPathsTx`), and clears with a
+> `WHERE write_id = ?` predicate evaluated inside the DELETE — so it needs no
+> read-then-filter step at all. expo's `write_id` is `NOT NULL` where web's is a
+> plain required field: neither store validates, so in both cases it is the type
+> system that has to stop a future writer enqueueing an untagged row.
+>
+> Regression coverage for all of the above:
+> `packages/web-react/src/sync/engine.spec.ts`.
+
 ### fallback full sync (download-authoritative)
 
 When routing lands on fallback (`since` older than `oldestUpdatedAt`, or ahead of
@@ -618,7 +677,9 @@ queued edit, or resurrects a bookmark whose delete is still queued:
 
 The local-only row is what kills the deleted-bookmark-resurrection bug, and it
 needs no user prompt. The comparison uses the **stored server `updatedAt`**,
-never Dexie's local write time.
+never Dexie's local write time. It is also the row most exposed to a write that
+lands mid-cycle (an unpushed create is local-only by definition), so its
+pending-op test is re-taken at apply time — see the note under _a sync cycle_.
 
 The already-gone `delete` is still pushed because the absence is ambiguous:
 usually another device committed the delete (so the re-commit costs one

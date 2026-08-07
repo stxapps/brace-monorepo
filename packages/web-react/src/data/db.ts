@@ -168,6 +168,26 @@ export interface PendingOpRecord {
   // fast-forward (server == base, often our own echo) from a true conflict
   // (server > base: both sides moved since the base). 0 for a fresh create.
   baseUpdatedAt: number;
+  // Which local WRITE this row stands for — minted per enqueue (pending-store.ts), so
+  // a re-edit that overwrites the row for this (account, path) is a DIFFERENT op, not
+  // the same one re-timed. It exists for exactly one reader: the drain clears the ops
+  // it pushed by compare-and-delete on this value (clearDrainedOps), never blindly by
+  // path. Without it a cycle that read its snapshot, then uploaded, deletes whatever
+  // row is at that path when it commits — including an edit made DURING the push,
+  // which it never uploaded. The local store then holds a change with nothing queued
+  // to carry it, and it never syncs: no error, no pending count, no retry. Settings is
+  // where that bites, because every click rewrites the SAME path (and kicks a sync),
+  // so a burst of them lands inside each other's push windows; entity namespaces mint
+  // a fresh path per record and rarely collide. NOT indexed — only ever read back
+  // through the row's own primary key. REQUIRED, though Dexie stores rows
+  // unvalidated: it is the type system, not the store, that has to stop a future
+  // writer from enqueueing an untagged row (there are three enqueue sites, and one
+  // of them — the bulk importer — was already restating the row shape by hand).
+  //
+  // `baseUpdatedAt` cannot stand in for it: a re-edit mid-cycle reads the same base
+  // (the commit's restamp hasn't landed yet), so the two ops are identical in every
+  // other field.
+  writeId: string;
 }
 
 // Device-local settings that DELIBERATELY never sync — the off-sync counterpart

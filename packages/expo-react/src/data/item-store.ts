@@ -17,6 +17,10 @@ import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 import { chunk } from '@stxapps/shared';
 
 import { type DbTx, getDb, itemFacetStatuses, items, itemTagIds, prefixEnd } from './db';
+// The queue's owner answers "is this path queued?" — this store composes that read
+// into its own guarded writes (putItemsUnqueued / deleteItemsUnqueued) rather than
+// querying `pending_ops` itself. One direction only; pending-store never imports back.
+import { queuedPathsTx } from './pending-store';
 import type { ItemRecord } from './projection';
 
 export type ItemRow = typeof items.$inferSelect;
@@ -81,11 +85,11 @@ export function namespaceRows(prefix: string): ItemRow[] {
     .all();
 }
 
-// The tx-taking body of putItems — for callers that must compose the row +
-// junction upsert into a LARGER transaction (the write edge in mutations.ts
-// puts the record and enqueues its pending op atomically). The invariant is
-// unchanged: junctions are written with their `items` row, replace-then-insert,
-// from the same projected record.
+// The row + junction upsert, tx-taking — for callers that compose it into a LARGER
+// transaction: the write edge in mutations.ts (which puts the record and enqueues
+// its pending op atomically) and putItemsUnqueued below. The invariant is unchanged:
+// junctions are written with their `items` row, replace-then-insert, from the same
+// projected record.
 export function putItemsTx(tx: DbTx, records: ItemRecord[]): void {
   for (const record of records) {
     const row = toRow(record);
@@ -110,19 +114,53 @@ export function putItemsTx(tx: DbTx, records: ItemRecord[]): void {
   }
 }
 
-// Upsert projected records — rows plus their junction rows, one transaction
-// (the invariant this store exists for). Junctions are replace-then-insert so
-// they always mirror the arrays projected from the current bytes; a record
-// without arrays simply clears its junction rows.
-export async function putItems(records: ItemRecord[]): Promise<void> {
-  if (records.length === 0) return;
-  getDb().transaction((tx) => {
-    putItemsTx(tx, records);
+// Store PULLED records, skipping any path the queue holds an op for — the sync
+// engine's download side, where "the server copy wins" is only true of paths this
+// device hasn't edited. There is deliberately no UNGUARDED bulk put beside it: the
+// only other writer is the local write edge, which goes through putItemsTx inside
+// its own transaction (a local write overwrites whatever the queue says, by
+// definition), so every path into this table is either guarded or the writer itself. The reconcile already filtered against the
+// `pending` snapshot it read at the top of the cycle; this re-takes that test at
+// write time, in the write's own transaction, because a local edit that landed
+// mid-cycle is absent from that snapshot (pending-store's queuedPathsTx). Without
+// it the server copy overwrites the edit AND the surviving pending op then uploads
+// the server's bytes back — laundering the loss into a legitimate-looking commit.
+//
+// Returns the paths actually written, so a caller with a second, non-transactional
+// half to do (the engine tearing down a content path's stale plaintext file) can
+// apply it to exactly those.
+export async function putItemsUnqueued(username: string, records: ItemRecord[]): Promise<string[]> {
+  if (records.length === 0) return [];
+  return getDb().transaction((tx) => {
+    const queued = queuedPathsTx(
+      tx,
+      username,
+      records.map((r) => r.path),
+    );
+    const writable = records.filter((r) => !queued.has(r.path));
+    if (writable.length > 0) putItemsTx(tx, writable);
+    return writable.map((r) => r.path);
   });
 }
 
-export async function putItem(record: ItemRecord): Promise<void> {
-  await putItems([record]);
+// Delete rows the pull judged gone server-side, skipping any path the queue holds
+// an op for — putItemsUnqueued's counterpart, and the one that matters most: an
+// unqueued delete of a path with a queued op leaves that op pointing at bytes that
+// no longer exist, and nothing will ever put them back. The op then fails
+// `no_object` on every commit, which by design requeues it — a queue stuck above
+// zero that no sync can drain, and the record gone with it. A pending DELETE
+// counts as an op too, so local-wins also stops the pull resurrecting a deletion
+// that hasn't been pushed yet.
+//
+// Returns the paths actually deleted, for the caller's disk-file half.
+export async function deleteItemsUnqueued(username: string, paths: string[]): Promise<string[]> {
+  if (paths.length === 0) return [];
+  return getDb().transaction((tx) => {
+    const queued = queuedPathsTx(tx, username, paths);
+    const deletable = paths.filter((path) => !queued.has(path));
+    if (deletable.length > 0) deleteItemsTx(tx, deletable);
+    return deletable;
+  });
 }
 
 // Stamp R2's authoritative `updatedAt` onto a committed path (sync/engine.ts).
@@ -139,9 +177,9 @@ export async function markItemDataFile(path: string, hasDataFile: boolean): Prom
   getDb().update(items).set({ hasDataFile }).where(eq(items.path, path)).run();
 }
 
-// The tx-taking body of deleteItems — for callers that must compose the row +
-// junction delete into a LARGER transaction (the write edge in mutations.ts
-// drops the record and enqueues its pending delete atomically), mirroring
+// The row + junction delete, tx-taking — for callers that compose it into a LARGER
+// transaction: the write edge in mutations.ts (which drops the record and enqueues
+// its pending delete atomically) and deleteItemsUnqueued above, mirroring
 // putItemsTx. The invariant is unchanged: junction rows go with their `items`
 // row, in the same transaction.
 export function deleteItemsTx(tx: DbTx, paths: string[]): void {
@@ -150,16 +188,6 @@ export function deleteItemsTx(tx: DbTx, paths: string[]): void {
     tx.delete(itemTagIds).where(inArray(itemTagIds.path, batch)).run();
     tx.delete(itemFacetStatuses).where(inArray(itemFacetStatuses.path, batch)).run();
   }
-}
-
-// Delete rows and their junction rows, one transaction. The on-disk plaintext of
-// `files/` paths is the caller's half (file-store.ts) — rows first, files after,
-// so a crash in between leaves only invisible orphan files (clear-data.ts).
-export async function deleteItems(paths: string[]): Promise<void> {
-  if (paths.length === 0) return;
-  getDb().transaction((tx) => {
-    deleteItemsTx(tx, paths);
-  });
 }
 
 // One projection-only pass over the whole table: path → updatedAt with no `data`

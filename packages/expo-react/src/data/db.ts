@@ -153,6 +153,16 @@ export const pendingOps = sqliteTable(
     path: text('path').notNull(),
     op: text('op', { enum: ['put', 'delete'] }).notNull(),
     baseUpdatedAt: integer('base_updated_at').notNull(),
+    // Which local WRITE this row stands for — see web-react db.ts `writeId` for the
+    // full why. Short version: the composite key means a re-edit OVERWRITES the row,
+    // so a drain that clears by path deletes whatever is there when its commit
+    // returns — including an edit made during the push, whose bytes never went up.
+    // The drain therefore compare-and-deletes on this (pending-store's
+    // clearDrainedOps). NOT NULL where web's is optional: every enqueue mints one
+    // (there is no non-tx enqueue here), and a column the type system forces makes a
+    // future writer that forgets it a compile error rather than a silent regression
+    // to delete-by-path.
+    writeId: text('write_id').notNull(),
   },
   (t) => [primaryKey({ columns: [t.username, t.path] })],
 );
@@ -367,6 +377,7 @@ const DDL = `
     path TEXT NOT NULL,
     op TEXT NOT NULL,
     base_updated_at INTEGER NOT NULL,
+    write_id TEXT NOT NULL,
     PRIMARY KEY (username, path)
   );
   CREATE TABLE IF NOT EXISTS local_settings (

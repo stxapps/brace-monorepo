@@ -56,15 +56,14 @@ import {
 } from '../data/file-store';
 import {
   bulkGetItems,
-  deleteItems,
+  deleteItemsUnqueued,
   getItem,
   listItemUpdatedAts,
   markItemDataFile,
-  putItem,
-  putItems,
+  putItemsUnqueued,
   stampItemUpdatedAt,
 } from '../data/item-store';
-import { clearPendingPaths, listPendingOps, type PendingOpRecord } from '../data/pending-store';
+import { clearDrainedOps, listPendingOps, type PendingOpRecord } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
@@ -409,7 +408,7 @@ async function incrementalCycle(
   // requirement (local changes durable first).
   const committed = await pushPending(deps, pending, outcome);
   await storeDownloads(deps, downloads);
-  await applyDeletes(localDeletes);
+  await applyDeletes(deps.username, localDeletes);
 
   // 5. Advance the cursor to the newest (updatedAt, path) seen across the whole
   // cycle — including our own just-committed uploads, so the next cycle doesn't
@@ -475,7 +474,7 @@ async function fallbackCycle(
   // dropping the op would leak the quota entry forever.
   const committed = await pushPending(deps, pending, outcome);
   await storeDownloads(deps, downloads);
-  await applyDeletes(localDeletes);
+  await applyDeletes(deps.username, localDeletes);
 
   // Cursor = newest (updatedAt, path) across ALL pages plus our commits. This is
   // reconstructed straight from R2 with no op-log dependence — resetCursor, not
@@ -566,8 +565,19 @@ async function pushPuts(
   for (const batch of chunk(puts, PUT_BATCH)) {
     const signed = await signPushable(deps, batch, outcome);
     if (signed === null) continue;
-    await uploadBlobs(deps, signed.ops, signed.urls);
-    committed.push(...(await commitBatched(deps, signed.ops)));
+    const orphaned = await uploadBlobs(deps, signed.ops, signed.urls);
+    // A put with nothing local left to send (see uploadBlobs) can never be
+    // satisfied, so it is dropped from the queue rather than committed into a
+    // guaranteed `no_object` that requeues it forever. Dropped BEFORE the commit, so
+    // the op log never records an op for an object we didn't upload — and by
+    // compare-and-delete, so a re-create that landed mid-cycle keeps its own op.
+    let uploaded = signed.ops;
+    if (orphaned.length > 0) {
+      await clearDrainedOps(orphaned);
+      const dropped = new Set(orphaned.map((o) => o.path));
+      uploaded = signed.ops.filter((o) => !dropped.has(o.path));
+    }
+    committed.push(...(await commitBatched(deps, uploaded)));
   }
   return committed;
 }
@@ -629,8 +639,15 @@ async function signPushable(
 // batches go out sequentially, so the caller's phase ordering is preserved
 // across chunks. For each committed put, stamp R2's authoritative `updatedAt`
 // onto the local record (a delete has no record left to stamp — the stamp is a
-// no-op), then clear the path from the queue. `failed` (only `no_object` today)
+// no-op), then clear the ops it accepted. `failed` (only `no_object` today)
 // is intentionally ignored: leaving the path queued is exactly the retry.
+//
+// The clear takes the OP ROWS this drain read, not the committed paths, so it
+// removes only the writes it actually pushed (clearDrainedOps): an edit made during
+// the push sits at the same path under a new `writeId` and must outlive this commit
+// — its bytes are not the bytes that just went up. The restamp is unconditional
+// even then: R2 does hold that path at `r.updatedAt` now, and the surviving op keeps
+// its own older base, which local-wins reconcile never reads against it.
 async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<CommitResult[]> {
   const committed: CommitResult[] = [];
   for (const batch of chunk(ops, COMMIT_BATCH)) {
@@ -641,10 +658,8 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
       committed.push(r);
       await stampItemUpdatedAt(r.path, r.updatedAt);
     }
-    await clearPendingPaths(
-      deps.username,
-      results.map((r) => r.path),
-    );
+    const accepted = new Set(results.map((r) => r.path));
+    await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
   }
   return committed;
 }
@@ -654,24 +669,42 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
 // sync/r2.ts): an entity blob encrypts in JS from the row's `data` bytes; a
 // `files/` content blob encrypts path-to-path in the native layer from its
 // on-disk plaintext into a temp ciphertext file, which uploads natively and is
-// deleted either way. A put with nothing local to send (no `data` bytes / no
-// materialized file — shouldn't happen, but be safe) is skipped — the commit
-// will then report `no_object` and the op stays queued.
+// deleted either way.
+//
+// Returns the ops with nothing local left to send — ones the drain can never
+// satisfy. The two skips here look alike and are not. An unsigned path (no URL came
+// back) is TRANSIENT: leaving it queued is the retry, and the commit's `no_object`
+// is the honest report. A missing record — or an entity row without `data`, or a
+// content row whose plaintext file is gone — is TERMINAL: a write stores the record
+// and enqueues its op in ONE transaction (mutations.ts), so an op without a payload
+// is never a write that hasn't landed yet; it is a record that went missing
+// underneath a queued op, and nothing will put it back. Retrying that forever wedges
+// the queue above zero where no cycle can drain it. Reported up so the caller drops
+// it. Since the guarded deletes above stopped producing that state it should be
+// unreachable, and stays as the self-heal for a queue already wedged by it.
 async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   urls: Map<string, string>,
-): Promise<void> {
+): Promise<PendingOpRecord[]> {
+  const orphaned: PendingOpRecord[] = [];
   await mapLimit(ops, UPLOAD_CONCURRENCY, async (op) => {
-    const url = urls.get(op.path);
-    if (!url) return;
-
     const rec = await getItem(op.path);
-    if (!rec) return;
+    if (!rec) {
+      orphaned.push(op);
+      return;
+    }
 
     if (isContentPath(op.path)) {
       const plain = dataFileFor(op.path);
-      if (!rec.hasDataFile || !plain.exists) return;
+      if (!rec.hasDataFile || !plain.exists) {
+        orphaned.push(op);
+        return;
+      }
+
+      const url = urls.get(op.path);
+      if (!url) return;
+
       const enc = newTempEncFile();
       try {
         await encryptFile(plain.uri, enc.uri, deps.encryptionKey);
@@ -682,9 +715,17 @@ async function uploadBlobs(
       return;
     }
 
-    if (!rec.data) return;
+    if (!rec.data) {
+      orphaned.push(op);
+      return;
+    }
+
+    const url = urls.get(op.path);
+    if (!url) return;
+
     await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
   });
+  return orphaned;
 }
 
 // --- download / store / delete ----------------------------------------------
@@ -719,8 +760,17 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   // schema-blind, it just routes every write through it so the projection can't
   // drift from `data`. A content record carries no bytes here, so it projects
   // none (only its `itemType`/`updatedAt`).
-  deleteDataFiles(content.map((e) => e.path));
-  await putItems(content.map((e) => toItemRecord(e.path, e.updatedAt)));
+  //
+  // Guarded (putItemsUnqueued): a path this device edited mid-cycle is absent from
+  // the reconcile's pending snapshot, and landing the server copy on it would drop
+  // the edit — see that helper. The stale plaintext then goes only for the rows
+  // actually re-stored; a spared path's file is still its queued upload's payload.
+  // Rows first, files after, the same fail-safe direction as applyDeletes.
+  const stored = await putItemsUnqueued(
+    deps.username,
+    content.map((e) => toItemRecord(e.path, e.updatedAt)),
+  );
+  deleteDataFiles(stored);
   // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
   // map never grows past a single batch (a large first sync holds ~1k URLs, not
   // all of them) and each URL's mint-to-GET latency stays well inside its 1-hour
@@ -747,17 +797,29 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
       if (!blob) return;
 
       const data = await decryptEntity(deps.encryptionKey, blob);
-      await putItem(toItemRecord(e.path, e.updatedAt, data));
+      // Per record, not per batch: each arrives after its own GET, so this is the
+      // largest group that can share one transaction with its queue check without
+      // holding decrypted blobs in memory or losing the resume-where-interrupted
+      // property the staleness skip above depends on.
+      await putItemsUnqueued(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
     });
   }
 }
 
-async function applyDeletes(paths: string[]): Promise<void> {
+// Drop the local records the reconcile judged deleted server-side — RE-TESTING the
+// pending queue at apply time (item-store's deleteItemsUnqueued), because both
+// callers filtered against the `pending` SNAPSHOT read at the top of the cycle and
+// this device keeps writing through the round trips since. See that helper and
+// docs/local-first-sync.md, _a sync cycle_, for what the unguarded version cost.
+//
+// Only the paths it actually deleted lose their disk files: a path spared by the
+// guard still has a queued op, and that op's upload reads the plaintext file.
+async function applyDeletes(username: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   // Rows (plus junction rows) first, disk files after — the fail-safe direction
   // (clear-data.ts): a crash in between leaves orphan files no row points at.
-  await deleteItems(paths);
-  deleteDataFiles(paths.filter(isContentPath));
+  const deleted = await deleteItemsUnqueued(username, paths);
+  deleteDataFiles(deleted.filter(isContentPath));
 }
 
 // --- control-plane helpers --------------------------------------------------

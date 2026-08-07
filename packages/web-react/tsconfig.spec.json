@@ -2,6 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./out-tsc/jest",
+    // Same libs as tsconfig.lib.json: this is a `platform:web` package, so its specs
+    // name web types the code under test is built on (CryptoKey in SyncDeps, IndexedDB
+    // through Dexie) even though jest runs them under the node environment against
+    // fake-indexeddb. Without `dom` here the specs can't spell their own subjects.
+    "lib": ["es2022", "dom", "dom.iterable"],
     "jsx": "react-jsx",
     "types": ["jest", "node"]
   },

@@ -15,6 +15,7 @@
 // base, which is exactly what reconcile compares against.
 
 import {
+  dropCachedPath,
   type Extraction,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -41,7 +42,7 @@ import {
 } from '@stxapps/shared';
 
 import { db, type ItemRecord, type PendingOpRecord } from './db';
-import { enqueueDelete } from './pending-store';
+import { enqueueDelete, enqueuePut, pendingPutRecord } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import type { WithPath } from './queries';
 
@@ -75,8 +76,19 @@ async function writeBytesWith(
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     const bytes = produce(existing);
     await db.items.put(toItemRecord(path, baseUpdatedAt, bytes));
-    await db.pendingOps.put({ username, path, op: 'put', baseUpdatedAt });
+    // Through enqueuePut (which joins this transaction) rather than an inline
+    // `pendingOps.put`, so every queued op is stamped with a `writeId` in ONE place —
+    // an untagged row would be indistinguishable from the op a drain is holding, and
+    // silently re-acquire the blind-delete-by-path bug (db.ts `writeId`).
+    await enqueuePut(username, path, baseUpdatedAt);
   });
+  // AFTER the commit: the read layer's memo is versioned by (updatedAt,
+  // itemUpdatedAt), and a local write freezes the first while the second has only
+  // millisecond resolution — so two writes to one path inside a millisecond are
+  // invisible to it and the reader would keep serving the first one's decode
+  // (@stxapps/shared sync/decode-cache.ts). Every local write goes through here, so
+  // this one line is the whole invalidation.
+  dropCachedPath(path);
 }
 
 // Persist already-formed bytes — the non-merging fast path (writeEntity, writeFile),
@@ -144,11 +156,15 @@ export async function bulkWriteEntities(
       const baseUpdatedAt = existing[i]?.updatedAt ?? 0;
       const bytes = data instanceof Uint8Array ? data : utf8(JSON.stringify(data));
       records.push(toItemRecord(path, baseUpdatedAt, bytes));
-      ops.push({ username, path, op: 'put', baseUpdatedAt });
+      // Through the shared factory, not an inline row literal: an op without a
+      // `writeId` is indistinguishable from the one a drain is holding, so an import
+      // whose entities are re-edited mid-drain would lose those edits (db.ts).
+      ops.push(pendingPutRecord(username, path, baseUpdatedAt));
     }
     await db.items.bulkPut(records);
     await db.pendingOps.bulkPut(ops);
   });
+  for (const entry of entries) dropCachedPath(entry.path);
 }
 
 // Delete one entity by path: drop the local record and queue the server delete in
@@ -167,6 +183,9 @@ async function deleteEntity(username: string, path: string): Promise<void> {
     await db.items.delete(path);
     await enqueueDelete(username, path, baseUpdatedAt);
   });
+  // Same invalidation as the put path: a re-create landing in the same millisecond
+  // would otherwise read back the pre-delete decode.
+  dropCachedPath(path);
 }
 
 // The user-authored fields an edit may touch — `links/{id}.enc` is the user half

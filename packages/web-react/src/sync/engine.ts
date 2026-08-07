@@ -37,8 +37,8 @@ import {
 } from '@stxapps/shared';
 import { decryptEntity, encryptEntity } from '@stxapps/web-crypto';
 
-import { db, type PendingOpRecord } from '../data/db';
-import { clearPendingPaths, listPendingOps } from '../data/pending-store';
+import { db, type ItemRecord, type PendingOpRecord } from '../data/db';
+import { clearDrainedOps, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
 import { BlobRequestError, getBlob, putBlob } from './r2';
@@ -355,7 +355,7 @@ async function incrementalCycle(
   // requirement (local changes durable first).
   const committed = await pushPending(deps, pending, outcome);
   await storeDownloads(deps, downloads);
-  await applyDeletes(localDeletes);
+  await applyDeletes(deps.username, localDeletes);
 
   // 5. Advance the cursor to the newest (updatedAt, path) seen across the whole
   // cycle — including our own just-committed uploads, so the next cycle doesn't
@@ -425,7 +425,7 @@ async function fallbackCycle(
   // would leak the quota entry forever.
   const committed = await pushPending(deps, pending, outcome);
   await storeDownloads(deps, downloads);
-  await applyDeletes(localDeletes);
+  await applyDeletes(deps.username, localDeletes);
 
   // Cursor = newest (updatedAt, path) across ALL pages plus our commits. This is
   // reconstructed straight from R2 with no op-log dependence — resetCursor, not
@@ -513,8 +513,19 @@ async function pushPuts(
   for (const batch of chunk(puts, PUT_BATCH)) {
     const signed = await signPushable(deps, batch, outcome);
     if (signed === null) continue;
-    await uploadBlobs(deps, signed.ops, signed.urls);
-    committed.push(...(await commitBatched(deps, signed.ops)));
+    const orphaned = await uploadBlobs(deps, signed.ops, signed.urls);
+    // A put with no local bytes left (see uploadBlobs) can never be satisfied, so it is
+    // dropped from the queue rather than committed into a guaranteed `no_object` that
+    // requeues it forever. Dropped BEFORE the commit, so the op log never records an op
+    // for an object we didn't upload (the "no op without its object" invariant) — and
+    // by compare-and-delete, so a re-create that landed mid-cycle keeps its own op.
+    let uploaded = signed.ops;
+    if (orphaned.length > 0) {
+      await clearDrainedOps(orphaned);
+      const dropped = new Set(orphaned.map((o) => o.path));
+      uploaded = signed.ops.filter((o) => !dropped.has(o.path));
+    }
+    committed.push(...(await commitBatched(deps, uploaded)));
   }
   return committed;
 }
@@ -574,9 +585,16 @@ async function signPushable(
 // Commit a sequence of ops in input order, chunked under the commit cap — batches go
 // out sequentially, so the caller's phase ordering is preserved across chunks. For
 // each committed put, stamp R2's authoritative `updatedAt` onto the local record (a
-// delete has no record left to stamp — update is a no-op), then clear the path from
-// the queue. `failed` (only `no_object` today) is intentionally ignored: leaving the
+// delete has no record left to stamp — update is a no-op), then clear the ops it
+// accepted. `failed` (only `no_object` today) is intentionally ignored: leaving the
 // path queued is exactly the retry.
+//
+// The clear takes the OP ROWS this drain read, not the committed paths, so it removes
+// only the writes it actually pushed (clearDrainedOps): an edit made during the push
+// sits at the same path under a new `writeId` and must outlive this commit — its bytes
+// are not the bytes that just went up. The restamp is unconditional even then: R2 does
+// hold that path at `r.updatedAt` now, and the surviving op keeps its own older base,
+// which local-wins reconcile never reads against it.
 async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<CommitResult[]> {
   const committed: CommitResult[] = [];
   for (const batch of chunk(ops, COMMIT_BATCH)) {
@@ -587,31 +605,46 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
       committed.push(r);
       await db.items.update(r.path, { updatedAt: r.updatedAt });
     }
-    await clearPendingPaths(
-      deps.username,
-      results.map((r) => r.path),
-    );
+    const accepted = new Set(results.map((r) => r.path));
+    await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
   }
   return committed;
 }
 
-// Encrypt and PUT each op's local blob to its signed URL. A put with no local
-// `data` (shouldn't happen, but be safe) is skipped — the commit will then report
-// `no_object` and the op stays queued.
+// Encrypt and PUT each op's local blob to its signed URL. Returns the ops whose local
+// bytes are GONE — ones the drain can never satisfy.
+//
+// The two skips look alike and are not. An unsigned path (no URL came back) is
+// transient: leaving it queued IS the retry, and the commit's `no_object` is the
+// honest report. A path with no local record (or a record stripped of its bytes) is
+// TERMINAL: a write puts the record and enqueues its op in one transaction
+// (data/mutations.ts writeBytesWith), so an op without bytes is never a write that
+// hasn't landed yet — it is a record that went missing underneath a queued op. Nothing
+// will ever put those bytes back, so retrying is a permanent wedge: the pending count
+// sticks above zero and no cycle can drain it. Reported up so the caller drops it.
+//
+// Since applyDeletes stopped producing that state it should be unreachable; it stays
+// as the self-heal for queues already wedged by it (and for any future route to the
+// same shape), because a queue that can't drain is invisible to every other repair.
 async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   urls: Map<string, string>,
-): Promise<void> {
+): Promise<PendingOpRecord[]> {
+  const orphaned: PendingOpRecord[] = [];
   await mapLimit(ops, UPLOAD_CONCURRENCY, async (op) => {
+    const rec = await db.items.get(op.path);
+    if (!rec?.data) {
+      orphaned.push(op);
+      return;
+    }
+
     const url = urls.get(op.path);
     if (!url) return;
 
-    const rec = await db.items.get(op.path);
-    if (!rec?.data) return;
-
     await putBlob(url, await encryptEntity(deps.encryptionKey, rec.data));
   });
+  return orphaned;
 }
 
 // --- download / store / delete ----------------------------------------------
@@ -648,8 +681,17 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
   // columns from the decrypted bytes (data/projection.ts) — the engine stays
   // schema-blind, it just routes every write through it so the indexes can't
   // drift from `data`. A content record carries no bytes here, so it projects
-  // none (only its `itemType`/`updatedAt`).
-  await db.items.bulkPut(content.map((e) => toItemRecord(e.path, e.updatedAt)));
+  // none (only its `itemType`/`updatedAt`) — which is exactly why this one must go
+  // through the guarded put too: landing it on a path whose bytes are still queued
+  // would strip them, and the drain would then find nothing to upload.
+  //
+  // The whole content set rides ONE transaction: nothing awaits the network between
+  // these records, so there's no reason to open a transaction per row (the index
+  // records below can't do the same — each waits on its own GET).
+  await putPulled(
+    deps.username,
+    content.map((e) => toItemRecord(e.path, e.updatedAt)),
+  );
   // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
   // map never grows past a single batch (a large first sync holds ~1k URLs, not all
   // of them) and each URL's mint-to-GET latency stays well inside its 1-hour TTL.
@@ -675,13 +717,65 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
       if (!blob) return;
 
       const data = await decryptEntity(deps.encryptionKey, blob);
-      await db.items.put(toItemRecord(e.path, e.updatedAt, data));
+      await putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
     });
   }
 }
 
-async function applyDeletes(paths: string[]): Promise<void> {
-  if (paths.length > 0) await db.items.bulkDelete(paths);
+// Store pulled records, skipping any path the local queue now holds an op for —
+// the reconcile's local-wins test (docs/local-first-sync.md — a sync cycle), re-taken
+// at write time and inside the write's own transaction, for the same reason
+// applyDeletes re-takes it: the callers filtered against the `pending` SNAPSHOT read
+// at the top of the cycle, and this device keeps writing through the round trips that
+// follow. Without it a mid-cycle edit is silently overwritten by the server copy it
+// was meant to beat — and the pending op survives, so the next drain uploads the
+// SERVER's bytes back, laundering the loss into a legitimate-looking commit.
+//
+// Per record, not per batch, because each index record arrives after its own network
+// GET: batching the puts would mean holding a whole chunk's decrypted blobs in memory
+// and would cost the resumability of storing each one the moment it's decrypted.
+// A pending DELETE counts too: local-wins means a queued deletion isn't resurrected
+// by the pull that raced it.
+async function putPulled(username: string, records: ItemRecord[]): Promise<void> {
+  if (records.length === 0) return;
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const ops = await db.pendingOps.bulkGet(
+      records.map((r) => [username, r.path] as [string, string]),
+    );
+    const writable = records.filter((_, i) => ops[i] === undefined);
+    if (writable.length > 0) await db.items.bulkPut(writable);
+  });
+}
+
+// Drop the local records the reconcile judged deleted server-side — RE-TESTING the
+// pending queue at apply time, inside the delete's own transaction.
+//
+// Both callers already excluded pending paths, but from the `pending` SNAPSHOT read at
+// the top of the cycle, and a cycle is many network round trips long. A local write that
+// lands DURING it (the extension's active-tab extraction writing `extractions/{id}.enc`
+// while the save's own cycle is still listing, the web app's user typing) is local-only
+// and absent from that snapshot, so the fallback's "local only, not in pending-ops" row
+// (docs/local-first-sync.md — fallback full sync) matched a brand-new create and deleted
+// it — while its pending op, written in the same transaction, survived. That op is then
+// UNPUSHABLE FOREVER: uploadBlobs finds no bytes, the commit answers `no_object`, and
+// `no_object` deliberately leaves the path queued to retry. The queue wedges at a
+// permanent non-zero count that no amount of syncing drains, and the entity (an
+// extraction, so a link silently missing its title/image) is gone with it.
+//
+// The re-read has to share the delete's transaction to actually close the window:
+// IndexedDB serializes overlapping rw transactions on these stores, so a concurrent
+// writeBytesWith either commits FIRST (its pending op is visible here → the path is
+// spared) or AFTER (this delete hits the stale record, and its put re-creates it). Both
+// orders end with the local write intact.
+async function applyDeletes(username: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const ops = await db.pendingOps.bulkGet(
+      paths.map((path) => [username, path] as [string, string]),
+    );
+    const deletable = paths.filter((_, i) => ops[i] === undefined);
+    if (deletable.length > 0) await db.items.bulkDelete(deletable);
+  });
 }
 
 // --- control-plane helpers --------------------------------------------------

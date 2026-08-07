@@ -29,9 +29,19 @@
 //     so a stale value would mis-order the views, not just the cache.
 //     But a server-side rewrite can change the bytes while leaving it untouched
 //     (a merge/migration that keeps the modified time), so it's insufficient solo.
-// Together they're airtight: a local edit moves `itemUpdatedAt`; any server rewrite
-// moves `updatedAt`. (A content hash would also work but costs an O(bytes) pass per
-// resident link per reactive tick — pure overhead on the all-hits hot path.)
+// Together they cover every rewrite EXCEPT one, and the exception is why the local
+// write edge also drops explicitly (dropCachedPath below): `itemUpdatedAt` is
+// `Date.now()`, so TWO local writes to the same path inside one millisecond leave
+// BOTH axes unchanged and the first one's decode is served for the second's bytes —
+// until some later write or a sync restamp moves a version. That is not exotic: the
+// extension's titleImage capture writes the title, then the terminal facet state,
+// back to back with nothing but a transaction between them whenever the page has no
+// preview image to resize; a settings picker fires one write per keystroke. Raising
+// the clock's resolution isn't available (the value is a persisted, synced "date
+// modified", not a cache token), so the writer invalidates instead — which also
+// makes the pair's job purely about writes this device didn't make.
+// (A content hash would also work but costs an O(bytes) pass per resident link per
+// reactive tick — pure overhead on the all-hits hot path.)
 //
 // Two caches, same versioning: `links/` and `extractions/`. The writer-split means a
 // list row now joins both blobs (the user-authored link + the machine-derived
@@ -138,6 +148,29 @@ export function setCachedExtraction(
 }
 
 export function dropCachedExtraction(path: string): void {
+  extractionCache.drop(path);
+}
+
+// Drop one path from BOTH caches — the LOCAL WRITE EDGE's invalidation hook, called
+// by each platform's mutations.ts after the write's transaction commits.
+//
+// It closes the version pair's one blind spot (see the header): two local writes to
+// the same path inside a millisecond are indistinguishable by `(updatedAt,
+// itemUpdatedAt)`, so without this the reader keeps serving the first write's decode.
+// The writer knows exactly which path changed and has to touch this module anyway to
+// stay correct, so the invalidation is exact and costs one Map delete per write —
+// against a cache whose whole purpose is amortizing READS.
+//
+// Namespace-agnostic on purpose: the write edge is generic over paths (one
+// `writeBytesWith` serves every namespace), so it shouldn't have to know which of
+// the two caches a path could be in. A drop of an absent key is free.
+//
+// AFTER the commit, never before: a reader racing the window between them would
+// otherwise re-cache the pre-write decode under the pre-write version and the drop
+// would miss it. Dropping a freshly-cached CORRECT entry instead just costs one
+// re-decode.
+export function dropCachedPath(path: string): void {
+  linkCache.drop(path);
   extractionCache.drop(path);
 }
 

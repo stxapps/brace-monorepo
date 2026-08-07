@@ -32,6 +32,7 @@ import type { File } from 'expo-file-system';
 
 import {
   type DeviceExtractionMode,
+  dropCachedPath,
   type Extraction,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -81,6 +82,12 @@ function writeBytesWith(
     putItemsTx(tx, [toItemRecord(path, baseUpdatedAt, bytes)]);
     enqueuePutTx(tx, username, path, baseUpdatedAt);
   });
+  // AFTER the commit: the read layer's memo is versioned by (updatedAt,
+  // itemUpdatedAt), and a local write freezes the first while the second has only
+  // millisecond resolution — so two writes to one path inside a millisecond are
+  // invisible to it and the reader would keep serving the first one's decode
+  // (@stxapps/shared sync/decode-cache.ts). Every local write goes through here.
+  dropCachedPath(path);
 }
 
 // The merging JSON layer over writeBytesWith — produce the PATHLESS entity blob
@@ -115,6 +122,9 @@ function deleteEntity(username: string, path: string): void {
     deleteItemsTx(tx, [path]);
     enqueueDeleteTx(tx, username, path, baseUpdatedAt);
   });
+  // Same invalidation as the put path: a re-create landing in the same millisecond
+  // would otherwise read back the pre-delete decode.
+  dropCachedPath(path);
 }
 
 // One raw entity to restore: its items/R2 path + either the pathless plaintext
@@ -165,6 +175,7 @@ export async function bulkWriteEntities(
       enqueuePutTx(tx, username, path, baseUpdatedAt);
     }
   });
+  for (const { path } of entries) dropCachedPath(path);
 
   for (const path of contentPaths) await markItemDataFile(path, true);
 }

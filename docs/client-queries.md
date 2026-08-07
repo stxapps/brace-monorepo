@@ -128,11 +128,27 @@ The one optimization on top is the **decode cache**
 Because `useLiveQuery` re-reads the whole loaded prefix on every write, and
 decoding a link (`parseBlob` → `JSON.parse` + zod) is the costliest step of a
 read, re-decoding that prefix on every tick is O(loaded) zod work per keystroke
-or sync. The cache memoizes decoded links keyed by `path` and **versioned by
-`record.updatedAt`** (the blob-write timestamp — bumped on every write; _not_
-`itemUpdatedAt`, which a re-encrypt/merge/migration can leave untouched while the
-bytes change). That turns re-decode into O(changed): only records whose bytes
-actually changed re-parse. The cache is keyed by `path`, so it spans **both**
+or sync. The cache memoizes decoded links keyed by `path` and **versioned by the
+pair (`record.updatedAt`, `record.itemUpdatedAt`)**. Neither alone is enough, and
+they cover each other's blind spot: `updatedAt` (the R2 stamp) catches any
+server-side rewrite but is _frozen_ by the local write edge at its reconcile base,
+while `itemUpdatedAt` (the in-blob "date modified") moves on every local edit but
+survives a merge/migration that keeps the modified time. That turns re-decode into
+O(changed): only records whose bytes actually changed re-parse.
+
+**The pair has exactly one blind spot, and the writer closes it.**
+`itemUpdatedAt` is `Date.now()`, so **two local writes to the same path inside one
+millisecond are identical on both axes** and the first one's decode would be served
+for the second's bytes — until some later write or sync moved a version. That is a
+routine sequence, not a corner: the extension's `titleImage` capture writes the
+title and then the terminal facet state back to back whenever the page has no
+preview image to resize (docs/link-extraction.md), and a settings picker writes per
+keystroke. The clock can't be given more resolution — it's a persisted, synced
+field, not a cache token — so **each platform's `mutations.ts` calls
+`dropCachedPath` after the write's transaction commits** (after, so a reader racing
+the window can't re-cache the pre-write decode under the pre-write version). The
+version pair is therefore about writes this device _didn't_ make; its own writes
+invalidate exactly. The cache is keyed by `path`, so it spans **both**
 record kinds the writer-split produces — the `links/` blob and its co-keyed
 `extractions/` blob — each versioned by its own `updatedAt`. So the per-row join
 (resolving the displayed title as `customTitle ?? extraction.title ?? host(url)`
