@@ -24,7 +24,16 @@ import { Topbar } from './_panes/topbar';
 // bar until you scroll — and this frame is exactly one screen tall by design
 // (the panes scroll inside it), so that bottom edge is the list's last row and
 // the page has no scroll of its own to bring it back. The dynamic unit tracks
-// the bar. The (app) layout's wrapper matches it.
+// the bar. The (app) layout deliberately wraps this in nothing at all — see its
+// note; a height wrapper there would only repeat what this element already says.
+//
+// `safe-area` rides on that SAME element, which is the whole trick: `box-sizing:
+// border-box` means the insets come out of the 100dvh rather than adding to it,
+// so the frame is still exactly one screen tall and its panes simply get a
+// smaller content box. Applied to a PARENT instead — which is what the blanket
+// `.safe-area` div in inner-layout.tsx used to be — it would push this frame's
+// bottom edge below the fold by the top+bottom insets, undoing the paragraph
+// above. Nothing in here needs its own inset as a result. docs/safe-area.md.
 //
 // No 'use client' here — this is pure composition of client components, with no
 // hooks or handlers of its own. The provider owns its own Suspense boundary (it
@@ -34,7 +43,7 @@ import { Topbar } from './_panes/topbar';
 export default function LinksPage() {
   return (
     <LinksPageProvider>
-      <div className="flex h-dvh overflow-hidden">
+      <div className="flex h-dvh overflow-hidden safe-area">
         <Sidebar />
         <LinksViewStateProvider>
           <div className="flex min-w-0 flex-1 flex-col">

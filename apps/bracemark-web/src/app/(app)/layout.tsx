@@ -60,13 +60,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <AppLockGate>
                   <InitialSyncGate>
                     <PaywallProvider>
-                      {/* `dvh`, not `vh`: the signed-in surfaces are
-                          single-screen frames that scroll inside themselves, and
-                          `100vh` measures the viewport with a mobile browser's
-                          URL bar retracted — taller than what's showing. A
-                          `min-h-screen` wrapper would re-introduce the overflow
-                          its children just avoided. */}
-                      <div className="min-h-dvh">{children}</div>
+                      {/* NO WRAPPER ELEMENT HERE, on purpose. Every screen under
+                          this layout is already its own `h-dvh` frame carrying
+                          its own `safe-area` (links/page.tsx,
+                          settings/layout.tsx), so a box here is either dead
+                          weight or actively harmful: a height would restate what
+                          those frames set for themselves, and PADDING would ADD
+                          to their `h-dvh` — separate elements, so border-box
+                          can't absorb it — hanging their bottom edge past the
+                          fold. That is the blanket bug from inner-layout.tsx one
+                          level lower. A bare `min-h-dvh` div used to sit here; it
+                          constrained nothing. docs/safe-area.md. */}
+                      {children}
                     </PaywallProvider>
                   </InitialSyncGate>
                 </AppLockGate>

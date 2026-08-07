@@ -118,13 +118,52 @@ they clear the keyboard. On most mobile browsers the keyboard fires only
 
 ### applying safe area
 
-A blanket `<div className="safe-area">` (as in `bracemark-web` `inner-layout.tsx`) is
-the right default: padding paints _inside_ the box, so a background fills
-edge-to-edge under the notch while content is inset. It does inset **all** children
-uniformly, though — once you add a sticky header or bottom bar that should bleed to
-the edge with only its _contents_ inset, drop the blanket utility and apply per-side
-utilities where they belong (`pt-safe` header, `pb-safe` bottom bar, `px-safe` side
-content).
+Put the inset utility **on the element that owns the height**, never on a wrapper
+around it. Padding paints _inside_ the border box (Preflight sets
+`box-sizing: border-box` on everything), so `class="safe-area h-dvh"` is still
+exactly one screen tall and simply hands its children a shorter content box. The
+same utility on a **parent** of that `h-dvh` box instead adds to it — the document
+becomes `100dvh + top + bottom` and the frame's bottom edge sits below the fold,
+which on an `overflow-hidden` single-screen frame means the last row is unreachable.
+
+That second shape is what `bracemark-web` used to have: a blanket
+`<div className="safe-area">` in `inner-layout.tsx` around every route. It's gone.
+Each full-height surface now carries its own:
+
+| surface                         | where                                                    |
+| ------------------------------- | -------------------------------------------------------- |
+| links frame                     | `(app)/links/page.tsx` — on the `h-dvh` frame            |
+| settings frame                  | `(app)/settings/layout.tsx` — same                       |
+| sign-in / create-account        | `(auth)/layout.tsx` — the outer `min-h-dvh` box          |
+| app lock screen                 | `components/app-lock-gate.tsx` — its full-screen wrapper |
+| decrypting / sync-error screens | `components/initial-sync-gate.tsx`                       |
+| the error boundary              | `app/error.tsx` — its outer box                          |
+
+`(app)/layout.tsx` deliberately wraps its children in **no element at all** — it is
+a parent of the first two, so insets there would reproduce the blanket bug one level
+lower. It used to hold a bare `min-h-dvh` div; that constrained nothing those frames
+don't already set on themselves, and an empty box at that position is an invitation
+to put padding on it.
+
+**Measure full-height surfaces in `dvh`, never `vh`.** `100vh` is the viewport with
+a mobile browser's URL bar _retracted_, so a `h-screen` frame hangs its bottom edge
+behind the bar — and a single-screen frame has no scroll of its own to bring it
+back. Every box in the table uses `h-dvh`/`min-h-dvh`; `min-h-screen` and `h-screen`
+should not reappear in `bracemark-web`.
+
+A blanket on the surface **itself** is still the right default when that surface is
+a flat background with a centred column (the auth pages, the lock screen): the
+background fills edge-to-edge under the notch while the content is inset. Switch to
+the per-side utilities (`pt-safe` header, `pb-safe` bottom bar, `px-safe` side
+content) once a sticky bar should bleed to the edge with only its _contents_ inset —
+`web-ui`'s `sheet.tsx` is the worked example.
+
+**Don't put a safe utility and a numeric one on the same element.** `safe-area` and
+`px-4` both emit a plain `padding` declaration, so one replaces the other and which
+one wins is a stylesheet-ordering detail — class order in JSX does not decide it.
+Give the insets a box with no padding of its own and keep the numeric padding a
+level in; `(auth)/layout.tsx` and `app-lock-gate.tsx` are both shaped that way for
+exactly this reason.
 
 ### breakpoints vs. insets
 
@@ -200,10 +239,11 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   (the note in `components/landing.tsx`). The standard shape is
   `<StyledSafeAreaView className="bg-background flex-1">` around the screen:
   padding paints inside the box, so the background fills edge-to-edge under
-  the notch while content is inset — the native mirror of web's blanket
-  `safe-area` div, with the same caveat: once a bar should bleed to the edge
-  with only its contents inset, switch to the `edges` prop / per-side inset
-  styles.
+  the notch while content is inset — the native mirror of web's per-screen
+  `safe-area` (above), and per-screen for the same reason: it sits on the box
+  that owns the screen's height rather than wrapping it. Same caveat too — once
+  a bar should bleed to the edge with only its contents inset, switch to the
+  `edges` prop / per-side inset styles.
 - **Why the native `SafeAreaView` and not `useSafeAreaInsets` + padding:** it
   measures **its own** insets natively, per window and per container — inside
   the AdvancedSearch `Modal` it correctly supplies the status-bar inset on

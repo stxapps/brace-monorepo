@@ -24,12 +24,20 @@ export function AppLockGate({ children }: { children: ReactNode }) {
 
   if (appLock.exists && !appLock.unlocked) {
     return (
-      <LockPane
-        className="min-h-screen"
-        title="Bracemark is locked"
-        description="Enter your app lock password to continue."
-        onUnlock={unlockApp}
-      />
+      // The insets live on this wrapper, not on LockPane's className: the pane
+      // roots at `px-6 py-8`, and `safe-area` is a plain `padding` declaration
+      // too, so the two would collide on one element (docs/safe-area.md). The
+      // wrapper owns the height and the insets; the pane fills what's left.
+      // Full-screen only in this gate — the in-pane list-lock caller renders
+      // inside the links frame, which already carries its own.
+      <div className="flex min-h-dvh flex-col safe-area">
+        <LockPane
+          className="flex-1"
+          title="Bracemark is locked"
+          description="Enter your app lock password to continue."
+          onUnlock={unlockApp}
+        />
+      </div>
     );
   }
 

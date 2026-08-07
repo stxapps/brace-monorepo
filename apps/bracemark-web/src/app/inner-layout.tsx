@@ -56,10 +56,6 @@ function Initializer() {
   return null;
 }
 
-function SafeArea({ children }: { children: React.ReactNode }) {
-  return <div className="safe-area">{children}</div>;
-}
-
 export function InnerLayout({ children }: { children: React.ReactNode }) {
   // One QueryClient per browser session, created lazily so it isn't shared
   // across requests/renders. ApiClientProvider hands the shared hooks the
@@ -86,9 +82,18 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
         <ApiClientProvider client={apiClient}>
           <ExtractClientProvider client={extractClient}>
             <AuthProvider>
-              <ThemeProvider>
-                <SafeArea>{children}</SafeArea>
-              </ThemeProvider>
+              {/* NO BLANKET `.safe-area` WRAPPER HERE — it used to sit around
+                  `children`, and the bug was that it was a PARENT of the screens
+                  rather than the screens themselves. Padding on a plain block box
+                  ADDS to whatever its child claims, so a `h-dvh` frame (links,
+                  settings) came out `100dvh + top + bottom` and hung its own
+                  bottom edge — the list's last row — past the fold, on a frame
+                  that is `overflow-hidden` and has no scroll of its own to bring
+                  it back. Every full-height surface now carries `safe-area` on the
+                  SAME element as its `h-dvh`/`min-h-dvh`, where `box-sizing:
+                  border-box` takes the padding OUT of that height instead of
+                  adding to it. docs/safe-area.md, _applying safe area_. */}
+              <ThemeProvider>{children}</ThemeProvider>
             </AuthProvider>
           </ExtractClientProvider>
         </ApiClientProvider>

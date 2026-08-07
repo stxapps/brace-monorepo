@@ -26,7 +26,11 @@ export function LockPane({
   // Resolves false on a wrong password (the pane shows the inline error);
   // anything else it may throw surfaces as the generic failure message.
   onUnlock: (password: string) => Promise<boolean>;
-  // Sizing comes from the caller: min-h-screen for the app gate, h-full in-pane.
+  // Sizing comes from the caller: `flex-1` inside the app gate's full-screen
+  // wrapper, `h-full` in-pane. Pass sizing only — the root here already spends
+  // its padding on `px-6 py-8`, so a safe-area utility handed in through this
+  // prop would collide with it rather than stack (docs/safe-area.md); the app
+  // gate insets its wrapper instead.
   className?: string;
 }) {
   const [password, setPassword] = useState('');

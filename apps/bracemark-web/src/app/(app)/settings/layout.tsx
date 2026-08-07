@@ -15,6 +15,9 @@ import { Topbar } from './_panes/topbar';
 // `h-dvh` for the reason the links frame carries the full note for: a
 // single-screen frame measured in `vh` hangs its bottom edge behind a mobile
 // browser's URL bar, and this one has no scroll of its own to bring it back.
+// `safe-area` sits on the same element for the other half of that note — on a
+// border-box element the insets come out of the 100dvh instead of adding to it,
+// which a wrapper one level up could not do (docs/safe-area.md).
 //
 // The active section lives in the URL PATH now (`/settings/lists`, …), not React
 // state — so a section is a real, linkable destination: open `/settings/lists`
@@ -27,7 +30,7 @@ import { Topbar } from './_panes/topbar';
 // already gates this behind auth + first sync.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh overflow-hidden safe-area">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />

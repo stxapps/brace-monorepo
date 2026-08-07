@@ -61,7 +61,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   // bgSyncStatus and never set the gate's 'error'.
   if (storeStatus === 'error') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 safe-area">
         <p>Couldn’t sync your links.</p>
         <button onClick={retryInitialSync} className="underline">
           Try again
@@ -86,7 +86,11 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
 
 function DecryptingScreen() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center">
+    // `safe-area` on the same element as the height, like every other
+    // full-screen surface here — bracemark-web has no blanket wrapper to inherit
+    // it from (inner-layout.tsx, docs/safe-area.md). `dvh` for the same reason
+    // every other full-height box in this app uses it (links/page.tsx).
+    <div className="flex min-h-dvh flex-col items-center justify-center safe-area">
       <p>Decrypting your links…</p>
     </div>
   );

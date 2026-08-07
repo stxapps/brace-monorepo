@@ -12,12 +12,13 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // differs, and that's what `side` picks.
 //
 // SAFE AREA IS THIS COMPONENT'S JOB, unlike Dialog's. Portaled content mounts on
-// `document.body` — OUTSIDE bracemark-web's blanket `.safe-area` div (see
-// inner-layout.tsx) — so nothing here inherits the insets. A centred dialog
+// `document.body` — outside whatever screen opened it, and bracemark-web insets
+// per screen (docs/safe-area.md) — so nothing here inherits insets. A centred dialog
 // doesn't care: it never reaches an edge. A sheet is *defined* by reaching one,
 // so each side variant carries the per-side padding for the edges it touches
-// (docs/safe-area.md, _applying safe area_ — the "drop the blanket, pad per
-// side" case). Padding paints inside the box, so the panel's background still
+// (docs/safe-area.md, _applying safe area_ — the per-side case, where a bar
+// bleeds to the edge with only its contents inset, rather than the whole-surface
+// blanket). Padding paints inside the box, so the panel's background still
 // bleeds under the notch while its content clears it.
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {

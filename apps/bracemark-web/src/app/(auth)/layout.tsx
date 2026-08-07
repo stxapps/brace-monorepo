@@ -31,32 +31,48 @@ import { GuestGuard } from '@/components/guest-guard';
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <GuestGuard>
-      <div
-        className={cn(
-          'flex min-h-screen flex-col items-center justify-center bg-muted px-4 py-12 dark:bg-background',
-        )}
-      >
-        <div className={cn('flex w-full max-w-sm flex-col gap-6')}>
-          <div className={cn('flex items-center gap-2.5')}>
-            <BracemarkIcon className={cn('h-5 w-auto shrink-0')} aria-hidden="true" />
-            <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
-              Bracemark
-            </span>
-          </div>
+      {/* Safe area is THIS surface's job now that bracemark-web has no blanket
+          `.safe-area` div (inner-layout.tsx). It goes on the outer box, which
+          owns the background and the height and carries no padding of its own:
+          `safe-area` and `px-4` are both plain `padding` declarations, so sharing
+          an element would make the winner a stylesheet-order detail that class
+          order in JSX can't settle. The centering and the page padding stay one
+          level in, where `px-4` also has to keep sitting OUTSIDE the `max-w-sm`
+          column — moving it inside would cap the card at 352px instead of 384.
+          A blanket is the right shape here, unlike on the app frames: this page
+          is a centred card on a flat background, with no chrome reaching an edge
+          (docs/safe-area.md, _applying safe area_).
 
-          <DogEaredCard>{children}</DogEaredCard>
+          `min-h-dvh`, not `min-h-screen`, for the reason links/page.tsx spells
+          out: `100vh` is the viewport with a mobile browser's URL bar retracted,
+          so it overstates the height actually on screen. This page can scroll, so
+          it merely centres the card slightly low rather than hiding anything —
+          but there is no reason for one surface to measure the viewport
+          differently from the rest. */}
+      <div className={cn('flex min-h-dvh flex-col bg-muted safe-area dark:bg-background')}>
+        <div className={cn('flex flex-1 flex-col items-center justify-center px-4 py-12')}>
+          <div className={cn('flex w-full max-w-sm flex-col gap-6')}>
+            <div className={cn('flex items-center gap-2.5')}>
+              <BracemarkIcon className={cn('h-5 w-auto shrink-0')} aria-hidden="true" />
+              <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
+                Bracemark
+              </span>
+            </div>
 
-          {/* Why the account behaves the way it does — no email field, no reset
+            <DogEaredCard>{children}</DogEaredCard>
+
+            {/* Why the account behaves the way it does — no email field, no reset
               link, a password ceremony that insists you save something. Said once
               here, quietly, under both pages, so neither form has to re-argue it.
               Both halves are literal (docs/account.md, "a password-derived
               wallet"): the DEK never leaves the client, and the server stores a
               wrapped key it cannot unwrap. Don't inflate this into a marketing
               line — it's load-bearing context for the next thing the user does. */}
-          <p className={cn('text-xs leading-5 text-balance text-muted-foreground')}>
-            Your links are encrypted on your device before they're stored. Bracemark's servers never
-            see your password.
-          </p>
+            <p className={cn('text-xs leading-5 text-balance text-muted-foreground')}>
+              Your links are encrypted on your device before they're stored. Bracemark's servers
+              never see your password.
+            </p>
+          </div>
         </div>
       </div>
     </GuestGuard>
