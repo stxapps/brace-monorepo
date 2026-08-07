@@ -23,7 +23,7 @@
 // expo-sqlite's change events, so reactivity stays out of scope here — these
 // specs are about the SQL, not the subscription.
 
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue, type StatementSync } from 'node:sqlite';
 
 function wrapStatement(stmt: StatementSync) {
   return {
@@ -33,7 +33,7 @@ function wrapStatement(stmt: StatementSync) {
     // touches — and the `run()` result is memoized, because drizzle destructures
     // `{ changes, lastInsertRowId }` and two independent getters would execute
     // the statement (an INSERT!) twice. Keep that memo if you touch this.
-    executeSync(params: unknown[] = []) {
+    executeSync(params: SQLInputValue[] = []) {
       let ran: ReturnType<StatementSync['run']> | undefined;
       const run = (): NonNullable<typeof ran> => (ran ??= stmt.run(...params));
       return {
@@ -50,7 +50,7 @@ function wrapStatement(stmt: StatementSync) {
     // drizzle's `.values()` path wants positional rows rather than objects.
     // Toggled per call and restored, since the flag lives on the statement and
     // these are prepared once and reused.
-    executeForRawResultSync(params: unknown[] = []) {
+    executeForRawResultSync(params: SQLInputValue[] = []) {
       return {
         getAllSync: () => {
           stmt.setReturnArrays(true);
